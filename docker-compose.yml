@@ -1,0 +1,282 @@
+name: fraud-detection
+
+# Local development stack for the real-time P2P fraud-detection pipeline.
+# Bring everything up with `make up` (or `docker compose up -d --build`).
+
+services:
+
+  # --- Event ingestion ------------------------------------------------------
+  kafka:
+    image: ${KAFKA_IMAGE}
+    container_name: kafka
+    ports:
+      - "${KAFKA_HOST_PORT}:29092"        # host clients -> localhost:29092
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,SSL:SSL
+      # INTERNAL  -> other containers reach the broker at kafka:9092
+      # EXTERNAL  -> your host reaches it at localhost:29092
+      # SSL       -> the same topics over mutual TLS at kafka:9094
+      #
+      # The plaintext and TLS listeners run SIDE BY SIDE on purpose. Both serve
+      # the same partitions, so the security-overhead arms (reviewer point 3)
+      # differ only in which port the clients dial - no redeploy of the broker,
+      # no separate data set, nothing else varying between the measurements.
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:29092,SSL://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:29092,SSL://kafka:9094
+      # These names are dictated by the image, not chosen. apache/kafka's
+      # entrypoint, on seeing SSL:// in the advertised listeners, builds
+      # ssl.keystore.location itself as /etc/kafka/secrets/$..._FILENAME and
+      # reads both passwords out of files in that directory - so setting
+      # ssl.keystore.location directly is ignored, and omitting the FILENAME
+      # variable aborts the container with "!1: unbound variable" from its own
+      # `ensure` helper.
+      #
+      # PKCS12 rather than PEM for the same reason: the script unconditionally
+      # requires a keystore password and a key password, and an unencrypted PEM
+      # key has neither. The clients still use PEM - see infra/kafka/certs.
+      KAFKA_SSL_KEYSTORE_FILENAME: kafka.keystore.p12
+      KAFKA_SSL_KEYSTORE_TYPE: PKCS12
+      KAFKA_SSL_KEYSTORE_CREDENTIALS: keystore_creds
+      KAFKA_SSL_KEY_CREDENTIALS: key_creds
+      KAFKA_SSL_TRUSTSTORE_FILENAME: kafka.truststore.p12
+      KAFKA_SSL_TRUSTSTORE_TYPE: PKCS12
+      KAFKA_SSL_TRUSTSTORE_CREDENTIALS: truststore_creds
+      # `required` is what makes this MUTUAL TLS rather than server-side TLS:
+      # the broker rejects any client that cannot present a certificate signed
+      # by the CA. Measuring one-way TLS and calling it mTLS would understate
+      # the handshake, which is the part with a real cost.
+      KAFKA_SSL_CLIENT_AUTH: required
+      KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: https
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 6
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+      # /etc/kafka/secrets is not a choice: the image's entrypoint hardcodes it
+      # as the directory it resolves KAFKA_SSL_*_FILENAME against.
+      # Generate with: .\run.ps1 make-certs   (before the first `up`)
+      - ./infra/kafka/certs:/etc/kafka/secrets:ro
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+    networks: [fraudnet]
+
+  # One-shot: create the topics, then exit.
+  kafka-init:
+    image: ${KAFKA_IMAGE}
+    container_name: kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/scripts/create-topics.sh"]
+    volumes:
+      - ./infra/kafka:/scripts:ro
+    restart: "no"
+    networks: [fraudnet]
+
+  # --- In-memory feature store ---------------------------------------------
+  redis:
+    image: ${REDIS_IMAGE}
+    container_name: redis
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    ports:
+      - "${REDIS_HOST_PORT}:6379"
+    volumes:
+      - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - redis_data:/data
+    networks: [fraudnet]
+
+  # --- Account + money-flow graph --------------------------------------------
+  neo4j:
+    image: ${NEO4J_IMAGE}
+    container_name: neo4j
+    ports:
+      - "${NEO4J_HTTP_PORT}:7474"         # browser UI
+      - "${NEO4J_BOLT_PORT}:7687"         # bolt driver
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*
+    volumes:
+      - neo4j_data:/data
+      - ./data-generator/out:/var/lib/neo4j/import   # CSVs for LOAD CSV
+    # Same race as ClickHouse: sink-writer opens the graph sink once at boot and
+    # disabled it for the whole run when Bolt was not accepting connections yet
+    # ("Neo4j unavailable, graph sink disabled"). The password is read back out
+    # of NEO4J_AUTH ("neo4j/<password>") so it is not repeated here.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - cypher-shell -u neo4j -p "$${NEO4J_AUTH#neo4j/}" "RETURN 1"
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    networks: [fraudnet]
+
+  # --- Analytical warehouse + WORM audit ------------------------------------
+  clickhouse:
+    image: ${CLICKHOUSE_IMAGE}
+    container_name: clickhouse
+    ports:
+      - "${CLICKHOUSE_HTTP_PORT}:8123"    # HTTP
+      - "${CLICKHOUSE_NATIVE_PORT}:9000"  # native protocol
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./infra/clickhouse/init:/docker-entrypoint-initdb.d:ro   # schema on first boot
+    # The probe checks the SCHEMA, not just the port. `depends_on:
+    # service_started` only waits for the container to exist, and a ClickHouse
+    # that answers on 8123 but has not yet run docker-entrypoint-initdb.d is
+    # still useless to the sink. sink-writer connects once at boot, so losing
+    # that race used to disable its sink for the whole run.
+    healthcheck:
+      # Double quotes around the query, not single: `$$CLICKHOUSE_DB` inside
+      # single quotes reaches ClickHouse as a literal and the probe can never
+      # pass. `$$` is compose escaping for a single `$` handed to the shell.
+      test:
+        - CMD-SHELL
+        - >-
+          clickhouse-client -u "$$CLICKHOUSE_USER" --password "$$CLICKHOUSE_PASSWORD"
+          -q "SELECT 1 FROM $$CLICKHOUSE_DB.transactions_scored LIMIT 0"
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+    networks: [fraudnet]
+
+  # --- Stream processing (PyFlink session cluster) --------------------------
+  jobmanager:
+    build:
+      context: ./infra/flink
+      args:
+        FLINK_VERSION: ${FLINK_VERSION}
+    image: fraud-flink:${FLINK_VERSION}
+    container_name: jobmanager
+    command: jobmanager
+    ports:
+      - "${FLINK_UI_PORT}:8081"           # Flink web UI
+    environment:
+      PAYLOAD_KEY_HEX: ${PAYLOAD_KEY_HEX}
+      # Transport for the job's own Kafka client. PLAINTEXT or SSL; switching
+      # requires a resubmit, unlike the payload arms, because the connector
+      # properties are fixed when the job graph is built.
+      KAFKA_SECURITY_PROTOCOL: ${KAFKA_SECURITY_PROTOCOL:-PLAINTEXT}
+      KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:-kafka:9092}
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: jobmanager
+    volumes:
+      - ./stream-processor:/opt/flink/usrjobs   # PyFlink jobs (phase 4)
+      - flink_checkpoints:/opt/flink/checkpoints
+      - ./infra/kafka/certs:/certs:ro           # mutual TLS arm (point 3)
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [fraudnet]
+
+  taskmanager:
+    image: fraud-flink:${FLINK_VERSION}
+    container_name: taskmanager
+    command: taskmanager
+    environment:
+      # Present permanently; it only enables DEcryption. Records without the
+      # envelope prefix are still read as plaintext, so both arms of the
+      # security-overhead measurement run against this one deployment.
+      PAYLOAD_KEY_HEX: ${PAYLOAD_KEY_HEX}
+      # Transport for the job's own Kafka client. PLAINTEXT or SSL; switching
+      # requires a resubmit, unlike the payload arms, because the connector
+      # properties are fixed when the job graph is built.
+      KAFKA_SECURITY_PROTOCOL: ${KAFKA_SECURITY_PROTOCOL:-PLAINTEXT}
+      KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:-kafka:9092}
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: jobmanager
+        taskmanager.numberOfTaskSlots: 4
+    volumes:
+      - ./stream-processor:/opt/flink/usrjobs
+      - flink_checkpoints:/opt/flink/checkpoints
+      # The Kafka client runs HERE, not on the jobmanager, so this mount is the
+      # one that actually matters for the mutual-TLS arm. Omitting it fails the
+      # job at SSL initialisation with no mention of a missing file.
+      - ./infra/kafka/certs:/certs:ro
+    depends_on:
+      - jobmanager
+    networks: [fraudnet]
+
+  # --- Dashboards -----------------------------------------------------------
+  grafana:
+    image: ${GRAFANA_IMAGE}
+    container_name: grafana
+    ports:
+      - "${GRAFANA_PORT}:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+      GF_INSTALL_PLUGINS: grafana-clickhouse-datasource
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - clickhouse
+    networks: [fraudnet]
+
+  # --- Sink writer: transactions.scored -> ClickHouse + Neo4j ---------------
+  sink-writer:
+    build:
+      context: .
+      dockerfile: infra/sink-writer/Dockerfile
+    image: fraud-sink-writer:latest
+    container_name: sink-writer
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_HTTP_PORT: "8123"
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+    depends_on:
+      kafka:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    networks: [fraudnet]
+    restart: unless-stopped
+
+networks:
+  fraudnet:
+    driver: bridge
+
+volumes:
+  kafka_data:
+  redis_data:
+  neo4j_data:
+  clickhouse_data:
+  grafana_data:
+  # Retained Flink checkpoints. Shared by jobmanager and taskmanager, and
+  # deliberately a named volume: checkpoints that die with the container leave a
+  # resubmitted job nothing to restore from, so it re-reads the topic from the
+  # start and re-alerts on transfers that settled days ago.
+  flink_checkpoints:
+

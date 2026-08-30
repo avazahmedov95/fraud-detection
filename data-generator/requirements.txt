@@ -1,0 +1,19 @@
+# Generator + producer, pinned exactly to the host environment the reported
+# datasets and measurements were produced on (2026-08-15).
+#
+# The seed alone does not make synthetic data reproducible: numpy's Generator
+# guarantees a stable stream for a given bit generator and version, so a numpy
+# upgrade can legitimately change the drawn values. Pinning is what makes
+# "seed=42" mean the same dataset next year as it does today.
+numpy==2.1.3
+pandas==2.2.3
+kafka-python==3.0.7
+
+# DIVERGENCE, deliberate and recorded: `run.ps1 produce-stream-docker` runs this
+# same kafka_producer.py inside the fraud-sink-writer image, where kafka-python
+# is 3.0.10 (see sink-writer/requirements.txt). Every latency figure was taken
+# through that path - the container producer - because measuring across the
+# host/VM clock boundary produces a systematic error of the same order as the
+# quantity being measured. The host pin above therefore covers `produce` and
+# `produce-stream` only. Align the two if the divergence ever matters; today it
+# does not, since the producer uses no API that changed between the patches.

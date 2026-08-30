@@ -1,0 +1,178 @@
+{
+  "42": {
+    "APP": {
+      "recall": 0.8125,
+      "caught": 39,
+      "n": 48
+    },
+    "ATO": {
+      "recall": 0.9629629629629629,
+      "caught": 26,
+      "n": 27
+    },
+    "MULE": {
+      "recall": 0.8285714285714286,
+      "caught": 29,
+      "n": 35
+    },
+    "STRUCTURING": {
+      "recall": 1.0,
+      "caught": 39,
+      "n": 39
+    }
+  },
+  "7": {
+    "APP": {
+      "recall": 0.8947368421052632,
+      "caught": 34,
+      "n": 38
+    },
+    "ATO": {
+      "recall": 0.925,
+      "caught": 37,
+      "n": 40
+    },
+    "MULE": {
+      "recall": 0.8888888888888888,
+      "caught": 16,
+      "n": 18
+    },
+    "STRUCTURING": {
+      "recall": 0.9375,
+      "caught": 45,
+      "n": 48
+    }
+  },
+  "13": {
+    "APP": {
+      "recall": 0.825,
+      "caught": 33,
+      "n": 40
+    },
+    "ATO": {
+      "recall": 0.926829268292683,
+      "caught": 38,
+      "n": 41
+    },
+    "MULE": {
+      "recall": 0.8888888888888888,
+      "caught": 24,
+      "n": 27
+    },
+    "STRUCTURING": {
+      "recall": 0.9833333333333333,
+      "caught": 59,
+      "n": 60
+    }
+  },
+  "99": {
+    "APP": {
+      "recall": 0.875,
+      "caught": 35,
+      "n": 40
+    },
+    "ATO": {
+      "recall": 0.8571428571428571,
+      "caught": 30,
+      "n": 35
+    },
+    "MULE": {
+      "recall": 0.8095238095238095,
+      "caught": 34,
+      "n": 42
+    },
+    "STRUCTURING": {
+      "recall": 1.0,
+      "caught": 38,
+      "n": 38
+    }
+  },
+  "2026": {
+    "APP": {
+      "recall": 0.9285714285714286,
+      "caught": 39,
+      "n": 42
+    },
+    "ATO": {
+      "recall": 0.9666666666666667,
+      "caught": 29,
+      "n": 30
+    },
+    "MULE": {
+      "recall": 0.625,
+      "caught": 10,
+      "n": 16
+    },
+    "STRUCTURING": {
+      "recall": 1.0,
+      "caught": 30,
+      "n": 30
+    }
+  },
+  "1": {
+    "APP": {
+      "recall": 0.8095238095238095,
+      "caught": 34,
+      "n": 42
+    },
+    "ATO": {
+      "recall": 0.8846153846153846,
+      "caught": 23,
+      "n": 26
+    },
+    "MULE": {
+      "recall": 0.8823529411764706,
+      "caught": 30,
+      "n": 34
+    },
+    "STRUCTURING": {
+      "recall": 0.896551724137931,
+      "caught": 26,
+      "n": 29
+    }
+  },
+  "2": {
+    "APP": {
+      "recall": 0.813953488372093,
+      "caught": 35,
+      "n": 43
+    },
+    "ATO": {
+      "recall": 0.9285714285714286,
+      "caught": 39,
+      "n": 42
+    },
+    "MULE": {
+      "recall": 0.7037037037037037,
+      "caught": 19,
+      "n": 27
+    },
+    "STRUCTURING": {
+      "recall": 0.9722222222222222,
+      "caught": 35,
+      "n": 36
+    }
+  },
+  "3": {
+    "APP": {
+      "recall": 0.9069767441860465,
+      "caught": 39,
+      "n": 43
+    },
+    "ATO": {
+      "recall": 0.85,
+      "caught": 17,
+      "n": 20
+    },
+    "MULE": {
+      "recall": 0.9444444444444444,
+      "caught": 34,
+      "n": 36
+    },
+    "STRUCTURING": {
+      "recall": 0.9787234042553191,
+      "caught": 46,
+      "n": 47
+    }
+  }
+}

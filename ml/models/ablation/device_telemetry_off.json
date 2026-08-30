@@ -1,0 +1,70 @@
+{
+  "label": "device_telemetry=off",
+  "env": {
+    "CAP_DEVICE_TELEMETRY": "off"
+  },
+  "n_features": 21,
+  "features": [
+    "log_amount",
+    "amount_to_mean",
+    "amount_z",
+    "is_new_payee",
+    "vel_10m",
+    "vel_1h",
+    "distinct_payees_10m",
+    "sub_threshold_1h",
+    "secs_since_last",
+    "daily_sum_ratio",
+    "hour",
+    "cross_network",
+    "receiver_age",
+    "receiver_is_fresh",
+    "geo_is_anomaly",
+    "active_call",
+    "secs_login_z",
+    "ch_mobile_app",
+    "ch_ussd",
+    "ch_web",
+    "ch_atm"
+  ],
+  "metrics": {
+    "roc_auc": 0.9985256836937483,
+    "pr_auc": 0.9470351825863383,
+    "at_0_50": {
+      "threshold": 0.5,
+      "precision": 0.8707482993197279,
+      "recall": 0.8590604026845637,
+      "f1": 0.8648648648648649,
+      "tp": 128,
+      "fp": 19,
+      "fn": 21,
+      "tn": 9832
+    },
+    "high_recall": {
+      "threshold": 0.75,
+      "precision": 0.9166666666666666,
+      "recall": 0.8120805369127517,
+      "f1": 0.8612099644128114,
+      "tp": 121,
+      "fp": 11,
+      "fn": 28,
+      "tn": 9840
+    },
+    "cep_only": {
+      "threshold": 0.5,
+      "precision": 0.37745098039215685,
+      "recall": 0.5167785234899329,
+      "f1": 0.43626062322946174,
+      "tp": 77,
+      "fp": 127,
+      "fn": 72,
+      "tn": 9724
+    }
+  },
+  "recall_by_type": {
+    "APP": "87.5%",
+    "ATO": "96.3%",
+    "MULE": "60.0%",
+    "STRUCTURING": "100.0%"
+  }
+}

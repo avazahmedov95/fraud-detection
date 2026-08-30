@@ -1,0 +1,26 @@
+# Host-side tooling for the stream processor, pinned exactly (2026-08-15).
+#
+# What actually runs where:
+#   fraud_job.py            executes INSIDE the cluster. Its PyFlink, ONNX
+#                           Runtime, redis and neo4j versions come from
+#                           infra/flink/Dockerfile, not from this file.
+#   latency_report.py       host-side; stdlib only (urllib, math, argparse)
+#   fault_injection.py      host-side; stdlib only
+#   replay_eval.py, tests   host-side; pandas + pytest
+#
+# So nothing on the host needs PyFlink to submit or measure anything - `flink
+# run` happens in the container. apache-flink is listed only so fraud_job.py can
+# be imported or type-checked locally, and it MUST match the cluster: a host
+# copy of a different major version would validate the job against an API the
+# cluster does not have. As of 2026-08-15 the host had apache-flink 2.3.0
+# installed against a 1.19.1 cluster, which is exactly that trap.
+#
+# Install with:  pip install -r requirements.txt
+apache-flink==1.19.1
+redis==5.3.1
+pandas==2.2.3
+pytest==9.0.2
+
+# neo4j is imported by enrichment.py, which only ever runs inside the cluster
+# (pinned to 6.2.0 in infra/flink/Dockerfile). Listed here without a pin would
+# be misleading; installed on the host it is simply unused.

@@ -1,0 +1,67 @@
+{
+  "label": "channel=off",
+  "env": {
+    "CAP_CHANNEL": "off"
+  },
+  "n_features": 18,
+  "features": [
+    "log_amount",
+    "amount_to_mean",
+    "amount_z",
+    "is_new_payee",
+    "vel_10m",
+    "vel_1h",
+    "distinct_payees_10m",
+    "sub_threshold_1h",
+    "secs_since_last",
+    "daily_sum_ratio",
+    "hour",
+    "cross_network",
+    "receiver_age",
+    "receiver_is_fresh",
+    "device_is_new",
+    "geo_is_anomaly",
+    "active_call",
+    "secs_login_z"
+  ],
+  "metrics": {
+    "roc_auc": 0.9986796557294289,
+    "pr_auc": 0.9479098024931673,
+    "at_0_50": {
+      "threshold": 0.5,
+      "precision": 0.8680555555555556,
+      "recall": 0.8389261744966443,
+      "f1": 0.8532423208191127,
+      "tp": 125,
+      "fp": 19,
+      "fn": 24,
+      "tn": 9832
+    },
+    "high_recall": {
+      "threshold": 0.75,
+      "precision": 0.9097744360902256,
+      "recall": 0.8120805369127517,
+      "f1": 0.8581560283687943,
+      "tp": 121,
+      "fp": 12,
+      "fn": 28,
+      "tn": 9839
+    },
+    "cep_only": {
+      "threshold": 0.5,
+      "precision": 0.3786407766990291,
+      "recall": 0.5234899328859061,
+      "f1": 0.4394366197183099,
+      "tp": 78,
+      "fp": 128,
+      "fn": 71,
+      "tn": 9723
+    }
+  },
+  "recall_by_type": {
+    "APP": "85.4%",
+    "ATO": "100.0%",
+    "MULE": "51.4%",
+    "STRUCTURING": "100.0%"
+  }
+}

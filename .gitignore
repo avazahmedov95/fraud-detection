@@ -1,0 +1,46 @@
+# ---------------------------------------------------------------------------
+# Generated and large datasets.
+# banks.csv is REAL input data (CBU card figures) that config.py loads, so it
+# is tracked deliberately — a blanket `*.csv` rule would silently drop it and
+# make the generator fall back to synthetic banks.
+# ---------------------------------------------------------------------------
+data-generator/out/
+validation/*.csv
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# ---------------------------------------------------------------------------
+# ML artifacts. Weights and plots are regenerable from train.py; the result
+# JSONs (metrics, ablation, seeds, recall-by-type) are the evidence quoted in
+# the thesis and are tracked.
+# ---------------------------------------------------------------------------
+ml/models/*.joblib
+ml/models/*.onnx
+ml/models/*.png
+ml/models/_pre_ablation/
+
+# Local env overrides
+.env.local
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# deployed model artifacts (copied from ml/models at deploy)
+stream-processor/model.onnx
+stream-processor/feature_names.json
+
+# TLS material for the mutual-TLS arm (regenerate with `run.ps1 make-certs`).
+# The CA private key lives here alongside the certificates it signs, which is
+# acceptable only because this is a throwaway development CA - and precisely
+# why it must never be committed.
+infra/kafka/certs/
+
+# stray scratch file, cannot be deleted from the sandbox
+.writetest

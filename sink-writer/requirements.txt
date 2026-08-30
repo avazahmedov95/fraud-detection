@@ -1,0 +1,33 @@
+# Pinned exactly, not floored.
+#
+# These were written against `kafka-python>=2.0, clickhouse-connect>=0.7,
+# neo4j>=5.0`. A rebuild on 2026-08-11 resolved all three across a MAJOR version
+# boundary at once - kafka-python 2.x -> 3.0.10, clickhouse-connect 0.x -> 1.6.0,
+# neo4j 5.x -> 6.2.0 - so the image stopped matching the code that had been
+# tested against it, with no change to this repository. For a thesis that is not
+# a nuisance but a reproducibility failure: the measured results could not be
+# regenerated from the source that produced them.
+#
+# The versions below are the ones the reported measurements were taken on.
+# Bump deliberately, one at a time, and re-run the latency and fault-injection
+# measurements afterwards.
+kafka-python==3.0.10
+clickhouse-connect==1.6.0
+neo4j==6.2.0
+
+# Not used by the sink-writer itself. This image is also where the producer runs
+# for every measured run (`run.ps1 produce-stream-docker` mounts data-generator
+# into it), and the payload-encryption arm of reviewer point 3 needs AES-256-GCM
+# on that side. OpenSSL-backed, so the measured cost is a realistic one rather
+# than a pure-Python artefact.
+cryptography==48.0.0
+
+# Resolved transitively by the above on the same build; listed so the image is
+# reproducible even if those packages loosen their own constraints later.
+certifi==2026.7.22
+urllib3==2.7.0
+backports.zstd==1.6.0
+lz4==4.4.5
+pytz==2026.3.post1
+
+# integrity.py and verify_audit.py use only hashlib + urllib from the stdlib.
