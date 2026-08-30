@@ -4,13 +4,14 @@
 # is tracked deliberately — a blanket `*.csv` rule would silently drop it and
 # make the generator fall back to synthetic banks.
 # ---------------------------------------------------------------------------
-data-generator/out/
+# generator --out can point anywhere: out/, out_check/, ...
+data-generator/out*/
 validation/*.csv
 
 # Python
 __pycache__/
 *.pyc
-.venv/
+.venv*/
 venv/
 .pytest_cache/
 

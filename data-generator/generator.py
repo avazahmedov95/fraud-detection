@@ -58,7 +58,17 @@ def _assign_payees(persons, rng):
                 q = persons[int(rng.integers(len(persons)))].pinfl
             if q != p.pinfl:
                 chosen.add(q)
-        payees[p.pinfl] = list(chosen)
+        # sorted(), not list(): iterating a set of strings orders them by hash,
+        # and Python randomises string hashing per process (PYTHONHASHSEED).
+        # Under list() this payee list came out shuffled differently on every
+        # run, so the same seed, the same code and the same pinned versions
+        # still produced a different receiver for most transactions. Measured
+        # 2026-08-30 on two runs differing only in PYTHONHASHSEED: persons.csv
+        # byte-identical, 36,072 of 50,000 transaction rows different. Sorting
+        # makes the order a property of the data rather than of the process.
+        # NOTE: this fix changes the RNG stream, so it does not regenerate the
+        # frozen dataset of record - see the hashes in docs/generator-spec.md.
+        payees[p.pinfl] = sorted(chosen)
     return payees
 
 

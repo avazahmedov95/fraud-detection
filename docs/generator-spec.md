@@ -336,10 +336,80 @@ python generator.py --seed 7 --persons 5000 --transactions 50000
 ```
 
 Output is a deterministic function of `(seed, n_persons, n_transactions,
-fraud_rate, days, start_date)` plus `banks.csv`. The multi-seed ablation
+fraud_rate, days, start_date)` plus `banks.csv` - but only since the payee
+ordering was fixed on 2026-08-30; see "Determinism is not free" below. The
+multi-seed ablation
 (`ml/ablation_seeds.py`) regenerates across 20 seeds; between-seed variation in
 baseline PR-AUC is ±0.008–0.035 depending on configuration, which is why no
 single-dataset figure is quoted anywhere in this project.
+
+### Determinism is not free, and the seed does not buy it
+
+Until 2026-08-30 the claim above was false, and the failure is worth recording
+because none of this project's guards could see it.
+
+`_assign_payees` collected each sender's frequent payees in a `set` and stored
+`list(chosen)`. Iterating a set of strings orders them by hash, and CPython
+randomises string hashing per process unless `PYTHONHASHSEED` is fixed. The
+payee list therefore came out in a different order in every interpreter, and the
+receiver is drawn from that list by index.
+
+Measured on two runs differing in nothing but `PYTHONHASHSEED` - same seed, same
+source, same pinned versions:
+
+| file | result |
+|---|---|
+| `persons.csv` | byte-identical |
+| `transactions.csv` | 36,072 of 50,000 rows differ |
+
+Every differing row carried the same sender, timestamp, amount, channel, device,
+region and session signals, and a different receiver. With
+`payees[p.pinfl] = sorted(chosen)` the output is byte-identical across
+`PYTHONHASHSEED` 1, 2 and 99.
+
+Two consequences outlast the one-line fix:
+
+- **Pinned dependencies are necessary and not sufficient.** Every declared
+  version matched across those runs; what differed was an undeclared property of
+  the interpreter process. `data-generator/requirements.txt` argues that pinning
+  numpy is what makes `seed = 42` mean the same dataset next year. That argument
+  is correct and incomplete.
+- **The ablation's version guard cannot catch this.** `ml/ablation_seeds.py`
+  fingerprints the feature set and the generator sources and refuses to mix
+  results across versions. The guard assumes identical sources imply identical
+  data. Two runs with the same fingerprint could stand on different datasets.
+
+`transaction_id` remains a bare `uuid.uuid4()`, drawn outside the seeded stream,
+so that column alone is still not reproducible. It carries no analytical content
+and every comparison above was taken with it removed.
+
+### The dataset of record
+
+`data-generator/out/` is gitignored, so the files every reported figure was
+computed on are pinned here instead. Generated 2026-07-19 on seed 42 with
+defaults.
+
+```
+transactions.csv   50,000 rows   16,162,896 bytes
+  sha256  b767f38489ab65628028b91638ca6cbfa7e0377128c0f86e844dffb35e0db596
+persons.csv         5,200 rows      546,044 bytes
+  sha256  010cddd6a60f30ee322dfd8c57643db87636f0ba1c3358e02d66711fcd9e463f
+```
+
+Both were written with LF line endings. `pandas.to_csv` takes its terminator
+from `os.linesep`, so they were not produced on the Windows host, and a
+regeneration there differs in hash for that reason alone before any content
+difference is considered.
+
+**The fix does not regenerate these files.** Sorting changes which payee is
+drawn and therefore the entire downstream RNG stream. The dataset above stays
+frozen as the one the reported figures were measured on; determinism applies
+from this commit forward.
+
+`out/relationships.csv` is *not* part of this dataset. It is a leftover from the
+design in which kinship edges were loaded into the graph - removed because the
+`is_family` signal it carried was an artefact (see `infra/neo4j/import.cypher`).
+Nothing in the current pipeline reads it.
 
 ### Specification against the produced dataset
 

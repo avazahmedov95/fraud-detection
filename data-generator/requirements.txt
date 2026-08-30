@@ -17,3 +17,11 @@ kafka-python==3.0.7
 # quantity being measured. The host pin above therefore covers `produce` and
 # `produce-stream` only. Align the two if the divergence ever matters; today it
 # does not, since the producer uses no API that changed between the patches.
+
+# Needed by payload_crypto.py, and by test_payload_crypto.py which lives in this
+# directory. The import inside payload_crypto.py is deliberately lazy, so the
+# plaintext arm runs on a host without it - but the test exercises the encrypted
+# path directly, so anyone installing only this file and running pytest gets an
+# ImportError rather than a skip. Pinned to the version the container producer
+# uses (sink-writer/requirements.txt): both sides must agree on the envelope.
+cryptography==48.0.0

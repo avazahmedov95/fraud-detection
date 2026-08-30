@@ -50,9 +50,24 @@ meaningful figure at a 1.5% positive rate. PaySim has a documented equivalent
 (balance-column leakage); the honest move is to disclose it rather than quote it
 as a headline result.
 
-**SHAP global importance (mean |SHAP|):** `receiver_age` (1.48) leads, then
-`is_new_payee` (1.27) and `log_amount` (1.20). The behavioural session signal
-`secs_login_z` enters the top eight (0.22).
+**SHAP global importance (mean |SHAP|)**, regenerated 2026-08-30 on the pinned
+environment: `is_new_payee` (0.770), `log_amount` (0.694), `receiver_age` (0.603),
+`rcv_inflow_1h` (0.516). The behavioural session signal `secs_login_z` sits sixth
+at 0.276.
+
+This replaces an earlier table (`receiver_age` 1.48, `is_new_payee` 1.27,
+`log_amount` 1.20) that predated the receiver-side aggregation capability -
+`rcv_inflow_1h` does not appear in it at all. The two must not be read side by
+side: adding a feature redistributes attribution across all of them, so every
+value moved, not only the new one's. Whether `receiver_age` lost weight *to*
+`rcv_inflow_1h` in particular is not established here - the two are plausibly
+correlated, since a freshly opened destination account is also the one doing the
+collecting, but that would have to be measured rather than asserted.
+
+SHAP is not bit-stable even when the model is. Two runs on this model - before
+and after the retrain that reproduced metrics.json exactly - differ by about
+0.002 per feature, because the explainer samples its background set. Quote three
+decimals at most.
 
 An earlier revision of this file reported `is_family` as the #1 feature (1.29)
 and framed it as the core research contribution. That feature has since been
