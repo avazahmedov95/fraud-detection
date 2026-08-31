@@ -66,13 +66,42 @@ CARD_LENGTH = 16  # 16-digit PAN with a valid Luhn check digit
 AMOUNT_MIN = 1_000
 AMOUNT_MAX = 50_000_000
 
-# --- Central Bank transfer limits (UZS) -------------------------------------
-# PLACEHOLDERS — set per Regulation No. 3759 / current CBU directives.
-LIMIT_PER_TRANSACTION = 30_000_000
-LIMIT_DAILY = 100_000_000
-LIMIT_MONTHLY = 500_000_000
-# Reporting / control threshold that "structuring" fraud tries to stay under.
+# --- Transfer thresholds (UZS) ----------------------------------------------
+# CORRECTION, 2026-08-31. This block used to cite Regulation No. 3759 as the
+# source of these figures. That citation was wrong, and checking it is what
+# found the error. CBU Board resolution 3759 of 21 January 2026 sets minimum
+# information-security and cybersecurity requirements for remote financial
+# services and fraud prevention - two-factor authentication, biometric
+# enrolment, OTP format, restricting the app during calls and remote-control
+# sessions. It sets NO sum thresholds at all, so nothing here was ever derived
+# from it.
+#
+# A traceability threshold does exist, and it is expressed in BRV (basic
+# accounting units) rather than in sums, so it is indexed and moves. In March
+# 2026 the CBU consulted on lowering it from 30 BRV to 25 BRV - about 10.3M UZS
+# at the time - above which a bank must collect full sender and receiver
+# details and guarantee traceability, following FATF recommendations.
+#
+# The value below is therefore a CHOSEN round figure: about 3% under the
+# proposed 25 BRV and about 19% under the 30 BRV then in force. A hardcoded sum
+# cannot track BRV indexation either, so it goes stale on its own. Before any
+# claim rests on this number it should become a BRV multiple with a dated BRV
+# value beside it.
+#
+# It is also load-bearing in a way worth stating: fraud_patterns.py places
+# STRUCTURING amounts at 0.85-0.99 of this threshold and rules.py watches the
+# same constant, so recall on that pattern is partly true by construction.
 STRUCTURING_THRESHOLD = 10_000_000
+
+# Operating limits, set by banks and the card networks rather than by a single
+# regulation - no CBU-wide per-transfer or daily limit on P2P card transfers
+# was found. LIMIT_DAILY is read by the DAILY_LIMIT_BREACH rule (and mirrored
+# in stream-processor/config.py). The other two are NOT read anywhere; they are
+# kept so the shape of a bank's limit set is visible, and marked so nobody
+# mistakes them for something the pipeline enforces.
+LIMIT_DAILY = 100_000_000
+LIMIT_PER_TRANSACTION = 30_000_000   # UNUSED
+LIMIT_MONTHLY = 500_000_000          # UNUSED
 
 # --- Channels ----------------------------------------------------------------
 CHANNELS = ["MOBILE_APP", "USSD", "WEB", "ATM"]

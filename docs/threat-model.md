@@ -172,6 +172,37 @@ base rate (~3%) within weeks, while `P(active_call = 1 | legitimate)` stays
 unchanged. That is the signature of evasion, and it is measurable on the audit
 log the system already writes.
 
+**The prediction has already been answered, and not by the adversary.** CBU
+Board resolution 3759 of 21 January 2026 requires the mobile application to
+restrict user access during audio and video calls, messenger calls included,
+and during remote-control sessions. In a compliant deployment the coached
+session never reaches confirmation, so `active_call = 1` should be absent from
+the stream rather than merely rarer.
+
+Three consequences, and the third belongs in the main argument.
+
+- `COACHED_SESSION` detects a state a compliant app must prevent. Its measured
+  contribution - session telemetry at -0.019 PR-AUC, the second most valuable
+  capability in the ablation - is measured on a capability that regulation is
+  removing.
+- The evasion predicted above is performed by the regulator rather than the
+  attacker, for a better reason, on a fixed date and for everyone at once. An
+  adversary would have adapted eventually; compliance adapts on their behalf.
+- **Detection value and prevention are substitutes, and a detection system must
+  not claim credit for what prevention removes.** The capability ablation ranks
+  data sources by what their absence costs the model. This is the third axis it
+  does not have: whether a control elsewhere in the stack is supposed to make
+  the source unobservable in the first place. On all three, session telemetry
+  reads the same way - high value, lowest robustness, and now legislated away.
+
+A blanket block carries a cost the rule did not: the bank's own support line
+walking a customer through a transfer is blocked along with the fraudster.
+Whitelisting the institution's support number is the obvious refinement, and
+whether 3759 admits such an exception has to be read from the clause itself.
+
+This paragraph rests on the published summary of 3759, not on the clause text.
+Quote the wording directly before the thesis leans on it.
+
 ---
 
 ## 6. Attacks on the detection system itself

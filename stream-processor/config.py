@@ -5,8 +5,12 @@ Connection defaults assume the job runs INSIDE the Flink container on the Docker
 network (service names). Override via environment variables for other setups.
 
 Thresholds and weights are deliberately explicit so they can be tuned and
-documented. Values that mirror regulation/network parameters (STRUCTURING_THRESHOLD,
-LIMIT_DAILY) must match the generator and Regulation No. 3759.
+documented. STRUCTURING_THRESHOLD and LIMIT_DAILY are mirrored from the
+generator and MUST match it - the generator places structuring amounts just
+under the threshold this side watches, which is why that pattern's recall is
+partly true by construction. Neither is a figure from Regulation No. 3759: that
+document sets information-security requirements and no sum thresholds. See the
+correction in data-generator/config.py.
 """
 
 import os
@@ -72,9 +76,11 @@ COACHED_SESSION_Z = 2.0
 # variables — see that module. Changing any of them changes the feature
 # contract, so retrain and re-export afterwards; ml/ablation.py does both.
 
-# --- Regulatory / network constants (must match the generator) --------------
-STRUCTURING_THRESHOLD = 10_000_000  # UZS — control threshold structuring stays under
-LIMIT_DAILY = 100_000_000           # UZS — per Regulation No. 3759 (placeholder)
+# --- Mirrored from the generator (must match it) -----------------------------
+# Chosen figures, not regulatory ones - see data-generator/config.py for what
+# 3759 actually says and where the real BRV-denominated threshold sits.
+STRUCTURING_THRESHOLD = 10_000_000  # UZS — the band structuring stays under
+LIMIT_DAILY = 100_000_000           # UZS — a bank operating limit, not a CBU one
 
 # --- Rule windows (seconds) -------------------------------------------------
 VELOCITY_WINDOW_S = 600             # 10 min
