@@ -208,6 +208,53 @@ the bet makes it falsifiable — and shows which controls are load-bearing.
 "yes" means the assumption holds against that adversary; "no" means they can
 break it.
 
+### One of those "cost to evade" ratings is now measured rather than reasoned
+
+Every entry in the right-hand column above was an argument. `NEW_PAYEE_HIGH_AMOUNT`
+is the first one with a price attached, and the price was obtainable only after
+noticing that **the generator never produced the evasion this table names**:
+measured on the frozen dataset, 99.20% of fraud went to a stream-new payee
+against 36.93% of legitimate traffic. A control whose stated weakness is absent
+from the data cannot have its value measured, only its ceiling.
+
+`SEEDED_PAYEE_SHARE` (`data-generator/config.py`) produces it: a share of APP
+episodes are preceded by one small transfer to the same payee, one to three
+weeks earlier, labelled **not fraud** because no loss occurs on it. Default 0.0,
+so nothing quoted elsewhere moves.
+
+Five generator seeds at share 0.5, APP episodes only, restricted to those late
+enough in the window for a seed to land (`stream-processor/seeded_payee_eval.py`):
+
+| payee at the time of the fraud | episodes | detected |
+|---|---|---|
+| new to the stream | 159 | **56.0%** |
+| established by one prior transfer | 201 | **31.8%** |
+
+Per-seed delta **−25.3 pp, 95% CI [−47.5, −3.1], 4 of 5 negative.**
+
+**Read the interval, not the headline.** It excludes zero, so the evasion works;
+it is also 44 points wide and one seed came out positive, so "roughly halves APP
+detection" is the pooled estimate and not a precise one. The width comes mostly
+from 30-50 episodes per group per seed rather than from disagreement between
+datasets, which is a reason to trust the direction and distrust the magnitude.
+
+Two things follow.
+
+- **The rating "low" was right, and now it has a number.** One small prior
+  transfer — no infrastructure, no cost, one sentence added to the script the
+  fraudster is already reading to the victim — removes roughly half the
+  detection on that episode.
+- **`is_new_payee`'s measured importance is an upper bound.** It is the model's
+  top SHAP feature at 0.770, measured on data where fraud reaches a stream-new
+  payee 99.2% of the time. That is not a finding about the signal; it is a
+  property of a generator that does not model the evasion. The figure should be
+  reported with that stated, exactly as the `is_family` artefact was.
+
+The measurement is deliberately a **lower** bound on full evasion: only APP is
+seeded. ATO is excluded because §3 constrains A2 to a short window, and seeding
+weeks ahead would put an evasion in the data that this threat model says that
+adversary cannot perform.
+
 ### The uncomfortable finding
 
 Ranking capabilities by measured detection value (from the ablation) against cost

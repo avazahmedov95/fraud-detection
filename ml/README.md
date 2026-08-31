@@ -75,6 +75,16 @@ environment: `is_new_payee` (0.770), `log_amount` (0.694), `receiver_age` (0.603
 `rcv_inflow_1h` (0.516). The behavioural session signal `secs_login_z` sits sixth
 at 0.276.
 
+**`is_new_payee` at the top is an upper bound, not a finding.** On this data
+fraud reaches a stream-new payee 99.2% of the time against 36.9% of legitimate
+traffic, because the generator does not produce the evasion its own threat model
+names — one small prior transfer establishes the payee. When that evasion is
+produced (`SEEDED_PAYEE_SHARE`, default off), APP detection on the affected
+episodes falls from 56.0% to 31.8%, five seeds, delta −25.3 pp [−47.5, −3.1].
+See `docs/threat-model.md` §4. Same shape as the `is_family` artefact below:
+a feature that dominates on synthetic data is suspect until the generator is
+shown to model both sides of its behaviour, and here one side is missing.
+
 This replaces an earlier table (`receiver_age` 1.48, `is_new_payee` 1.27,
 `log_amount` 1.20) that predated the receiver-side aggregation capability -
 `rcv_inflow_1h` does not appear in it at all. The two must not be read side by

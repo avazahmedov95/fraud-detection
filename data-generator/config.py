@@ -52,6 +52,40 @@ FAMILY_FRAUD_SHARE = 0.10     # share of eligible fraud legs routed to a relativ
 MULE_RECRUITED_SHARE = 0.30   # share of mules who are ordinary recruited people
                               # (the rest are purpose-made fraud accounts)
 
+# Share of APP/ATO episodes preceded by a SMALL transfer to the same payee,
+# days earlier, so that by the time the real transfer happens the payee is no
+# longer new to the stream.
+#
+# This is not invented. docs/threat-model.md 4 already rates NEW_PAYEE_HIGH_AMOUNT
+# as "low cost to evade - a prior small transfer establishes the payee", and the
+# generator did not produce that evasion: measured on the frozen dataset, 99.20%
+# of fraud went to a stream-new payee against 36.93% of legitimate traffic. A
+# control whose stated weakness is absent from the data cannot have its value
+# measured, only its ceiling.
+#
+# DEFAULT 0.0, deliberately. Turning this on changes every figure quoted in
+# irp-framing, ml/README and the ablation tables, and the dataset of record is
+# pinned by SHA-256. The point of the switch is to MEASURE what the evasion
+# costs before deciding whether to re-baseline on it - the same order of
+# operations that removing `is_family` followed.
+#
+# Applied to APP only, and the exclusions are reasoned rather than lazy:
+#
+#   ATO - threat-model.md 3 constrains A2 to a SHORT window ("credentials get
+#         revoked; the victim notices"). Seeding a payee one to three weeks
+#         ahead contradicts that adversary, so modelling it here would put an
+#         evasion in the data that the threat model says A2 cannot perform.
+#   MULE - the fan-in legs are already many small transfers from many senders;
+#         seeding each is a different and far more expensive evasion.
+#   STRUCTURING - the sub-threshold legs already establish the payee.
+#
+# APP is where the evasion is cheap and documented: one victim, one large
+# transfer, one payee to establish, and a fraudster already speaking to the
+# victim who can ask for a small transfer first. Since only 35% of fraud is APP,
+# the measured cost at share S is the cost of seeding 0.35*S of all fraud - a
+# LOWER bound on what full evasion would cost.
+SEEDED_PAYEE_SHARE = float(os.getenv("SEEDED_PAYEE_SHARE", "0.0"))
+
 CARD_NETWORKS = {
     "UZCARD": "8600",
     "HUMO": "9860",

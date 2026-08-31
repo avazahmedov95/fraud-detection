@@ -25,7 +25,8 @@ import numpy as np
 from datetime import datetime, timedelta
 
 from config import (AMOUNT_MIN, AMOUNT_MAX, STRUCTURING_THRESHOLD, CHANNELS,
-                    REGIONS, FAMILY_FRAUD_SHARE, MULE_RECRUITED_SHARE)
+                    REGIONS, FAMILY_FRAUD_SHARE, MULE_RECRUITED_SHARE,
+                    SEEDED_PAYEE_SHARE)
 from events import make_event
 from persons import households, relatives_of
 from travel import hijack_origin
@@ -73,6 +74,51 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
     def pick(pool):
         return pool[int(rng.integers(len(pool)))]
 
+    # Seed transfers live in their own list: `produced[kind]` counts everything
+    # appended to `events` inside a pattern block, so putting a non-fraud event
+    # there would silently consume the fraud budget and shrink the dataset's
+    # fraud count.
+    seeds = []
+
+    def maybe_seed_payee(victim, payee, fraud_ts, balance):
+        """Establish the payee before the fraud, the way the threat model says
+        an adversary would.
+
+        docs/threat-model.md 4 rates NEW_PAYEE_HIGH_AMOUNT "low cost to evade -
+        a prior small transfer establishes the payee". This produces exactly
+        that: a small transfer from the victim to the same destination, days
+        earlier, which leaves the payee no longer new to the stream by the time
+        the real transfer arrives.
+
+        The seed is labelled is_fraud=0 ON PURPOSE. No loss happens on it, and
+        under this project's label definition a detector firing on it is a false
+        positive. Labelling it fraud would hand the model a second positive per
+        episode and quietly inflate recall.
+
+        Known unrealism, recorded rather than modelled: receiver_account_age_days
+        is a static property of the Person, so the destination looks the same age
+        at seed time as at fraud time. Modelling it would mean ageing accounts
+        along the timeline, which affects every event in the dataset for the sake
+        of one.
+        """
+        if SEEDED_PAYEE_SHARE <= 0 or rng.random() >= SEEDED_PAYEE_SHARE:
+            return
+        seed_ts = fraud_ts - timedelta(days=float(rng.uniform(1.0, 21.0)))
+        if seed_ts < start_dt:
+            # Outside the observed window: the payee would still be stream-new,
+            # so emitting nothing is the honest outcome rather than clamping the
+            # timestamp and pretending the seeding happened inside it.
+            return
+        # Small enough that the seed itself trips neither the absolute floor of
+        # NEW_PAYEE_HIGH_AMOUNT nor the personal AMOUNT_DEVIATION baseline: an
+        # evasion that raises its own alert is not an evasion.
+        amount = float(np.clip(np.exp(rng.normal(10.8, 0.4)), AMOUNT_MIN, AMOUNT_MAX))
+        seeds.append(make_event(
+            victim, payee, amount, seed_ts, "MOBILE_APP",
+            device_id=f"dev-{victim.pinfl[-8:]}",
+            is_new_payee=True, balance_before=balance,
+            is_fraud=0, fraud_type="NONE", rng=rng))
+
     # Round-robin over patterns whose budget is not yet met.
     while sum(produced.values()) < n_fraud:
         remaining = [k for k in FRAUD_MIX if produced[k] < budget[k]]
@@ -94,8 +140,10 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
                 amount = float(np.clip(np.exp(rng.normal(14.0, 0.5)), AMOUNT_MIN, AMOUNT_MAX))
             else:
                 amount = float(np.clip(balance * rng.uniform(0.5, 0.95), AMOUNT_MIN, AMOUNT_MAX))
+            ts = rand_time()
+            maybe_seed_payee(victim, fraudster, ts, balance)
             events.append(make_event(
-                victim, fraudster, amount, rand_time(), "MOBILE_APP",
+                victim, fraudster, amount, ts, "MOBILE_APP",
                 device_id=f"dev-{victim.pinfl[-8:]}",
                 is_new_payee=True, balance_before=balance,
                 is_fraud=1, fraud_type="APP", rng=rng))
@@ -195,4 +243,4 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
 
         produced[kind] += len(events) - before
 
-    return events
+    return events + seeds
