@@ -111,6 +111,39 @@ MIN_TRAVEL_DISTANCE_KM = 100.0
 # several unrelated new payees is not.
 RECEIVER_WINDOW_S = 3600
 MULE_FAN_IN_MIN_SENDERS = 6
+
+# How that threshold is applied. "absolute" is the deployed behaviour and the
+# default: fire at >= MULE_FAN_IN_MIN_SENDERS, full stop.
+#
+# "relative" replaces the constant with a quantile of the population's OWN
+# live distribution of rcv_distinct_senders_1h. The reason is measured, not
+# aesthetic: running the deployed rules on IBM AMLSim (validation/README.md 3)
+# showed that 6 encodes the in-degree density of THIS generator's population.
+# On a scale-free transaction graph 2.69% of receiver-days exceed it as
+# ordinary hub behaviour, and the rule fired on 3.12% of legitimate traffic
+# while catching 0.0% of the fan-in typology. The constant was an unstated
+# assumption about the deployment population.
+#
+# Normalising against the RECEIVER's own history - the idiom used by amount_z
+# and secs_login_z - was considered and rejected: mule drop accounts are
+# frequently fresh (that is what FRESH_RECEIVER is for), so a per-receiver
+# baseline is absent exactly where the rule is needed. The population baseline
+# has no such hole.
+#
+# This does NOT recover the AMLSim result and is not claimed to. There the sign
+# was inverted - SAR receivers had FEWER senders - and a high-tail quantile
+# cannot fix a sign flip, nor should it: AML layering and P2P mule collection
+# are different phenomena. What it fixes is silent recalibration when the same
+# rule meets a bank with different traffic density.
+MULE_FAN_IN_MODE = os.getenv("MULE_FAN_IN_MODE", "absolute")   # absolute | relative
+MULE_FAN_IN_QUANTILE = float(os.getenv("MULE_FAN_IN_QUANTILE", "0.999"))
+# Below this many observations the population estimate is not worth trusting and
+# the rule falls back to the absolute constant. Failing back to a known
+# behaviour beats firing on an estimate built from nothing.
+MULE_FAN_IN_MIN_OBS = int(os.getenv("MULE_FAN_IN_MIN_OBS", "5000"))
+# Recomputing an exact quantile from the histogram is O(bins); doing it on every
+# event is waste. The threshold moves slowly, so it is cached and refreshed.
+MULE_FAN_IN_REFRESH_EVERY = int(os.getenv("MULE_FAN_IN_REFRESH_EVERY", "512"))
 AMOUNT_DEVIATION_MIN_HISTORY = 5   # need this much history before deviation fires
 NEW_PAYEE_AMOUNT_FACTOR = 3.0      # amount > factor * sender mean
 NEW_PAYEE_ABS_FLOOR = 2_000_000    # ...and above this absolute floor (UZS)

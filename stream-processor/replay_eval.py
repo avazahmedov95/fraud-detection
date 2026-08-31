@@ -18,7 +18,9 @@ from collections import defaultdict, Counter
 
 import pandas as pd
 
-from rules import SenderState, ReceiverState, evaluate
+import config as C
+from rules import (SenderState, ReceiverState, PopulationBaseline,
+                   evaluate)
 
 
 def _as_bool(v):
@@ -40,6 +42,11 @@ def run(path):
     states = defaultdict(SenderState)
     # Keyed by payee, mirroring the shared store the live job reads.
     receiver_states = defaultdict(ReceiverState)
+    # One histogram for the whole stream, mirroring the shared counter the live
+    # job would keep. Only consulted when MULE_FAN_IN_MODE is "relative"; it is
+    # built unconditionally so the two modes replay identical code paths apart
+    # from the threshold itself.
+    population = PopulationBaseline()
     decisions, hit_counter = [], defaultdict(Counter)
 
     for row in df.itertuples(index=False):
@@ -68,13 +75,20 @@ def run(path):
                        receiver_age_days=_as_age(r.get("receiver_account_age_days")),
                        state=states[r["sender_card"]],
                        now=ts,
-                       receiver_state=receiver_states[r["receiver_pinfl"]])
+                       receiver_state=receiver_states[r["receiver_pinfl"]],
+                       population=population)
         decisions.append(res["decision"])
         bucket = "fraud" if (has_labels and int(r["label_is_fraud"]) == 1) else "legit"
         for h in res["rule_hits"]:
             hit_counter[bucket][h] += 1
 
     df["decision"] = decisions
+    thr = population.threshold(C.MULE_FAN_IN_QUANTILE, C.MULE_FAN_IN_MIN_SENDERS)
+    print(f"MULE_FAN_IN mode: {C.MULE_FAN_IN_MODE}"
+          + (f"  (q={C.MULE_FAN_IN_QUANTILE}, threshold settled at "
+             f"{thr} senders/h over {population.n:,} observations)"
+             if C.MULE_FAN_IN_MODE == "relative"
+             else f"  (fixed at {C.MULE_FAN_IN_MIN_SENDERS} senders/h)"))
     _report(df, hit_counter, has_labels)
 
 

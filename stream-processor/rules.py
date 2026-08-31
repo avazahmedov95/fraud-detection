@@ -33,6 +33,66 @@ class ReceiverState:
 
 
 @dataclass
+class PopulationBaseline:
+    """Live empirical distribution of `rcv_distinct_senders_1h` across ALL
+    receivers, so MULE_FAN_IN can fire on a quantile instead of a constant.
+
+    Why this is a separate object rather than module state: the rule engine is
+    replayed offline and unit-tested, and a global counter would make results
+    depend on execution order across tests. It is passed in exactly the way
+    `ReceiverState` is, and is optional for the same reason - if it is absent
+    the rule falls back to the absolute threshold rather than stalling.
+
+    In production this is shared state, like ReceiverStore: every partition
+    observes into it. It is one small histogram, not per-key state, so the cost
+    is a bounded array rather than a store.
+
+    Exact rather than approximate: the quantity is a small count, so a bounded
+    histogram gives the true quantile with O(1) memory. Values above the last
+    bin land in it - a receiver with 256+ distinct senders in an hour is beyond
+    any threshold this would set.
+    """
+    BINS: int = 257
+    counts: list = field(default_factory=lambda: [0] * 257)
+    n: int = 0
+    _cached_thr: int = -1
+    _cached_at: int = -1
+
+    def observe(self, senders: int) -> None:
+        self.counts[min(int(senders), self.BINS - 1)] += 1
+        self.n += 1
+
+    def threshold(self, q: float, fallback: int) -> int:
+        """Smallest count k such that P(X < k) >= q, i.e. the value that puts a
+        receiver in the top (1-q) of the population right now.
+
+        Returns `fallback` until MULE_FAN_IN_MIN_OBS observations have been
+        seen. A quantile estimated from a handful of events is not a baseline,
+        and firing on one would replace a wrong constant with a random one.
+        """
+        if self.n < C.MULE_FAN_IN_MIN_OBS:
+            return fallback
+        if (self._cached_at >= 0
+                and self.n - self._cached_at < C.MULE_FAN_IN_REFRESH_EVERY):
+            return self._cached_thr
+        target = q * self.n
+        cum = 0
+        thr = self.BINS - 1
+        for k, c in enumerate(self.counts):
+            cum += c
+            if cum >= target:
+                thr = k
+                break
+        # A single sender is not concentration, whatever the distribution says:
+        # if 99.9% of receivers see zero or one, the quantile lands at 1 and the
+        # rule would fire on every ordinary transfer. The floor is a statement
+        # about what the rule MEANS, not a tuning constant.
+        thr = max(thr, 2)
+        self._cached_thr, self._cached_at = thr, self.n
+        return thr
+
+
+@dataclass
 class SenderState:
     seen_payees: set = field(default_factory=set)
     events: deque = field(default_factory=deque)        # (ts, amount, payee, device)
@@ -71,7 +131,8 @@ def _thresholds():
 
 
 def evaluate(event: dict, receiver_age_days, state: SenderState, now: float,
-             receiver_state: "ReceiverState | None" = None) -> dict:
+             receiver_state: "ReceiverState | None" = None,
+             population: "PopulationBaseline | None" = None) -> dict:
     """Score one event from the shared features. Mutates state (after extraction).
 
     `receiver_state` carries the payee's inbound history. It is optional: if the
@@ -122,8 +183,16 @@ def evaluate(event: dict, receiver_age_days, state: SenderState, now: float,
     # Fan-IN: many distinct senders converging on this payee. The mirror image
     # of DISTINCT_PAYEE_BURST, and the only rule here that looks at the payee's
     # history rather than the sender's.
-    if on("MULE_FAN_IN") and f["rcv_distinct_senders_1h"] >= C.MULE_FAN_IN_MIN_SENDERS:
-        hits.append("MULE_FAN_IN"); score += C.W_MULE_FAN_IN
+    if on("MULE_FAN_IN"):
+        # The threshold is either the configured constant or a quantile of the
+        # live population - see MULE_FAN_IN_MODE in config.py for the measured
+        # reason the choice exists.
+        fan_in_thr = C.MULE_FAN_IN_MIN_SENDERS
+        if C.MULE_FAN_IN_MODE == "relative" and population is not None:
+            fan_in_thr = population.threshold(C.MULE_FAN_IN_QUANTILE,
+                                              C.MULE_FAN_IN_MIN_SENDERS)
+        if f["rcv_distinct_senders_1h"] >= fan_in_thr:
+            hits.append("MULE_FAN_IN"); score += C.W_MULE_FAN_IN
 
     score = min(1.0, score)
 
@@ -138,6 +207,10 @@ def evaluate(event: dict, receiver_age_days, state: SenderState, now: float,
     vector = F.to_vector(f)
     F.update_state(state, event, now)
     F.update_receiver_state(receiver_state, event, now)
+    if population is not None:
+        # After the decision, never before: an event must not be part of the
+        # baseline it is judged against.
+        population.observe(f["rcv_distinct_senders_1h"])
 
     return {
         "is_new_payee": bool(f["is_new_payee"]),
