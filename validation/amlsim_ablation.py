@@ -37,7 +37,7 @@ import argparse
 import math
 import os
 import sys
-from collections import defaultdict, deque, Counter
+from collections import defaultdict, deque
 
 import numpy as np
 import pandas as pd

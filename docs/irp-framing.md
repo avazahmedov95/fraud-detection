@@ -628,7 +628,7 @@ partitioning key must stay readable to the broker.
 
 Transport security (mTLS between the switch, the broker and the consumers) is a
 separate measurement with a different cost profile — per-connection handshakes
-rather than per-record work — and is not yet done.
+rather than per-record work — and is taken in §7.5 and §7.5a below.
 
 ### 7.5 Security overhead II: transport (reviewer point 3, second half)
 

@@ -442,6 +442,17 @@ drawn and therefore the entire downstream RNG stream. The dataset above stays
 frozen as the one the reported figures were measured on; determinism applies
 from this commit forward.
 
+Measured 2026-08-31, because "the entire downstream RNG stream" invites the
+question *how much*: regenerating with the fixed generator gives 50,000 rows
+again, of which **36,110 carry a different receiver**. Sender, timestamp and
+amount are identical on every row; only `receiver_*` and the `is_family_transfer`
+that follows from it move. That is the same 72% and the same signature as the
+`PYTHONHASHSEED` experiment above (36,072 rows), which is what one would expect:
+both compare an arbitrary set ordering against the sorted one. The regenerated
+file is also self-consistent - two runs at different `PYTHONHASHSEED` now agree
+on every column except `transaction_id` - so the fix holds; what cannot be
+reproduced is this particular pre-fix file.
+
 `out/relationships.csv` is *not* part of this dataset. It is a leftover from the
 design in which kinship edges were loaded into the graph - removed because the
 `is_family` signal it carried was an artefact (see `infra/neo4j/import.cypher`).

@@ -24,16 +24,37 @@ fraud-detection/
 │   ├── flink/              PyFlink-ready Flink image
 │   └── grafana/            datasource + dashboard provisioning
 │
-├── data-generator/   ◀──   PUT THE GENERATOR FILES HERE   (phase 1 ✅)
-│   ├── config.py  events.py  persons.py  fraud_patterns.py
-│   ├── generator.py  kafka_producer.py  requirements.txt  README.md
+├── data-generator/         synthetic population + transactions   (phase 1)
+│   ├── config.py  events.py  persons.py  travel.py  fraud_patterns.py
+│   ├── generator.py  kafka_producer.py  handshake_bench.py
 │   └── out/                generated CSVs (gitignored)
 │
 ├── stream-processor/       PyFlink: enrich + CEP + ONNX + fusion   (phases 4,6)
 ├── ml/                     LightGBM + SHAP -> ONNX                 (phase 5)
 ├── sink-writer/            transactions.scored -> ClickHouse + Neo4j (phase 7)
-└── docs/                   architecture & regulatory mapping
+├── validation/             the deployed rules run on FOREIGN datasets
+│   ├── paysim_adapter.py   PaySim, and what transfers from it
+│   ├── amlsim_adapter.py   IBM AMLSim + amlsim.Dockerfile toolchain
+│   ├── amlsim_ablation.py  leakage and drift screens
+│   └── zenodo_provenance.py  why one published dataset was rejected
+└── docs/                   the evidence base — read irp-framing.md first
 ```
+
+## Where the results live
+
+The code runs; the argument lives in `docs/`. In rough order of importance to a
+reader:
+
+| document | what it holds |
+|---|---|
+| `docs/irp-framing.md` | the research question, every measurement with its interval, and a line-by-line answer to the seven review points |
+| `docs/threat-model.md` | three adversaries, what each control assumes, and what evading it costs — one of those costs is now measured rather than argued |
+| `docs/generator-spec.md` | the generator as a specification, the dataset of record with its hashes, and why the data is generated at all |
+| `validation/README.md` | four foreign datasets, what each could and could not test, and the screens that came out of it |
+| `docs/related-work.md` | fifteen sources, each with what it does **not** support |
+| `ml/README.md` | model, SHAP, and the capability ablation |
+
+Numbers quoted anywhere else in this repository are subordinate to those files.
 
 ## Prerequisites
 
