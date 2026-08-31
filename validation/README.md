@@ -254,19 +254,52 @@ run in which `FRESH_RECEIVER` is exercised at all. And `alert_transactions.csv`
 labels `fan_in` and `fan_out` **separately**, so the leg asymmetry in
 `ml/README.md` can be checked rather than asserted.
 
-```bash
-# once, outside this repo — needs Java 8+ and Maven
-git clone https://github.com/IBM/AMLSim.git && cd AMLSim
-bash scripts/build_AMLSim.sh
-pip install -r requirements.txt
-# conf.json -> "input": {"directory": "paramFiles/10K"}; that profile ships
-# 30 fan_in, 30 fan_out and 40 cycle alerts with is_sar=True
-python scripts/transaction_graph_generator.py conf.json
-bash scripts/run_AMLSim.sh conf.json
+```powershell
+# once, outside this repo
+git clone https://github.com/IBM/AMLSim.git
+
+# the toolchain, in a container - see amlsim.Dockerfile for why
+docker build -f amlsim.Dockerfile -t amlsim:1.0 .
+docker run --rm -e MAVEN_OPTS="-Xms1g -Xmx4g" `
+  -v "C:/path/to/AMLSim:/amlsim" -w /amlsim amlsim:1.0 bash -lc `
+  "bash scripts/build_AMLSim.sh && \
+   python scripts/transaction_graph_generator.py conf.json && \
+   bash scripts/run_AMLSim.sh conf.json && \
+   python scripts/convert_logs.py conf.json"
 
 # then, here
-python amlsim_adapter.py --dir /path/to/AMLSim/outputs/<simulation_name>
+python amlsim_adapter.py --dir C:/path/to/AMLSim/outputs/<simulation_name>
 ```
+
+**Two upstream traps, both handled by that container rather than by editing
+AMLSim.** `requirements.txt` pins `networkx==1.11`, and the generator calls
+`nx.set_edge_attributes(g, 'active', False)` twice — the 1.x argument order,
+reversed in 2.x, so on a modern networkx it is wrong rather than loud. And
+`pygraphviz` and `matplotlib` are in that file but imported by none of the
+scripts used here; they are the painful Windows dependencies and are skipped on
+purpose. Pinning the interpreter instead of patching two lines is what preserves
+the reason AMLSim was chosen at all — that a reader reproduces the data by
+running the published code unmodified.
+
+**`convert_logs.py` is not optional.** `run_AMLSim.sh` leaves only the raw
+simulator log (`tx_log.csv`) plus a counter file; the `schema.json`-shaped
+outputs this adapter reads — `accounts.csv`, `transactions.csv`,
+`alert_transactions.csv` — are produced by the conversion step, and the shipped
+run script does not call it. A run that stops after the simulator looks
+successful and yields a directory the adapter cannot read.
+
+**Which profile.** `conf.json` → `"input": {"directory": "paramFiles/100K"}`.
+The shipped profiles carry 3 / 30 / 300 / 3000 `fan_in` alerts at 1K / 10K /
+100K / 1M, and each alert spans 5–10 accounts. 100K therefore yields roughly
+1,500–3,000 fan-in transactions, the same order as the 2,520 fraud rows in the
+PaySim run. 10K would give 30 alerts, and this project has already been burned
+once by an interval wider than the effect it was measuring — a single test slice
+of ~35 mule events had a 30-point interval (`ml/README.md`, "Fan-in").
+
+Raising the alert **count** for statistical power is legitimate. Changing
+`min_period`/`max_period` is not: that is the pattern's duration, and altering it
+to fit `RECEIVER_WINDOW_S` would be tuning the dataset to the rule. Leave those
+columns alone.
 
 `python -m pytest test_adapters.py -q` exercises the adapter against fixtures in
 the shape of all three output files, so the harness is known to work before the
@@ -292,6 +325,139 @@ experiment and must be reported as one. Note the direction of travel against
 PaySim: there, hourly timestamps made the test conservative; here a daily clock
 against an hour-long window makes it conservative again, for a different reason.
 Neither dataset can flatter the rule by accident.
+
+### Result, 10K profile, 2026-08-31
+
+197,905 transactions, 12,043 accounts, 671 SAR-labelled (0.339%), typologies
+`cycle` 291 / `fan_in` 199 / `fan_out` 181.
+
+| rule | on SAR | on legit | lift |
+|---|---|---|---|
+| `AMOUNT_DEVIATION` | 0.15% | 0.02% | 7.7x |
+| `MULE_FAN_IN` | 0.15% | **3.12%** | **0.0x** |
+
+| typology | n | flagged | recall |
+|---|---|---|---|
+| cycle | 291 | 1 | 0.3% |
+| fan_in | **199** | **0** | **0.0%** |
+| fan_out | 181 | 1 | 0.6% |
+
+Decision layer: 2 of 671 SAR flagged against 6,185 of 197,234 legitimate —
+**lift 0.1x, worse than chance.** Essentially every alert is `MULE_FAN_IN`
+firing on legitimate traffic.
+
+**This is not a null result. The rule is anti-correlated with the label**, and
+the reason is measurable rather than speculative:
+
+| | all receivers | `fan_in` targets |
+|---|---|---|
+| distinct senders per receiver **per day**, median | 1 | 1 |
+| share above the rule's threshold (>5) | **2.69%** | **1.16%** |
+| distinct senders **over the whole run**, median | 1 | 16 |
+| p95 | 26 | 154 |
+
+and one figure settles the window question: **the median `fan_in` alert spans
+363 days** (min 72, max 616). The 5-20 in `alertPatterns.csv` is the interval
+between individual transfers, not the length of the pattern — a misreading
+recorded here because it changed the expected answer. `RECEIVER_WINDOW_S` is one
+hour. The mismatch is not a factor of a few, it is about 10^4. SAR amounts are
+also no larger than legitimate ones (median 575 against 547), so
+`AMOUNT_DEVIATION` has nothing to work with either.
+
+**Three findings, and the first is the one worth the chapter.**
+
+1. **`MULE_FAN_IN` detects a *rate*, not a *topology*.** It encodes the
+   assumption that collection into a drop account is fast relative to
+   background. In an AML typology collection is deliberately *slower* than
+   background, so `fan_in` targets cross the threshold **less** often than
+   ordinary accounts (1.16% against 2.69%) and the lift inverts. The rule did
+   not miss; it reversed.
+2. **The threshold of six senders is not portable on its own.** In a scale-free
+   transaction graph 2.69% of receiver-days exceed it as ordinary hub
+   behaviour. Six was calibrated against a population where that is rare.
+3. **Widening the window would not rescue it.** `fan_in` targets have a median
+   of 16 distinct senders over the run against 1 for the population - but the
+   population's p95 is 26, above the targets' median. An unnormalised count
+   separates the classes poorly at *any* window.
+
+**What this does and does not say about the -0.032.** It does not falsify it:
+that figure is a *feature* ablation on a model free to learn its own decision
+surface, and this is a fixed-threshold rule. It does establish something the
+own-generator evaluation could not - **the idea of receiver-side aggregation
+transfers; this rule does not.** Portable: the feature `rcv_distinct_senders`.
+Not portable: the window and the absolute threshold, both of which encode a
+local baseline that was never written down as an assumption.
+
+That is the same distinction the PaySim run reached for the decision threshold
+(`SCALE_THRESHOLDS_BY_CAPABILITY`), extended from *which capabilities exist* to
+*what the local traffic looks like*. Two foreign datasets, two different
+constants, the same lesson: this system's rules carry unstated assumptions
+about their deployment population, and each one is invisible until a population
+that violates it turns up.
+
+**Operational consequence, stated plainly.** Deployed unchanged against a
+population with this tempo, the CEP layer would alert on 3.14% of legitimate
+traffic and catch 0.3% of the fraud. The capability-scaled thresholds handle a
+missing data source; nothing in the system currently handles a different
+baseline, and that gap is now measured rather than suspected.
+
+### The ablation was run, and AMLSim cannot answer the question
+
+`amlsim_ablation.py`, 10K profile. The conclusion is negative about the
+**dataset**, not about the hypothesis, and it took three independent findings to
+establish - any one of which alone would have compromised the measurement.
+
+| run | PR-AUC with receiver block | without | delta |
+|---|---|---|---|
+| first, no bagging | 0.9507 | 0.8816 | **+0.069**, CI of *zero width* |
+| bagging on | 0.0153 | 0.2263 | −0.211 [−0.573, +0.151] |
+| bagging on, `is_new_payee` dropped | 0.0273 | 0.3629 | −0.336 [−0.643, −0.028] |
+
+**A sixty-fold swing in PR-AUC from a bagging parameter.** No healthy
+measurement does that, and chasing the sign through three configurations would
+have produced whichever answer was looked for. What the three runs actually
+found:
+
+1. **The zero-width interval was not precision, it was absence of
+   measurement.** Without `subsample`/`colsample_bytree` LightGBM is
+   deterministic given the data, so five seeds returned five identical models.
+   A degenerate interval reads as a very tight one. Now fixed, and recorded in
+   the code rather than quietly corrected.
+2. **`is_new_payee` separates the classes at rank-AUC 0.906** - 97% of SAR rows
+   go to a never-before-paid payee against 16% of legitimate ones. AMLSim plants
+   each alert as fresh graph edges while ordinary traffic reuses established
+   ones, so the feature encodes *how the positives were injected*, not how they
+   behave. This is `is_family` again (`ml/README.md`), in someone else's
+   generator, in a different column.
+3. **The receiver features are strongly non-stationary.** `rcv_txcount_90d`
+   runs 67 → 199 → 102 across time deciles while the SAR rate runs 0.54% →
+   0.28%. Under a time-ordered split - the correct protocol - the model trains
+   in one regime and is scored in another, so the delta measures the
+   simulation's shape as much as the feature's value.
+
+**Bottom line: AMLSim cannot validate the −0.032, and the reason is structural.**
+Its class membership is dominated by injection artefacts and its feature
+distributions are non-stationary by construction. This is a property of the
+dataset, discovered by measurement, and it is not repairable by adjusting the
+experiment. Continuing to adjust until a positive delta appeared would be
+precisely the failure this directory exists to prevent.
+
+**What survives, and it is worth more than the delta would have been.** Four
+datasets have now been examined for this project - its own generator, PaySim,
+Zenodo 20030065, AMLSim - and **every one placed its positive class where the
+method of placement is itself the strongest predictor**: `is_family` here,
+balance columns in PaySim and Zenodo, `is_new_payee` in AMLSim. That is not four
+coincidences. It is a property of how synthetic fraud data gets made, and it
+means **the first step in using a foreign dataset is a screen for it, not the
+last.** `amlsim_ablation.py` now carries two such screens - `leakage_screen()`
+for near-deterministic single features and `drift_screen()` for
+non-stationarity - and both were written after being caught by what they now
+detect.
+
+**Still owed for the receiver-side claim.** It has no external corroboration and
+this run did not provide one. What would: a dataset whose positive class is
+observed rather than injected. None of the four qualifies, and §8 of
+`docs/related-work.md` records why none is likely to.
 
 ### The stronger half: reproduce the ablation, do not just run the rules
 

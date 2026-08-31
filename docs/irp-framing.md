@@ -317,6 +317,58 @@ The generalisable claim: *any* additively-scored rule layer deployed across
 institutions with differing data access needs thresholds expressed relative to
 what is observable, not as absolute constants. This is the operational
 counterpart to the capability-ablation result in §4.
+
+### RQ3, third result: a rule threshold can encode the population it was tuned on
+
+The same claim has a second half, found the same way - by running the rules on
+someone else's data - and it concerns not *which capabilities exist* but *what
+the traffic looks like*.
+
+`MULE_FAN_IN` fires at six distinct senders converging on one payee within an
+hour. On IBM AMLSim (`validation/README.md` §3) that rule fired on **3.12% of
+legitimate traffic and caught 0.0% of the fan-in typology**: in a scale-free
+transaction graph 2.69% of receiver-days exceed six senders as ordinary hub
+behaviour. The constant was not arbitrary and it was not wrong - it was an
+**unstated assumption about the density of the population it was tuned on**,
+and it travelled silently.
+
+Replacing it with a quantile of the population's own live distribution
+(`MULE_FAN_IN_MODE = relative`, `rules.PopulationBaseline`) makes that
+assumption explicit. Two things follow, and the first matters more.
+
+**The learned threshold reproduces the hand-set one at home.** On the project's
+own data the quantile lands on 5 at q=0.9995 and 7 at q=0.9999, bracketing the
+six that was chosen by hand: the constant had been encoding roughly the 99.97th
+percentile of this population all along. Nothing about home behaviour changes;
+what changes is that the quantity is now named.
+
+**And it is measurably better at home, at no cost in alerts.** Five generator
+seeds, each replayed under both modes, deltas paired within seed
+(`stream-processor/fan_in_mode_eval.py`, q=0.999):
+
+| | delta | 95% CI | sign |
+|---|---|---|---|
+| MULE recall | **+6.9 pp** | [+4.2, +9.7] | 5/5 |
+| overall fraud recall | +1.8 pp | [+1.1, +2.5] | 5/5 |
+| false-positive rate | +0.01 pp | [−0.01, +0.02] | 2/5 |
+
+The recall intervals exclude zero; the false-positive interval contains it.
+That is the only shape in which such a claim is worth making - a recall gain
+bought with alerts is a threshold move, and the decision layer already has a
+knob for that. The mechanism is the additivity above: `W_MULE_FAN_IN` is 0.35
+against a REVIEW cutoff of 0.40, so the rule never decides alone. Lowering its
+threshold adds hits where another rule has already fired and adds nothing on
+isolated legitimate traffic.
+
+**Two limits, stated because they bound the claim.** The quantile 0.999 was
+chosen by a three-value sweep on the frozen dataset *before* these seeds
+existed; the seeds establish that the effect survives across generator seeds at
+a fixed quantile, not that 0.999 is optimal. And all five seeds come from one
+generator, so what is demonstrated is that the threshold **adapts**, not that
+it adapts correctly to a foreign institution. The AMLSim run cannot supply that
+second test: there the sign was inverted - SAR receivers had *fewer* senders,
+because AML layering deliberately spreads collection - and a high-tail quantile
+cannot and should not repair a sign flip between two different phenomena.
    - **Base rate**, cited to the ULB/Kaggle card dataset: ~0.17% against the
      generator's 1.5%. Recall is unaffected by class balance, **precision is
      not**, so precision measured on synthetic data is optimistic and must be
