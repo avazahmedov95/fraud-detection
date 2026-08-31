@@ -31,8 +31,6 @@ log = logging.getLogger("ch_writer")
 # interval and recovers within a few seconds of ClickHouse coming back.
 RECONNECT_INTERVAL_S = 10.0
 
-_PAYLOAD_IDX = R.AUDIT_CORE_COLUMNS.index("payload")
-_INGRESS_IDX = R.AUDIT_CORE_COLUMNS.index("ingress_hash")
 
 
 class ClickHouseWriter:
@@ -96,8 +94,7 @@ class ClickHouseWriter:
         if self._audit_all or R.is_alert(event):
             core = R.audit_core(event)
             seq, prev = self._seq, self._prev_hash
-            rh = integrity.record_hash(
-                prev, seq, [core[_INGRESS_IDX], core[_PAYLOAD_IDX]])
+            rh = integrity.record_hash(prev, seq, R.audit_signed_values(core))
             self._audit.append(core + [seq, prev, rh])
             self._seq, self._prev_hash = seq + 1, rh
 

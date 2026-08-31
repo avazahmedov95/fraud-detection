@@ -97,6 +97,12 @@ AUDIT_CORE_COLUMNS = [
 AUDIT_CHAIN_COLUMNS = ["seq", "prev_hash", "record_hash"]
 AUDIT_COLUMNS = AUDIT_CORE_COLUMNS + AUDIT_CHAIN_COLUMNS
 
+# Positions of the two columns the chain hash binds, derived from the column
+# list rather than written as literals: reordering the columns then cannot
+# silently change what is signed.
+_PAYLOAD_IDX = AUDIT_CORE_COLUMNS.index("payload")
+_INGRESS_IDX = AUDIT_CORE_COLUMNS.index("ingress_hash")
+
 
 def audit_core(e: dict) -> list:
     """Content columns of one audit record (no chain fields yet)."""
@@ -115,7 +121,7 @@ def audit_core(e: dict) -> list:
     ]
 
 
-def audit_signed_values(e: dict) -> list:
+def audit_signed_values(core: list) -> list:
     """The values the chain hash actually binds: [ingress_hash, payload].
 
     The payload is the authoritative JSON snapshot of the whole event, so hashing
@@ -129,7 +135,19 @@ def audit_signed_values(e: dict) -> list:
     a String column byte-for-byte, whereas final_score is Float32 and would come
     back as 0.9300000071 — hashing typed columns directly would make every record
     fail verification after a read.
+
+    Takes the audit ROW, not the event, on purpose: the hash has to cover
+    exactly the values that will be written and read back, so it is taken from
+    the row `audit_core` produced rather than recomputed from the event beside
+    it. The two agree today; taking them from one place is what keeps them
+    agreeing.
+
+    This function had been defined and called by nowhere, while the writer
+    indexed the same two columns itself and the verifier looked them up by name.
+    The contract was therefore stated in three places and executed in two, and
+    the one that named it could drift from the other two in silence.
     """
+    return [core[_INGRESS_IDX], core[_PAYLOAD_IDX]]
     return [e.get("ingress_hash", "") or "",
             json.dumps(e, ensure_ascii=False, separators=(",", ":"))]
 

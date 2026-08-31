@@ -13,7 +13,8 @@ national identifiers or authoritative bank assignments.
 from dataclasses import dataclass
 import numpy as np
 
-from config import (CARD_LENGTH, REGIONS, REGION_WEIGHTS, BANKS, BANK_WEIGHTS,
+from config import (CARD_LENGTH, CARD_NETWORKS, BANKS_SOURCE, REGIONS,
+                    REGION_WEIGHTS, BANKS, BANK_WEIGHTS,
                     MALE_FIRST, FEMALE_FIRST, SURNAME_STEMS,
                     DECISION_TIME_MEDIAN_SEC, DECISION_TIME_CLIENT_SPREAD)
 
@@ -63,6 +64,29 @@ def gen_full_name(rng):
     return f"{surname} {first} {patronymic}"
 
 
+def network_from_bin(bin6):
+    """Card network from the BIN's leading digits, per config.CARD_NETWORKS.
+
+    Refuses an unrecognised prefix instead of guessing. This used to read
+    `"UZCARD" if bin6.startswith("8600") else "HUMO"`, which had two faults at
+    once: it labelled ANY unknown BIN as HUMO without a word, and it left
+    CARD_NETWORKS defined and read by nothing, so a reader who corrected that
+    table changed nothing at all.
+
+    A BIN outside the registry's networks is worth stopping for rather than
+    absorbing: the network feeds `cross_network`, which the model uses as a
+    feature, so a mislabelled card does not fail - it quietly shifts a feature.
+    """
+    for name, prefix in CARD_NETWORKS.items():
+        if bin6.startswith(prefix):
+            return name
+    known = ", ".join(f"{n}={p}" for n, p in CARD_NETWORKS.items())
+    raise ValueError(
+        f"BIN {bin6!r} matches no network in CARD_NETWORKS ({known}). "
+        f"Check {BANKS_SOURCE}: a card whose network cannot be resolved would "
+        f"silently distort the cross_network feature.")
+
+
 def gen_card(rng):
     """Return (network, 16-digit PAN). The PAN starts with a real bank BIN, so the
     issuing bank can be recovered from the number via `bank_from_card`."""
@@ -70,7 +94,7 @@ def gen_card(rng):
     # config.py for why the concentration of the card market matters here.
     bank = BANKS[int(rng.choice(len(BANKS), p=BANK_WEIGHTS))]
     bin6 = bank["bin"]
-    network = "UZCARD" if bin6.startswith("8600") else "HUMO"
+    network = network_from_bin(bin6)
     n_random = CARD_LENGTH - len(bin6) - 1          # 16 - 6 - 1 = 9
     base = bin6 + "".join(str(int(d)) for d in rng.integers(0, 10, size=n_random))
     # Luhn: rightmost base digit sits in an even position w.r.t. the check digit.
