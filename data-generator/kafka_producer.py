@@ -86,6 +86,16 @@ def main():
                          "hand gives each arm a different length and a "
                          "different amount of cache warming, which moves the "
                          "figures by more than the effect being measured")
+    ap.add_argument("--skip", type=int, default=0,
+                    help="drop the first N rows before sending anything. A "
+                         "repeated experiment on one dataset needs DISJOINT "
+                         "slices: replaying the same transaction ids makes "
+                         "every row after the first pass indistinguishable "
+                         "from a duplicate, and duplication is exactly what "
+                         "fault_injection.py measures. Skipped rows are "
+                         "dropped before the pacing clock starts, so the "
+                         "slice is paced from its own first row rather than "
+                         "sleeping out the gap it was never going to send")
     args = ap.parse_args()
 
     # Resolved once, before the loop, so a missing key fails at startup rather
@@ -130,11 +140,17 @@ def main():
             **tls,
         )
 
-    sent, prev_dt = 0, None
+    sent, skipped, prev_dt = 0, 0, None
     interrupted = False
     try:
         with open(args.file, newline="") as f:
             for row in csv.DictReader(f):
+                # Before the pacing clock, deliberately: prev_dt must be set by
+                # the first row actually SENT, or the slice would open by
+                # sleeping out a gap belonging to rows it skipped.
+                if skipped < args.skip:
+                    skipped += 1
+                    continue
                 if args.realtime:
                     dt = datetime.fromisoformat(row["event_time"])
                     if prev_dt is not None:
@@ -174,7 +190,8 @@ def main():
 
     if producer is not None:
         producer.flush()
-    print(f"produced {sent:,} messages to '{args.topic}'"
+    slice_note = f" (rows {args.skip:,}..{args.skip + sent:,})" if args.skip else ""
+    print(f"produced {sent:,} messages to '{args.topic}'" + slice_note
           + (" (stopped by hand)" if interrupted else ""))
 
 

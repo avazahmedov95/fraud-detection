@@ -138,10 +138,10 @@ model both classes of its behaviour.
 |---|---|---|
 | 1 | Formal adversarial threat model | **Accepted, and done — `docs/threat-model.md`.** The four fraud patterns were raw material, not a threat model. The document states, per control, what the attacker must be able to do, whether the required capability is attacker-controllable, and what evasion costs. It produced a result belonging in the main argument: **detection value and evasion cost are different axes**, and the second most valuable capability — session telemetry — is the cheapest to evade. |
 | 2 | Exact mathematical specification of the generator | **Done — `docs/generator-spec.md`.** Every distribution and parameter stated formally; the PaySim-style parametric approach defended against copulas/GANs on the grounds that both estimate a joint distribution *from data* and no Uzbek P2P data exists to fit — a GAN trained on IEEE-CIS would reproduce e-commerce covariance under Uzbek field names. Includes an explicit list of what the generator does **not** model. `verify_spec.py` re-checks the document against the output (16/16). |
-| 3 | Security-overhead benchmarking (mTLS, payload encryption) | **Half done — payload encryption measured, see §7.4.** AES-256-GCM on the event payload, decrypted inside the scored path: on matched 400-record arms the decision path is unchanged (p99 183 ms both, median CIs overlapping). A microbenchmark supplies the figure the pipeline cannot resolve — ~6.8 µs to decrypt, ~0.15% of the scoring budget. The measurable cost is **size**, about +50% per message, roughly half of it an artefact of the string deserialiser rather than of the cryptography. **Still owed:** mTLS between switch, broker and consumers, whose cost profile is per-connection rather than per-record. |
+| 3 | Security-overhead benchmarking (mTLS, payload encryption) | **Half done — payload encryption measured, see §7.4.** AES-256-GCM on the event payload, decrypted inside the scored path: on matched 400-record arms the decision path is unchanged (p99 183 ms both, median CIs overlapping). A microbenchmark supplies the figure the pipeline cannot resolve — ~6.8 µs to decrypt, ~0.15% of the scoring budget. The measurable cost is **size**, about +50% per message, roughly half of it an artefact of the string deserialiser rather than of the cryptography. **Transport half now measured too, see 7.5:** four counterbalanced arms show no transport effect that survives the ordering - the cost sits below a per-arm drift of about 4 ms - while the 300 ms target is met at p99 in every arm. Owed: an arm with connection churn, since each arm here held one long-lived connection and amortised the handshake. |
 | 4 | Integrity audit — cryptographic hashing at ingress and sink | **Done.** Ingress SHA-256 over the raw event at the producer, carried through Flink untouched and bound into the audit record; a hash chain over audit records makes any alteration, deletion or reorder evident; `verify_audit.py` recomputes it. Residual (a full-table rewrite) closed by publishing the head hash externally. |
 | 5 | Distinguish organic concept drift from adversarial evasion | **Accepted, sharpened, and settled in `docs/threat-model.md`.** The two are separated by *where* the shift appears: organic drift moves both classes, evasion moves the fraud class only, and only on features the adversary controls. Session timing is attacker-controllable; receiver account age is not. The document commits to a falsifiable prediction — if `COACHED_SESSION` is deployed and announced, `P(active_call = 1 | APP fraud)` should decay toward the ~3% population base rate while the legitimate rate holds. A control whose evasion is predictable in advance is a stronger claim than one whose robustness is merely asserted. |
-| 6 | Non-parametric statistics for tail latency; validate exactly-once by fault injection | **Done, with the exactly-once half reframed — see §6.6 and §7.** Non-parametric tail statistics are built into `latency_report.py` (nearest-rank order statistics, distribution-free CI for the median). On exactly-once the honest answer is that **the system does not provide it and should not**: the sink is `AT_LEAST_ONCE`, ClickHouse is plain MergeTree with no deduplication, and the Redis fan-in store sits outside the checkpoint. Fault injection measured what that costs: **nothing lost (500/500), duplication 0.20%, and — the finding — the duplicate copies carry different scores**, because the fan-in store's reads do not roll back with the checkpoint. Duplicate alerts are cheap; the checkpoint-interval latency that transactional writes would add is not, against a 300 ms budget. Owed: repeated kills for a distribution rather than a single observation. |
+| 6 | Non-parametric statistics for tail latency; validate exactly-once by fault injection | **Done, with the exactly-once half reframed — see §6.6 and §7.** Non-parametric tail statistics are built into `latency_report.py` (nearest-rank order statistics, distribution-free CI for the median). On exactly-once the honest answer is that **the system does not provide it and should not**: the sink is `AT_LEAST_ONCE`, ClickHouse is plain MergeTree with no deduplication, and the Redis fan-in store sits outside the checkpoint. Fault injection measured what that costs: **nothing lost (500/500), duplication 0.20%, and — the finding — the duplicate copies carry different scores**, because the fan-in store's reads do not roll back with the checkpoint. Duplicate alerts are cheap; the checkpoint-interval latency that transactional writes would add is not, against a 300 ms budget. Repeated kills now done: six jittered kills on a clean warehouse give a median duplication of 0.89% [0.40%, 1.38%], nothing lost in any of twelve kills across two series, and a divergence magnitude - 3 of 26 duplicates, at most 0.0003, no decision changed - that the original single observation could not supply. |
 | 7 | Spark micro-batching may miss rapid velocity attacks | **Scope changed — see §3.** The engine comparison is declined. The underlying concern is retained as a *design constraint on this system*: the detection window for the velocity and structuring rules is stated explicitly, and end-to-end latency is measured against it. If Flink's own latency exceeds the window the objection applies to this system too, and that is the version worth testing. |
 
 Point 7 is the one requiring care in the written response. It should read as
@@ -171,13 +171,16 @@ Ordered by what blocks what.
 4. ~~**Integrity hashing at ingress and sink** (point 4).~~ **Done** —
    `integrity.py`, `verify_audit.py`. Ingress hash binds each decision to its
    event; the audit hash chain makes tampering evident and survives restarts.
-5. **Security-overhead measurement** (point 3) — **payload encryption done,
-   §7.4; mTLS still owed.** The payload half found no cost on the decision path
-   and a ~50% cost in message size. The transport half is the one that could
-   plausibly move the budget, since a handshake is per-connection and TLS record
-   framing is per-message; it needs a CA, broker and client certificates, and an
-   SSL listener alongside the existing plaintext one so both arms can be run
-   against one deployment as the payload arms were.
+5. ~~**Security-overhead measurement** (point 3).~~ **Both halves done —
+   payload encryption in §7.4, transport in §7.5.** The payload half found no
+   cost on the decision path and a ~50% cost in message size. The transport half
+   was expected to be the one that could move the budget, since a handshake is
+   per-connection and TLS record framing is per-message. Four counterbalanced
+   arms say otherwise: the sign of the transport difference reverses with the
+   order of the arms, so the cost sits below a per-arm drift of about 4 ms,
+   while the 300 ms target is met at p99 in every arm. **Owed:** an arm with
+   connection churn — each arm here held one long-lived connection, which
+   amortises away the handshake that was the reason to expect a cost.
 6. ~~**Fault injection for exactly-once**~~ (point 6). **Done — `stream-processor/
    fault_injection.py`.** The system does not provide exactly-once and does not
    claim to: `AT_LEAST_ONCE` on the Kafka sink, a `MergeTree` with no
@@ -186,14 +189,43 @@ Ordered by what blocks what.
    what do the permitted duplicates cost.
 
    Method: baseline row count, paced stream, `docker compose kill taskmanager`
-   mid-stream, recount after recovery. 500 transactions sent.
+   mid-stream, recount after recovery. 500 transactions per round, six rounds
+   (`run-kill-series.ps1`), against a warehouse emptied beforehand.
 
-   **Nothing lost — 500 of 500 present.** Checkpointing plus committed offsets
-   replayed the window between the last checkpoint and the kill. Duplication:
-   1 row, 0.20%.
+   **Nothing lost — 500 of 500 in every round.** Across twelve kills in two
+   series, not one transaction was lost. Checkpointing plus committed offsets
+   replayed the window between the last checkpoint and the kill.
 
-   **The result worth reporting is not the rate but that the duplicates
-   disagree.** The two copies of the duplicated transaction carried different
+   **Duplication, six kills: median 0.89%, distribution-free 96.9% interval
+   [0.40%, 1.38%]** (for six order statistics that interval is the range).
+   Per round: 0.40, 1.38, 0.79, 0.40, 0.99, 1.19 per cent, i.e. 2 to 7 rows in
+   500. The count is the traffic in one checkpoint interval - 2 s at about 5
+   events/s, so a ceiling near ten - and which value comes up is decided by
+   where the kill lands in the cycle, a phase nobody controls in production
+   either. Twelve observations across both series span 1 to 10 rows, which is
+   the predicted range.
+
+   **The result worth reporting is not the rate but that the duplicates can
+   disagree — and how much, which is a separate question from whether.**
+
+   On the clean six-round series, 26 fault-induced duplicate rows produced
+   **3 with a different final score, a largest divergence of 0.0003, and no
+   decision change at all**. The mechanism below is confirmed; its operational
+   magnitude on this traffic is small, and both halves have to be said.
+
+   The reason it is small is the reason it matters. Divergence needs the payee's
+   window to be non-empty: the replayed transfer counts its own amount twice in
+   `rcv_inflow`, and on a 500-record slice across 5,200 people most payees
+   receive exactly once, so the double count moves almost nothing. **The size of
+   the disagreement scales with receiver-side concentration** - with the fan-in
+   structure the system exists to detect. On a mule payee with six inbound
+   transfers in the hour it would be large. An earlier measurement taken against
+   a warehouse still holding the security-overhead arms' deliberate re-sends
+   showed divergences up to 0.9275 and 18 changed decisions; those figures
+   belong to replays hours apart with full windows, not to the injected fault,
+   and are quoted here only as the ceiling of the same mechanism.
+
+   The original single-kill observation of two copies scoring 0 and 0.0012: The two copies of the duplicated transaction carried different
    scores — 0 and 0.0012. Replay is not a pure function of the event, and the
    mechanism is in the code rather than in the observation: `ReceiverStore`
    writes are idempotent (the sorted-set member encodes `transaction_id`) but
@@ -213,10 +245,21 @@ Ordered by what blocks what.
    than safer, which is the benign direction but is a property of this store, not
    a guarantee.
 
-   **Caveat on the rate.** 0.20% is a single observation, not an estimate. The
-   replay window is one checkpoint interval (2 s) of traffic, so the kill landed
-   almost immediately after a checkpoint. Non-parametric statistics over repeated
-   kills — the other half of point 6 — are still owed.
+   **What the repetition corrected, and how.** The previously reported 0.20%
+   was a single observation, and it turned out to be the MINIMUM of the range -
+   the kill had landed almost immediately after a checkpoint. Two method errors
+   surfaced on the way to replacing it, both worth recording:
+
+   - A first six-round series killed at a FIXED offset and returned 1.96, 1.38,
+     1.19, 0.60, 0.20, 0.20 per cent - strictly non-increasing, which six
+     independent draws do once in 720 times. A fixed offset does not sample the
+     checkpoint phase, it tracks it. The offset is now drawn per round.
+   - Score divergence and decision changes are computed over the whole table,
+     not the round's delta, so a warehouse left populated by earlier runs
+     swamps them. The series now refuses to start against a non-empty table.
+
+   Non-parametric statistics over repeated kills, the other half of point 6, are
+   no longer owed.
 7. **External validation.** Harnesses built and tested; both need a manual
    download (`validation/README.md`). The investigation produced a result worth
    putting in the thesis rather than in an appendix:
@@ -480,6 +523,77 @@ partitioning key must stay readable to the broker.
 Transport security (mTLS between the switch, the broker and the consumers) is a
 separate measurement with a different cost profile — per-connection handshakes
 rather than per-record work — and is not yet done.
+
+### 7.5 Security overhead II: transport (reviewer point 3, second half)
+
+Mutual TLS between producer, broker and consumers, measured 2026-08-31. The
+broker runs a plaintext listener on 9092 and an SSL listener on 9094 side by
+side over the same partitions, so an arm changes only the port the clients dial
+and `KAFKA_SECURITY_PROTOCOL` for the job. `ssl.client.auth = required`: the
+broker rejects any client without a certificate signed by the CA, so this is
+mutual TLS rather than server-side TLS, and the handshake - the part with a real
+cost - is inside the measurement.
+
+Four arms, counterbalanced A-B-B-A. Each discards a warm-up of a quarter its
+length, waits for the backlog to drain, settles 90 s so earlier rows leave the
+reporting window, and flushes the `age:*` enrichment cache so both arms start
+cold.
+
+| # | arm | n | median (95% CI) | p95 | p99 | max | over 300 ms |
+|---|---|---|---|---|---|---|---|
+| 1 | plaintext | 400 | 77 [73, 81] | 167 | 201 | 212 | 0 / 400 |
+| 2 | mutual TLS | 400 | 82 [79, 88] | 196 | 243 | 306 | 1 / 400 |
+| 3 | mutual TLS | 1456 | 83 [81, 85] | 174 | 225 | 304 | 1 / 1456 |
+| 4 | plaintext | 1456 | 87 [85, 89] | 168 | 230 | 268 | 0 / 1456 |
+
+**The target is met in every arm at the 99th percentile.** Operationally that is
+the result: mutual TLS does not put the 300 ms decision budget at risk.
+
+**The transport effect does not survive counterbalancing, and that is the
+finding.** Read the first pair alone and it says mutual TLS costs +5 ms at the
+median, on intervals that barely overlap. Read the second pair alone and it says
+plaintext costs +4 ms - the same magnitude, the opposite sign. What is
+consistent is not the transport but the position: in both pairs the arm that ran
+second was the slower one.
+
+Subtracting the scoring bracket from the decision path leaves the buffering
+component, and in run order across all four arms it is monotone:
+
+| arm (run order) | decision | scoring | buffering |
+|---|---|---|---|
+| 1, plaintext | 77 | 8.1 | ~69 |
+| 2, mutual TLS | 82 | 8.9 | ~73 |
+| 3, mutual TLS | 83 | 6.8 | ~76 |
+| 4, plaintext | 87 | 6.7 | ~80 |
+
+The subtraction is of medians rather than a median of differences, so it
+indicates the shape and not the exact value. Scoring falls across the session as
+the JVM and the Python workers warm; the buffering component rises by roughly
+4 ms per arm regardless of transport. The cause is not diagnosed - a growing
+ClickHouse table changing the sink's back-pressure, keyed state accumulating
+across `resume-job` restores, and host-level drift over a forty-minute session
+are all candidates, and four arms cannot separate them.
+
+**Stated at the resolution the setup supports: the cost of mutual TLS on the
+decision path is below the resolution of this measurement, and that resolution
+is set by a per-arm drift of about 4 ms rather than by the transport.** This is
+the same shape as the payload result in 7.4 - the pipeline confirms a small cost
+by failing to see it - but it is reached differently. There a microbenchmark
+supplied the figure the pipeline could not resolve; here the counterbalancing
+supplied the reason that no figure should be quoted at all.
+
+**What this does not measure.** Each arm holds one long-lived connection, so the
+handshake is amortised across it and what remains is mostly TLS record framing.
+A payment switch with many short-lived connections pays the handshake
+repeatedly, and that is the one scenario in which this answer could change. A
+connection-churn arm is the honest next measurement and is not run here.
+
+**Why the arms were reversed.** Had only the first pair been run - which is the
+normal thing to do - this section would have reported that mutual TLS costs 5 ms
+at the median, on intervals clean enough to publish. Reversing the arm order is
+what prevented it. That is the third time in this project that a single-order or
+single-run figure was wrong: once by a factor of two, once in sign, and now once
+in sign again through an ordering confound.
 
 ### The work was never the constraint
 
