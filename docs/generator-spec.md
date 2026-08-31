@@ -422,7 +422,7 @@ output is a wish list, so these are the numbers a reader can reproduce.
 | fraud rate | 1.5% | 1.500% |
 | fresh legitimate accounts | 12% | 12.5% |
 | aged fraud accounts | 30% | 27.0% |
-| channel mix | 0.70 / 0.13 / 0.12 / 0.05 | 0.700 / 0.130 / 0.118 / 0.051 |
+| channel mix (MOBILE_APP / USSD / WEB / ATM) | 0.70 / 0.12 / 0.13 / 0.05 | 0.700 / 0.118 / 0.130 / 0.051 |
 | median legitimate amount | ≈133k (baseline median) | 138,740 UZS |
 | `active_call` legitimate | 0.03 | 0.029 |
 | `active_call` APP | 0.70 | 0.669 |
