@@ -124,6 +124,7 @@ collapses under a reviewer's question is worse than no citation.
 |---|---|
 | rows | 57,394 in the file vs **56,962** claimed |
 | fraud | 111 in the file vs **98** claimed |
+| ...but partitioned by `transaction_id` shape | the counts resolve **exactly** — see below |
 | response latency (promised per record) | **absent** |
 | `v7..v28` | max pairwise correlation 0.10, medians 0.0003, σ ≈ 1.17 → **PCA components** |
 | `v1..v6` | σ ≈ 110,000, one pair correlated **0.9996** → balance-like, not PCA |
@@ -132,6 +133,40 @@ collapses under a reviewer's question is worse than no citation.
 The arithmetic also matches a 1/5 sample of the ULB credit-card dataset to
 within rounding: 284,807/5 = 56,961.4 against 56,962 claimed; 492/5 = 98.4
 against 98 claimed; ULB's fraud rate 0.1727% against 0.172% claimed.
+
+### The count mismatch is contamination, not miscounting
+
+`transaction_id` has three incompatible shapes in one file, and splitting on
+them resolves both discrepancies exactly:
+
+| `transaction_id` shape | rows | fraud | `test_date` | timestamps |
+|---|---|---|---|---|
+| `TXN`+base32 | **56,962** | **98** | set on all | 1–31 Jan 2026 |
+| `txn_<epoch>_<n>` | 423 | 4 | none | 10–13 Apr 2026 |
+| 8 hex chars | 9 | 9 | none | 9 Apr – 1 May 2026 |
+
+The first block is the described dataset, to the row and to the label:
+56,962 and 98, exactly as claimed. 432 further rows carrying 13 of the flagged
+frauds were appended **after** publication — no `test_date`, timestamps months
+past the dataset's own window, and a different feature schema: in the 423
+`txn_` rows 81.6% of the `v*` cells are exactly zero and `v2 == amount` in
+100% of them, which is a PaySim-shaped record (amount, old/new balances) poured
+into slots named for someone else's PCA components. The 9 hex-id rows are one
+canned test record replayed, `amount` 149.99 every time.
+
+Those 432 rows are somebody clicking through a demo UI, captured into a
+published research dataset. Two further marks of the same thing: the
+`fraud_probability` column carries **two scales at once** — fractions for the
+dataset block, percentages for most of the appended rows (51.03 alongside
+0.51) — while `risk_level` is banded on the fraction scale, so a percent-scale
+row lands in a band by accident. And `ip_address` holds what look like the
+testers' real addresses, one of them repeated 425 times.
+
+**This correction matters for how the finding is stated.** Reporting "57,394
+against 56,962 claimed" as a bare mismatch implies the publisher miscounted.
+They did not. The dataset is exactly what its description says; what fails is
+the release, which shipped live-testing rows and third-party IPs alongside it.
+The PCA finding below is unaffected and remains the reason the file is not used.
 
 **Three consequences.**
 

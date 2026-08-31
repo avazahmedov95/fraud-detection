@@ -31,6 +31,7 @@ IS, which determines what it can support.
 
 import argparse
 import os
+import re
 
 import numpy as np
 import pandas as pd
@@ -86,6 +87,48 @@ def main():
                       for c in df.columns)
     print(f"   latency   promised in the description: "
           f"{'present' if has_latency else 'ABSENT'}")
+
+    # --- 1b. where the extra rows come from -------------------------------
+    # The row and fraud counts differ from the description, and the obvious
+    # reading is that the description is wrong. It is not. Partitioning by the
+    # SHAPE of transaction_id splits the file cleanly into the dataset that was
+    # described and a block of rows appended afterwards, and the description is
+    # exact for the first. Reporting the raw mismatch without this split would
+    # accuse the publisher of miscounting when the real defect is contamination.
+    print()
+    print("   where the difference comes from - partition by transaction_id shape:")
+    tid = df["transaction_id"].astype(str)
+
+    def _shape(v):
+        if v.startswith("txn_"):
+            return "txn_<epoch>_<n>"          # a demo UI's own id format
+        if re.fullmatch(r"[0-9a-f]{8}", v):
+            return "8 hex chars"             # repeated canned test record
+        return "TXN+base32"                  # the published dataset
+
+    for name, g in df.assign(_s=tid.map(_shape)).groupby("_s"):
+        fr = int(pd.to_numeric(g[label_col], errors="coerce").fillna(0).sum()) \
+            if label_col else -1
+        dates = pd.to_datetime(g["timestamp"], errors="coerce")
+        td = g["test_date"].notna().sum() if "test_date" in g else 0
+        print(f"     {name:<16} {len(g):>7,} rows  {fr:>4} fraud  "
+              f"test_date set on {td:>6,}  "
+              f"{dates.min():%Y-%m-%d}..{dates.max():%Y-%m-%d}")
+
+    main_block = df[tid.map(_shape) == "TXN+base32"]
+    main_fraud = int(pd.to_numeric(main_block[label_col], errors="coerce")
+                     .fillna(0).sum()) if label_col else None
+    exact = (len(main_block) == claims["rows"] and main_fraud == claims["fraud"])
+    print(f"\n     -> the TXN+base32 block alone: {len(main_block):,} rows, "
+          f"{main_fraud} fraud  "
+          f"{'EXACTLY as claimed' if exact else 'still does not match'}")
+    if exact:
+        print("     -> so the description is accurate for the dataset, and the")
+        print(f"        remaining {len(df) - len(main_block):,} rows "
+              f"({actual_fraud - main_fraud} of them flagged fraud) are")
+        print("        somebody's live testing, appended after publication:")
+        print("        no test_date, timestamps months past the dataset window,")
+        print("        and a different feature schema (see check 3).")
 
     # --- 2. the PCA hypothesis --------------------------------------------
     print("\n" + "=" * 70)

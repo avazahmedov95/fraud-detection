@@ -22,6 +22,20 @@ The alternatives were considered and rejected:
 | IEEE-CIS (590k txns) | Real, but e-commerce card-not-present, not P2P. Different fraud shapes, no counterparty, no session signals. |
 | CCF / Kaggle credit card | PCA-anonymised into V1..V28. Features have no meaning, so SHAP explanations — a hard requirement under CBU 3759 — are meaningless. |
 | Zenodo 20030065 (57k txns) | Closest match: 30 days of production online banking, includes response latency. Retained as a **validation** set (§7), not as a source for the design. |
+| IBM Synthetic Data Sets (SynDS) | Since Oct 2025 includes P2P payment data modelled on Venmo/Zelle, fully labelled. Closest off-the-shelf substitute, and rejected mainly because it is a **commercial product**: a thesis built on it is not reproducible by a reader who has not bought it. The Apache-2.0 repo publishes schemas and DDL only. US consumer-app semantics, no session signals. |
+| Kaggle UPI sets (several) | India's UPI is the closest real instant-payment rail. But every set found is **itself synthetic and published without a generating specification** — strictly worse than a documented generator, by the argument in §7. |
+
+Assessed in full, with what each does and does not support, in
+`docs/related-work.md`.
+
+The V1..V28 objection above is not hypothetical, and the Zenodo file in the row
+above demonstrates it. 432 of its rows carry a completely different feature
+schema in the same `v1..v28` slots — a PaySim-shaped record with 81.6% of the
+cells zero and `v2 == amount` throughout — and nothing in the file marks the
+change, because a column named `v14` asserts nothing that could be violated.
+Anonymised features do not only cost explainability, which is the objection
+above; they remove the reader's ability to notice that the wrong quantity is in
+the column. `validation/zenodo_provenance.py` makes the split visible.
 
 So the generator produces a **design fixture**: a dataset whose statistical
 structure is stated up front, used to develop and instrument the pipeline. Every

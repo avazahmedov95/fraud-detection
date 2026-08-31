@@ -57,6 +57,19 @@ meaningful figure at a 1.5% positive rate. PaySim has a documented equivalent
 (balance-column leakage); the honest move is to disclose it rather than quote it
 as a headline result.
 
+**How much easier is this data? About 2.5x, measured.** The claim that a
+generated fixture is easier than real traffic is usually left qualitative. An
+external anchor makes it a number: a public CatBoost baseline on PaySim
+(`ris3abh/aml-p2p-fraud-detection`, MIT) reports **AUPRC 0.380** with ROC-AUC
+0.908 and 49.4% recall, on 6.36M transactions at a 0.129% fraud rate, after
+removing the balance-derived leakage. Against a baseline PR-AUC of 0.966 here,
+that is a factor of 2.5 — and the ROC-AUC comparison (0.908 against ~0.999)
+understates the gap, which is the point of preferring PR-AUC. Those are the
+author's self-reported figures, not reproduced here, and the two settings differ
+in dataset, rail and task, so this is a difficulty anchor for the **data** and
+not a comparison of systems. It is quoted so the separability of this generator
+has a size rather than an adjective. See `docs/related-work.md` §6.
+
 **SHAP global importance (mean |SHAP|)**, regenerated 2026-08-30 on the pinned
 environment: `is_new_payee` (0.770), `log_amount` (0.694), `receiver_age` (0.603),
 `rcv_inflow_1h` (0.516). The behavioural session signal `secs_login_z` sits sixth

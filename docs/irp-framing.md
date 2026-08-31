@@ -328,10 +328,17 @@ counterpart to the capability-ablation result in §4.
    semantics.
 
    **Zenodo 20030065 examined and rejected**, and the examination is a result in
-   its own right. Published as production-collected from a live system, it does
-   not match its own description: 57,394 rows against 56,962 claimed, 111 fraud
-   against 98, and the per-record response latency the description promises is
-   absent. Structurally, `v7..v28` are PCA components (pairwise |r| ≤ 0.10,
+   its own right. Published as production-collected from a live system, the file
+   holds 57,394 rows against 56,962 claimed and 111 fraud against 98, and the
+   per-record response latency the description promises is absent. The count
+   mismatch has an exact explanation and it is not miscounting: partitioning on
+   the shape of `transaction_id` isolates a block of **56,962 rows with 98
+   fraud — precisely as described** — plus 432 rows appended after publication,
+   carrying no `test_date`, timestamps months past the dataset's own window, a
+   PaySim-shaped feature schema in slots named for PCA components, two
+   probability scales in one column, and what appear to be the testers' real IP
+   addresses. The dataset is what it says it is; the release shipped somebody's
+   live demo session on top of it. Structurally, `v7..v28` are PCA components (pairwise |r| ≤ 0.10,
    medians ~0.0003, σ ≈ 1.17) while `v1..v6` are not (σ ≈ 110,000, one pair
    correlated 0.9996 — the signature of before/after balance columns, which is
    PaySim's documented leakage mode). Row and fraud counts sit within rounding of
