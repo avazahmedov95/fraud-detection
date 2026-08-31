@@ -695,9 +695,15 @@ switch ($Target.ToLower()) {
         Invoke-Step "submitting the Flink job" { & $PSCommandPath submit-job }
         Write-Host ""
         Write-Host "Empty topic, job running. Now feed it a paced stream:" -ForegroundColor Green
-        Write-Host "  .\run.ps1 produce-stream                        # Ctrl+C after 3-5 min"
+        Write-Host "  .\run.ps1 produce-stream-docker 7000           # about 30 min at this pacing"
         Write-Host "  cd stream-processor"
-        Write-Host "  python latency_report.py --since-minutes 5"
+        Write-Host "  python latency_report.py --since-minutes 35"
+        Write-Host ""
+        Write-Host "  produce-stream-docker, NOT produce-stream: the plain target runs the" -ForegroundColor Yellow
+        Write-Host "  producer on the host, so ingested_at and scored_at_job come from two" -ForegroundColor Yellow
+        Write-Host "  clocks. Measured offsets reached +205 ms and -279 ms minutes apart -" -ForegroundColor Yellow
+        Write-Host "  the same order as the quantity being measured - and that is what" -ForegroundColor Yellow
+        Write-Host "  produced a stable 640 ms tail no amount of tuning could move." -ForegroundColor Yellow
     }
 
     default {

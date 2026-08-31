@@ -139,7 +139,7 @@ model both classes of its behaviour.
 | 1 | Formal adversarial threat model | **Accepted, and done — `docs/threat-model.md`.** The four fraud patterns were raw material, not a threat model. The document states, per control, what the attacker must be able to do, whether the required capability is attacker-controllable, and what evasion costs. It produced a result belonging in the main argument: **detection value and evasion cost are different axes**, and the second most valuable capability — session telemetry — is the cheapest to evade. |
 | 2 | Exact mathematical specification of the generator | **Done — `docs/generator-spec.md`.** Every distribution and parameter stated formally; the PaySim-style parametric approach defended against copulas/GANs on the grounds that both estimate a joint distribution *from data* and no Uzbek P2P data exists to fit — a GAN trained on IEEE-CIS would reproduce e-commerce covariance under Uzbek field names. Includes an explicit list of what the generator does **not** model. `verify_spec.py` re-checks the document against the output (16/16). |
 | 3 | Security-overhead benchmarking (mTLS, payload encryption) | **Half done — payload encryption measured, see §7.4.** AES-256-GCM on the event payload, decrypted inside the scored path: on matched 400-record arms the decision path is unchanged (p99 183 ms both, median CIs overlapping). A microbenchmark supplies the figure the pipeline cannot resolve — ~6.8 µs to decrypt, ~0.15% of the scoring budget. The measurable cost is **size**, about +50% per message, roughly half of it an artefact of the string deserialiser rather than of the cryptography. **Transport half now measured too, see 7.5:** four counterbalanced arms show no transport effect that survives the ordering - the cost sits below a per-arm drift of about 4 ms - while the 300 ms target is met at p99 in every arm. Owed: an arm with connection churn, since each arm here held one long-lived connection and amortised the handshake. |
-| 4 | Integrity audit — cryptographic hashing at ingress and sink | **Done.** Ingress SHA-256 over the raw event at the producer, carried through Flink untouched and bound into the audit record; a hash chain over audit records makes any alteration, deletion or reorder evident; `verify_audit.py` recomputes it. Residual (a full-table rewrite) closed by publishing the head hash externally. |
+| 4 | Integrity audit — cryptographic hashing at ingress and sink | **Done.** Ingress SHA-256 over the raw event at the producer, carried through Flink untouched and bound into the audit record; a hash chain over audit records makes any alteration, deletion or reorder evident; `verify_audit.py` recomputes it. Residual (a full-table rewrite) now closed in practice: the head hash of the reference run is published in `docs/audit-anchors.md` and pushed to the remote, which separates custody of the value from custody of the database. Not a cryptographic timestamp, and recorded as the weaker option it is. |
 | 5 | Distinguish organic concept drift from adversarial evasion | **Accepted, sharpened, and settled in `docs/threat-model.md`.** The two are separated by *where* the shift appears: organic drift moves both classes, evasion moves the fraud class only, and only on features the adversary controls. Session timing is attacker-controllable; receiver account age is not. The document commits to a falsifiable prediction — if `COACHED_SESSION` is deployed and announced, `P(active_call = 1 | APP fraud)` should decay toward the ~3% population base rate while the legitimate rate holds. A control whose evasion is predictable in advance is a stronger claim than one whose robustness is merely asserted. |
 | 6 | Non-parametric statistics for tail latency; validate exactly-once by fault injection | **Done, with the exactly-once half reframed — see §6.6 and §7.** Non-parametric tail statistics are built into `latency_report.py` (nearest-rank order statistics, distribution-free CI for the median). On exactly-once the honest answer is that **the system does not provide it and should not**: the sink is `AT_LEAST_ONCE`, ClickHouse is plain MergeTree with no deduplication, and the Redis fan-in store sits outside the checkpoint. Fault injection measured what that costs: **nothing lost (500/500), duplication 0.20%, and — the finding — the duplicate copies carry different scores**, because the fan-in store's reads do not roll back with the checkpoint. Duplicate alerts are cheap; the checkpoint-interval latency that transactional writes would add is not, against a 300 ms budget. Repeated kills now done: six jittered kills on a clean warehouse give a median duplication of 0.89% [0.40%, 1.38%], nothing lost in any of twelve kills across two series, and a divergence magnitude - 3 of 26 duplicates, at most 0.0003, no decision changed - that the original single observation could not supply. |
 | 7 | Spark micro-batching may miss rapid velocity attacks | **Scope changed — see §3.** The engine comparison is declined. The underlying concern is retained as a *design constraint on this system*: the detection window for the velocity and structuring rules is stated explicitly, and end-to-end latency is measured against it. If Flink's own latency exceeds the window the objection applies to this system too, and that is the version worth testing. |
@@ -420,6 +420,51 @@ suggested otherwise was over-read, which is the same error the reviewer's point
 6 warns about in a different context — and worth recording rather than
 overwriting, since the first reading survived long enough to be written down.
 
+### 7.1a The reference run: 5,956 records, thirty minutes, no stall
+
+Runs A and B above are 1,602 and 430 records. This one is 5,956 over about
+thirty minutes of continuous paced traffic, producer inside the Docker network,
+warm enrichment cache, and it supersedes them as the figure to quote.
+
+| stage | median (95% CI) | p95 | p99 | max |
+|---|---|---|---|---|
+| ingest -> decision | 69 ms [68, 70] | 131 ms | **176 ms** | 325 ms |
+| of which scoring work | 4.2 ms [4, 4] | 13.8 ms | 22.0 ms | 168.3 ms |
+| decision -> ClickHouse | 30.3 s | 69.8 s | 79.7 s | 87.8 s |
+
+**Target met: 2 of 5,956 over 300 ms (0.03%).** Both breaches are marginal -
+the maximum on the decision path is 325 ms - rather than the tail of a stall.
+
+Every decision-path statistic is better than run A's on a sample 3.7 times
+larger: median 69 against 80, p99 176 against 186, maximum 325 against 570, and
+a breach rate of 0.03% against 0.37%. The host-to-container clock offset read
++0 ms with a 6 ms round trip, the cleanest of any run taken, so the confound
+that historically dominated these figures is absent here.
+
+**The multi-second stall did not recur.** Characterising it is what this run was
+for: two observations, 1,452 ms in run B and 323 ms in run A, are too few to
+attribute to anything. Across 5,956 records the worst scoring excursion was
+168 ms - an order of magnitude below the stall that prompted the investigation.
+
+That does not identify the cause; it bounds the frequency. **Under warm
+steady-state conditions the stall occurs less often than once in ~6,000
+records**, where run B put it at 2 in 430. Both observed stalls fell in short
+runs taken shortly after a cold start or a job submission, which suggests they
+belong to startup rather than to steady state - a hypothesis on n=2, not a
+finding, and one this run can only make plausible by failing to reproduce it.
+
+The head-of-line mechanism in 7.3 is confirmed from the other side: with no
+stall there is nothing to queue behind, and the breach count falls to two
+marginal records rather than run B's eighteen.
+
+Three limits on what this measures. The reporting window clipped the first
+~1,044 records of the run, which were the coldest, so this describes warm steady
+state and says nothing about a cold start. Throughput is 5 events/s on one
+machine - a pacing choice, not a load test, and p99 at this rate implies nothing
+about behaviour at a switch's volumes. And the warehouse path at a 30.3 s median
+sits at the top of the 20-33 s band reported earlier and is still undiagnosed;
+nothing real-time rides on it, but it did not improve.
+
 ### 7.2 The enrichment cache is the variable, and the prototype flatters it
 
 `enrichment.py` looks up receiver account age in Neo4j, cached in Redis with a
@@ -675,6 +720,10 @@ produced on desktop Docker needs to say so.
   not comparable, and the current one has not been diagnosed. No real-time
   requirement rides on it, but Grafana dashboards inherit the lag.
 - **A rare multi-second stall in scoring**, 1452 ms in run B, 323 ms in run A.
+  **Frequency now bounded (7.1a):** a 5,956-record run over thirty minutes did
+  not reproduce it at all, worst scoring excursion 168 ms, so under warm
+  steady-state conditions it is rarer than one in ~6,000 records. The cause
+  remains unidentified and the thirty-minute run that was owed is done.
   Three hypotheses were tested and rejected or left open: it is **not** ONNX
   warm-up (the stalls occur late in a run, not on the first records); it is
   **not** enrichment cache misses (the worst stall fell in the cache-hit
