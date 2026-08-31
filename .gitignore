@@ -45,3 +45,8 @@ infra/kafka/certs/
 
 # stray scratch file, cannot be deleted from the sandbox
 .writetest
+
+# Run state, not source: fault_injection.py rewrites the baseline snapshot on
+# every round, so tracking it means a dirty tree after every experiment.
+stream-processor/fault_injection_state.json
+stream-processor/fault_injection_duplicates.txt
