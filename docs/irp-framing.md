@@ -580,6 +580,20 @@ rather than per-record work — and is not yet done.
 
 ### 7.5 Security overhead II: transport (reviewer point 3, second half)
 
+**Why this control and not another.** The reviewer asked for transport-security
+overhead, but there is a stronger reason to measure it here. In the 2025 annual
+report of Uzbekistan's State Institution "Cybersecurity Centre", transport
+security is the **largest single class of high-severity defect found in mobile
+applications**: of 157 high-severity findings, 33 are "interception of
+transmitted data", 13 are "transport security disabled in the application", and
+8 are "data transmitted unencrypted" - 54 of 157, over a third, in one class.
+The measurement below therefore prices the control that national data identifies
+as the one most often missing. That reframes the result: 7.5 and 7.5a do not
+report that a control the reviewer named happens to be affordable, they report
+that **the most commonly omitted high-severity control in this market costs less
+than this pipeline can measure** - which removes performance as a defence for
+omitting it.
+
 Mutual TLS between producer, broker and consumers, measured 2026-08-31. The
 broker runs a plaintext listener on 9092 and an SSL listener on 9094 side by
 side over the same partitions, so an arm changes only the port the clients dial
