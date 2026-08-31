@@ -105,6 +105,15 @@ def generate_normal(config, persons, by_pinfl, n_normal, rng, start_dt, trips):
                 rp = cand
 
         receiver = by_pinfl[rp]
+        # NOTE the two senses of "new payee", which are NOT the same thing and
+        # differ on ~28% of rows. This one is generator-internal: is the
+        # receiver outside the sender's ASSIGNED regular-payee set. The feature
+        # the model and the rules actually use (features.py) is stream-derived:
+        # has this sender sent to this receiver BEFORE, within the observed
+        # window. A person's regular payee is still stream-new the first time
+        # they are paid here. The column below records the first; the signal
+        # check at the end of this file reports the second, because that is the
+        # one anything downstream reads.
         is_new = rp not in known[sender.pinfl]
         known[sender.pinfl].add(rp)
 
@@ -186,9 +195,43 @@ def _summary(df):
     print(f"fraudulent        : {n_fraud:,}  ({n_fraud / n:.2%})")
     print("\nby fraud type:")
     print(df.loc[df.label_is_fraud == 1, "label_fraud_type"].value_counts().to_string())
-    new_fraud = df.loc[df.label_is_fraud == 1, "is_new_payee"].mean()
-    new_legit = df.loc[df.label_is_fraud == 0, "is_new_payee"].mean()
-    print(f"\nsignal check  is_new_payee   fraud={new_fraud:.2%}  legit={new_legit:.2%}")
+    _signal_check(df)
+
+
+def _signal_check(df):
+    """Report `is_new_payee` as the PIPELINE computes it, not as the column
+    records it.
+
+    The two disagreed on 14,201 of 50,000 rows and the check was reporting the
+    wrong one: the column said 8.11% of legitimate traffic went to a new payee,
+    while the value features.py derives from the stream says 36.93%. A check
+    that reports on a quantity nothing downstream reads is worse than no check,
+    because it looks like verification. Both are printed now, and the gap
+    between them is the point.
+    """
+    seen, computed = {}, []
+    for card, rcv in zip(df["sender_card"], df["receiver_pinfl"]):
+        s = seen.setdefault(card, set())
+        computed.append(0 if rcv in s else 1)
+        s.add(rcv)
+    df = df.assign(_computed=computed)
+    f = df.label_is_fraud == 1
+    print("\nsignal check  is_new_payee")
+    print(f"  as computed from the stream (what the model and rules see):"
+          f"  fraud={df.loc[f, '_computed'].mean():.2%}"
+          f"  legit={df.loc[~f, '_computed'].mean():.2%}")
+    print(f"  as recorded in the column (outside the assigned payee set):"
+          f"     fraud={df.loc[f, 'is_new_payee'].mean():.2%}"
+          f"  legit={df.loc[~f, 'is_new_payee'].mean():.2%}")
+    disagree = (df["is_new_payee"].astype(int) != df["_computed"]).sum()
+    print(f"  the two senses disagree on {disagree:,} of {len(df):,} rows"
+          f" ({disagree / len(df):.1%}) - see the note beside `is_new` above")
+    if df.loc[f, "_computed"].mean() > 0.98:
+        print("  !! fraud is essentially ALWAYS to a stream-new payee. The"
+              " threat model (docs/threat-model.md 4) rates that control"
+              " 'low cost to evade - a prior small transfer establishes the"
+              " payee', and this generator does not produce that evasion, so"
+              " the feature's measured value is an upper bound.")
 
 
 def parse_args():
