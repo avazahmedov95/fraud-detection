@@ -86,6 +86,15 @@ def main():
                          "hand gives each arm a different length and a "
                          "different amount of cache warming, which moves the "
                          "figures by more than the effect being measured")
+    ap.add_argument("--reconnect-every", type=int, default=0, metavar="N",
+                    help="close and reopen the producer every N messages. The "
+                         "transport arms in docs/irp-framing.md 7.5 each hold "
+                         "ONE long-lived connection, so the handshake is "
+                         "amortised over the whole arm and what they measure is "
+                         "mostly record framing. A payment switch does not work "
+                         "that way. This makes the handshake recur, which is "
+                         "the only condition under which the mutual-TLS answer "
+                         "could change.")
     ap.add_argument("--skip", type=int, default=0,
                     help="drop the first N rows before sending anything. A "
                          "repeated experiment on one dataset needs DISJOINT "
@@ -133,14 +142,17 @@ def main():
                        ssl_certfile=args.ssl_cert,
                        ssl_keyfile=args.ssl_key)
             print(f"transport: mutual TLS -> {args.bootstrap}")
-        producer = KafkaProducer(
-            bootstrap_servers=args.bootstrap,
-            key_serializer=lambda k: k.encode(),
-            value_serializer=_serialize,
-            **tls,
-        )
+        def _new_producer():
+            return KafkaProducer(
+                bootstrap_servers=args.bootstrap,
+                key_serializer=lambda k: k.encode(),
+                value_serializer=_serialize,
+                **tls,
+            )
 
-    sent, skipped, prev_dt = 0, 0, None
+        producer = _new_producer()
+
+    sent, skipped, reconnects, prev_dt = 0, 0, 0, None
     interrupted = False
     try:
         with open(args.file, newline="") as f:
@@ -175,6 +187,28 @@ def main():
                 else:
                     producer.send(args.topic, key=row["sender_card"], value=msg)
                 sent += 1
+                if (args.reconnect_every and producer is not None
+                        and sent % args.reconnect_every == 0):
+                    # flush() before close(): messages already buffered belong to
+                    # the run, and dropping them here would look like loss in
+                    # exactly the experiment that exists to rule loss out.
+                    producer.flush()
+                    producer.close(timeout=10)
+                    reconnects += 1
+                    producer = _new_producer()
+                    # SCOPE OF WHAT THIS MEASURES. The reconnect happens AFTER
+                    # the send, and _new_producer() blocks until bootstrap is
+                    # done, so the next row's ingested_at is stamped on the far
+                    # side of the handshake. The client-side handshake cost is
+                    # therefore EXCLUDED from every decision-latency figure by
+                    # construction; handshake_bench.py measures that directly.
+                    # What a churn arm can show is the broker-side spillover:
+                    # repeated handshakes competing with the partitions Flink is
+                    # reading. Note the confound in the other direction too - the
+                    # pause drains the pipeline's buffers, and the TLS arm pauses
+                    # longer, which biases TLS to look FASTER on decision
+                    # latency. Both arms reconnect so the pause exists in both;
+                    # only its length differs.
                 if args.limit is not None and sent >= args.limit:
                     break
     except KeyboardInterrupt:
@@ -191,6 +225,7 @@ def main():
     if producer is not None:
         producer.flush()
     slice_note = f" (rows {args.skip:,}..{args.skip + sent:,})" if args.skip else ""
+    slice_note += f", {reconnects} reconnects" if reconnects else ""
     print(f"produced {sent:,} messages to '{args.topic}'" + slice_note
           + (" (stopped by hand)" if interrupted else ""))
 

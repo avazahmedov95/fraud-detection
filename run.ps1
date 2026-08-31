@@ -40,7 +40,14 @@ param(
     #   .\run.ps1 produce-stream-docker 400
     #   .\run.ps1 produce-stream-secure 400
     [Parameter(Position = 1)]
-    [int]$Count = 0
+    [int]$Count = 0,
+
+    # Close and reopen the producer every N messages. The transport arms hold
+    # ONE connection each, so the handshake is amortised over the whole arm and
+    # what they measure is mostly TLS record framing. A switch reconnects; this
+    # is the only condition under which the mutual-TLS answer could change.
+    #   .\run.ps1 measure-tls 1200 -Reconnect 20
+    [int]$Reconnect = 0
 )
 
 $ErrorActionPreference = "Stop"
@@ -65,6 +72,10 @@ $DotEnv = Get-DotEnv
 $Neo4jPassword = if ($DotEnv.NEO4J_PASSWORD) { $DotEnv.NEO4J_PASSWORD } else { "fraud_neo4j" }
 $ChUser = if ($DotEnv.CLICKHOUSE_USER) { $DotEnv.CLICKHOUSE_USER } else { "fraud" }
 $ChPassword = if ($DotEnv.CLICKHOUSE_PASSWORD) { $DotEnv.CLICKHOUSE_PASSWORD } else { "fraud_ch" }
+
+# Built once so every producer target speaks the same churn setting; an arm
+# where only one side reconnects would compare two different experiments.
+$rc = if ($Reconnect -gt 0) { @("--reconnect-every", "$Reconnect") } else { @() }
 
 function Invoke-Step {
     param([string]$Description, [scriptblock]$Action)
@@ -245,7 +256,13 @@ function Invoke-Measurement {
     #>
     param(
         [ValidateSet("plain", "tls", "crypto")] [string]$Arm,
-        [int]$Messages
+        [int]$Messages,
+        # Declared rather than inherited. Without it PowerShell would still find
+        # the script-level $Reconnect by dynamic scoping and the arm would run
+        # correctly - until someone moved this function, at which point churn
+        # would silently become 0 and the arm would report a no-churn result
+        # under a churn label. The banner below prints what was actually bound.
+        [int]$Reconnect = 0
     )
     if ($Messages -le 0) { $Messages = 400 }
 
@@ -277,7 +294,8 @@ function Invoke-Measurement {
     }
 
     Write-Host ""
-    Write-Host "=== ARM '$Arm' : $Messages messages, job transport $jobProto ===" -ForegroundColor Cyan
+    $churn = if ($Reconnect -gt 0) { ", reconnecting every $Reconnect" } else { ", one connection" }
+    Write-Host "=== ARM '$Arm' : $Messages messages, job transport $jobProto$churn ===" -ForegroundColor Cyan
 
     # Warm-up, discarded. Switching transports REQUIRES recreating the Flink
     # containers, so whichever arm runs first after that recreate meets a cold
@@ -291,9 +309,9 @@ function Invoke-Measurement {
     $warm = [Math]::Max(100, [int]($Messages / 4))
     Write-Host "==> warm-up: $warm messages, discarded" -ForegroundColor Cyan
     switch ($Arm) {
-        "plain"  { & $PSCommandPath produce-stream-docker $warm }
-        "tls"    { & $PSCommandPath produce-stream-tls    $warm }
-        "crypto" { & $PSCommandPath produce-stream-secure $warm }
+        "plain"  { & $PSCommandPath produce-stream-docker $warm -Reconnect $Reconnect }
+        "tls"    { & $PSCommandPath produce-stream-tls    $warm -Reconnect $Reconnect }
+        "crypto" { & $PSCommandPath produce-stream-secure $warm -Reconnect $Reconnect }
     }
 
     if (-not (Wait-Drained "the backlog")) { return }
@@ -308,9 +326,9 @@ function Invoke-Measurement {
 
     $startedAt = Get-Date
     switch ($Arm) {
-        "plain"  { & $PSCommandPath produce-stream-docker $Messages }
-        "tls"    { & $PSCommandPath produce-stream-tls    $Messages }
-        "crypto" { & $PSCommandPath produce-stream-secure $Messages }
+        "plain"  { & $PSCommandPath produce-stream-docker $Messages -Reconnect $Reconnect }
+        "tls"    { & $PSCommandPath produce-stream-tls    $Messages -Reconnect $Reconnect }
+        "crypto" { & $PSCommandPath produce-stream-secure $Messages -Reconnect $Reconnect }
     }
 
     if (-not (Wait-Drained "this arm")) { return }
@@ -484,12 +502,12 @@ switch ($Target.ToLower()) {
             -v "${genPath}:/gen" -w /gen `
             fraud-sink-writer:latest `
             python kafka_producer.py --file out/transactions.csv --realtime --speed 200 `
-                --bootstrap kafka:9092 --topic transactions.raw @limit
+                --bootstrap kafka:9092 --topic transactions.raw @limit @rc
     }
 
-    "measure-plain"  { Invoke-Measurement -Arm plain  -Messages $Count }
-    "measure-tls"    { Invoke-Measurement -Arm tls    -Messages $Count }
-    "measure-crypto" { Invoke-Measurement -Arm crypto -Messages $Count }
+    "measure-plain"  { Invoke-Measurement -Arm plain  -Messages $Count -Reconnect $Reconnect }
+    "measure-tls"    { Invoke-Measurement -Arm tls    -Messages $Count -Reconnect $Reconnect }
+    "measure-crypto" { Invoke-Measurement -Arm crypto -Messages $Count -Reconnect $Reconnect }
 
     "make-certs" {
         # Private CA, broker certificate and client certificate for the mutual
@@ -522,6 +540,22 @@ switch ($Target.ToLower()) {
             "apache/kafka:$($DotEnv.KAFKA_IMAGE -replace '.*:', '')" /make-truststore.sh
     }
 
+    "handshake-bench" {
+        # What ONE connection costs, plaintext against mutual TLS. The transport
+        # arms hold a single connection each, so this is the figure they cannot
+        # resolve - the same relationship the AES-GCM microbenchmark has to the
+        # payload arms in 7.4. Runs inside the network for the certificates and
+        # for one clock. `-Count` sets the number of pairs, default 30.
+        $genPath = (Resolve-Path "data-generator").Path
+        $certPath = (Resolve-Path "infra\kafka\certs").Path
+        $pairs = if ($Count -gt 0) { $Count } else { 30 }
+        docker run --rm -i `
+            --network fraud-detection_fraudnet `
+            -v "${genPath}:/gen" -v "${certPath}:/certs:ro" -w /gen `
+            fraud-sink-writer:latest `
+            python handshake_bench.py --n $pairs
+    }
+
     "produce-stream-tls" {
         if (-not (Assert-JobRunning)) { break }
         # Transport arm: same producer, same pacing, same payload - only the
@@ -535,7 +569,7 @@ switch ($Target.ToLower()) {
             -v "${genPath}:/gen" -v "${certPath}:/certs:ro" -w /gen `
             fraud-sink-writer:latest `
             python kafka_producer.py --file out/transactions.csv --realtime --speed 200 `
-                --bootstrap kafka:9094 --topic transactions.raw --tls @limit
+                --bootstrap kafka:9094 --topic transactions.raw --tls @limit @rc
     }
 
     "produce-stream-secure" {

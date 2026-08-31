@@ -138,7 +138,7 @@ model both classes of its behaviour.
 |---|---|---|
 | 1 | Formal adversarial threat model | **Accepted, and done — `docs/threat-model.md`.** The four fraud patterns were raw material, not a threat model. The document states, per control, what the attacker must be able to do, whether the required capability is attacker-controllable, and what evasion costs. It produced a result belonging in the main argument: **detection value and evasion cost are different axes**, and the second most valuable capability — session telemetry — is the cheapest to evade. |
 | 2 | Exact mathematical specification of the generator | **Done — `docs/generator-spec.md`.** Every distribution and parameter stated formally; the PaySim-style parametric approach defended against copulas/GANs on the grounds that both estimate a joint distribution *from data* and no Uzbek P2P data exists to fit — a GAN trained on IEEE-CIS would reproduce e-commerce covariance under Uzbek field names. Includes an explicit list of what the generator does **not** model. `verify_spec.py` re-checks the document against the output (16/16). |
-| 3 | Security-overhead benchmarking (mTLS, payload encryption) | **Half done — payload encryption measured, see §7.4.** AES-256-GCM on the event payload, decrypted inside the scored path: on matched 400-record arms the decision path is unchanged (p99 183 ms both, median CIs overlapping). A microbenchmark supplies the figure the pipeline cannot resolve — ~6.8 µs to decrypt, ~0.15% of the scoring budget. The measurable cost is **size**, about +50% per message, roughly half of it an artefact of the string deserialiser rather than of the cryptography. **Transport half now measured too, see 7.5:** four counterbalanced arms show no transport effect that survives the ordering - the cost sits below a per-arm drift of about 4 ms - while the 300 ms target is met at p99 in every arm. Owed: an arm with connection churn, since each arm here held one long-lived connection and amortised the handshake. |
+| 3 | Security-overhead benchmarking (mTLS, payload encryption) | **Done — both halves plus the churn arm.** Payload encryption, see §7.4: AES-256-GCM on the event payload, decrypted inside the scored path: on matched 400-record arms the decision path is unchanged (p99 183 ms both, median CIs overlapping). A microbenchmark supplies the figure the pipeline cannot resolve — ~6.8 µs to decrypt, ~0.15% of the scoring budget. The measurable cost is **size**, about +50% per message, roughly half of it an artefact of the string deserialiser rather than of the cryptography. **Transport half now measured too, see 7.5:** four counterbalanced arms show no transport effect that survives the ordering - the cost sits below a per-arm drift of about 4 ms - while the 300 ms target is met at p99 in every arm. **Churn arm done, see 7.5a:** a microbenchmark puts one mutual-TLS handshake at +11.2 ms over plaintext, and four further arms with 60 reconnects each still show no cost on the decision path - the handshake is paid by the client before the measured clock starts, so it lands on the switch's latency budget and not on the bank's. |
 | 4 | Integrity audit — cryptographic hashing at ingress and sink | **Done.** Ingress SHA-256 over the raw event at the producer, carried through Flink untouched and bound into the audit record; a hash chain over audit records makes any alteration, deletion or reorder evident; `verify_audit.py` recomputes it. Residual (a full-table rewrite) now closed in practice: the head hash of the reference run is published in `docs/audit-anchors.md` and pushed to the remote, which separates custody of the value from custody of the database. Not a cryptographic timestamp, and recorded as the weaker option it is. |
 | 5 | Distinguish organic concept drift from adversarial evasion | **Accepted, sharpened, and settled in `docs/threat-model.md`.** The two are separated by *where* the shift appears: organic drift moves both classes, evasion moves the fraud class only, and only on features the adversary controls. Session timing is attacker-controllable; receiver account age is not. The document commits to a falsifiable prediction — if `COACHED_SESSION` is deployed and announced, `P(active_call = 1 | APP fraud)` should decay toward the ~3% population base rate while the legitimate rate holds. A control whose evasion is predictable in advance is a stronger claim than one whose robustness is merely asserted. |
 | 6 | Non-parametric statistics for tail latency; validate exactly-once by fault injection | **Done, with the exactly-once half reframed — see §6.6 and §7.** Non-parametric tail statistics are built into `latency_report.py` (nearest-rank order statistics, distribution-free CI for the median). On exactly-once the honest answer is that **the system does not provide it and should not**: the sink is `AT_LEAST_ONCE`, ClickHouse is plain MergeTree with no deduplication, and the Redis fan-in store sits outside the checkpoint. Fault injection measured what that costs: **nothing lost (500/500), duplication 0.20%, and — the finding — the duplicate copies carry different scores**, because the fan-in store's reads do not roll back with the checkpoint. Duplicate alerts are cheap; the checkpoint-interval latency that transactional writes would add is not, against a 300 ms budget. Repeated kills now done: six jittered kills on a clean warehouse give a median duplication of 0.89% [0.40%, 1.38%], nothing lost in any of twelve kills across two series, and a divergence magnitude - 3 of 26 duplicates, at most 0.0003, no decision changed - that the original single observation could not supply. |
@@ -178,9 +178,11 @@ Ordered by what blocks what.
    per-connection and TLS record framing is per-message. Four counterbalanced
    arms say otherwise: the sign of the transport difference reverses with the
    order of the arms, so the cost sits below a per-arm drift of about 4 ms,
-   while the 300 ms target is met at p99 in every arm. **Owed:** an arm with
-   connection churn — each arm here held one long-lived connection, which
-   amortises away the handshake that was the reason to expect a cost.
+   while the 300 ms target is met at p99 in every arm. The churn arm that was
+   owed is now run (§7.5a): a handshake costs +11.2 ms measured directly, and
+   four arms reconnecting every 20 messages still show no cost on the decision
+   path — because the handshake is paid before the measured clock starts, it is
+   the switch's latency budget it comes out of, not the bank's.
 6. ~~**Fault injection for exactly-once**~~ (point 6). **Done — `stream-processor/
    fault_injection.py`.** The system does not provide exactly-once and does not
    claim to: `AT_LEAST_ONCE` on the Kafka sink, a `MergeTree` with no
@@ -627,11 +629,91 @@ by failing to see it - but it is reached differently. There a microbenchmark
 supplied the figure the pipeline could not resolve; here the counterbalancing
 supplied the reason that no figure should be quoted at all.
 
-**What this does not measure.** Each arm holds one long-lived connection, so the
-handshake is amortised across it and what remains is mostly TLS record framing.
-A payment switch with many short-lived connections pays the handshake
-repeatedly, and that is the one scenario in which this answer could change. A
-connection-churn arm is the honest next measurement and is not run here.
+**What the arms above do not measure.** Each holds one long-lived connection, so
+the handshake is amortised across it and what remains is mostly TLS record
+framing. A payment switch with many short-lived connections pays the handshake
+repeatedly, and that is the one scenario in which this answer could change. It
+is measured in 7.5a.
+
+### 7.5a Connection churn, and what one connection costs
+
+**The handshake, measured directly.** `data-generator/handshake_bench.py`
+constructs and closes one producer per iteration and times the constructor,
+which blocks until bootstrap completes. Forty pairs, arms alternating *within*
+each pair rather than in two blocks, one discarded warm-up pair:
+
+| transport | median | p95 | min | max |
+|---|---|---|---|---|
+| plaintext | 3.3 | 5.0 | 2.6 | 6.8 |
+| mutual TLS | 14.5 | 20.4 | 12.4 | 26.0 |
+
+Paired difference, TLS minus plaintext: **median +11.2 ms**, over the range
+[+9.2, +20.6]. Both arms pay the TCP connect, the API-version probe and the
+metadata fetch, so only the *difference* is the handshake; the absolutes are
+not. This is the same instrument 7.4 used for AES-GCM: a microbenchmark for a
+cost the pipeline cannot resolve.
+
+**The churn arms.** Four more arms, same A-B-B-A protocol as above, same 1200
+messages, with the producer closed and reopened every 20 messages - 60
+reconnects per arm, against one connection for the whole of 7.5.
+
+| # | arm | n | median (95% CI) | p95 | p99 | max | over 300 ms |
+|---|---|---|---|---|---|---|---|
+| 1 | plaintext, churn | 1456 | 66 [65, 68] | 128 | 170 | 475 | 3 / 1456 |
+| 2 | mutual TLS, churn | 1456 | 64 [62, 65] | 131 | 179 | 410 | 4 / 1456 |
+| 3 | mutual TLS, churn | 1389 | 62 [60, 64] | 127 | 171 | 226 | 0 / 1389 |
+| 4 | plaintext, churn | 1456 | 68 [65, 71] | 166 | 210 | 328 | 2 / 1456 |
+
+**The target is met at p99 in every churn arm**, with the worst arm at 210 ms.
+Operationally that is again the result.
+
+**The counterbalanced contrast has the wrong sign, and that is the finding.**
+Averaging the two arms of each transport - which cancels a drift linear in
+position - gives plaintext 67 ms against mutual TLS 63 ms: TLS **faster** by
+4 ms. Unlike 7.5 the sign does not reverse with the order. TLS was faster when
+it ran second (pair 1) and faster when it ran first (pair 2), and the per-arm
+confidence intervals do not overlap in the second pair. Subtracting the scoring
+bracket puts the whole difference in buffering (plaintext ~61.6 ms both arms;
+mutual TLS ~58.5 and ~57.7), not in work.
+
+Mutual TLS cannot make the decision path faster. So a sign-consistent,
+tight-interval result is being read here as evidence of a confound rather than
+of an effect, and two candidate confounds were named before the run:
+
+- **The handshake is outside the measurement by construction.** The reconnect
+  happens after the send, and the producer constructor blocks until bootstrap
+  finishes, so the next row's `ingested_at` is stamped on the far side of the
+  handshake. Every millisecond of the 11.2 ms above is paid by the client
+  *before* the clock this section reads starts. The churn arm can therefore only
+  show broker-side spillover - repeated handshakes competing with the partitions
+  Flink reads - never the handshake itself.
+- **The pause drains the pipeline.** Each reconnect is a gap in the stream, and
+  the mutual-TLS gap is ~11 ms longer. A longer gap lets buffers empty, which
+  biases the TLS arm toward *lower* latency. The direction of the observed
+  effect is the direction this confound predicts.
+
+Two pairs favouring one arm is `p = 0.25` under a null of no effect, by sign
+alone; the tight per-arm intervals do not improve on that, because 7.5 already
+established that they measure sampling within an arm rather than variation
+between arms. Nothing here is established. What the four arms do establish is
+the negative: **60 reconnects per arm did not make mutual TLS visible on the
+decision path, and the resolution floor is not the transport but the ~60 ms of
+pipeline buffering that swamps an 11 ms per-connection cost.**
+
+**Deployment consequence, stated plainly.** A switch that opens a connection per
+transaction pays 11.2 ms of its own latency each time - real, measured, and
+nearly 4% of a 300 ms end-to-end budget it does not get back. It does not,
+however, degrade the bank's detection path. The engineering answer is connection
+pooling on the switch side, and it is a switch-side answer: nothing in this
+pipeline is where that cost lands.
+
+**A comparison deliberately not drawn.** The churn arms sit ~20 ms below the
+arms in 7.5 across the board. That is a between-session difference - a different
+job submission, a larger ClickHouse table, restored checkpoints, two hours of
+uptime - and 7.5 established that per-arm drift of ~4 ms is already enough to
+reverse a conclusion. Quoting churn as a 20 ms improvement would repeat exactly
+the error this section exists to document. It would need its own counterbalanced
+design, alternating churn and no-churn within one session.
 
 **Why the arms were reversed.** Had only the first pair been run - which is the
 normal thing to do - this section would have reported that mutual TLS costs 5 ms
@@ -730,10 +812,16 @@ produced on desktop Docker needs to say so.
   bucket); and it is **not** a Neo4j pause (that component's own pause monitor
   logged nothing at the time). VM-level pause and Python worker GC remain
   plausible and were not separated — with n=2 any attribution would be fitted
-  rather than measured. A thirty-minute run would be needed to characterise it.
-- Single machine. Security overhead (reviewer point 3) still has to be measured
-  against this baseline, which is now the only baseline taken with the model
-  actually running.
+  rather than measured. Characterising the cause needs *occurrences*, and the
+  thirty-minute run produced none: bounding the frequency and diagnosing the
+  cause turn out to need opposite conditions, and the run that settled the
+  first made the second no easier.
+- Single machine. Security overhead has since been measured against this
+  baseline (§7.4 payload, §7.5 transport, §7.5a churn), and the limitation that
+  remains is the baseline itself: one host, so every arm shares whatever that
+  host was doing at the time. That is what the counterbalancing in §7.5 exists
+  to work around, and §7.5a shows it working around it imperfectly - a
+  sign-consistent result with the wrong sign.
 
 ## 8. Silent failure modes
 
