@@ -1,0 +1,29 @@
+# Line endings.
+#
+# Git on Windows checks out with CRLF by default (core.autocrlf=true). Shell
+# scripts in this repository are executed INSIDE Linux containers - the Kafka
+# image runs create-topics.sh and make-truststore.sh from a bind mount - and
+# bash does not tolerate a trailing \r:
+#
+#     scripts/foo.sh: line 2: $'\r': command not found
+#     scripts/foo.sh: line 18: syntax error: unexpected end of file
+#
+# The working copies happen to be LF today, so this file is not fixing a break;
+# it is preventing one that a FRESH CLONE on Windows would produce. That matters
+# here specifically: reproducibility by a reader is a claim this project makes
+# (docs/generator-spec.md 7), and a reader who clones and runs `run.ps1 up`
+# would meet the failure, not the author.
+#
+# Learned from IBM/AMLSim on 2026-08-31, whose six shell scripts arrived as CRLF
+# from a Windows clone and failed exactly this way inside a container.
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+*.Dockerfile    text eol=lf
+docker-compose.yml text eol=lf
+
+# PowerShell is the Windows-side entry point and stays native.
+*.ps1           text eol=crlf
+
+# Data files are compared by SHA-256 in docs/generator-spec.md. Any rewriting of
+# line endings would change the hash and silently break the "dataset of record".
+*.csv           -text
