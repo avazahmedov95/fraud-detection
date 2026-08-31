@@ -1,10 +1,22 @@
 <#
 .SYNOPSIS
-    PowerShell equivalent of the Makefile, for Windows hosts without `make`.
+    Operations and measurement entry point. On Windows it replaces the
+    Makefile; on any host it is where the measurements live.
 
 .DESCRIPTION
-    Same targets, same commands. Keep this in step with the Makefile - if a
-    target changes there it should change here, and vice versa.
+    A SUPERSET of the Makefile, not a translation of it. The Makefile carries
+    the everyday targets - up, down, generate, produce, load-graph, submit-job.
+    This file additionally carries every sequenced experiment: measure-plain /
+    measure-tls / measure-crypto, latency-setup, pipeline, kill-worker,
+    make-certs, status, and the TLS and encrypted producer arms. Each is an
+    ordered protocol rather than a command, and every seam between its steps
+    has lost a run at least once, so they are not worth expressing twice in two
+    languages. Reproducing any figure in docs/ goes through this file.
+
+    An earlier header claimed the two files were kept in step as equivalents.
+    They were not - the Makefile had none of the measurement targets and its
+    only paced producer ran on the host, which is the configuration that
+    corrupts latency figures. The claim is withdrawn rather than repaired.
 
     ASCII only, deliberately. Windows PowerShell 5.1 reads .ps1 files as ANSI
     unless they carry a BOM, so any non-ASCII character (an em-dash, a curly

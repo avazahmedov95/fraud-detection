@@ -1,10 +1,22 @@
 # Convenience commands for the local stack and data pipeline.
 # Usage: make <target>
+#
+# SCOPE. This is a SUBSET, not the full command set. run.ps1 additionally
+# carries every measurement: measure-plain / measure-tls / measure-crypto,
+# latency-setup, pipeline, kill-worker, make-certs, status, and the TLS and
+# encrypted producer arms. Each of those is a sequenced protocol - warm-up
+# discarded, drain, settle, cache flush, measured arm, report - rather than a
+# single command, and every seam between those steps has lost a run at least
+# once. Reproducing any figure in docs/ therefore goes through run.ps1.
+#
+# An earlier version of both files claimed they were kept in step as
+# equivalents. They were not, and this note replaces the claim rather than
+# repairing it.
 
 COMPOSE = docker compose
 GEN_DIR = data-generator
 
-.PHONY: help up down clean ps logs topics generate produce produce-stream load-graph serve-prep submit-job resume-job sink-logs latency query-scored
+.PHONY: help up down clean ps logs topics generate produce produce-stream produce-stream-docker load-graph serve-prep submit-job resume-job sink-logs latency query-scored
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -33,8 +45,22 @@ generate: ## generate the synthetic dataset into data-generator/out
 produce: ## replay the dataset into Kafka (batch)
 	cd $(GEN_DIR) && python kafka_producer.py --file out/transactions.csv --bootstrap localhost:29092 --topic transactions.raw
 
-produce-stream: ## replay paced to original timing (200x), simulating a live stream
+produce-stream: ## paced replay (200x) FROM THE HOST - convenience only, never for latency
 	cd $(GEN_DIR) && python kafka_producer.py --file out/transactions.csv --realtime --speed 200 --bootstrap localhost:29092 --topic transactions.raw
+
+# Use this, not produce-stream, for anything that ends in a latency figure.
+# ingested_at is stamped by the producer and scored_at_job by Flink. Run from the
+# host those are two clocks: containers live in a VM whose clock drifts from the
+# host's and is resynced periodically. Measured offsets of +205 ms and -279 ms
+# minutes apart land straight in the decision-path figure, and once produced a
+# stable 640 ms tail that responded to no amount of tuning because it was never
+# latency at all. Inside the network the producer, Flink and ClickHouse share one
+# clock. Optional length:  make produce-stream-docker COUNT=7000
+produce-stream-docker: ## paced replay from INSIDE the network - required for latency work
+	docker run --rm -i --network fraud-detection_fraudnet \
+	  -v "$(CURDIR)/$(GEN_DIR):/gen" -w /gen fraud-sink-writer:latest \
+	  python kafka_producer.py --file out/transactions.csv --realtime --speed 200 \
+	    --bootstrap kafka:9092 --topic transactions.raw $(if $(COUNT),--limit $(COUNT),)
 
 load-graph: ## load the account population into Neo4j
 	$(COMPOSE) exec -T neo4j cypher-shell -u neo4j -p $${NEO4J_PASSWORD:-fraud_neo4j} < infra/neo4j/import.cypher
