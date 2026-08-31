@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "stream-processor"))
 
 import paysim_adapter as PS      # noqa: E402
+import amlsim_adapter as AS      # noqa: E402
 import capabilities as CAP       # noqa: E402
 
 
@@ -123,6 +124,125 @@ def test_capabilities_without_data_are_off_in_the_run(paysim_df, tmp_path):
     fired = set(hits["fraud"]) | set(hits["legit"])
     assert not (fired & forbidden), f"fired without data: {fired & forbidden}"
 
+
+
+# ---------------------------------------------------------------------------
+# AMLSim. Fixtures in the shape of AMLSim's three output files, so the harness
+# is known to work before anyone builds a Java simulator. AMLSim supports one
+# capability PaySim does not — receiver_age, from accounts.open_dt — so the
+# "capabilities without data" test differs from PaySim's by exactly that entry.
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def amlsim_dir(tmp_path):
+    """accounts.csv + transactions.csv + alert_transactions.csv, with fan_in and
+    fan_out labelled separately — the reason this dataset was chosen."""
+    rng = np.random.default_rng(0)
+    base = pd.Timestamp("2017-01-01")
+
+    accts = []
+    for i in range(1, 181):
+        fresh = rng.random() < 0.25
+        off = int(rng.integers(1, 25)) if fresh else int(rng.integers(1, 900))
+        accts.append(dict(acct_id=f"A{i}", dsply_nm=f"n{i}", type="I",
+                          acct_stat="A",
+                          open_dt=(base - pd.Timedelta(days=off)).date(),
+                          initial_deposit=50000, tx_behavior_id=1, bank_id=0))
+
+    tx, al, tid = [], [], [0]
+
+    def add(step, orig, bene, amt, sar, aid="", atype=""):
+        tid[0] += 1
+        row = dict(tran_id=f"T{tid[0]}",
+                   tran_timestamp=(base + pd.Timedelta(days=int(step))).date(),
+                   base_amt=round(float(amt), 2), tx_type="TRANSFER",
+                   orig_acct=orig, bene_acct=bene, is_sar=bool(sar), alert_id=aid)
+        tx.append(row)
+        if aid:
+            al.append(dict(alert_id=aid, alert_type=atype, is_sar=True,
+                           tran_id=row["tran_id"], orig_acct=orig, bene_acct=bene,
+                           tx_type="TRANSFER", base_amt=row["base_amt"],
+                           tran_timestamp=row["tran_timestamp"]))
+
+    for step in range(1, 120):
+        for _ in range(6):
+            add(step, f"A{rng.integers(1, 90)}", f"A{rng.integers(90, 180)}",
+                np.exp(rng.normal(5.5, 0.6)), 0)
+    for k in range(12):                       # collection stage: 6 senders -> 1 drop
+        drop = f"A{170 + k % 10}"
+        for _ in range(6):
+            add(rng.integers(1, 119), f"A{rng.integers(1, 90)}", drop,
+                np.exp(rng.normal(7.4, 0.3)), 1, f"FI{k}", "fan_in")
+    for k in range(12):                       # dispersal stage: 1 mule -> 6 dests
+        mule, st = f"A{rng.integers(1, 90)}", int(rng.integers(1, 119))
+        for _ in range(6):
+            add(st, mule, f"A{90 + rng.integers(0, 80)}",
+                np.exp(rng.normal(7.4, 0.3)), 1, f"FO{k}", "fan_out")
+
+    pd.DataFrame(accts).to_csv(tmp_path / "accounts.csv", index=False)
+    pd.DataFrame(tx).to_csv(tmp_path / "transactions.csv", index=False)
+    pd.DataFrame(al).to_csv(tmp_path / "alert_transactions.csv", index=False)
+    return str(tmp_path)
+
+
+def test_amlsim_missing_directory_is_refused(tmp_path):
+    """A silently empty run would look like 'the rules found nothing'."""
+    with pytest.raises(SystemExit):
+        AS.load(str(tmp_path / "nope"))
+
+
+def test_amlsim_daily_timestamps_become_epoch_seconds(amlsim_dir):
+    tx, _, _ = AS.load(amlsim_dir)
+    ts = AS._epoch(tx["tran_timestamp"])
+    assert (ts % 86400 == 0).all(), "AMLSim steps are whole days"
+    assert ts.is_monotonic_increasing or ts.min() > 0
+
+
+def test_amlsim_receiver_age_is_read_from_accounts(amlsim_dir):
+    """The capability PaySim could not support. If open_dt were ignored,
+    receiver_age would be None everywhere and FRESH_RECEIVER could never fire."""
+    saved = dict(CAP.MODES)
+    try:
+        for key in ("myid_kinship", "device_telemetry", "geo_telemetry",
+                    "session_telemetry", "channel"):
+            CAP.MODES[key] = "off"
+        _, hits = AS.run(amlsim_dir, None)
+    finally:
+        CAP.MODES.clear(); CAP.MODES.update(saved)
+    fired = set(hits["fraud"]) | set(hits["legit"])
+    assert "FRESH_RECEIVER" in fired
+
+
+def test_amlsim_typology_labels_survive_to_the_result(amlsim_dir):
+    """Section B of the report exists only if alert_type reaches the rows. The
+    fan_in/fan_out split is the whole reason for using this dataset."""
+    saved = dict(CAP.MODES)
+    try:
+        for key in ("myid_kinship", "device_telemetry", "geo_telemetry",
+                    "session_telemetry", "channel"):
+            CAP.MODES[key] = "off"
+        res, _ = AS.run(amlsim_dir, None)
+    finally:
+        CAP.MODES.clear(); CAP.MODES.update(saved)
+    assert {"fan_in", "fan_out"} <= set(res.typology.unique())
+    assert (res[res.typology == "fan_in"].label == 1).all()
+
+
+def test_amlsim_capabilities_without_data_are_off(amlsim_dir):
+    """AMLSim has no device, geo, session or channel. FRESH_RECEIVER is NOT in
+    the forbidden set here — unlike the PaySim test — because open_dt is real."""
+    saved = dict(CAP.MODES)
+    try:
+        for key in ("myid_kinship", "device_telemetry", "geo_telemetry",
+                    "session_telemetry", "channel"):
+            CAP.MODES[key] = "off"
+        _, hits = AS.run(amlsim_dir, None)
+    finally:
+        CAP.MODES.clear(); CAP.MODES.update(saved)
+    forbidden = {"DEVICE_CHANGE", "GEO_ANOMALY", "IMPOSSIBLE_TRAVEL",
+                 "COACHED_SESSION"}
+    fired = set(hits["fraud"]) | set(hits["legit"])
+    assert not (fired & forbidden), f"fired without data: {fired & forbidden}"
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

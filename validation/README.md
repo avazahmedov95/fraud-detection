@@ -39,12 +39,40 @@ the same person as the detector. The obvious objection is that the features
 detect fraud because the generator put it there in a detectable form.
 
 **Why PaySim.** Agent-based mobile-money generator by Lopez-Rojas et al., built
-for a different market with no knowledge of this system, and the only public
-dataset carrying **identifiers on both sides** — so this project's actual feature
-extractor and CEP rules can run on it unchanged.
+for a different market with no knowledge of this system, carrying **identifiers
+on both sides** — so this project's actual feature extractor and CEP rules can
+run on it unchanged. Its transactions are consumer-to-consumer money transfers,
+which is the closest available analogue to card P2P.
+
+*Corrected 2026-08-31:* an earlier revision called PaySim "the only public
+dataset carrying identifiers on both sides". That is wrong. IBM's **AMLSim** and
+**AML-Data** carry originator and beneficiary accounts with labels, and BankSim
+carries customer→merchant pairs. What is true is narrower and still the reason
+PaySim was chosen: it is the closest public analogue *in transaction type*. The
+correction matters because one of those alternatives can test the rule PaySim
+cannot — see below.
 
 **What is run.** `rules.evaluate()` exactly as deployed. No retraining, no
-threshold tuning. Capabilities PaySim cannot support (device, geo, session,
+threshold tuning.
+
+**Why not train on it — the question a reviewer asks first.** Three reasons, in
+order of weight. (i) **Training here destroys the thing this directory is for.**
+The evidence being sought is that the features detect fraud in data this project
+did not produce; fit the model to that data and the test answers a different,
+circular question. (ii) **The feature spaces do not align.** 14 of 24 features
+are relational and six more need device, geo, session, channel, receiver age or
+kinship, none of which PaySim carries. Training on what remains would produce a
+model over ~5 features while the Flink job computes 24 — train/serve skew, which
+is precisely what the single ordered `FEATURE_NAMES` built from `capabilities.py`
+exists to make impossible. (iii) **Different rail, different units.** PaySim is
+mobile money at ~1/1000 of UZS amounts; pooling it with generated card P2P
+produces a model for neither. The amount rescaling below is a unit conversion
+applied so absolute thresholds can fire at all, not a step toward training.
+
+The one legitimate training use of foreign data is not training *this* system:
+it is fitting a throwaway model twice on a foreign dataset, with and without a
+capability, to see whether an **ablation delta reproduces** off this project's
+own generator. That is the shape the AMLSim run below should take. Capabilities PaySim cannot support (device, geo, session,
 channel, receiver age, kinship) are switched **off** rather than defaulted, so no
 rule can fire on a fabricated zero — enforced by a test.
 
@@ -78,6 +106,28 @@ senders converge on a drop account. The rule has nothing to detect. This is a
 difference between fraud *phenomena*, not a rule failure — and it is itself
 worth reporting: **fraud patterns are market-specific**, which is the premise of
 building an Uzbekistan-specific system rather than importing a generic one.
+
+### The gap this leaves, and what closes it
+
+Receiver-side aggregation is this project's **largest measured effect**
+(−0.032 PR-AUC) and its one structural design finding. It is also the one thing
+here with **no external validation whatsoever**, because the only foreign dataset
+run so far cannot express the pattern. Saying "the rule has nothing to detect" is
+true and is also the most convenient possible outcome, which is a reason to
+distrust it.
+
+**IBM AMLSim** (open source, agent-based, run locally) generates **fan-in** as an
+explicit typology — "multiple accounts send substantial funds to a single main
+account" — alongside fan-out, scatter-gather and gather-scatter, with originator
+and beneficiary accounts and alert labels. It is the dataset that could falsify
+the claim rather than confirm one already made, and it is the next external run
+this project owes.
+
+Scope it honestly when run: AMLSim's fan-in is an **interbank AML typology**, not
+consumer card-to-card, so amounts, cadence and account population all differ.
+Like the PaySim exercise, it tests whether the rule's *shape* transfers, not its
+thresholds — which is the only kind of transfer test a threshold-carrying rule
+can pass on foreign data anyway.
 
 ### The threshold finding, and its fix
 
@@ -189,6 +239,74 @@ python zenodo_provenance.py --file fraud_tests_export_20260501_080333.csv
 
 Kept in the repository because the investigation is itself a result — see
 `docs/irp-framing.md`.
+
+---
+
+## 3. AMLSim — the adapter, and how to run it
+
+`amlsim_adapter.py`. Same contract as the PaySim adapter: the deployed
+`rules.evaluate()`, nothing retrained, no threshold tuned.
+
+**What it supports that PaySim did not.** AMLSim's `accounts.csv` carries
+`open_dt`, so `receiver_age` is computed from the data instead of being switched
+off — one more of the six capabilities PaySim forced off, and the first foreign
+run in which `FRESH_RECEIVER` is exercised at all. And `alert_transactions.csv`
+labels `fan_in` and `fan_out` **separately**, so the leg asymmetry in
+`ml/README.md` can be checked rather than asserted.
+
+```bash
+# once, outside this repo — needs Java 8+ and Maven
+git clone https://github.com/IBM/AMLSim.git && cd AMLSim
+bash scripts/build_AMLSim.sh
+pip install -r requirements.txt
+# conf.json -> "input": {"directory": "paramFiles/10K"}; that profile ships
+# 30 fan_in, 30 fan_out and 40 cycle alerts with is_sar=True
+python scripts/transaction_graph_generator.py conf.json
+bash scripts/run_AMLSim.sh conf.json
+
+# then, here
+python amlsim_adapter.py --dir /path/to/AMLSim/outputs/<simulation_name>
+```
+
+`python -m pytest test_adapters.py -q` exercises the adapter against fixtures in
+the shape of all three output files, so the harness is known to work before the
+simulator is built.
+
+### The window problem, stated before the run rather than after it
+
+AMLSim's clock advances **one day per step**, and its `fan_in` typology spreads
+over `min_period..max_period` steps — 5 to 20 in the shipped parameter files.
+`RECEIVER_WINDOW_S` is 3600 s. So the deployed window covers at most one
+simulated day, while each collection pattern is spread across five to twenty of
+them: **the window sees a fraction of every fan-in by construction.**
+
+On the fixture, `MULE_FAN_IN` does not appear in the rule-lift table at all.
+That is the predicted behaviour, not a defect, and it sets up the one reading
+this run must not fall into: a null fan-in result here is **ambiguous** between
+*the rule does not transfer* and *the window is shorter than the pattern*, and
+the two carry opposite conclusions. Section D of the report says so on every run.
+
+Widening the window to fit is tuning on the validation set, which is what this
+directory exists to avoid. A longer-window run is a legitimate **separate**
+experiment and must be reported as one. Note the direction of travel against
+PaySim: there, hourly timestamps made the test conservative; here a daily clock
+against an hour-long window makes it conservative again, for a different reason.
+Neither dataset can flatter the rule by accident.
+
+### The stronger half: reproduce the ablation, do not just run the rules
+
+Running the rules answers "does the shape transfer". It cannot answer whether
+receiver-side aggregation is *worth* anything, because the CEP layer has no
+counterfactual. The measurement that would corroborate the −0.032 is a throwaway
+model fitted twice on AMLSim's own features — once with `rcv_distinct_senders_1h`
+and `rcv_inflow_1h`, once without — and the delta read **in sign**, not in
+magnitude. Feature sets and baselines differ, so the number will not be −0.032
+and must not be quoted as though it could be.
+
+This is the one legitimate use of foreign data for training here, and it is
+training a disposable model to test a claim, never the deployed one. See "Why
+not train on it" above.
+
 
 ---
 

@@ -28,6 +28,29 @@ issuing bank's antifraud system.
 The boundary matters: everything below assumes the attacker operates **through
 the payment system as a user of it**, not against the system.
 
+**The cross-border exclusion needs its number, because it is not small.** The
+Central Bank's *Review of international migration and currency operations of
+individuals* (March 2026) reports that of **$18.9bn** of remittances received in
+Uzbekistan in 2025 — up 28% on 2024 — **$8.6bn, 46%, arrived as P2P transfers
+sent directly to individuals' bank cards**, a channel that grew 1.4x in a year
+while conventional bank transfers fell 49% to $397mn. So "cross-border is out of
+scope" excludes roughly half of a flow that lands on exactly the cards this
+system watches.
+
+The exclusion is still correct, and the reason is structural rather than
+convenient: for an inbound cross-border transfer the **sender is not a customer
+of this bank and has no history here**, so the 14 relational features computed
+over sender state do not exist. What survives is the receiver side — account age,
+inflow concentration, distinct senders per hour.
+
+That inverts the usual reading of §4 for this market. On domestic traffic,
+receiver-side aggregation is the most valuable capability (−0.032 PR-AUC). On the
+46% of inflow that arrives from abroad it is not the most valuable, it is **the
+only one available**. The finding this project treats as its strongest is, in the
+Uzbek remittance context, more load-bearing than its own evaluation shows —
+and that evaluation cannot demonstrate it, because the generator models domestic
+traffic only.
+
 ---
 
 ## 2. Assets and security goals
@@ -41,6 +64,26 @@ the payment system as a user of it**, not against the system.
 
 The first two goals are in direct tension, and the threat model exists to say
 where the trade-off should sit rather than to eliminate it.
+
+**From 16 November 2026 the first row stops being the customer's loss.** The
+Central Bank's amended P2P requirements make the credit or payment organisation
+**liable for fraudulent transactions carried out without additional verification
+within the limit that organisation itself set**. Three consequences, and the
+third is the one for the thesis.
+
+- The asset table above is written from the customer's side. After that date the
+  loss lands on the bank's own balance sheet, so detection stops being a
+  prudential or reputational matter and becomes a priced one.
+- **The bank now chooses its own exposure.** Institutions may set the transfer
+  amount below which no additional confirmation is required — and that same
+  threshold defines what they will pay for. A detection system's value becomes
+  directly expressible: a higher no-OTP limit is affordable exactly to the extent
+  that detection is good, so the model's precision and recall convert into a
+  number the institution can set.
+- This is the strongest available motivation for the whole system, and it did not
+  exist when the project started. It should be stated in the introduction rather
+  than left in a threat model: **regulation has converted fraud detection quality
+  from a cost centre into the variable that sets a revenue-bearing limit.**
 
 ---
 
@@ -86,6 +129,60 @@ is not incidental to the pattern; it *is* the pattern.
 
 **Constraint:** capital and coordination. Aged accounts cost money to farm;
 spreading fan-in across time and accounts reduces throughput.
+
+---
+
+## 3a. The adversary model against national data
+
+The three adversaries above are constructed from the fraud literature and from
+how the payment system works. One national source lets parts of them be checked
+rather than asserted: the **State Institution "Cybersecurity Centre" of the
+Republic of Uzbekistan, 2025 annual report** (csec.uz). It is a cybersecurity
+register, not a fraud register, so what it can and cannot support has to be
+stated carefully.
+
+**What it supports.**
+
+*A2's premise — that credentials are obtainable — is quantified.* During 2025
+the Centre found databases belonging to 37 organisations, **21 million rows in
+total**, together with **1,697 user login/password pairs**, leaked to darknet
+networks; separately, rapid analysis of 10 systems prevented the leak of over
+**23 million personal records**, which the report notes is close to two-thirds
+of the country's population. A2 is modelled as "holds valid credentials", and
+that assumption does not need to be argued.
+
+*The attack surface is moving toward exactly this system's setting.* Mobile
+application security expertise rose from 18 apps in 2024 to **40 in 2025
+(+122%)**, and the report's own forward-looking conclusion reads the rise as
+confirmation that attacker attention is shifting to smartphones **and to the
+financial applications on them**. Banking and finance is the second-largest
+sector by share of detected vulnerabilities (**22.84%**, behind public
+administration at 25.84%).
+
+*Session persistence is a real defect, not a theoretical one.* "Session retained"
+is the second most common high-severity finding in information systems (82
+instances) and appears again in mobile apps (8). The `COACHED_SESSION` and
+`DEVICE_CHANGE` controls assume a session boundary means something; in a
+deployment where sessions do not expire, that assumption is weaker than §4
+implies.
+
+**What it does not support, and the misreading to head off.** Of 247 recorded
+cybersecurity incidents in 2025, **only 3 are phishing**. Read carelessly, that
+says social-engineering fraud is negligible in Uzbekistan and A1 is
+over-modelled. It says nothing of the kind. The Centre's incident register
+counts incidents **against state web resources** — the most common entry is
+website defacement, at 219 — and consumer-facing APP fraud is neither its remit
+nor within its visibility. The absence is a scope artefact. This is worth
+stating explicitly in the thesis, because it is the kind of number a reader will
+find, quote, and draw the opposite conclusion from.
+
+**Prevention is arriving from a second direction.** Alongside the CBU 3759
+requirements discussed in §5, the Centre now ships citizen-facing preventive
+tools — a "CyberQalqon" Telegram bot for checking suspicious files, "Xavfsizlink"
+for checking links against phishing, and a permissions monitor. That reinforces
+the substitution argument in §5 rather than softening it: controls that remove
+the observable, whoever deploys them, reduce what a detection system can claim
+credit for.
 
 ---
 
@@ -194,6 +291,27 @@ Three consequences, and the third belongs in the main argument.
   does not have: whether a control elsewhere in the stack is supposed to make
   the source unobservable in the first place. On all three, session telemetry
   reads the same way - high value, lowest robustness, and now legislated away.
+
+**A second instance, and this one lands on a capability the ablation already
+measured as worthless.** The same November 2026 package requires that logging in
+from a new device deactivates the linked cards, and that biometric identification
+be performed before an account is used from a different device or after a
+password reset. `DEVICE_CHANGE` measures exactly that event as a *signal*; the
+regulation converts it into a *hard control*.
+
+Note what makes this cleaner than the `active_call` case. Session telemetry was
+the second most valuable capability in the ablation, so its removal by regulation
+is a loss. `device_telemetry=off` measured **+0.000 [+0.000, +0.000]** — no
+effect at all, on five seeds. The capability whose detection value this project
+could not measure is the one regulation found worth mandating as prevention.
+
+That is not a contradiction, it is the substitution stated from the other end: a
+signal contributes nothing to a *detector* precisely when the event it marks is
+rare or already handled, and it is exactly such an event that is cheapest to
+*prevent* outright. **A capability's detection value and its prevention value can
+be inversely related, and an ablation measures only the first.** Any argument
+that ranks data sources by ablation delta alone will therefore rank prevention
+candidates last.
 
 A blanket block carries a cost the rule did not: the bank's own support line
 walking a customer through a transfer is blocked along with the fraudster.

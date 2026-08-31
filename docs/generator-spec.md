@@ -309,6 +309,28 @@ PaySim also supplies the cautionary precedent: its balance columns leak the labe
 and models trained on it report near-perfect scores that mean nothing. This
 project's equivalents are recorded rather than hidden — see §8.
 
+**A second, independent precedent, and a criterion this spec is written to meet.**
+Tritscher et al. (2022), *Open ERP System Data For Occupational Fraud Detection*,
+generate public ERP data for the same reason in a different domain: the real
+thing is withheld for trade-secret and privacy reasons, so the field either
+generates or stops. Two of their judgements about *other* generators apply here
+and are worth meeting explicitly rather than by accident.
+
+They reject one prior generator because "with no data, code, and chosen
+simulation parameters available, modeling realistic ERP system data through this
+approach is challenging". That is the criterion this document exists to satisfy —
+every parameter stated, the code published, the dataset pinned by SHA-256, and
+determinism demonstrated rather than assumed (§9). Meeting a criterion someone
+else published is a stronger claim than meeting one's own.
+
+They also criticise generating fraud by modelling it "into an existing database
+in post, potentially causing unwanted divergence between normal and fraudulent
+data characteristics". **§5 of this document injects fraud into already-generated
+legitimate traffic, so the criticism applies here directly.** The ROC-AUC of
+0.999 discussed below is not a vague "artefact of synthetic data": it is that
+divergence, measured. Naming the mechanism, and its source in the literature, is
+more useful than calling the number an artefact and moving on.
+
 **On the ROC-AUC ≈ 0.999 this data produces.** It is an artefact of a generator
 whose classes are separable by construction along several axes at once. PR-AUC
 (0.966 ± 0.008 across seeds) is the figure to read at a 1.5% positive rate, and
