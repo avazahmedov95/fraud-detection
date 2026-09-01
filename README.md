@@ -55,7 +55,7 @@ reader:
 | `docs/threat-model.md` | three adversaries, what each control assumes, and what evading it costs — one of those costs is now measured rather than argued |
 | `docs/generator-spec.md` | the generator as a specification, the dataset of record with its hashes, and why the data is generated at all |
 | `validation/README.md` | four foreign datasets, what each could and could not test, and the screens that came out of it |
-| `docs/related-work.md` | fifteen sources, each with what it does **not** support |
+| `docs/related-work.md` | fifteen sources, each with what it does **not** support — and §9, which maps every source to the file it actually reaches |
 | `ml/README.md` | model, SHAP, and the capability ablation |
 | `case-manager/README.md` | the alert consumer: the analyst queue, the disposition as the only real label this system can produce, and why the model's reasons are computed off the scoring path |
 

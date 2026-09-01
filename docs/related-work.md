@@ -8,6 +8,11 @@ The organising question is not "is this about fraud" but "does this constrain a
 claim this project makes". Several sources below are about something else
 entirely and are recorded so the same search is not run twice.
 
+**§9 is the answer to "how did the literature affect the system".** It maps each
+source to the file it actually reaches, and separates the five that changed code
+from the ones that changed only how results are reported. That separation is the
+honest answer, and it is not the flattering one.
+
 ---
 
 ## 1. The term "P2P" is ambiguous, and the ambiguity is expensive
@@ -566,3 +571,50 @@ Stated so the gap is not mistaken for an oversight:
   a task rather than a limitation, since AMLSim (§7) generates the fan-in stage
   PaySim lacks. Until it is run, the strongest claim in this project rests on one
   generator, and that generator is this project's own.
+
+---
+
+## 9. Where each source is actually used
+
+Verified by searching the repository, not from memory. The question a reviewer
+asks is "how did the literature affect the system", and there are two truthful
+answers to it, not one.
+
+### Sources that changed the code
+
+| Source | What was taken | Where it lands |
+|---|---|---|
+| **PaySim** (§6) | The rule layer went **mute** on foreign data: with two rules available the highest score any fraud reached was 0.35 against a 0.40 cutoff, while the rules separated the classes 4:1. | `capabilities.scaled_threshold` exists because of this — `capabilities.py:283`, `config.py:175`. Adapter: `validation/paysim_adapter.py`. Balance leakage as precedent: `generator-spec.md` §7. |
+| **PaySim, via `ris3abh`** (§6) | PR-AUC **0.380** on the standard public benchmark against 0.966 here. | Turns "our data is probably easier" into "2.5x easier, measured" — `generator-spec.md` §0, §7. |
+| **IBM AMLSim** (§7) | `MULE_FAN_IN` at six senders fired on **3.12%** of legitimate traffic and caught **0.0%** of the fan-in typology: in a scale-free graph 2.69% of receivers exceed six as ordinary hub behaviour. The constant encoded the density of the population it was tuned on. | `rules.PopulationBaseline`, `MULE_FAN_IN_MODE=relative`, measured +6.9 pp — `irp-framing.md` §6, third RQ3 result. Screens: `validation/amlsim_ablation.py`. |
+| **CBU Regulation No. 3759** | The BRV-denominated threshold, and the fact that **the project's earlier citation of it was wrong**. | `data-generator/config.py:104-106`, `stream-processor/config.py:11, 81`. The correction is left in the code as a comment: a citation that was checked and refuted. |
+| **Cybersecurity Centre of Uzbekistan, 2025** (§6d) | **54 of 157** high-severity mobile findings are transport security. | The motivation for measuring transport overhead at all — `irp-framing.md` §7.5, `threat-model.md` §3a. Not "interesting to measure" but "the national authority says this is the dominant defect class". |
+| **Tritscher et al. 2022** (§6b) | Two things: the published criterion a generator must meet (parameters, code, hashes, determinism proof), and the criticism of **post-hoc fraud injection**. | `generator-spec.md` §0 and §5. The second lands on this project directly, and ROC-AUC 0.999 is that divergence observed rather than an unexplained artefact. |
+
+### Sources that changed how results are reported, and nothing else
+
+| Source | What was taken | Where it lands |
+|---|---|---|
+| **Machado et al. 2026** (§2) | The evaluation-practice table: study after study recorded as "Accuracy reported", *NR* everywhere else. | Why PR-AUC with intervals and per-type recall is a contribution about method, not a courtesy — `ml/README.md`, `irp-framing.md` §10. |
+| **Afriyie et al. 2023** (§6a) | The same failure in one peer-reviewed instance, recomputable from their own tables: precision **0.092**, F1 **0.167**, 10.9 alerts per catch, headline accuracy 0.958 against a 0.996 trivial baseline. | The strongest single argument for this project's reporting discipline. |
+| **Hemel et al. 2026** (§4) | XGBoost on tabular features: 0.98 on the majority class, **exactly 0.00** on both financial-fraud classes; the graph model is the only one that finds them. | Independent arrival at the fan-in argument — a per-record view cannot express a pattern defined over the relation between records. |
+| **Wang, Liu, He & Du 2020** (§6c) | Relational structure beats demographic attributes on *real* data (FDNE F1 0.820), with a per-decision explanation. Plus their label caveat: overdue borrowers counted as fraud. | Supports receiver-side aggregation + SHAP as a pair. The label caveat is the contrast: here the label's definition is written down. |
+| **Wang 2018** (§3) | AUC 0.780 at a >10% fraud rate, justified as "insensitive to class balance" — the reasoning this project argues against. Their identity graph is the shape of the MyID integration measured here as worthless (+0.004 PR-AUC). | Cited as contrast. A source asserting the value of graph identity data, beside a measurement that it adds nothing, is a better citation than one that agrees. |
+
+### Sources that supply nothing, recorded so the search is not repeated
+
+**Saad et al. 2011** (§5) — "P2P" in the networking sense, botnet C&C.
+**Zenodo 20030065** (§7) — rejected; the count discrepancy was resolved exactly
+and the fault was in the release, not the dataset.
+
+### The honest summary
+
+**Five sources reached the code. The rest shaped how results are reported.**
+Machado, Afriyie, Hemel and both Wang papers appear nowhere in this repository
+outside this file — searched, not assumed.
+
+That is not a weakness to hide. Reporting discipline is a separate contribution
+from architecture, and it is defensible on its own: the alternative answer, that
+all fifteen sources shaped the design, would be false and is the kind of claim a
+committee is good at testing. What must not happen is the mapping above being
+guessed at under questioning; hence this section.
