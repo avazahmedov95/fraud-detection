@@ -119,6 +119,29 @@ REGISTRY = (
                   "USSD, ATM and third-party channels.",
     ),
     Capability(
+        key="payee_identity",
+        requires="resolution of the destination PAN to the person behind it",
+        modes=("card", "pinfl"),        # default card: what a bank actually has
+        features=(), rules=(),
+        rationale="A card-to-card transfer reaches the sending bank as a "
+                  "destination PAN. Resolving it to a person needs either the "
+                  "switch or the CBU platform; a bank can do it only for its "
+                  "own clients, which is 6.9% of transfers at the measured "
+                  "market concentration. So receiver-side state is keyed by "
+                  "CARD by default. The cost is real and one-directional: a "
+                  "mule spreading inbound transfers across several of their own "
+                  "cards is split across as many fan-in buckets. Resolving "
+                  "per-transfer where possible was measured and REJECTED - it "
+                  "makes the key depend on the sender's bank, fragmenting one "
+                  "payee's window in two and losing 17.4% of MULE_FAN_IN's true "
+                  "positives. Mode 'pinfl' models a switch-level or "
+                  "platform-level deployment, where the resolution exists for "
+                  "everyone rather than for 7%. It is reachable only OFFLINE: "
+                  "receiver_pinfl is not on the wire, so the live job falls "
+                  "back to the card and says so once. The harnesses that read "
+                  "the generated CSV can run it.",
+    ),
+    Capability(
         key="channel",
         requires="the channel the transfer came through",
         features=("ch_mobile_app", "ch_ussd", "ch_web", "ch_atm"),
@@ -154,7 +177,12 @@ def mode(key: str) -> str:
 
 
 def enabled(key: str) -> bool:
-    """True unless the capability is switched off entirely."""
+    """True unless the capability is switched off entirely.
+
+    A capability with no "off" among its modes (payee_identity) is therefore
+    always enabled: it selects BETWEEN data sources rather than declaring one
+    absent. It contributes no features, so this does not affect the vector.
+    """
     return MODES[key] != "off"
 
 

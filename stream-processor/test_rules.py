@@ -8,6 +8,7 @@ import pytest
 from rules import SenderState, evaluate
 import config as C
 import capabilities as CAP
+from conftest import bank_card, payee_card
 
 # A rule cannot fire when the capability behind it is switched off, so tests
 # asserting on those rules are skipped rather than weakened.
@@ -30,7 +31,8 @@ def _ev(amount, payee="rcv", device="dev-1", region="Tashkent City",
     # the mode switch is covered in test_receiver_age_modes.py.
     return {"amount_uzs": amount, "receiver_pinfl": payee,
             "device_id": device, "sender_region": region,
-            "sender_bank_name": sender_bank, "receiver_bank_name": receiver_bank}
+            "sender_card": bank_card(sender_bank),
+            "receiver_card": payee_card(payee, receiver_bank)}
 
 
 def test_known_small_payment_is_allowed():

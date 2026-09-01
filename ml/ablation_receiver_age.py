@@ -66,11 +66,21 @@ def _train(mode):
 
 
 def _on_us_share():
-    """Share of transfers the sending bank could resolve in-house."""
+    """Share of transfers the sending bank could resolve in-house.
+
+    Resolved from the PANs through bins.py, not from the CSV's bank-name
+    columns. The columns are the generator's own bookkeeping; the issuer the
+    PIPELINE sees comes from the BIN table, and reporting a capability's
+    coverage from a different source than the capability uses is how a number
+    ends up describing something other than what ran.
+    """
     import pandas as pd
+    import bins as B
     csv = os.path.join(ROOT, "data-generator", "out", "transactions.csv")
-    d = pd.read_csv(csv, usecols=["sender_bank_name", "receiver_bank_name"])
-    return (d.sender_bank_name == d.receiver_bank_name).mean()
+    d = pd.read_csv(csv, usecols=["sender_card", "receiver_card"], dtype=str)
+    s = d.sender_card.map(B.issuer_of)
+    r = d.receiver_card.map(B.issuer_of)
+    return ((s != "") & (r != "") & (s == r)).mean()
 
 
 def main():

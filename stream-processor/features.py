@@ -10,12 +10,14 @@ CEP rule engine (rules.py) also consumes these features, so rules and ML never
 drift apart. Pure: no Flink/Redis/Neo4j imports.
 """
 
+import logging
 import math
 import datetime
 
 import config as C
 import geo as G
 import capabilities as CAP
+import bins as B
 
 # The model's feature vector, derived from the capability registry rather than
 # maintained by hand — so the train/serve contract cannot drift from what the
@@ -26,13 +28,58 @@ _CHANNEL_KEY = {"MOBILE_APP": "ch_mobile_app", "USSD": "ch_ussd",
                 "WEB": "ch_web", "ATM": "ch_atm"}
 
 
-def _issuer(event: dict, side: str) -> str:
-    """Card issuer for one side of the transfer.
+_warned_no_pinfl = False
 
-    In production the issuer is resolved from the PAN's BIN, which the switch
-    message always carries; here the generator has already materialised it.
+
+def _warn_pinfl_unavailable():
+    """Once per process. This runs on the 300 ms path and the condition is a
+    deployment mistake that does not change between events."""
+    global _warned_no_pinfl
+    if not _warned_no_pinfl:
+        _warned_no_pinfl = True
+        logging.getLogger("features").warning(
+            "CAP_PAYEE_IDENTITY=pinfl but the events carry no receiver_pinfl; "
+            "keying the payee by card instead. The live wire format does not "
+            "carry the payee's identity - only the offline harnesses, which "
+            "read the generated CSV, can run this mode.")
+
+
+#: Values that mean False when a flag arrives as text.
+_FALSEY_TEXT = {"", "0", "false", "f", "no", "n", "none", "null", "nan"}
+
+
+def truthy(v) -> int:
+    """Coerce a wire-shaped flag to 0/1.
+
+    `1 if v else 0` is wrong at this boundary and was wrong in production. A
+    Kafka record built from csv.DictReader carries every field as TEXT, so
+    active_call arrived as the string "False" - which is a non-empty string and
+    therefore true. The live job scored active_call = 1 on 100% of events while
+    the model had been trained on 3.5%: not a missing feature, a constant one,
+    and constant at the RARE value.
+
+    Coercing here rather than only in the producer is deliberate. This module is
+    the single train/serve feature contract; every caller - the Flink job, the
+    offline replay, ml/dataset.py, the tests - reaches the model through it, and
+    the contract should not depend on each of them having typed its input
+    correctly. The producer is fixed too, but that fix protects one caller.
     """
-    return str(event.get(f"{side}_bank_name", "") or "")
+    if isinstance(v, str):
+        return 0 if v.strip().lower() in _FALSEY_TEXT else 1
+    return 1 if v else 0
+
+
+def _issuer(event: dict, side: str) -> str:
+    """Card issuer for one side of the transfer, resolved from the PAN's BIN.
+
+    This is what a deployment actually does, and it used to be faked: the two
+    `*_bank_name` fields travelled in the Kafka message, which made the wire
+    format carry something UzCard / HUMO does not carry and made the on-us test
+    - and with it the whole receiver_age capability - depend on a convenience of
+    the generator. The switch message carries the PAN; the bank resolves the
+    issuer from its 6-digit BIN against its own table. See bins.py.
+    """
+    return B.issuer_of(event.get(f"{side}_card"))
 
 
 def is_on_us(event: dict) -> bool:
@@ -44,6 +91,44 @@ def is_on_us(event: dict) -> bool:
     """
     s, r = _issuer(event, "sender"), _issuer(event, "receiver")
     return bool(s) and bool(r) and s == r
+
+
+def payee_key(event: dict) -> str:
+    """The identity this deployment can pin the payee to.
+
+    Everything receiver-side is keyed on this: the payee history behind
+    `is_new_payee`, the inbound window behind the fan-in features, and the
+    account-age lookup. It must therefore be an identifier present on EVERY
+    event, which is what rules out resolving it only where the bank can.
+
+    card  - the destination PAN, which is what a card-to-card transfer actually
+            delivers to the sending bank. The default.
+    pinfl - the person behind the PAN. Available to the switch or the CBU
+            platform for everyone, and to a bank only for its own clients.
+            Models a platform-level deployment.
+
+    There is deliberately no per-transfer mode. Resolving to PINFL where the
+    bank can and to PAN otherwise makes the key depend on the SENDER's bank,
+    which splits one payee's inbound window into two by a property that is not
+    about the payee at all. Measured: 24 MULE_FAN_IN hits under either uniform
+    key, 19 under the mixed one - a 17.4% loss of the rule's true positives for
+    no gain. See capabilities.payee_identity.
+    """
+    if CAP.mode("payee_identity") == "pinfl":
+        pinfl = str(event.get("receiver_pinfl", "") or "")
+        if pinfl:
+            return pinfl
+        # Asked for pinfl, given an event that does not carry one. This is the
+        # normal state of the LIVE stream: receiver_pinfl left the wire because
+        # a sending bank cannot resolve the destination PAN to a person, so the
+        # mode is reachable only from the offline harnesses, which read the CSV.
+        #
+        # Returning "" here would be the quiet catastrophe: an empty key makes
+        # ReceiverStore skip the write and the read, and the whole fan-in signal
+        # disappears with the knob showing "on". So fall back to the card and
+        # say so, once.
+        _warn_pinfl_unavailable()
+    return str(event.get("receiver_card", "") or "")
 
 
 def visible_receiver_age(event: dict, receiver_age_days):
@@ -70,7 +155,7 @@ def extract(event: dict, receiver_age_days, state, now: float,
     fail-open behaviour the rest of the enrichment path also uses.
     """
     amount = float(event["amount_uzs"])
-    payee = event["receiver_pinfl"]
+    payee = payee_key(event)
     device = event.get("device_id", "")
     region = event.get("sender_region", "")
     channel = event.get("channel", "MOBILE_APP")
@@ -147,7 +232,7 @@ def extract(event: dict, receiver_age_days, state, now: float,
         rcv_senders = len({e[1] for e in recent} | {event.get("sender_pinfl", "")})
         rcv_inflow = sum(e[2] for e in recent) + amount
 
-    active_call = 1 if event.get("active_call") else 0
+    active_call = truthy(event.get("active_call"))
     secs_login = float(event.get("secs_login_to_confirm") or 0.0)
 
     # z-score in LOG space: session latency is lognormal, so log() first —
@@ -171,7 +256,7 @@ def extract(event: dict, receiver_age_days, state, now: float,
         "receiver_age_known": age_known,
         # MyID-verified kinship between sender and payee. Only meaningful when
         # the myid_kinship capability is on; otherwise it is not in the vector.
-        "is_family": 1 if event.get("is_family_transfer") else 0,
+        "is_family": truthy(event.get("is_family_transfer")),
         "vel_10m": win_count(C.VELOCITY_WINDOW_S),
         "vel_1h": win_count(C.STRUCTURING_WINDOW_S),
         "distinct_payees_10m": len(distinct),
@@ -217,8 +302,12 @@ def update_receiver_state(receiver_state, event: dict, now: float) -> None:
 def update_state(state, event: dict, now: float) -> None:
     """Advance per-sender state with the current event (call AFTER extract)."""
     amount = float(event["amount_uzs"])
-    state.seen_payees.add(event["receiver_pinfl"])
-    state.events.append((now, amount, event["receiver_pinfl"], event.get("device_id", "")))
+    # The same resolver extract() used. Keying the write differently from the
+    # read would leave `seen_payees` permanently missing what it just recorded,
+    # and is_new_payee would read 1 on every event forever.
+    payee = payee_key(event)
+    state.seen_payees.add(payee)
+    state.events.append((now, amount, payee, event.get("device_id", "")))
     # Bound the window deque (memory). Stale entries are time-filtered in extract anyway.
     while state.events and now - state.events[0][0] > C.RECENT_RETENTION_S:
         state.events.popleft()

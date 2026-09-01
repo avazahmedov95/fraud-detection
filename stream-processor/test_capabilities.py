@@ -31,11 +31,29 @@ def test_every_rule_is_declared_exactly_once():
     assert len(seen) == len(set(seen))
 
 
+#: Capabilities that legitimately have no "off", with the reason. A capability
+#: that SELECTS between data sources has no null option: switching it off would
+#: not model a poorer deployment, it would model one that cannot key its state
+#: at all. Exemptions are listed rather than the rule weakened, so a new
+#: capability without "off" still has to be argued for here.
+_NO_OFF_MODE = {
+    "payee_identity": "selects which identity the payee is keyed by; there is "
+                      "no deployment that keys receiver-side state on nothing",
+}
+
+
 def test_off_is_available_wherever_it_makes_sense():
     for cap in CAP.REGISTRY:
-        if cap.always_on:
+        if cap.always_on or cap.key in _NO_OFF_MODE:
             continue
         assert "off" in cap.modes, f"{cap.key} cannot be switched off"
+
+
+def test_exempt_capabilities_contribute_no_features():
+    """The exemption above is only safe while such a capability adds no columns:
+    a feature that can never be removed would be an undeclared requirement."""
+    for key in _NO_OFF_MODE:
+        assert CAP.BY_KEY[key].features == ()
 
 
 def test_core_history_cannot_be_switched_off():

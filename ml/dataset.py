@@ -23,9 +23,12 @@ _EVENT_KEYS = ("amount_uzs", "sender_pinfl", "receiver_pinfl", "device_id", "sen
                # behavioural session signals (backlog #7) — must be forwarded,
                # otherwise active_call / secs_login_z train as constant zeros.
                "active_call", "secs_login_to_confirm",
-               # issuer identity, for the on-us test behind the receiver_age
-               # capability; kinship, for the myid_kinship capability.
-               "sender_bank_name", "receiver_bank_name", "is_family_transfer")
+               # The cards, from which features.py derives the issuer via the
+               # BIN table - the on-us test behind the receiver_age capability.
+               # Forwarded rather than the bank names so the offline replay
+               # resolves the issuer through exactly the code path the live job
+               # uses; kinship, for the myid_kinship capability.
+               "sender_card", "receiver_card", "is_family_transfer")
 
 
 def _as_bool(v):
@@ -60,7 +63,7 @@ def build_matrix(csv_path: str) -> pd.DataFrame:
         res = R.evaluate(event,
                          _as_age(d.get("receiver_account_age_days")),
                          states[d["sender_card"]], now,
-                         receiver_states[d["receiver_pinfl"]],
+                         receiver_states[F.payee_key(event)],
                          population=population)
         row = dict(zip(FEATURE_NAMES, res["features"]))
         row["cep_score"] = res["cep_score"]

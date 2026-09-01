@@ -37,6 +37,7 @@ import pandas as pd
 
 from rules import SenderState, ReceiverState, evaluate
 from replay_eval import _as_bool, _as_age
+import features as F
 
 MAX_SEED_LAG_DAYS = 21     # must match maybe_seed_payee in fraud_patterns.py
 
@@ -44,7 +45,13 @@ MAX_SEED_LAG_DAYS = 21     # must match maybe_seed_payee in fraud_patterns.py
 def replay(path):
     df = pd.read_csv(path).sort_values("event_time").reset_index(drop=True)
     seen, stream_new = defaultdict(set), []
-    for card, rcv in zip(df["sender_card"], df["receiver_pinfl"]):
+    # Resolved through features.payee_key rather than by naming a column: this
+    # recomputation exists to be compared against what the RULE layer sees, and
+    # a cross-check keyed on a different identity than the thing it checks is
+    # not a cross-check.
+    payees = [F.payee_key({"receiver_pinfl": p, "receiver_card": c})
+              for p, c in zip(df["receiver_pinfl"], df["receiver_card"])]
+    for card, rcv in zip(df["sender_card"], payees):
         stream_new.append(0 if rcv in seen[card] else 1)
         seen[card].add(rcv)
     df["stream_new"] = stream_new
@@ -58,13 +65,13 @@ def replay(path):
               "receiver_network": r.get("receiver_network", ""),
               "active_call": _as_bool(r.get("active_call")),
               "secs_login_to_confirm": r.get("secs_login_to_confirm", 0.0),
-              "sender_bank_name": r.get("sender_bank_name", ""),
-              "receiver_bank_name": r.get("receiver_bank_name", ""),
+              "sender_card": r.get("sender_card", ""),
+              "receiver_card": r.get("receiver_card", ""),
               "is_family_transfer": _as_bool(r.get("is_family_transfer"))}
         res = evaluate(ev, _as_age(r.get("receiver_account_age_days")),
                        states[r["sender_card"]],
                        pd.Timestamp(r["event_time"]).timestamp(),
-                       rstates[r["receiver_pinfl"]])
+                       rstates[F.payee_key(ev)])
         flagged.append(res["decision"] in ("REVIEW", "BLOCK"))
     df["flagged"] = flagged
     # ISO8601: the generator omits microseconds when they are zero, so the

@@ -13,6 +13,8 @@ import pytest
 
 import config as C
 from receiver_store import ReceiverStore
+import features as F
+from conftest import payee_card
 
 
 class FakeRedis:
@@ -71,8 +73,23 @@ def store():
 
 
 def _ev(txid, sender="S1", amount=100_000.0, receiver="R1"):
+    # Carries BOTH identities. The store keys on whichever the payee_identity
+    # capability selects (features.payee_key), so an event that named only one
+    # of them would silently exercise a single mode.
     return {"transaction_id": txid, "sender_pinfl": sender,
-            "receiver_pinfl": receiver, "amount_uzs": amount}
+            "receiver_pinfl": receiver, "receiver_card": payee_card(receiver),
+            "amount_uzs": amount}
+
+
+def _payee(receiver="R1"):
+    """The identity the store keys this payee by under the active mode.
+
+    load() takes an ALREADY-RESOLVED key - the job calls it with
+    features.payee_key(event) - so the test has to resolve it the same way.
+    Writing "R1" here instead is precisely the read/write key mismatch the
+    store's design exists to prevent, and it silently reads an empty window.
+    """
+    return F.payee_key(_ev("probe", receiver=receiver))
 
 
 def test_replay_of_the_same_event_is_idempotent(store):
@@ -80,7 +97,7 @@ def test_replay_of_the_same_event_is_idempotent(store):
     call record() again. A repeat must not inflate the payee's inflow."""
     store.record(_ev("tx-1"), now=1000)
     store.record(_ev("tx-1"), now=1000)          # replayed after restart
-    state = store.load("R1", now=1000)
+    state = store.load(_payee(), now=1000)
     assert len(state.inbound) == 1
 
 
@@ -90,7 +107,7 @@ def test_distinct_transfers_sharing_time_sender_amount_are_both_kept(store):
     time|sender|amount key the second transfer vanished."""
     store.record(_ev("tx-1"), now=1000)
     store.record(_ev("tx-2"), now=1000)          # different transaction
-    state = store.load("R1", now=1000)
+    state = store.load(_payee(), now=1000)
     assert len(state.inbound) == 2
     assert sum(a for _, _, a in state.inbound) == 200_000.0
 
@@ -98,21 +115,21 @@ def test_distinct_transfers_sharing_time_sender_amount_are_both_kept(store):
 def test_distinct_senders_are_counted_separately(store):
     for i in range(4):
         store.record(_ev(f"tx-{i}", sender=f"S{i}"), now=1000)
-    state = store.load("R1", now=1000)
+    state = store.load(_payee(), now=1000)
     assert len({s for _, s, _ in state.inbound}) == 4
 
 
 def test_entries_outside_the_window_are_dropped(store):
     store.record(_ev("tx-old"), now=1000)
     store.record(_ev("tx-new"), now=1000 + C.RECEIVER_WINDOW_S + 10)
-    state = store.load("R1", now=1000 + C.RECEIVER_WINDOW_S + 10)
+    state = store.load(_payee(), now=1000 + C.RECEIVER_WINDOW_S + 10)
     assert len(state.inbound) == 1
 
 
 def test_a_ttl_is_always_set(store):
     """Without it an idle payee's key would sit in memory for ever."""
     store.record(_ev("tx-1"), now=1000)
-    assert store._redis.expiries["rcv:R1"] >= C.RECEIVER_WINDOW_S
+    assert store._redis.expiries[f"rcv:{_payee()}"] >= C.RECEIVER_WINDOW_S
 
 
 def test_unavailable_redis_fails_open_rather_than_raising():

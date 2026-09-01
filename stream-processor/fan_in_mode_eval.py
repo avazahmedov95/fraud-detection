@@ -37,6 +37,7 @@ import pandas as pd
 import config as C
 from rules import SenderState, ReceiverState, PopulationBaseline, evaluate
 from replay_eval import _as_bool, _as_age
+import features as F
 
 
 def score(path, mode, quantile):
@@ -59,14 +60,14 @@ def score(path, mode, quantile):
                 "receiver_network": r.get("receiver_network", ""),
                 "active_call": _as_bool(r.get("active_call")),
                 "secs_login_to_confirm": r.get("secs_login_to_confirm", 0.0),
-                "sender_bank_name": r.get("sender_bank_name", ""),
-                "receiver_bank_name": r.get("receiver_bank_name", ""),
+                "sender_card": r.get("sender_card", ""),
+                "receiver_card": r.get("receiver_card", ""),
                 "is_family_transfer": _as_bool(r.get("is_family_transfer")),
             }
             res = evaluate(ev, _as_age(r.get("receiver_account_age_days")),
                            states[r["sender_card"]],
                            pd.Timestamp(r["event_time"]).timestamp(),
-                           rstates[r["receiver_pinfl"]], population=pop)
+                           rstates[F.payee_key(ev)], population=pop)
             flagged.append(res["decision"] in ("REVIEW", "BLOCK"))
             hits += ("MULE_FAN_IN" in res["rule_hits"])
         df["flagged"] = flagged

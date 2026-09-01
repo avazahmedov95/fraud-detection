@@ -15,6 +15,7 @@ import pytest
 import capabilities as CAP
 import features as F
 from rules import SenderState, evaluate
+from conftest import bank_card, payee_card
 
 
 @pytest.fixture
@@ -28,7 +29,8 @@ def mode():
 def _ev(sender_bank="BankA", receiver_bank="BankA"):
     return {"amount_uzs": 500_000, "receiver_pinfl": "rcv", "device_id": "dev-1",
             "sender_region": "Tashkent City",
-            "sender_bank_name": sender_bank, "receiver_bank_name": receiver_bank}
+            "sender_card": bank_card(sender_bank),
+            "receiver_card": payee_card("rcv", receiver_bank)}
 
 
 # --- the feature contract ---------------------------------------------------

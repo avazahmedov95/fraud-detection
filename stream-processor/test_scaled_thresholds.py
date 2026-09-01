@@ -15,6 +15,7 @@ import pytest
 import capabilities as CAP
 import config as C
 import rules as R
+from conftest import bank_card, payee_card
 
 
 @pytest.fixture
@@ -90,7 +91,8 @@ def test_ordering_of_review_and_block_is_preserved(profile):
 def _ev(amount, payee, bank="BankA"):
     return {"amount_uzs": amount, "sender_pinfl": "S1", "receiver_pinfl": payee,
             "device_id": "dev-1", "sender_region": "Tashkent City",
-            "sender_bank_name": bank, "receiver_bank_name": bank}
+            "sender_card": bank_card(bank),
+            "receiver_card": payee_card(payee, bank)}
 
 
 def test_single_rule_can_flag_when_it_is_all_that_is_available(profile):

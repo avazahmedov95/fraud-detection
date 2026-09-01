@@ -14,6 +14,7 @@ import capabilities as CAP
 import config as C
 import features as F
 from rules import SenderState, ReceiverState, evaluate
+from conftest import bank_card, payee_card
 
 needs_cap = pytest.mark.skipif(
     not CAP.enabled("receiver_velocity"),
@@ -24,7 +25,8 @@ def _ev(sender, amount=500_000, receiver="mule"):
     return {"amount_uzs": amount, "sender_pinfl": sender,
             "receiver_pinfl": receiver, "device_id": f"dev-{sender}",
             "sender_region": "Tashkent City",
-            "sender_bank_name": "BankA", "receiver_bank_name": "BankA"}
+            "sender_card": bank_card("BankA"),
+            "receiver_card": payee_card(receiver)}
 
 
 def _fan_in(n_senders, receiver_state, spacing_s=60, now0=1000):

@@ -9,7 +9,11 @@ outside the partitioning — hence Redis.
 
 The window is a sorted set per payee, scored by timestamp:
 
-    rcv:{receiver_pinfl}  ->  ZSET of "ts|sender_pinfl|amount", score = ts
+    rcv:{payee}  ->  ZSET of "ts|sender_pinfl|amount|txid", score = ts
+
+where {payee} is whatever identity this deployment can pin the payee to -
+the destination PAN by default, the PINFL at switch/platform level. See
+features.payee_key; the choice is one place, not one per call site.
 
 Reads take the window with ZRANGEBYSCORE; writes append and prune expired
 members in one pipeline. A TTL on the key means a payee who stops receiving
@@ -22,6 +26,7 @@ without the fan-in signal, exactly as the enrichment lookups degrade.
 import logging
 
 import config as C
+import features as F
 from rules import ReceiverState, quantile_threshold
 
 log = logging.getLogger("receiver_store")
@@ -43,7 +48,7 @@ class ReceiverStore:
             log.warning("Redis unavailable, fan-in detection disabled: %s", exc)
             self._redis = None
 
-    def load(self, receiver_pinfl, now):
+    def load(self, payee, now):
         """The payee's inbound window, or None when the store is unavailable.
 
         None and an empty window are deliberately different: None means "this
@@ -51,12 +56,12 @@ class ReceiverStore:
         fail-open, while an empty window is a real observation about a payee
         nobody has paid recently.
         """
-        if self._redis is None or not receiver_pinfl:
+        if self._redis is None or not payee:
             return None
         state = ReceiverState()
         try:
             members = self._redis.zrangebyscore(
-                f"rcv:{receiver_pinfl}", now - self._window_s, now)
+                f"rcv:{payee}", now - self._window_s, now)
         except Exception as exc:                       # noqa: BLE001
             log.warning("fan-in lookup failed, failing open: %s", exc)
             return None
@@ -80,10 +85,12 @@ class ReceiverStore:
         """Append this transfer to the payee's window and prune what expired."""
         if self._redis is None:
             return
-        receiver = event.get("receiver_pinfl")
-        if not receiver:
+        # Resolved through the same helper load() is called with, so a write
+        # can never land under a key the read will not look at.
+        payee = F.payee_key(event)
+        if not payee:
             return
-        key = f"rcv:{receiver}"
+        key = f"rcv:{payee}"
         # The member encodes transaction_id, which buys two distinct properties:
         #
         #   Idempotence under replay. This store is external, so it does NOT

@@ -19,6 +19,7 @@ from collections import defaultdict, Counter
 import pandas as pd
 
 import config as C
+import features as F
 from rules import (SenderState, ReceiverState, PopulationBaseline,
                    evaluate)
 
@@ -64,10 +65,12 @@ def run(path):
             # COACHED_SESSION rule and the secs_login_z baseline.
             "active_call": _as_bool(r.get("active_call")),
             "secs_login_to_confirm": r.get("secs_login_to_confirm", 0.0),
-            # issuer identity, for the on-us test behind the receiver_age
-            # capability; kinship, for the myid_kinship capability.
-            "sender_bank_name": r.get("sender_bank_name", ""),
-            "receiver_bank_name": r.get("receiver_bank_name", ""),
+            # The cards, from which features.py resolves the issuer via the
+            # BIN table - the on-us test behind receiver_age. Forwarded
+            # rather than the bank names so the replay resolves the issuer
+            # through exactly the path the live job uses.
+            "sender_card": r.get("sender_card", ""),
+            "receiver_card": r.get("receiver_card", ""),
             "is_family_transfer": _as_bool(r.get("is_family_transfer")),
         }
         ts = pd.Timestamp(r["event_time"]).timestamp()
@@ -75,7 +78,7 @@ def run(path):
                        receiver_age_days=_as_age(r.get("receiver_account_age_days")),
                        state=states[r["sender_card"]],
                        now=ts,
-                       receiver_state=receiver_states[r["receiver_pinfl"]],
+                       receiver_state=receiver_states[F.payee_key(event)],
                        population=population)
         decisions.append(res["decision"])
         bucket = "fraud" if (has_labels and int(r["label_is_fraud"]) == 1) else "legit"

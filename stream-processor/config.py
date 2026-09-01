@@ -273,12 +273,19 @@ JOB_DIR = os.path.dirname(os.path.abspath(__file__))
 MOUNTED_JOB_DIR = os.getenv("FLINK_JOB_DIR", "/opt/flink/usrjobs")
 
 
-def _resolve_artefact(env_var, filename):
-    """Locate a deploy-time artefact, mounted directory first."""
+def _resolve_artefact(env_var, filename, extra_dirs=()):
+    """Locate a deploy-time artefact, mounted directory first.
+
+    `extra_dirs` are searched last, for artefacts that also have a home in the
+    repository (banks.csv lives in data-generator/ and is copied to the job dir
+    by serve-prep). They are never searched first: in a deployment the mounted
+    copy is the one that ships, and preferring a repository path would let a
+    local file silently override what was deployed.
+    """
     override = os.getenv(env_var)
     if override:
         return override
-    for directory in (MOUNTED_JOB_DIR, JOB_DIR):
+    for directory in (MOUNTED_JOB_DIR, JOB_DIR) + tuple(extra_dirs):
         candidate = os.path.join(directory, filename)
         if os.path.exists(candidate):
             return candidate
@@ -289,6 +296,20 @@ def _resolve_artefact(env_var, filename):
 
 MODEL_ONNX_PATH = _resolve_artefact("MODEL_ONNX_PATH", "model.onnx")
 FEATURE_NAMES_PATH = _resolve_artefact("FEATURE_NAMES_PATH", "feature_names.json")
+
+# The BIN table, from which bins.py resolves the card issuer. Resolved HERE, the
+# same way as the two artefacts above, and for the same reason spelled out in
+# the comment on JOB_DIR: `--pyFiles` copies the Python modules into a Beam temp
+# directory, so a path derived from a module's __file__ points at that temp
+# directory and finds no data files at all. bins.py originally did exactly that
+# and failed the job at import with FileNotFoundError - the trap this resolver
+# exists to close, walked into a second time.
+#
+# data-generator/ is included as a last resort so tests and the offline replay
+# harnesses work in a checkout where serve-prep has not been run.
+BANKS_CSV_PATH = _resolve_artefact(
+    "BANKS_CSV", "banks.csv",
+    extra_dirs=(os.path.join(JOB_DIR, "..", "data-generator"),))
 
 # Fusion happens at the DECISION layer, not by averaging scores. We evaluated
 # naive blends (noisy-OR, weighted, ml-augmented) and all DEGRADE ranking vs the
