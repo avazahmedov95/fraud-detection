@@ -30,7 +30,10 @@ EVENT = {
 # Frozen vectors. These exact strings must also appear in
 # data-generator/test_integrity.py; equal vectors on both sides prove the two
 # integrity.py copies agree without a runtime dependency between them.
-INGRESS_VECTOR = "0d15674e61bf66a467d0302c95f2d2b9f6a11446ab9de7f3364811230946c30e"
+# Changed when receiver_pinfl left the wire: the hash can only bind
+# fields the event carries. Both copies of integrity.py must produce
+# this same value - that is what these two test files are for.
+INGRESS_VECTOR = "80f4245868803adc2b0324e7a0a3b5ef43ec6cfcff45011f752eb3083c1591c6"
 RECORD_VECTOR = "0b78fd33b284062eb5b9f6dc32f1c4507ed4fbb4c1d00c2a48cc4b885c964cad"
 
 

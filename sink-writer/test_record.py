@@ -48,10 +48,26 @@ def test_is_alert():
     assert R.is_alert(ALLOW) is False
 
 
-def test_alert_params_links_by_pinfl():
+def test_alert_params_links_by_card():
+    """Both ends of a graph edge are keyed by CARD.
+
+    receiver_pinfl is no longer on the wire — a sending bank cannot resolve the
+    destination PAN to a person — so the money-flow network is the card-to-card
+    graph the switch actually sees. Keying one end by pinfl and the other by
+    card would make the graph inconsistent rather than merely partial.
+    """
     p = R.alert_params(SCORED)
-    assert p["sender"] == "S1" and p["receiver"] == "R1"
+    assert p["sender"] == SCORED["sender_card"]
+    assert p["receiver"] == SCORED["receiver_card"]
     assert p["decision"] == "BLOCK" and p["ptype"] == "APP"
+
+
+def test_alert_params_survive_a_record_without_a_payee_identity():
+    """A scored record carries no receiver_pinfl at all now; alert_params must
+    not reintroduce a dependency on it."""
+    without = {k: v for k, v in SCORED.items() if k != "receiver_pinfl"}
+    p = R.alert_params(without)
+    assert p["receiver"] == SCORED["receiver_card"]
 
 
 # --- batching, with injected fake clients (no real ClickHouse/Neo4j) ---

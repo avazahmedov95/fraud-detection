@@ -34,9 +34,14 @@ import hashlib
 # emits and that survive unchanged through the pipeline.
 INGRESS_FIELDS = (
     "transaction_id", "event_time",
-    "sender_pinfl", "sender_card", "receiver_pinfl", "receiver_card",
+    "sender_pinfl", "sender_card", "receiver_card",
     "amount_uzs", "channel", "sender_region", "receiver_region",
 )
+# receiver_pinfl was removed from this tuple when it was removed from the wire.
+# The hash can only bind fields the event actually carries, and receiver_card is
+# the identifier the sending bank holds for the payee. This is a BREAKING change
+# to every hash computed before it: see docs/audit-anchors.md, where the
+# anchored head is recorded together with the field list it was computed over.
 
 GENESIS = "0" * 64          # prev_hash of the first record in a chain
 

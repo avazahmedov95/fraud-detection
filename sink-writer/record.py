@@ -160,8 +160,13 @@ def is_alert(e: dict) -> bool:
 def alert_params(e: dict) -> dict:
     return {
         "txid": e.get("transaction_id", "") or "",
-        "sender": e.get("sender_pinfl", "") or "",
-        "receiver": e.get("receiver_pinfl", "") or "",
+        # Cards, not PINFLs. receiver_pinfl no longer travels - the sending
+        # bank does not hold the payee's identity - and keying the two ends of
+        # an edge by different identifiers would make the graph inconsistent
+        # rather than merely partial. :Person carries `card`; import.cypher
+        # indexes it.
+        "sender": e.get("sender_card", "") or "",
+        "receiver": e.get("receiver_card", "") or "",
         "amount": _i(e.get("amount_uzs")),
         "event_time": e.get("event_time") or "",
         "final_score": _f(e.get("final_score")),

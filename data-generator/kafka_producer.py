@@ -35,7 +35,7 @@ except ImportError:  # allow --dry-run without the dependency installed
 # for offline evaluation harnesses.
 RAW_FIELDS = [
     "transaction_id", "event_time", "sender_pinfl", "sender_card", "sender_network",
-    "receiver_pinfl", "receiver_card", "receiver_network", "amount_uzs", "channel",
+    "receiver_card", "receiver_network", "amount_uzs", "channel",
     "device_id", "sender_region", "receiver_region", "sender_balance_before",
     # Session signals the mobile app observes and sends with the confirmation.
     # These are raw, not enrichment: omitting them silently scores every live
@@ -44,19 +44,50 @@ RAW_FIELDS = [
     # twice. The session_telemetry capability is the second most valuable one
     # measured, so dropping it here would quietly discard that.
     "active_call", "secs_login_to_confirm",
-    # Issuer identity. In production it is derived from the PAN's BIN, which the
-    # switch message carries; materialised here so the job need not carry a BIN
-    # table. Used for the on-us test behind the receiver_age capability.
-    "sender_bank_name", "receiver_bank_name",
 ]
+# NOT sent: receiver_pinfl. A card-to-card transfer reaches the sending bank as
+# a destination PAN; the person behind it is a core-banking lookup available for
+# the bank's own clients only (6.85% of transfers at the measured market
+# concentration). Carrying it made the wire format assert knowledge no
+# deployment has. sender_pinfl stays: the sender IS the bank's client.
+#
+# NOT sent: sender_bank_name / receiver_bank_name. The issuer is derived by the
+# stream processor from the PAN's BIN (stream-processor/bins.py), which is what
+# a bank does - the switch message carries the card, not the counterparty's
+# institution. Sending the names made the wire format carry a field UzCard /
+# HUMO does not, and put the on-us test behind the receiver_age capability on a
+# convenience of the generator rather than on data a deployment holds.
+
+
+#: Fields that are booleans, not text. csv.DictReader returns every column as a
+#: string, so without this `active_call` travelled as "False" - a non-empty
+#: string, and therefore TRUE to every consumer that tested it for truthiness.
+#: The live job scored active_call = 1 on 100% of events while the model had
+#: been trained on 3.5%. Numbers were cast here from the start; booleans were
+#: not, and the omission was invisible because the JSON looked right.
+_BOOL_FIELDS = ("active_call",)
+_INT_FIELDS = ("amount_uzs", "sender_balance_before")
+_FLOAT_FIELDS = ("secs_login_to_confirm",)
+_FALSEY = {"", "0", "false", "f", "no", "n", "none", "null", "nan"}
 
 
 def _row_to_message(row, include_labels):
     fields = RAW_FIELDS + (["label_is_fraud", "label_fraud_type"] if include_labels else [])
     msg = {k: row[k] for k in fields if k in row}
-    for k in ("amount_uzs", "sender_balance_before"):
+    for k in _INT_FIELDS:
         if k in msg:
             msg[k] = int(msg[k])
+    for k in _FLOAT_FIELDS:
+        if k in msg:
+            try:
+                msg[k] = float(msg[k])
+            except (TypeError, ValueError):
+                msg[k] = 0.0
+    for k in _BOOL_FIELDS:
+        if k in msg:
+            v = msg[k]
+            msg[k] = (bool(v) if isinstance(v, bool)
+                      else str(v).strip().lower() not in _FALSEY)
     return msg
 
 

@@ -22,6 +22,7 @@ venv/
 # ---------------------------------------------------------------------------
 ml/models/*.joblib
 ml/models/*.onnx
+ml/models/*.txt
 ml/models/*.png
 ml/models/_pre_ablation/
 
@@ -36,6 +37,7 @@ ml/models/_pre_ablation/
 # deployed model artifacts (copied from ml/models at deploy)
 stream-processor/model.onnx
 stream-processor/feature_names.json
+stream-processor/banks.csv
 
 # TLS material for the mutual-TLS arm (regenerate with `run.ps1 make-certs`).
 # The CA private key lives here alongside the certificates it signs, which is

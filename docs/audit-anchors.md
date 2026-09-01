@@ -53,3 +53,20 @@ less than no anchor, because it invites more confidence than it earns.
 Recompute with `.\run.ps1 verify-audit` against the same warehouse. The head is
 derived from the stored records, so a match means that nothing between this
 commit and that query altered, removed or reordered a decision.
+
+## Change of hashed field list — 01.09.2026
+
+`receiver_pinfl` was removed from `integrity.INGRESS_FIELDS` when it was removed
+from the wire: a hash can only bind fields the event actually carries, and
+`receiver_card` is the identifier a sending bank holds for the payee.
+
+This is a **breaking change to the ingress hash**. Records anchored before this
+date were hashed over the ten-field list including `receiver_pinfl`; records
+after are hashed over nine. Both are verifiable, but only against the definition
+in force when they were written, so the anchor registry above should be read
+with this line beside it. The head
+`3b20c07cffeb3a6a19c8078205b77ba24ca4cec48d35d14d967747874a896184`
+(7,000 records) predates the change.
+
+The chained `record_hash` is unaffected — it folds the previous hash, a sequence
+number and the record's own content, none of which changed.

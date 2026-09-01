@@ -4,6 +4,10 @@ Batched Neo4j writer: persists ALERT transactions (decision != ALLOW) as
 
   (s:Person)-[:SENT]->(t:Transaction)-[:TO]->(r:Person)
 
+Both ends are matched by CARD. The payee's PINFL is not on the wire - a sending
+bank does not hold it - so the money-flow network is the card-to-card graph the
+switch actually sees.
+
 This puts the flagged-flow network next to the account population, so mule
 fan-in/out and transfer rings become graph-queryable. Only alerts are written to
 keep the graph focused. Fails open if Neo4j is unreachable.
@@ -31,8 +35,8 @@ RECONNECT_INTERVAL_S = 10.0
 
 _MERGE = """
 UNWIND $rows AS row
-MATCH (s:Person {pinfl: row.sender})
-MATCH (r:Person {pinfl: row.receiver})
+MATCH (s:Person {card: row.sender})
+MATCH (r:Person {card: row.receiver})
 MERGE (t:Transaction {id: row.txid})
   SET t.amount         = row.amount,
       t.final_score    = row.final_score,

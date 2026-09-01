@@ -10,6 +10,17 @@
 CREATE CONSTRAINT person_pinfl IF NOT EXISTS
 FOR (p:Person) REQUIRE p.pinfl IS UNIQUE;
 
+// The account-age lookup runs by CARD under the default payee_identity mode,
+// because that is the identity a sending bank holds for the payee. Without an
+// index that lookup is a full label scan on every uncached transaction.
+//
+// An INDEX, not a constraint: card uniqueness happens to hold in the generated
+// population (one card per person), but the whole point of the card-keyed mode
+// is that a real person holds several cards - one of which may one day be
+// loaded here. A uniqueness constraint would make that data unloadable.
+CREATE INDEX person_card IF NOT EXISTS
+FOR (p:Person) ON (p.card);
+
 // Accounts.
 LOAD CSV WITH HEADERS FROM 'file:///persons.csv' AS row
 MERGE (p:Person {pinfl: row.pinfl})
