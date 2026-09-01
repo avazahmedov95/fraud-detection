@@ -334,7 +334,19 @@ and it travelled silently.
 
 Replacing it with a quantile of the population's own live distribution
 (`MULE_FAN_IN_MODE = relative`, `rules.PopulationBaseline`) makes that
-assumption explicit. Two things follow, and the first matters more.
+assumption explicit.
+
+**Where this runs, stated before the numbers.** The measurement below is taken
+through `replay_eval.py`, which drives the deployed `rules.evaluate` unchanged -
+so it is the real rule layer, not a reimplementation. It is **not** yet reachable
+in the Flink job: the baseline is population-wide state, and this stream is keyed
+by sender, so it belongs in Redis beside `ReceiverStore` for the same reason the
+receiver window does. Until it is wired there, setting the mode on the deployed
+job falls back to the constant. That fallback now logs a warning once per process
+rather than happening silently, which is the minimum this project's own catalogue
+of silent failures demands of it.
+
+Two things follow from the measurement, and the first matters more.
 
 **The learned threshold reproduces the hand-set one at home.** On the project's
 own data the quantile lands on 5 at q=0.9995 and 7 at q=0.9999, bracketing the

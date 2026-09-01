@@ -15,6 +15,8 @@ Scores are design targets for tuning, not validated production metrics.
 from dataclasses import dataclass, field
 from collections import deque, Counter
 
+import logging
+
 import config as C
 import features as F
 import capabilities as CAP
@@ -30,6 +32,25 @@ class ReceiverState:
     engine stays testable and replayable offline.
     """
     inbound: deque = field(default_factory=deque)     # (ts, sender_pinfl, amount)
+
+
+_warned_no_baseline = False
+
+
+def _warn_relative_without_baseline():
+    """Once per process. A per-event log line on the 300 ms path would be its own
+    defect, and the condition is a deployment mistake that does not change
+    between events."""
+    global _warned_no_baseline
+    if not _warned_no_baseline:
+        _warned_no_baseline = True
+        logging.getLogger("rules").warning(
+            "MULE_FAN_IN_MODE=relative but no PopulationBaseline was passed to "
+            "evaluate(); the rule is running on the absolute threshold "
+            "(%d senders). The live Flink job does not yet wire one - the "
+            "baseline is population-wide state and belongs in Redis beside "
+            "ReceiverStore. Offline harnesses (replay_eval.py, "
+            "fan_in_mode_eval.py) do pass one.", C.MULE_FAN_IN_MIN_SENDERS)
 
 
 @dataclass
@@ -188,9 +209,16 @@ def evaluate(event: dict, receiver_age_days, state: SenderState, now: float,
         # live population - see MULE_FAN_IN_MODE in config.py for the measured
         # reason the choice exists.
         fan_in_thr = C.MULE_FAN_IN_MIN_SENDERS
-        if C.MULE_FAN_IN_MODE == "relative" and population is not None:
-            fan_in_thr = population.threshold(C.MULE_FAN_IN_QUANTILE,
-                                              C.MULE_FAN_IN_MIN_SENDERS)
+        if C.MULE_FAN_IN_MODE == "relative":
+            if population is not None:
+                fan_in_thr = population.threshold(C.MULE_FAN_IN_QUANTILE,
+                                                  C.MULE_FAN_IN_MIN_SENDERS)
+            else:
+                # Asked for relative, given no baseline. Falling back silently is
+                # what this project catalogues as the dangerous failure: the knob
+                # is set, the operator believes it took effect, and the rule runs
+                # on the constant the mode exists to replace. Say so, once.
+                _warn_relative_without_baseline()
         if f["rcv_distinct_senders_1h"] >= fan_in_thr:
             hits.append("MULE_FAN_IN"); score += C.W_MULE_FAN_IN
 
