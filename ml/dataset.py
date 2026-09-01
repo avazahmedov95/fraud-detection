@@ -44,6 +44,14 @@ def build_matrix(csv_path: str) -> pd.DataFrame:
     states = defaultdict(R.SenderState)
     # Keyed by payee, mirroring the shared store the live job reads.
     receiver_states = defaultdict(R.ReceiverState)
+    # `cep_score` is one of the model's features, and MULE_FAN_IN feeds it. If
+    # the deployed job scored against a population-relative threshold while
+    # training scored against the constant, that feature would mean two
+    # different things either side of deployment - train/serve skew, which the
+    # single ordered FEATURE_NAMES exists to make impossible. Offline the whole
+    # replay is one process, so the in-process baseline sees everything, which
+    # is the same quantity PopulationStore reads out of Redis in the job.
+    population = R.PopulationBaseline()
     rows = []
     for rec in df.itertuples(index=False):
         d = rec._asdict()
@@ -52,7 +60,8 @@ def build_matrix(csv_path: str) -> pd.DataFrame:
         res = R.evaluate(event,
                          _as_age(d.get("receiver_account_age_days")),
                          states[d["sender_card"]], now,
-                         receiver_states[d["receiver_pinfl"]])
+                         receiver_states[d["receiver_pinfl"]],
+                         population=population)
         row = dict(zip(FEATURE_NAMES, res["features"]))
         row["cep_score"] = res["cep_score"]
         row["label"] = int(d["label_is_fraud"])

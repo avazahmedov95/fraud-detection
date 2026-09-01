@@ -41,7 +41,7 @@ from pyflink.datastream.connectors.kafka import (
 import config as C
 from rules import SenderState, evaluate
 from enrichment import EnrichmentClient
-from receiver_store import ReceiverStore
+from receiver_store import ReceiverStore, PopulationStore
 import fusion
 import payload_crypto
 
@@ -104,8 +104,15 @@ class FraudDetector(KeyedProcessFunction):
         # by sender, so one payee's inbound transfers are spread across every
         # partition. See receiver_store.py.
         self._receivers = ReceiverStore(C.REDIS_HOST, C.REDIS_PORT)
+        # The threshold MULE_FAN_IN compares against is a property of the whole
+        # population, so it cannot be derived inside a partition either. Opened
+        # unconditionally: it is inert while MULE_FAN_IN_MODE is "absolute", and
+        # constructing it only in relative mode would mean the mode could be
+        # switched on against a job that has nothing to switch on.
+        self._population = PopulationStore(C.REDIS_HOST, C.REDIS_PORT)
         self._enrich.open()
         self._receivers.open()
+        self._population.open()
 
         # Payload decryption key. Absent is legitimate - it is the plaintext arm
         # of the experiment, and the deserialiser decides per record - but a key
@@ -168,7 +175,8 @@ class FraudDetector(KeyedProcessFunction):
         event_epoch = _event_epoch(event)
         receiver_state = self._receivers.load(event.get("receiver_pinfl"), event_epoch)
 
-        result = evaluate(event, receiver_age, state, event_epoch, receiver_state)
+        result = evaluate(event, receiver_age, state, event_epoch, receiver_state,
+                          population=self._population)
         self._state.update(state)
         self._receivers.record(event, event_epoch)
 
@@ -225,6 +233,7 @@ class FraudDetector(KeyedProcessFunction):
             self._enrich.close()
         if hasattr(self, "_receivers"):
             self._receivers.close()
+            self._population.close()
 
 
 def _apply_security(builder):

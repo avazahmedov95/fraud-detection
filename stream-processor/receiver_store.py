@@ -22,7 +22,7 @@ without the fan-in signal, exactly as the enrichment lookups degrade.
 import logging
 
 import config as C
-from rules import ReceiverState
+from rules import ReceiverState, quantile_threshold
 
 log = logging.getLogger("receiver_store")
 
@@ -115,6 +115,129 @@ class ReceiverStore:
     def close(self):
         if self._redis is not None:
             try:
+                self._redis.close()
+            except Exception:                          # noqa: BLE001
+                pass
+
+
+class PopulationStore:
+    """The population-wide distribution of `rcv_distinct_senders_1h`, shared
+    across Flink partitions via Redis.
+
+    Same argument as ReceiverStore one class up, one level higher. That store
+    exists because a payee's inbound transfers are spread across every
+    partition, so receiver-side STATE cannot live in Flink keyed state. This one
+    exists because the THRESHOLD that state is compared against is a property of
+    the whole population, and a worker that built its own histogram would hold a
+    partition baseline, not a population one - two workers would derive
+    different thresholds from different slices and judge identical transactions
+    differently depending on where they landed.
+
+    Topology constrains the feature, then the state, then the threshold. Three
+    consequences of one partitioning choice.
+
+        mule:fanin:hist  ->  HASH { sender-count -> times observed }
+
+    WRITES ARE BATCHED. `observe()` only increments a local dict; the flush
+    happens on the same call that refreshes the threshold, once every
+    MULE_FAN_IN_REFRESH_EVERY observations. A HINCRBY per event would be a Redis
+    round trip per event on the 300 ms decision path, which is the kind of cost
+    7.3 spent a chapter tracking down.
+
+    READS ARE CACHED for the same reason: HGETALL every event is the same round
+    trip wearing a different name. The threshold moves slowly, so a stale one is
+    a far smaller error than a latency budget spent on freshness nobody needs.
+
+    Fails CLOSED to the absolute constant, not to a local histogram. Without
+    Redis the only baseline available is this worker's own slice, which is
+    precisely the wrong quantity - better the known constant than a confident
+    wrong number.
+    """
+
+    KEY = "mule:fanin:hist"
+    BINS = 257
+    #: Long enough to survive normal operation, short enough that a deployment
+    #: left idle for a week does not come back scoring against last month's
+    #: traffic.
+    TTL_S = 7 * 24 * 3600
+
+    def __init__(self, host, port):
+        self._host, self._port = host, port
+        self._redis = None
+        self._pending = {}
+        self._since_sync = 0
+        self._counts = None
+        self._total = 0
+        self._thr = None
+        self._warned = False
+
+    def open(self):
+        try:
+            import redis
+            self._redis = redis.Redis(host=self._host, port=self._port,
+                                      decode_responses=True)
+            self._redis.ping()
+        except Exception as exc:                       # noqa: BLE001
+            log.warning("Redis unavailable, MULE_FAN_IN stays on the absolute "
+                        "threshold: %s", exc)
+            self._redis = None
+
+    def observe(self, senders):
+        """Called by rules.evaluate AFTER the decision. Local only - see the
+        class docstring on why this does not touch Redis."""
+        k = min(int(senders), self.BINS - 1)
+        self._pending[k] = self._pending.get(k, 0) + 1
+        self._since_sync += 1
+
+    def threshold(self, q, fallback):
+        if self._redis is None:
+            if not self._warned:
+                self._warned = True
+                log.warning("no Redis: MULE_FAN_IN on the absolute threshold "
+                            "(%d senders)", fallback)
+            return fallback
+        if self._counts is None or self._since_sync >= C.MULE_FAN_IN_REFRESH_EVERY:
+            self._sync()
+        if self._total < C.MULE_FAN_IN_MIN_OBS or self._thr is None:
+            return fallback
+        return self._thr
+
+    def _sync(self):
+        """Flush what this worker observed, then re-read the whole population."""
+        try:
+            if self._pending:
+                pipe = self._redis.pipeline()
+                for k, v in self._pending.items():
+                    pipe.hincrby(self.KEY, k, v)
+                pipe.expire(self.KEY, self.TTL_S)
+                pipe.execute()
+                self._pending.clear()
+            self._since_sync = 0
+            raw = self._redis.hgetall(self.KEY) or {}
+            counts = [0] * self.BINS
+            total = 0
+            for k, v in raw.items():
+                try:
+                    i, c = int(k), int(v)
+                except (TypeError, ValueError):
+                    continue
+                if 0 <= i < self.BINS:
+                    counts[i] = c
+                    total += c
+            self._counts, self._total = counts, total
+            self._thr = (quantile_threshold(counts, total, C.MULE_FAN_IN_QUANTILE)
+                         if total else None)
+        except Exception as exc:                       # noqa: BLE001
+            # Do not drop _pending: a transient Redis blip should cost accuracy
+            # of the next refresh, not the observations themselves.
+            log.warning("fan-in baseline sync failed, keeping the last "
+                        "threshold: %s", exc)
+
+    def close(self):
+        if self._redis is not None:
+            try:
+                if self._pending:
+                    self._sync()
                 self._redis.close()
             except Exception:                          # noqa: BLE001
                 pass

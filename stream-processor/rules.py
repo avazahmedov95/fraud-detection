@@ -34,6 +34,34 @@ class ReceiverState:
     inbound: deque = field(default_factory=deque)     # (ts, sender_pinfl, amount)
 
 
+#: Below this a "receiver with many senders" is not a claim anyone would make.
+FAN_IN_FLOOR = 2
+
+
+def quantile_threshold(counts, n, q):
+    """Smallest count k such that P(X < k) >= q — the value that puts a receiver
+    in the top (1-q) of the population right now.
+
+    Shared by the in-process baseline and the Redis-backed one so the floor
+    below cannot drift between them: two implementations of a threshold is two
+    thresholds.
+
+    A single sender is not concentration, whatever the distribution says. If
+    99.9% of receivers see zero or one, the raw quantile lands at 1 and the rule
+    would fire on every ordinary transfer. FAN_IN_FLOOR is a statement about
+    what the rule MEANS, not a tuning constant.
+    """
+    target = q * n
+    cum = 0
+    thr = len(counts) - 1
+    for k, c in enumerate(counts):
+        cum += c
+        if cum >= target:
+            thr = k
+            break
+    return max(thr, FAN_IN_FLOOR)
+
+
 _warned_no_baseline = False
 
 
@@ -84,33 +112,14 @@ class PopulationBaseline:
         self.n += 1
 
     def threshold(self, q: float, fallback: int) -> int:
-        """Smallest count k such that P(X < k) >= q, i.e. the value that puts a
-        receiver in the top (1-q) of the population right now.
-
-        Returns `fallback` until MULE_FAN_IN_MIN_OBS observations have been
-        seen. A quantile estimated from a handful of events is not a baseline,
-        and firing on one would replace a wrong constant with a random one.
-        """
         if self.n < C.MULE_FAN_IN_MIN_OBS:
             return fallback
         if (self._cached_at >= 0
                 and self.n - self._cached_at < C.MULE_FAN_IN_REFRESH_EVERY):
             return self._cached_thr
-        target = q * self.n
-        cum = 0
-        thr = self.BINS - 1
-        for k, c in enumerate(self.counts):
-            cum += c
-            if cum >= target:
-                thr = k
-                break
-        # A single sender is not concentration, whatever the distribution says:
-        # if 99.9% of receivers see zero or one, the quantile lands at 1 and the
-        # rule would fire on every ordinary transfer. The floor is a statement
-        # about what the rule MEANS, not a tuning constant.
-        thr = max(thr, 2)
-        self._cached_thr, self._cached_at = thr, self.n
-        return thr
+        self._cached_thr = quantile_threshold(self.counts, self.n, q)
+        self._cached_at = self.n
+        return self._cached_thr
 
 
 @dataclass
