@@ -41,6 +41,45 @@ def _metrics(y, proba, thr):
                 tp=int(tp), fp=int(fp), fn=int(fn), tn=int(tn))
 
 
+def _calibration(y, proba, review_thr=REVIEW_THRESHOLD, block_thr=0.80):
+    """How usable the probabilities are AS MAGNITUDES, not just as a ranking.
+
+    ROC-AUC and PR-AUC are rank statistics: a model can score every alert at
+    0.99999 and still post a near-perfect AUC, because ranking is all they see.
+    That is what happened here and nothing in the reported metrics showed it -
+    it surfaced only when a human work queue tried to order by score and found
+    89% of alerts tied at 1.000, leaving arrival order as the only tiebreak.
+
+    So these are reported beside the AUCs:
+
+      brier            mean squared error of the probabilities. Sensitive to
+                       calibration, unlike anything above.
+      saturated_share  share of ALERTS whose probability rounds to 1.000 at
+                       three decimals - the queue's view of the problem.
+      distinct_scores  distinct rounded alert probabilities. A handful means
+                       the score cannot order the work whatever the AUC says.
+      review_band      how many alerts land between the review and block
+                       cutoffs. A near-empty band means the two-tier decision
+                       is nominal: everything that alerts is blocked.
+
+    None of this is a defect of the METHOD. Synthetic fraud is close to
+    separable, so the trees drive the log-odds to the extremes; real traffic
+    with label noise and overlapping classes does not behave this way. It is a
+    property of the data that has to be reported rather than discovered.
+    """
+    alert = proba >= review_thr
+    n_alert = int(alert.sum())
+    pa = proba[alert]
+    return dict(
+        brier=float(np.mean((proba - y) ** 2)),
+        n_alerts=n_alert,
+        saturated_share=(float(np.mean(pa >= 0.9995)) if n_alert else None),
+        distinct_scores=(int(len(np.unique(np.round(pa, 3)))) if n_alert else 0),
+        review_band=int(((pa >= review_thr) & (pa < block_thr)).sum()) if n_alert else 0,
+        median_alert_score=(float(np.median(pa)) if n_alert else None),
+    )
+
+
 def main():
     os.makedirs(MODELS_DIR, exist_ok=True)
     print("building feature matrix ...")
@@ -86,6 +125,20 @@ def main():
     print(f"ML @0.50  : precision={m05['precision']:.3f}  recall={m05['recall']:.3f}   "
           f"<- fusion (phase 6) combines both")
 
+    cal = _calibration(yte, proba)
+    print("\n=== calibration - are the probabilities usable as MAGNITUDES? ===")
+    print(f"Brier score            : {cal['brier']:.5f}")
+    if cal["n_alerts"]:
+        print(f"alerts (>= {REVIEW_THRESHOLD:.2f})        : {cal['n_alerts']}")
+        print(f"  rounding to 1.000    : {cal['saturated_share']:.1%}")
+        print(f"  distinct scores      : {cal['distinct_scores']}")
+        print(f"  in the REVIEW band   : {cal['review_band']}")
+        print(f"  median alert score   : {cal['median_alert_score']:.6f}")
+        if cal["saturated_share"] and cal["saturated_share"] > 0.5:
+            print("  WARNING: most alerts are tied at the top of the scale. "
+                  "Ranking is fine (see AUC) but the score cannot ORDER work, "
+                  "and the REVIEW/BLOCK split is nominal. See _calibration().")
+
     print("\nrecall by fraud type (ML @0.50):")
     tdf = test.copy(); tdf["pred"] = (proba >= 0.50).astype(int)
     by_type = {}
@@ -102,7 +155,8 @@ def main():
         json.dump(feats, fh, indent=2)
     with open(os.path.join(MODELS_DIR, "metrics.json"), "w") as fh:
         json.dump(dict(roc_auc=auc, pr_auc=ap, at_0_50=m05,
-                       high_recall=best, cep_only=cep, by_fraud_type=by_type),
+                       high_recall=best, cep_only=cep, calibration=cal,
+                       by_fraud_type=by_type),
                   fh, indent=2)
     print(f"\nsaved model + feature_names + metrics to {MODELS_DIR}/")
     print("NOTE: metrics are design targets on synthetic data, not validated findings.")

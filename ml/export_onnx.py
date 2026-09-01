@@ -4,7 +4,9 @@ Runtime (already bundled in the Flink image). Verifies that the ONNX model
 reproduces the native model's probabilities, so phase-6 serving is faithful.
 
 Produces:
-  models/model.onnx
+  models/model.onnx     - what the Flink job serves
+  models/model.txt      - the same trees as a bare LightGBM Booster, for the
+                          case-manager's explanations
   + parity check against the native model
 
   python export_onnx.py
@@ -25,6 +27,16 @@ MODELS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
 CSV = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                    "..", "data-generator", "out", "transactions.csv")
 ONNX_PATH = os.path.join(MODELS_DIR, "model.onnx")
+
+#: The booster as a plain text model, for case-manager/explain.py.
+#:
+#: Not model.joblib: unpickling an LGBMClassifier drags in scikit-learn, which
+#: would put ~30 MB of training dependency into a service that only reads trees.
+#: `Booster(model_file=...)` needs lightgbm alone. It is written from the SAME
+#: object that is converted to ONNX two lines below, so the explanation and the
+#: decision cannot come from different trees - and explain.py re-checks that at
+#: runtime anyway by recomputing the probability.
+BOOSTER_PATH = os.path.join(MODELS_DIR, "model.txt")
 
 
 def _onnx_positive_proba(outputs):
@@ -54,6 +66,12 @@ def main():
     with open(ONNX_PATH, "wb") as fh:
         fh.write(onx.SerializeToString())
     print(f"exported {ONNX_PATH}  ({os.path.getsize(ONNX_PATH) / 1024:.0f} KB)")
+
+    booster = model.booster_ if hasattr(model, "booster_") else model
+    booster.save_model(BOOSTER_PATH)
+    print(f"exported {BOOSTER_PATH}  "
+          f"({os.path.getsize(BOOSTER_PATH) / 1024:.0f} KB, "
+          f"{booster.num_trees()} trees)")
 
     # --- parity check on a sample of the test slice ---
     df = D.build_matrix(CSV)

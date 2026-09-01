@@ -222,3 +222,39 @@ findings:
   of the mean. That test is far too strict — it reported `receiver_age` as
   unresolved at 20 seeds when the CI clearly excluded zero. Effect sizes are now
   judged on a t-based confidence interval for the mean.
+
+## Calibration
+
+`metrics.json` carries a `calibration` block beside the AUCs. It answers a
+different question from everything else there: not *does the model rank fraud
+above legitimate traffic* (it does, ROC-AUC 0.999 / PR-AUC 0.959) but *are its
+probabilities usable as magnitudes*.
+
+```
+brier               0.00244
+n_alerts            131          (>= 0.40 on the held-out slice)
+saturated_share     70.2%        rounding to 1.000
+distinct_scores     35
+review_band         14           alerts in [0.40, 0.80)
+median_alert_score  0.999975
+scored_with         model.onnx
+```
+
+Read `saturated_share` and `distinct_scores` together: the model separates the
+classes almost perfectly and still cannot **order** an alert queue, because the
+alerts are piled at the top of the scale. AUC is blind to this by construction -
+it is a rank statistic. The finding surfaced only when a real work queue tried
+to sort by score; see `docs/irp-framing.md` §9.1.
+
+This is a property of near-separable synthetic data, not of gradient boosting.
+
+**Two ways to produce it.** `train.py` computes it as part of a training run.
+`calibration_report.py` computes it for a model that is already trained and
+merges it into `metrics.json` without touching any other key - which is what to
+run when the aim is to measure the deployed model rather than to replace it:
+
+```bash
+python calibration_report.py            # score through model.onnx (what serves)
+python calibration_report.py --native   # score through model.joblib
+python calibration_report.py --dry-run  # print only
+```

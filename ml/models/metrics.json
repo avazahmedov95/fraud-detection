@@ -52,5 +52,14 @@
       "caught": 34,
       "n": 35
     }
+  },
+  "calibration": {
+    "brier": 0.0024405613899718616,
+    "n_alerts": 131,
+    "saturated_share": 0.7022900763358778,
+    "distinct_scores": 35,
+    "review_band": 14,
+    "median_alert_score": 0.9999746084213257,
+    "scored_with": "model.onnx"
   }
 }
