@@ -214,10 +214,19 @@ def main():
 
     # The design target is about blocking a transfer before settlement, so it
     # applies to when the DECISION exists - not to when the row is durable in
-    # the analytical warehouse. Those are different paths: the decision goes to
-    # the fraud.alerts topic for the switch to act on, while ClickHouse is where
-    # it is later queried. Holding the warehouse write to the same target would
-    # be measuring the reporting stack against a real-time requirement.
+    # the analytical warehouse. Those are different paths: the decision is
+    # published to fraud.alerts, while ClickHouse is where it is later queried.
+    # Holding the warehouse write to the same target would be measuring the
+    # reporting stack against a real-time requirement.
+    #
+    # SCOPE, stated because the split above invites the assumption: publishing
+    # is not enforcement. Nothing in this system answers an authorisation
+    # request, declines a transfer, or challenges a customer. fraud.alerts is
+    # consumed by the case-manager, which opens an analyst case. So the figure
+    # below is the latency of REACHING A DECISION, which is the necessary
+    # condition for acting before settlement, not evidence that anything acted.
+    # An earlier version of this comment said the topic existed "for the switch
+    # to act on", which asserted an integration that has never existed.
     print("DECISION PATH - what the <%.0f ms target is about" % args.target_ms)
     print(f"{'stage':<22}{'n':>8}{'median':>10}{'95% CI':>13}"
           f"{'p95':>10}{'p99':>10}{'max':>10}   (ms)")

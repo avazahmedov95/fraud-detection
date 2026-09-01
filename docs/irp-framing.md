@@ -416,6 +416,67 @@ cannot and should not repair a sign flip between two different phenomena.
 
 ---
 
+### RQ3, fourth result: the payee is not an identity the deploying bank holds
+
+Every receiver-side signal in this system - `is_new_payee`, the fan-in window,
+the account-age lookup - was keyed on the payee's PINFL. A card-to-card P2P
+transfer does not carry one. It reaches the sending bank as a destination PAN;
+resolving that PAN to a person is a core-banking lookup the bank can perform
+only for **its own** clients.
+
+How large "its own clients" is, is measurable rather than arguable. Weighting by
+the real card market - 69.0 million cards across 34 banks, largest share 16.3% -
+the probability that two randomly paired parties bank at the same institution is
+`sum(p_i^2)` = **6.85%**, and the generated stream realises **6.73%**. So the
+identity the whole receiver-side contour was built on is available on roughly
+one transfer in fifteen.
+
+This has a consequence for the literature, not just for the implementation. The
+receiver's account age is among the most-cited single features in APP-fraud
+work; here it is **unobtainable on 93% of transfers**, not because the technique
+is weak but because the UzCard/HUMO switch carries no account-age field and the
+card market is fragmented. That is a quantitative argument for resolution at the
+national-platform level, and it arrives from the same direction as the
+threshold result above: what is detectable is set by the deployment's position
+in the payment topology, not by the model.
+
+**The obvious repair does not work, and the failure is instructive.** Resolving
+to PINFL where the bank *can* and falling back to the PAN otherwise seems
+strictly better - more information wherever it is available. Measured on 50,000
+transactions with the window and threshold unchanged:
+
+| receiver key | `MULE_FAN_IN` fired | of which fraud |
+|---|---|---|
+| PINFL throughout | 24 | 23 |
+| PAN throughout | 24 | 23 |
+| PINFL where on-us, else PAN | **19** | **19** |
+
+The mixed key loses **17.4% of the rule's true positives** and gains nothing.
+The mechanism: the key then depends on the **sender's** bank, so one payee's
+inbound window is split across two Redis keys by a property that is not about
+the payee at all. A mule collecting from senders at several institutions
+accumulates in neither bucket. A key derived from the pair cannot aggregate over
+one side of it.
+
+PINFL and PAN keying are identical here because the generated population holds
+exactly one card per person. That equality is a property of the data, not a
+finding: a real customer holds several cards, and PAN keying then splits a mule
+who spreads inbound transfers across their own cards into as many fan-in buckets.
+So the honest default *understates* what a bank-level deployment can see, and
+`capabilities.payee_identity = pinfl` exists to quantify what platform-level
+resolution would add. `test_payee_identity.py` asserts the limitation rather
+than describing it, so it cannot quietly stop being true.
+
+**A smaller instance of the same class.** The BIN table is maintained by hand
+and the population was generated against an earlier version of it; a bank that
+has since closed (Yangi Bank, BIN 986040) therefore appears in the traffic and
+resolves to no issuer - 1.10% of card sides. This is the ordinary operating
+condition of any BIN table, which always lags the cards in circulation, and it
+is why `is_on_us` requires a non-empty issuer on **both** sides: two unresolvable
+BINs are not evidence of a shared institution. The unresolvable set is kept as a
+named list (`bins.RETIRED_BINS`) so that a row deleted by accident still fails a
+test while a genuinely closed bank does not.
+
 ## 7. Latency: measured
 
 ### 7.0 The July figures are withdrawn
@@ -910,10 +971,11 @@ produced on desktop Docker needs to say so.
 
 ## 8. Silent failure modes
 
-Seven distinct failures were found in one working session. Six of them left the
-system looking healthy: containers `Up`, no exception anywhere, Kafka offsets
-advancing, the producer reporting success. They are collected here because the
-pattern is the result, not the individual bugs.
+Thirteen distinct failures were found across two working sessions — eight while
+building the pipeline, five more while building the alert consumer that closes
+it. Ten of them left the system looking healthy: containers `Up`, no exception
+anywhere, Kafka offsets advancing, the producer reporting success. They are
+collected here because the pattern is the result, not the individual bugs.
 
 | # | failure | what an operator saw | what it actually did |
 |---|---|---|---|
@@ -924,10 +986,52 @@ pattern is the result, not the individual bugs.
 | 5 | resubmission without `-s` | job RUNNING, offsets committed, nothing re-read | empty keyed state — velocity and structuring windows blank, history-dependent rules unable to fire until refilled |
 | 6 | producer stopped with Ctrl+C | "produced N messages" never printed | `KeyboardInterrupt` bypassed `producer.flush()`; buffered messages never sent, and in the fault-injection run they would have been counted as **transactions lost** — manufacturing the exact correctness failure the experiment exists to rule out |
 | 7 | unpinned dependencies | build succeeded | one rebuild moved three libraries across major versions with no change to the repository, so the code no longer matched the environment its results were measured on |
+| 9 | ClickHouse init scripts run **only on an empty data directory**, so a schema file added later never executes on a cluster that has been up before | service starts, consumes the alert topic, commits offsets | every insert fails against a table that does not exist — the same shape as #1, rediscovered in a new component |
+| 10 | a DDL splitter that stripped whole comment lines and then split on `;` | — | tore `CREATE TABLE` in half at a semicolon **inside an inline comment**, yielding three fragments of which none was valid SQL. Caught by a test before deployment, which is why it is the cheapest row here |
+| 11 | `--pyFiles` copies modules into a Beam temp directory, so a data file resolved against `__file__` is never found | job `FAILED` in Flink; **downstream, an empty queue** | the alert topic stayed empty and the work queue looked simply quiet. The remote symptom is the point: the loud failure was two components away from where it was noticed |
+| 12 | the LightGBM wheel installs cleanly and its native library needs an OpenMP runtime the slim image does not ship | service healthy, alerts consumed, cases opening | `OSError: libgomp.so.1` at import — not a Python-level error and invisible to any dependency check; every case filed as `NO_MODEL` |
+| 13 | `csv.DictReader` returns every column as text; numbers were cast on the producer, booleans were not | the JSON on the wire looks right — `"active_call": "False"` | a non-empty string is true, so the live job scored `active_call = 1` on **100%** of events against a model trained on 3.5%. Measured through the deployed model: false positives **20 → 459**, PR-AUC 0.9956 → 0.9842, for five additional true positives |
 
 Only the eighth — a checkpoint directory created root-owned by the volume mount
 while Flink runs as `flink` — failed loudly, with a stack trace at submission.
-It was the least costly of the eight and the fastest to fix.
+It was the least costly of the first eight and the fastest to fix.
+
+Rows 9–12 were found later, building the alert consumer, and they repeat the
+pattern rather than extending it: two left every health indicator intact, one
+failed loudly two components away from where anyone was looking, and the one
+that failed immediately was the one a test caught before it ever ran.
+
+**Row 13 is the one to read twice, because it inverts the usual assumption
+about where results are safest.** Every number reported in this document was
+measured offline, and every offline path converted the flag correctly - the
+replay harness through its own `_as_bool`, the training matrix through pandas'
+bool dtype. Three private conversions, each right. The one path with no
+conversion of its own was the live pipeline, so the defect existed *only* in
+production: nothing in the reported results is wrong, and none of them described
+the running system.
+
+That is the opposite of the failure mode usually guarded against. The concern is
+normally that offline evaluation flatters a model the deployment cannot match;
+here the deployment was quietly worse than every measurement of it, and no
+measurement could have found it, because measuring is exactly what the offline
+paths do. Only serving the wire format found it.
+
+The repair is structural rather than local: the coercion now lives in
+`features.py`, the module every caller reaches the model through, so it cannot
+be missing from one of them. `test_wire_types.py` states the property directly -
+an event whose every field is a string must produce the same feature vector as
+its typed equivalent - which is the invariant that was never written down.
+
+**Row 11 deserves to be uncomfortable.** The lesson it teaches was already
+written down — in this very document as failure 3, and in a fifteen-line
+comment above `config._resolve_artefact` explaining that `--pyFiles` ships
+Python modules to a temp directory and leaves data artefacts behind. A new
+module resolved `banks.csv` against its own `__file__` anyway, and the job died
+at import. Writing the lesson down did not prevent its recurrence; only routing
+the new artefact through the same resolver did. The design consequence is
+narrower than "document more": **a hazard that has been met twice should be made
+unavailable, not annotated.** There is now one artefact resolver and every
+deploy-time file goes through it.
 
 **The claim.** In a streaming fraud pipeline the dangerous failures are not the
 ones that stop it. They are the ones that leave every health indicator intact
@@ -956,7 +1060,158 @@ failure 6 would not have broken the pipeline. It would have broken the
 instrument that fails in the direction of its own hypothesis is the one worth
 checking first.
 
-## 9. Notes for the written revision
+## 9. What the work queue found that the metrics did not
+
+The alert topic had no consumer. The pipeline computed a decision, published it,
+and nothing read it - `BLOCK` and `REVIEW` were strings in a warehouse rather
+than work anyone did. Building the missing consumer (`case-manager/`) was
+intended as scope-completion. It turned into an instrument: within one session
+of running a real queue against real alerts it exposed two properties of the
+detector that no reported metric could show, because no reported metric looks
+at them.
+
+### 9.1 The probabilities rank well and mean nothing
+
+Every case in the queue carried `final_score = 1.000`. Measured over the
+held-out slice:
+
+| quantity | value |
+|---|---|
+| Brier score | 0.00244 |
+| alerts (p >= 0.40) | 131 |
+| alerts rounding to 1.000 | **70.2%** (89.1% over the full set) |
+| distinct rounded alert scores | **35** |
+| alerts in the REVIEW band [0.40, 0.80) | **14** |
+| median alert probability | 0.999975 |
+
+ROC-AUC is 0.9992 and PR-AUC 0.9591, and both are *correct*: they are rank
+statistics, and the ranking genuinely is near-perfect. A model that scores every
+alert at 0.99999 posts the same AUCs as one whose scores are spread across the
+interval, because ranking is all they see. What is broken is **calibration** -
+the probabilities are not usable as magnitudes - and nothing in the metrics
+suite was sensitive to it.
+
+Two consequences follow, and neither is visible from an AUC:
+
+- **The two-tier decision is nominal.** 98.2% of alerts exceed the 0.80 block
+  cutoff; the REVIEW band holds 14 of 758. The thresholds were calibrated as if
+  the score were distributed, and it is not.
+- **The queue cannot be prioritised by score.** Every case arrives at the same
+  priority and ties at 1.000, leaving arrival order as the only tiebreak. The
+  queue was re-ordered by **exposure** instead: amount spans four orders of
+  magnitude, and between two cases the model is equally sure about, the larger
+  one costs more to be wrong about.
+
+This is a property of the data, not of the method. Synthetic fraud is close to
+separable, so the trees drive the log-odds to the extremes; real traffic with
+label noise and overlapping classes does not behave this way. It is reported
+because it would otherwise be discovered by whoever first tried to operate the
+system. `train.py` now emits Brier score, saturated share, distinct alert
+scores and review-band occupancy beside the AUCs, and warns when the saturated
+share exceeds one half - so this class of problem is caught by a number at
+training time rather than by a screenshot of a queue.
+
+### 9.2 One alert in seven was an automated adverse decision with no reason
+
+`predicted_type` and `rule_hits` are derived from the CEP layer. When the model
+alerts and no rule fires, both are empty:
+
+| | count | share |
+|---|---|---|
+| alerts | 758 | |
+| with at least one rule hit | 645 | 85.1% |
+| **with no reason code at all** | **113** | **14.9%** |
+| BLOCKs with no reason code | 111 of 744 | 14.9% |
+| of those, actually fraud | 109 of 111 | **98.2%** |
+
+The uncomfortable part is not that the model is wrong. It is right, at 98.2%
+precision on exactly these cases - and mute. An automated block with nothing to
+tell the customer or the supervisor is a compliance problem independent of its
+accuracy.
+
+Two responses were considered and one measured. Capping an unexplained decision
+at REVIEW costs no detection at all (the alert is raised either way; 111 cases
+move from automatic block to human review, alert recall unchanged at 0.984) but
+trades enforcement speed for explainability. The alternative - **give the model
+a voice** - was chosen instead, and all 113 now carry exact tree contributions
+in words:
+
+```
+money into this payee in an hour: 14 615 204 UZS (+9.84)
+payee's account age: 31 days (+5.38)
+amount: 7 307 603 UZS (+4.59)
+```
+
+Where this runs, and why it is not on the scoring path: exact contributions cost
+**1.89 ms per event** (400 trees, 24 features, LightGBM `pred_contrib`), which
+at ~1.5% alert traffic the 300 ms budget could absorb. It was still the wrong
+place. It would put a second copy of the model in the serving worker beside
+`model.onnx`, and nobody consumes an explanation at decision time - the analyst
+reads it from the case, the auditor from the record. So the job publishes the
+feature vector it scored on (alerts only) and the explanation is computed
+downstream, where a millisecond costs nothing. The measured 1.89 ms is recorded
+so that the choice is a comparison rather than an assertion.
+
+The guard matters more than the feature. The explaining artefact (`model.txt`)
+and the serving artefact (`model.onnx`) agree to 3.3e-07 across 50,000 events;
+every explanation recomputes the probability and refuses to speak if it differs
+from the recorded `ml_score` by more than 1e-4. A confident, specific, wrong
+reason is worse than an admitted absence, so most of `test_explain.py` is about
+refusing rather than explaining.
+
+### 9.3 The mechanism behind the ML layer's advantage, on one transaction
+
+The head-to-head figure - F1 0.881 fused against 0.417 rules-only - says the ML
+layer helps. It does not say *how*, and a reviewer is entitled to ask. One of
+the model-only alerts answers it:
+
+| | value | rule | threshold | fired? |
+|---|---|---|---|---|
+| payee account age | 31 days | `FRESH_RECEIVER` | < 30 days | no, by one day |
+| distinct senders in 1h | 2 | `MULE_FAN_IN` | >= 6 | no |
+| inbound to payee in 1h | 14 615 204 UZS | - | - | - |
+| this transfer | 7 307 603 UZS | `NEW_PAYEE_HIGH_AMOUNT` | new payee and > 3x mean | no |
+
+A month-old account taking 14.6 million sum in an hour from more than one
+sender. Every individual threshold is missed, two of them narrowly; the
+conjunction is decisive. **Rules test thresholds one at a time; the model tests
+combinations that cross no threshold at all.** That is the mechanism, shown
+rather than asserted, and it generalises: across the 113 model-only alerts, 69%
+had receiver-side concentration as their strongest contribution - the model
+systematically detects fan-in *below* the rule's constant, which is the same
+finding §6's third result reached from the opposite direction.
+
+### 9.4 What is not defensible in this, stated first
+
+- **Hour of day is the strongest contribution on 27 of the 113** model-only
+  alerts (24%). "The transfer was at 23:00" is weak grounds for an automated
+  block, and it should be read as the model exploiting a diurnal artefact of the
+  generator rather than as a finding about fraud.
+- **`predicted_type` is empty for every model-only alert**, because the type is
+  derived from which rules fired. The cases that most need triage are the ones
+  the queue cannot categorise. Deriving a type from feature contributions was
+  rejected: "rule MULE_FAN_IN fired" and "the model weighted receiver-side
+  features" are claims of different strength, and substituting one for the other
+  would be dishonest.
+- **The queue's precision figure is biased upward** and says so in its own
+  output: analysts work the top of the queue, so the resolved set over-samples
+  high scores.
+- **One case per alert.** A mule receiving from twelve senders produces up to
+  twelve cases where an investigator wants one. Grouping is deferred because it
+  changes what a "false positive" counts, and the counting is what the
+  disposition exists for.
+
+### 9.5 Why the disposition field exists in a prototype with no analysts
+
+`CONFIRMED_FRAUD` / `FALSE_POSITIVE` is the only real label this system can
+produce. Every other figure in this document is measured against generated
+ground truth. What an analyst confirms is what a production model would actually
+be retrained on, so the column is the shape of the feedback loop and the place a
+real deployment would begin collecting - which is also the honest answer to the
+absence of labelled Uzbek P2P fraud data: the system cannot conjure labels, but
+it can be built so that operating it produces them.
+
+## 10. Notes for the written revision
 
 - Every quoted figure needs its interval. Baseline PR-AUC varies by ±0.008–0.035
   across generator seeds depending on configuration, which is wider than most of
@@ -969,3 +1224,20 @@ checking first.
   result for impossible travel. The detection rate on injected hijacks is **not**
   — the generator and the detector share a reachability threshold, so that half
   is true by construction and should be stated as such.
+- **Scope must be declared in the introduction, not inferred from the
+  architecture.** This is a *detection* system, not an *enforcement* one.
+  Nothing in it answers an authorisation request, declines a transfer, holds an
+  account, or challenges a customer; `fraud.alerts` is consumed by the
+  case-manager, which opens an analyst case. Two code comments previously
+  asserted that the decision "reached the switch" — naming an integration that
+  has never existed — and have been corrected. The latency figure is therefore
+  the time to *reach a decision*, which is the necessary condition for acting
+  before settlement, not evidence that anything acted.
+- **The cost of a false BLOCK is never paid by this system**, so the operating
+  point was chosen against a cost it does not incur. In a deployment that
+  threshold would be argued over declined payments and call-centre volume, not
+  over F1. Say so before it is asked.
+- Report calibration next to discrimination wherever a probability is quoted.
+  §9.1 is the case for it: two near-perfect rank statistics coexisted with a
+  score that could not order a work queue, and only an instrument that consumed
+  the scores as magnitudes revealed it.

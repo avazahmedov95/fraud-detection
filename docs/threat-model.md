@@ -208,6 +208,37 @@ the bet makes it falsifiable — and shows which controls are load-bearing.
 "yes" means the assumption holds against that adversary; "no" means they can
 break it.
 
+### Two of these controls assume data the deploying bank mostly does not have
+
+The table above states what an attacker must not be able to influence. It says
+nothing about whether the input exists, and for the two receiver-side controls
+that turns out to be the binding constraint.
+
+A card-to-card P2P transfer reaches the sending bank as a **destination PAN**.
+Resolving that PAN to the person behind it is a core-banking lookup available
+only for the bank's own clients — **6.85% of transfers** at the measured card-
+market concentration (69.0 million cards, 34 banks, largest share 16.3%; the
+generated stream realises 6.73%). So `FRESH_RECEIVER` and `receiver_age`, rated
+"medium cost to evade" above, are simply **unavailable on 93% of traffic**, and
+`MULE_FAN_IN` aggregates over whatever identity the deployment can pin the payee
+to — the card, not the person.
+
+Two consequences for this threat model:
+
+- **A3's cost to evade is overstated at bank level.** Spreading fan-in across
+  accounts is rated "high" because it cuts the network's throughput. But a mule
+  holding several cards is already split across as many fan-in buckets when the
+  key is the PAN, at no cost to the operator at all. The rating holds at
+  switch or platform level, where the payee resolves to one person.
+- **A2 and A3 both benefit from the same gap**, and it is not a modelling gap —
+  it is a position-in-the-topology gap. It is the strongest argument in this
+  document for resolution at the national-platform level, and it is measured
+  rather than asserted.
+
+`docs/irp-framing.md` §6, "RQ3, fourth result" carries the measurement, including
+why resolving the payee per-transfer where the bank *can* makes detection worse
+rather than better (−17.4% of `MULE_FAN_IN`'s true positives).
+
 ### One of those "cost to evade" ratings is now measured rather than reasoned
 
 Every entry in the right-hand column above was an argument. `NEW_PAYEE_HIGH_AMOUNT`

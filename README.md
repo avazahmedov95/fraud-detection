@@ -32,6 +32,10 @@ fraud-detection/
 ├── stream-processor/       PyFlink: enrich + CEP + ONNX + fusion   (phases 4,6)
 ├── ml/                     LightGBM + SHAP -> ONNX                 (phase 5)
 ├── sink-writer/            transactions.scored -> ClickHouse + Neo4j (phase 7)
+├── case-manager/           fraud.alerts -> the analyst work queue
+│   ├── case.py  store.py   an alert becomes a case; a verdict becomes a label
+│   ├── explain.py          exact tree contributions, for alerts no rule explains
+│   └── queue_cli.py        list / show / resolve / stats
 ├── validation/             the deployed rules run on FOREIGN datasets
 │   ├── paysim_adapter.py   PaySim, and what transfers from it
 │   ├── amlsim_adapter.py   IBM AMLSim + amlsim.Dockerfile toolchain
@@ -47,12 +51,13 @@ reader:
 
 | document | what it holds |
 |---|---|
-| `docs/irp-framing.md` | the research question, every measurement with its interval, and a line-by-line answer to the seven review points |
+| `docs/irp-framing.md` | the research question, every measurement with its interval, a line-by-line answer to the seven review points, twelve silent failure modes, and what a real work queue exposed that no metric did |
 | `docs/threat-model.md` | three adversaries, what each control assumes, and what evading it costs — one of those costs is now measured rather than argued |
 | `docs/generator-spec.md` | the generator as a specification, the dataset of record with its hashes, and why the data is generated at all |
 | `validation/README.md` | four foreign datasets, what each could and could not test, and the screens that came out of it |
 | `docs/related-work.md` | fifteen sources, each with what it does **not** support |
 | `ml/README.md` | model, SHAP, and the capability ablation |
+| `case-manager/README.md` | the alert consumer: the analyst queue, the disposition as the only real label this system can produce, and why the model's reasons are computed off the scoring path |
 
 Numbers quoted anywhere else in this repository are subordinate to those files.
 
