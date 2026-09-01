@@ -40,6 +40,7 @@ from pyflink.datastream.connectors.kafka import (
 
 import config as C
 from rules import SenderState, evaluate
+import features as F
 from enrichment import EnrichmentClient
 from receiver_store import ReceiverStore, PopulationStore
 import fusion
@@ -166,14 +167,16 @@ class FraudDetector(KeyedProcessFunction):
             return
 
         state = self._state.value() or SenderState()
-        receiver_age = self._enrich.lookup(event.get("receiver_pinfl"))
+        # Looked up by the identity this deployment can actually pin the payee
+        # to - the destination PAN by default. See features.payee_key.
+        receiver_age = self._enrich.lookup(F.payee_key(event))
 
         # The fan-in window is read on the SIMULATED clock, because the windows
         # it is compared against (velocity, structuring) are simulated too. The
         # wall-clock stamps below exist only to measure the pipeline itself and
         # never enter a feature.
         event_epoch = _event_epoch(event)
-        receiver_state = self._receivers.load(event.get("receiver_pinfl"), event_epoch)
+        receiver_state = self._receivers.load(F.payee_key(event), event_epoch)
 
         result = evaluate(event, receiver_age, state, event_epoch, receiver_state,
                           population=self._population)
@@ -192,7 +195,9 @@ class FraudDetector(KeyedProcessFunction):
             "sender_card": event.get("sender_card"),
             "receiver_card": event.get("receiver_card"),
             "sender_pinfl": event.get("sender_pinfl"),
-            "receiver_pinfl": event.get("receiver_pinfl"),
+            # No receiver_pinfl: it is not on the wire, because a sending bank
+            # cannot resolve the destination PAN to a person. Everything
+            # downstream keys the payee by card.
             "amount_uzs": event.get("amount_uzs"),
             "channel": event.get("channel"),
             "sender_region": event.get("sender_region"),
@@ -205,6 +210,19 @@ class FraudDetector(KeyedProcessFunction):
             "decision": decision,
             "predicted_type": predicted_type,
             "rule_hits": result["rule_hits"],
+            # Session telemetry, carried into the record.
+            #
+            # `evaluate` has always RETURNED these two - it computes them for
+            # exactly this purpose - and this dict never forwarded them. The
+            # ClickHouse schema declares all three columns and record.py reads
+            # them, so every row ever written carried a constant zero for the
+            # capability measured as the second most valuable one. Nothing
+            # failed: the columns exist, the writes succeed, and the warehouse
+            # answers questions about session telemetry with zeros.
+            "active_call": result["active_call"],
+            "secs_login_z": result["secs_login_z"],
+            # Raw, from the event: the job does not recompute what the app sent.
+            "secs_login_to_confirm": event.get("secs_login_to_confirm"),
             # Stamped from what actually ran, not from configuration. A run
             # that degraded to CEP-only used to be recorded as a fused run,
             # which made the two indistinguishable in the warehouse afterwards.
@@ -223,6 +241,28 @@ class FraudDetector(KeyedProcessFunction):
             # producer sealed.
             "ingress_hash": event.get("ingress_hash"),
         }
+        # The vector the decision was made on, republished on ALERTS ONLY.
+        #
+        # Why publish it at all: the case-manager explains the model's verdict
+        # with exact tree contributions, and it cannot recompute these features
+        # - they come from the sender's streaming state, which exists only in
+        # this operator. Recomputing downstream would explain a different event
+        # than the one that alerted.
+        #
+        # Why alerts only: this rides in every record on transactions.scored
+        # otherwise, which is ~24 numbers on 98.5% of traffic that nothing reads
+        # - and it would grow the audit payload and the warehouse write for
+        # every measured run. The rows an auditor or an analyst reopens are the
+        # ones that alerted.
+        #
+        # NaN -> None: a NaN receiver_age is meaningful (see features.extract),
+        # but json.dumps writes a bare `NaN`, which is not valid JSON. Both ends
+        # here are Python and would round-trip it, which is exactly why it would
+        # go unnoticed until something else consumed the topic.
+        if decision != "ALLOW":
+            out["features"] = [None if v != v else round(float(v), 6)
+                               for v in result["features"]]
+
         if "label_is_fraud" in event:
             out["label_is_fraud"] = event["label_is_fraud"]
             out["label_fraud_type"] = event.get("label_fraud_type")
