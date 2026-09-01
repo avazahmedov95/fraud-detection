@@ -21,8 +21,10 @@ import pytest
 
 import features as F
 
+# ../../ml/models: this file sits in stream-processor/tests/, two levels
+# below the repository root.
 _MODELS = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                       "..", "ml", "models")
+                       "..", "..", "ml", "models")
 _NAMES = os.path.join(_MODELS, "feature_names.json")
 
 

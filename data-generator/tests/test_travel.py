@@ -18,7 +18,7 @@ import pytest
 import travel as T
 
 sys.path.insert(0, os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "stream-processor"))
+    os.path.dirname(os.path.abspath(__file__)), "..", "..", "stream-processor"))
 import config as SC          # noqa: E402  — the detector's thresholds
 import geo as G              # noqa: E402
 

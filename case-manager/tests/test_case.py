@@ -155,7 +155,7 @@ def test_columns_match_the_clickhouse_schema():
     re-applied on every connect and a widened CREATE would do nothing on a
     cluster that already has the table. Both forms are read here.
     """
-    ddl = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
+    ddl = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
                        "infra", "clickhouse", "init", "02-cases.sql")
     with open(ddl, encoding="utf-8") as fh:
         sql = fh.read()

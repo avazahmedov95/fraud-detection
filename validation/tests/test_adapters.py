@@ -16,9 +16,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# The package itself is put on sys.path by tests/conftest.py; this adds the
+# stream-processor modules the adapters replay through.
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "..", "stream-processor"))
+                                "..", "..", "stream-processor"))
 
 import paysim_adapter as PS      # noqa: E402
 import amlsim_adapter as AS      # noqa: E402

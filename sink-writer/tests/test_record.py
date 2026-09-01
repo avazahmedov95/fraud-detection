@@ -124,7 +124,7 @@ import os
 import re
 
 _SCHEMA = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                       "..", "infra", "clickhouse", "init", "01-schema.sql")
+                       "..", "..", "infra", "clickhouse", "init", "01-schema.sql")
 
 
 def _schema_columns(table):

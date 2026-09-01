@@ -81,7 +81,7 @@ def _unresolved_bins_in_population():
     import csv
     import os
     here = os.path.dirname(os.path.abspath(__file__))
-    persons = os.path.join(here, "..", "data-generator", "out", "persons.csv")
+    persons = os.path.join(here, "..", "..", "data-generator", "out", "persons.csv")
     if not os.path.exists(persons):
         return None
     with open(persons, newline="", encoding="utf-8") as fh:

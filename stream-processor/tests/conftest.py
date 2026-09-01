@@ -1,14 +1,27 @@
-"""Shared test helpers for the stream processor.
+"""Path shim and shared helpers for the stream-processor tests.
 
-Exists for one reason: the issuer is no longer a field on the event. It is
-resolved from the PAN's BIN (bins.py), so a test that wants two parties at the
-same or at different banks has to say so with CARDS, the way the live job sees
-it. Hard-coding a card per bank alias here keeps that in one place instead of
-four, and keeps the tests exercising the real resolution path rather than a
-synthetic field the wire format no longer carries.
+TWO JOBS, both of which have to be here.
+
+Importable package. The tests live one directory below the modules they
+exercise, so the package directory has to be on sys.path for `import features`
+to resolve: pytest inserts the test file's OWN directory, not its parent. Kept
+in a conftest rather than a pytest.ini or an __init__.py because these five
+packages deploy as separate units with no shared tooling, and conftest is the
+one file pytest loads with no configuration at all.
+
+Bank cards. The issuer is no longer a field on the event - it is resolved from
+the PAN's BIN (bins.py) - so a test that wants two parties at the same or at
+different banks has to say so with CARDS, the way the live job sees it. Keeping
+one card per bank alias here means the tests exercise the real resolution path
+instead of a synthetic field the wire format no longer carries.
 """
 
 import hashlib
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 #: Bank alias -> a 16-digit PAN whose 6-digit BIN resolves to a real issuer in
 #: data-generator/banks.csv. Only the prefix matters to bins.issuer_of(); the

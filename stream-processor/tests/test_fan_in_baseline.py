@@ -18,7 +18,7 @@ import sys
 
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# sys.path is set by tests/conftest.py.
 
 import config as C          # noqa: E402
 from rules import PopulationBaseline   # noqa: E402

@@ -301,7 +301,7 @@ Raising the alert **count** for statistical power is legitimate. Changing
 to fit `RECEIVER_WINDOW_S` would be tuning the dataset to the rule. Leave those
 columns alone.
 
-`python -m pytest test_adapters.py -q` exercises the adapter against fixtures in
+`python -m pytest tests/test_adapters.py -q` exercises the adapter against fixtures in
 the shape of all three output files, so the harness is known to work before the
 simulator is built.
 

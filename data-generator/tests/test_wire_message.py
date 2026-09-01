@@ -99,7 +99,7 @@ def test_every_generated_row_survives_the_conversion():
     """Against the real dataset when it exists: a cast that works on one
     handcrafted row and throws on row 40,000 is not a cast."""
     here = os.path.dirname(os.path.abspath(__file__))
-    csv_path = os.path.join(here, "out", "transactions.csv")
+    csv_path = os.path.join(here, "..", "out", "transactions.csv")
     if not os.path.exists(csv_path):
         pytest.skip("dataset not generated")
     with open(csv_path, newline="", encoding="utf-8") as fh:
