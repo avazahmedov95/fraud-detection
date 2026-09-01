@@ -1,0 +1,16 @@
+# Pinned exactly, for the same reproducibility reason as sink-writer's — see the
+# note there. These are the versions the service was written and tested against.
+kafka-python==3.0.10
+clickhouse-connect==1.6.0
+
+# Explanations: exact tree contributions via Booster.predict(pred_contrib=True).
+#
+# lightgbm alone, deliberately. The model ships as model.txt (a bare Booster),
+# not model.joblib — unpickling an LGBMClassifier would require scikit-learn,
+# ~30 MB of training dependency in a service that only reads trees. numpy comes
+# with lightgbm and is listed so the image is reproducible if that changes.
+# NOTE: lightgbm needs the OpenMP runtime (libgomp1) present in the image. It
+# is a system package, not a wheel dependency, so pip cannot tell you it is
+# missing - see the apt-get line in infra/case-manager/Dockerfile.
+lightgbm==4.7.0
+numpy==2.3.4

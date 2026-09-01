@@ -47,7 +47,21 @@ param(
     # what they measure is mostly TLS record framing. A switch reconnects; this
     # is the only condition under which the mutual-TLS answer could change.
     #   .\run.ps1 measure-tls 1200 -Reconnect 20
-    [int]$Reconnect = 0
+    [int]$Reconnect = 0,
+
+    # The analyst queue (`cases`). Named rather than positional: position 1 is
+    # already an [int] for the produce/measure targets, so a bare
+    # `.\run.ps1 cases list` would fail binding "list" to a count before this
+    # script ever ran.
+    #   .\run.ps1 cases
+    #   .\run.ps1 cases -Case t_0041237
+    #   .\run.ps1 cases -Case t_0041237 -Verdict CONFIRMED_FRAUD -By analyst.k
+    #   .\run.ps1 cases -Stats
+    [string]$Case = "",
+    [ValidateSet("", "CONFIRMED_FRAUD", "FALSE_POSITIVE")]
+    [string]$Verdict = "",
+    [string]$By = "",
+    [switch]$Stats
 )
 
 $ErrorActionPreference = "Stop"
@@ -124,7 +138,8 @@ function Wait-Ready {
 # where the mistake was made - so the list lives in one place.
 $JobModules = @(
     "config.py", "capabilities.py", "features.py", "geo.py", "rules.py",
-    "enrichment.py", "receiver_store.py", "fusion.py", "payload_crypto.py"
+    "enrichment.py", "receiver_store.py", "fusion.py", "payload_crypto.py",
+    "bins.py"
 ) | ForEach-Object { "/opt/flink/usrjobs/$_" }
 
 function Assert-JobRunning {
@@ -436,6 +451,8 @@ switch ($Target.ToLower()) {
             "submit-job"     = "submit the PyFlink CEP+ML job (empty state)"
             "resume-job"     = "same, restoring keyed state from the newest checkpoint"
             "sink-logs"      = "tail the sink-writer logs"
+            "boundaries"     = "audit every place one component hands something to another"
+            "cases"          = "the analyst work queue (-Case <id> to show, +-Verdict/-By to resolve, -Stats for totals)"
             "latency"        = "end-to-end latency vs the 300ms target"
             "verify-audit"   = "recompute the audit hash chain, report tampering"
             "status"         = "diagnose the whole path: containers, job, rows, offsets"
@@ -601,9 +618,37 @@ switch ($Target.ToLower()) {
         Get-Content "infra/neo4j/import.cypher" | docker compose exec -T neo4j cypher-shell -u neo4j -p $Neo4jPassword
     }
 
+    # Reading a file says a component is right; it does not say that what it
+    # PRODUCES is what the next one EXPECTS. Three defects in one day lived in
+    # that gap. Run this before a walkthrough, and after touching any record,
+    # schema or wire format.
+    "boundaries" { python tools/boundary_audit.py -v }
+
+    # The analyst surface. One target, four shapes, chosen by which parameters
+    # are present - see the param block above for why they are named.
+    "cases" {
+        if ($Stats) {
+            $argv = @("stats")
+        } elseif ($Case -and $Verdict) {
+            if (-not $By) {
+                throw "-By is required: a disposition is a label a model may be retrained on, and an unattributed label cannot be audited or withdrawn."
+            }
+            $argv = @("resolve", $Case, $Verdict, "--by", $By)
+        } elseif ($Case) {
+            $argv = @("show", $Case)
+        } else {
+            $argv = @("list")
+        }
+        docker compose exec -T case-manager python queue_cli.py @argv
+    }
+
     "serve-prep" {
         Copy-Item "ml/models/model.onnx" "stream-processor/" -Force
         Copy-Item "ml/models/feature_names.json" "stream-processor/" -Force
+        # The BIN table. bins.py resolves the card issuer from it, and the job
+        # dir is what gets mounted into the cluster - without this the job dies
+        # at import with FileNotFoundError instead of scoring.
+        Copy-Item "data-generator/banks.csv" "stream-processor/" -Force
         Write-Host "model + feature spec copied to stream-processor/"
     }
 
