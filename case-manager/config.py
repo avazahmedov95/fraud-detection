@@ -13,7 +13,7 @@ TOPIC_ALERTS = os.getenv("TOPIC_ALERTS", "fraud.alerts")
 # for the warehouse; this reads fraud.alerts for the queue. Sharing a group id
 # across two topics and two services would let one service's offset commits
 # stand in for the other's work.
-CONSUMER_GROUP = os.getenv("CASE_CONSUMER_GROUP", "fraud-case-manager")
+CONSUMER_GROUP = "fraud-case-manager"
 
 CH_HOST = os.getenv("CLICKHOUSE_HOST", "clickhouse")
 CH_PORT = int(os.getenv("CLICKHOUSE_HTTP_PORT", "8123"))
@@ -21,7 +21,7 @@ CH_USER = os.getenv("CLICKHOUSE_USER", "fraud")
 CH_PASSWORD = os.getenv("CLICKHOUSE_PASSWORD", "fraud_ch")
 CH_DB = os.getenv("CLICKHOUSE_DB", "fraud")
 
-BATCH_SIZE = int(os.getenv("CASE_BATCH_SIZE", "200"))
+BATCH_SIZE = 200
 # Shorter than the sink-writer's 5 s. The queue is something a person watches,
 # so freshness is the point; the warehouse path has no such requirement.
-FLUSH_INTERVAL_S = float(os.getenv("CASE_FLUSH_INTERVAL_S", "2"))
+FLUSH_INTERVAL_S = 2.0

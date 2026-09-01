@@ -244,6 +244,3 @@ def test_amlsim_capabilities_without_data_are_off(amlsim_dir):
                  "COACHED_SESSION"}
     fired = set(hits["fraud"]) | set(hits["legit"])
     assert not (fired & forbidden), f"fired without data: {fired & forbidden}"
-
-if __name__ == "__main__":
-    raise SystemExit(pytest.main([__file__, "-q"]))

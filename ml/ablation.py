@@ -1,23 +1,5 @@
-"""
-Capability ablation — what detection costs when an integration is missing.
-
-Every feature is only as deployable as the data behind it. A bank without MyID
-cannot check kinship; one without a mobile app sees no session signals; across
-the UzCard / HUMO switch no account-age field is exchanged at all. This harness
-retrains the model under each configuration and reports the difference, so the
-value of an integration is measured rather than assumed.
-
-Two modes:
-
-  python ablation.py                  sweep every capability against the baseline
-  python ablation.py receiver_age     sweep one capability across all its modes
-
-Each configuration has its own feature contract, so each gets its own training
-run — the comparison is between models, not between thresholds on one model.
-Trained artefacts in models/ are restored afterwards; per-run detail is written
-to models/ablation/.
-
-Results are design targets on synthetic data, not validated findings.
+"""Sweeps capability profiles, retraining and re-exporting for each, and reports
+what each capability is worth.
 """
 
 import json

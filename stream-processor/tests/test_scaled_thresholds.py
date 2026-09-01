@@ -126,7 +126,3 @@ def test_scaling_does_not_change_the_full_profile_decision(profile):
                for c in CAP.REGISTRY if not c.always_on})
     assert R._thresholds() == pytest.approx(
         (C.REVIEW_THRESHOLD, C.BLOCK_THRESHOLD), abs=1e-6)
-
-
-if __name__ == "__main__":
-    raise SystemExit(pytest.main([__file__, "-q"]))

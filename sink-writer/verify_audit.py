@@ -1,26 +1,6 @@
-"""
-Verify the integrity of the audit log.
+"""Recomputes the audit hash chain and reports where it breaks.
 
-Recomputes the hash chain from the stored records and reports any break. A break
-means a record was altered, deleted or reordered after it was written - which the
-WORM grants are supposed to prevent, so a break is evidence those grants were
-bypassed.
-
-Three independent checks:
-
-  1. Chain continuity - each record's prev_hash equals the previous record's
-     record_hash, and each record_hash recomputes from its stored content. A
-     mismatch localises the tampering to a record.
-  2. Sequence continuity - seq increases by one with no gaps. A gap means records
-     were dropped (a failed sink flush, or deletion).
-  3. Projection consistency - the flat columns (decision, final_score, ...) match
-     what the payload actually says, so editing a queryable column without
-     editing the signed payload is caught.
-
-  python verify_audit.py                 verify the whole log
-  python verify_audit.py --limit 100000  most recent N records
-
-Exit code is non-zero if any check fails, so it can gate a scheduled job.
+Anchored heads: docs/audit-anchors.md.
 """
 
 import argparse

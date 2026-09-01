@@ -1,37 +1,7 @@
-"""
-Fault injection: what actually happens to a transaction when the job dies.
+"""Measures what happens to a transaction when the job is killed mid-stream:
+how many are lost, how many duplicated, and where the duplicates diverge.
 
-Reviewer point 6 asks to "validate exactly-once via deliberate fault injection".
-The honest starting position is that **this system does not provide exactly-once
-and does not claim to**:
-
-    fraud_job.py      DeliveryGuarantee.AT_LEAST_ONCE
-    ClickHouse        MergeTree, no deduplication on transaction_id
-    Redis fan-in      external to the checkpoint, so it does not roll back
-
-So the question this answers is not "is it exactly-once" — it is not — but the
-two that matter for money:
-
-    1. Is any transaction LOST when a worker dies mid-stream?
-    2. What is the cost of the duplicates that at-least-once permits?
-
-Loss would be a correctness failure. Duplication is a design choice with
-consequences worth quantifying rather than hiding.
-
-Usage — three terminals, or three steps:
-
-    # 1. baseline: how many rows before the fault
-    python fault_injection.py --phase before
-
-    # 2. start a paced producer, then kill the worker mid-stream
-    #    (from the repo root, in another terminal)
-    #    .\run.ps1 produce-stream-docker
-    docker compose kill taskmanager && docker compose start taskmanager
-
-    # 3. after the job recovers and the topic drains
-    python fault_injection.py --phase after --expect 50000
-
-Reports transactions lost, duplicated, and where duplication lands.
+Run in three phases - see --help. Findings: docs/irp-framing.md 5, point 6.
 """
 
 import argparse

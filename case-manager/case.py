@@ -1,6 +1,5 @@
-"""Pure mapping of an alert into a case row. No I/O, so it is fully testable.
-
-Column order matches infra/clickhouse/init/02-cases.sql.
+"""Pure mapping of an alert into a case row, and of a verdict into its
+replacement. No I/O. Column order matches infra/clickhouse/init/02-cases.sql.
 """
 
 from datetime import datetime, timezone

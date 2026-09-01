@@ -1,15 +1,7 @@
-"""
-Geographic reference data and distance maths for the CEP layer.
+"""Uzbekistan's 14 regions as coordinates, and great-circle distance.
 
-Uzbekistan's 14 first-level administrative divisions, each represented by the
-coordinates of its administrative centre. Transaction events carry a region
-name, not a coordinate, so the centre is used as the region's representative
-point — an approximation whose error is bounded by the region's radius. The
-IMPOSSIBLE_TRAVEL rule compensates with MIN_TRAVEL_DISTANCE_KM (see config).
-
-Kept separate from features.py so the reference table can be cited, unit-tested
-and swapped for finer-grained geodata (e.g. district centroids or the acquirer's
-terminal coordinates) without touching feature extraction.
+Each region is represented by its administrative centre; IMPOSSIBLE_TRAVEL
+compensates for that approximation with MIN_TRAVEL_DISTANCE_KM.
 """
 
 import math

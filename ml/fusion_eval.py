@@ -1,13 +1,4 @@
-"""
-Offline validation of CEP + ML score fusion, served through the real ONNX model.
-
-Reuses ml/dataset.py to build the feature matrix (which also puts the
-stream-processor on the path), runs models/model.onnx on the held-out time slice,
-takes final_score via fusion.final_score, and compares the fused decision against CEP-only and
-ML-only on the SAME slice. Results are design targets on synthetic data, not
-validated production metrics.
-
-  python fusion_eval.py
+"""Evaluates score-fusion strategies against the model alone.
 """
 
 import os

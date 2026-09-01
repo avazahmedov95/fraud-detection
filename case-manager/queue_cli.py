@@ -1,14 +1,6 @@
 """The analyst surface: look at the queue, resolve a case, see what it implies.
 
-Deliberately a CLI and not a web app. What matters for this project is that the
-loop CLOSES - an alert becomes work, work becomes a verdict, and verdicts are
-the only real labels the system can ever have. A UI would make it prettier to
-demonstrate and no more true.
-
-  python queue_cli.py list
-  python queue_cli.py show t_0041237
-  python queue_cli.py resolve t_0041237 CONFIRMED_FRAUD --by analyst.k
-  python queue_cli.py stats
+  queue_cli.py list | show ID | resolve ID VERDICT --by WHO | stats
 """
 
 import argparse

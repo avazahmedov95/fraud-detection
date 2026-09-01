@@ -120,7 +120,3 @@ def test_missing_baseline_falls_back_rather_than_failing(relative_mode):
     res = evaluate(ev, None, SenderState(), 1_700_000_000.0, ReceiverState(),
                    population=None)
     assert res["decision"] in ("ALLOW", "REVIEW", "BLOCK")
-
-
-if __name__ == "__main__":
-    raise SystemExit(pytest.main([__file__, "-q"]))

@@ -1,13 +1,5 @@
-"""
-Synthetic population generator.
-
-Generates a population of persons (each with a synthetic 14-digit PINFL-like
-identifier, a full name, a valid-Luhn UzCard/HUMO card whose BIN encodes the
-issuing bank). Persons are drawn in household-sized clusters so members share a
-region, which keeps the regional distribution realistic.
-
-NOTE: PINFLs, names, bank codes and BINs here are all synthetic — clearly not real
-national identifiers or authoritative bank assignments.
+"""The synthetic population: PINFL, a valid-Luhn card whose BIN encodes the
+issuer, region, device, household, and a per-person decision-time baseline.
 """
 
 from dataclasses import dataclass

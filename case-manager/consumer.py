@@ -1,13 +1,6 @@
-"""Case-manager service: consumes fraud.alerts and opens a case per alert.
+"""Case-manager service: fraud.alerts -> the analyst work queue.
 
-This is the consumer the alert topic did not have. Before it existed, the
-pipeline computed a decision, wrote it to fraud.alerts, and nothing read it -
-so BLOCK and REVIEW were strings in a warehouse rather than work anyone did.
-It still is not enforcement (nothing here declines a transfer or challenges a
-customer; see docs/irp-framing.md on scope), but the verdict now lands somewhere
-a person acts on, and their verdict is recorded.
-
-  python consumer.py
+The consumer the alert topic did not have. Scope and design: case-manager/README.md.
 """
 
 import json

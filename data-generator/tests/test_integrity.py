@@ -37,8 +37,3 @@ def test_record_hash_known_answer():
 def test_ingress_hash_ignores_unlisted_fields():
     noisy = dict(EVENT, ingested_at=123.456, label_is_fraud=1, ingress_hash="x")
     assert integrity.ingress_hash(noisy) == integrity.ingress_hash(EVENT)
-
-
-if __name__ == "__main__":
-    import sys, pytest
-    sys.exit(pytest.main([__file__, "-q"]))

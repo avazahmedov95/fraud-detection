@@ -34,11 +34,3 @@ def test_type_priority():
     assert classify_type(["VELOCITY", "DISTINCT_PAYEE_BURST"]) == "MULE"
     assert classify_type(["NEW_PAYEE_HIGH_AMOUNT"]) == "APP"
     assert classify_type([]) is None
-
-
-if __name__ == "__main__":
-    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    for fn in fns:
-        fn()
-        print(f"PASS  {fn.__name__}")
-    print(f"\n{len(fns)} tests passed")

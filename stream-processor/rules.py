@@ -1,15 +1,8 @@
-"""
-Pure CEP / rule engine — consumes the shared feature contract (features.py).
+"""The CEP rule engine, over the shared feature contract in features.py.
 
-No Flink/Redis/Neo4j imports, so it can be unit-tested and replayed offline. The
-Flink job keeps `SenderState` in keyed state and calls `evaluate` per event.
-
-`evaluate` returns both the rule-based decision AND the model feature vector
-(`features`), so the same call drives CEP now and feeds ML score fusion (phase 6).
-`SenderState` carries Welford accumulators so the amount baseline is full-history
-with O(1) memory; `features.py` reads and advances this state.
-
-Scores are design targets for tuning, not validated production metrics.
+Returns both the rule decision and the model's feature vector, so one call
+drives the rules and feeds fusion. No Flink, Redis or Neo4j imports, so it
+replays offline unchanged.
 """
 
 from dataclasses import dataclass, field

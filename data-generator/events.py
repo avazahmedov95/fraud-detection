@@ -1,29 +1,6 @@
-"""
-Canonical transaction-event schema, shared by the normal-traffic generator and
-the fraud-injection module so both emit identical rows.
+"""Normal transaction behaviour: salary, rent, transfers to relatives, payments.
 
-Field groups
-------------
-RAW (as produced by the payment switch / Kafka source):
-    transaction_id, event_time, sender_pinfl, sender_card, sender_network,
-    receiver_pinfl, receiver_card, receiver_network, amount_uzs, channel,
-    device_id, sender_region, receiver_region, sender_balance_before
-
-REFERENCE (identity/bank data a bank knows for its own customer or derives from
-the PAN's BIN — materialised here for readable analysis; NOT sent on the wire by
-the producer):
-    sender_name, sender_bank_code, sender_bank_name,
-    receiver_name, receiver_bank_code, receiver_bank_name
-
-ENRICHED (in the live system these are added by the Flink pipeline via the
-Neo4j account lookup, the Redis feature store, and the account registry):
-    is_new_payee, receiver_account_age_days, is_family_transfer
-
-`is_family_transfer` mirrors what a MyID kinship lookup would return, and is only
-consumed when the myid_kinship capability is on (see stream-processor).
-
-LABELS (ground truth — never available at inference time):
-    label_is_fraud, label_fraud_type
+What each pattern is meant to look like: docs/generator-spec.md 3.
 """
 
 import uuid

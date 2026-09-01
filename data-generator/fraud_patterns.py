@@ -1,24 +1,7 @@
-"""
-Fraud-pattern injection.
+"""The seven fraud scenarios injected into the generated traffic.
 
-Produces labelled fraudulent events covering four patterns relevant to instant
-P2P payments. Each is shaped so that the *enriched* and behavioural signals the
-Flink + CEP + ML pipeline is designed to catch are actually present in the data:
-
-  APP          Authorized Push Payment — the genuine account-holder is socially
-               engineered into sending a single, unusually large amount to a
-               new, unrelated, freshly-created payee. (Key research target.)
-
-  ATO          Account takeover — a session from a NEW device in a DIFFERENT
-               region, followed by 2–4 rapid transfers out to fresh accounts.
-
-  STRUCTURING  One actor splits funds into many transfers kept just under the
-               control threshold, within a short window.
-
-  MULE         A mule account fans IN from many distinct senders, then quickly
-               fans OUT to a few destinations.
-
-These are design fixtures for prototype experimentation, not measured findings.
+Each leaves a signature a specific rule is meant to catch; the parameters and
+the injection method are docs/generator-spec.md 5.
 """
 
 import numpy as np

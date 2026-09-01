@@ -1,28 +1,7 @@
-"""
-Run this project's feature extractor and CEP rules on PaySim.
+"""Replays the deployed rules over PaySim, mapping its schema onto the event
+shape features.py expects.
 
-PaySim (Lopez-Rojas et al.) is an agent-based mobile-money generator built by a
-different group, for a different market, without knowledge of this system. It is
-the only public dataset that carries **account identifiers on both sides**, which
-is what makes it usable here: 14 of this project's 24 features are relational and
-cannot be computed without them.
-
-The question it answers is not "does the system work in production" — PaySim is
-synthetic too. It is the narrower and more dangerous one:
-
-    Do the relational features detect fraud in data that this project's own
-    generator did not produce?
-
-If recall collapses on PaySim, the features are an artefact of `data-generator/`
-and the whole evaluation is circular. If it holds, the features describe
-something about fraud rather than something about our code.
-
-Nothing is retrained and no threshold is tuned. The CEP layer is run exactly as
-deployed.
-
-    python paysim_adapter.py --file PS_20174392719_1491204439457_log.csv
-
-Get the file from Kaggle: "Synthetic Financial Datasets For Fraud Detection".
+What transfers and what does not: validation/README.md 2.
 """
 
 import argparse

@@ -1,30 +1,5 @@
-"""
-What does the NEW_PAYEE evasion actually cost, measured across generator seeds.
-
-docs/threat-model.md 4 rates NEW_PAYEE_HIGH_AMOUNT "low cost to evade - a prior
-small transfer establishes the payee", and rated it from reasoning rather than
-measurement, because the generator never produced that evasion: 99.20% of fraud
-went to a stream-new payee. SEEDED_PAYEE_SHARE (config.py) produces it for APP.
-
-DESIGN. The comparison is WITHIN each dataset - seeded episodes against unseeded
-ones - so nothing has to be matched across files, and it is restricted to
-episodes after the maximum seed lag. That restriction is not cosmetic: a seed
-can only land when the fraud falls late enough in the window for `fraud_ts minus
-1..21 days` to still be inside it, so seeded episodes are systematically later,
-and later senders have more history for the amount and velocity baselines. On a
-single seed that confound ran AGAINST the finding - controlling for it moved
-APP recall on seeded episodes from 24.4% vs 36.4% to 25.6% vs 53.1% - so leaving
-it uncontrolled understates the cost.
-
-    cd ../data-generator
-    foreach ($s in 1..5) { $env:SEEDED_PAYEE_SHARE="0.5"; python generator.py --seed $s --out ./out_seed_s50_$s }
-    Remove-Item Env:SEEDED_PAYEE_SHARE
-
-    cd ../stream-processor
-    python seeded_payee_eval.py --files "../data-generator/out_seed_s50_*/transactions.csv"
-
-Only APP is seeded (see config.py for why ATO, MULE and STRUCTURING are not), so
-this measures the cost of the evasion where it is cheap, not everywhere.
+"""Compares seeded against unseeded APP episodes within one dataset, to bound how
+much is_new_payee owes to the generator rather than to behaviour.
 """
 
 import argparse

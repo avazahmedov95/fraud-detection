@@ -1,18 +1,8 @@
-"""Check every place one component hands something to another.
+"""Checks every place one component hands something to another.
 
-Reading a file tells you a component is right. It does not tell you that what it
-PRODUCES is what the next component EXPECTS - and three defects found in one day
-lived in exactly that gap: a boolean that travelled as the string "False", a
-feature vector the consumer needed and the producer never sent, and a data file
-resolved against a path that does not exist inside a Flink worker. Each
-component was correct. The joins were not.
-
-So this walks the joins. Where it can, it builds the real artefact on one side
-and asks the other side to accept it; where it cannot (a Cypher string, a
-PowerShell list) it compares the two declarations directly.
-
-  python tools/boundary_audit.py
-  python tools/boundary_audit.py -v      # list every check, not only failures
+Reading a file says a component is right; it does not say that what it PRODUCES
+is what the next one EXPECTS. Run before a walkthrough, and after touching any
+record, schema or wire format.
 """
 
 import argparse
@@ -155,13 +145,42 @@ def b_hash_covers_only_sent_fields():
     return None
 
 
-def b_both_integrity_copies_identical():
-    a = _read("data-generator", "integrity.py")
-    b = _read("sink-writer", "integrity.py")
-    if a != b:
-        return ("data-generator/integrity.py and sink-writer/integrity.py have "
-                "drifted; the audit chain would be unverifiable across them")
-    return None
+def b_duplicated_modules_are_identical():
+    """Modules that DECLARE themselves duplicates must be byte-identical.
+
+    integrity.py and payload_crypto.py are duplicated because the packages
+    deploy as separate units with no shared library. Drift is silent in the
+    worst way: the producer writes records the consumer cannot read, or an audit
+    chain neither side can verify.
+
+    The set is not hard-coded here - it is whatever says "byte-identical" in its
+    own docstring. A hard-coded pair went stale once: the check covered
+    integrity.py, payload_crypto.py drifted, and nothing complained. A file that
+    states its own invariant cannot fall out of the list it belongs to.
+    """
+    declared = {}
+    for pkg in ("stream-processor", "data-generator", "sink-writer",
+                "case-manager", "validation", "ml"):
+        d = os.path.join(ROOT, pkg)
+        if not os.path.isdir(d):
+            continue
+        for fn in sorted(os.listdir(d)):
+            if not fn.endswith(".py") or fn.startswith("test_"):
+                continue
+            body = _read(pkg, fn)
+            if "byte-identical" in body.split('"""')[1 if body.startswith('"""') else 0]:
+                declared.setdefault(fn, []).append((f"{pkg}/{fn}", body))
+    problems = []
+    for fn, copies in sorted(declared.items()):
+        if len(copies) < 2:
+            problems.append(f"{copies[0][0]} claims to be byte-identical to a "
+                            f"copy that does not exist")
+        elif len({b for _, b in copies}) > 1:
+            problems.append(f"{fn} differs between "
+                            f"{', '.join(p for p, _ in copies)}")
+    if not declared:
+        return "no module declares itself a duplicate - has the convention changed?"
+    return "; ".join(problems) or None
 
 
 # --- 4. the partitioning key is readable without decrypting -----------------
@@ -399,7 +418,7 @@ CHECKS = [
     ("producer message -> feature extractor (equivalence)", b_wire_extracts_like_typed),
     ("feature extractor -> producer (nothing absent)", b_extractor_needs_nothing_absent),
     ("producer message -> ingress hash (fields sent)", b_hash_covers_only_sent_fields),
-    ("integrity.py copies identical", b_both_integrity_copies_identical),
+    ("duplicated modules identical", b_duplicated_modules_are_identical),
     ("wire -> routing key, plaintext and encrypted", b_routing_key_survives_the_wire),
     ("job record -> sink-writer", b_sink_reads_only_emitted_keys),
     ("job record -> case-manager", b_case_manager_reads_only_emitted_keys),

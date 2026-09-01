@@ -55,11 +55,3 @@ def test_driving_speed_is_below_the_ceiling():
     """A five-hour Tashkent-Samarkand drive must never look impossible."""
     v = G.implied_speed_kmh("Tashkent City", "Samarkand", 5 * 3600)
     assert v < C.MAX_PLAUSIBLE_KMH
-
-
-if __name__ == "__main__":
-    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    for fn in fns:
-        fn()
-        print(f"PASS  {fn.__name__}")
-    print(f"\n{len(fns)} tests passed")

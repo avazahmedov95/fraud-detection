@@ -1,36 +1,7 @@
-"""
-Does the receiver-side FEATURE carry signal on AMLSim, when a model is free to
-choose its own decision surface?
+"""Ablation over the AMLSim features, plus two screens the run produced:
+leakage_screen() and drift_screen().
 
-WHY THIS EXISTS, AND WHY IT IS NOT THE RULE RUN. `amlsim_adapter.py` ran the
-deployed CEP rules and found MULE_FAN_IN anti-correlated with the label: it
-fires on 3.12% of legitimate traffic and 0.15% of SAR. The measured cause is
-that the rule encodes a RATE - six distinct senders inside one hour - while
-AMLSim's fan_in typology spreads a median 363 days. A fixed threshold cannot
-answer whether the underlying quantity is informative, only whether that
-particular constant is. This script asks the other question.
-
-    Fit a throwaway model twice on AMLSim's own features, once with the
-    receiver-side block and once without, and read the delta.
-
-WHAT MAY AND MAY NOT BE CONCLUDED. The number here is NOT comparable in
-magnitude to the -0.032 PR-AUC measured on this project's own generator: a
-different dataset, a different label (laundering typologies, not customer
-fraud), a different feature set and a different baseline. Only the SIGN
-transfers. A positive delta says receiver-side aggregation is informative on
-data this project did not produce; a delta at zero says the idea itself, and
-not merely the threshold, fails to transfer.
-
-The model is deliberately not tuned. Fixed hyperparameters, no search, both arms
-identical apart from the feature block. Tuning either arm would make the delta a
-property of the search rather than of the data.
-
-    python amlsim_ablation.py --dir  /path/to/AMLSim/outputs/<name>
-    python amlsim_ablation.py --dirs /path/to/out/seed0 /path/to/out/seed1 ...
-
-Read the note on seeds in `report()` before quoting an interval from a single
-directory - it is narrower than it should be, for a reason this project has
-already been caught by once.
+Why the result is negative and structural: validation/README.md 3.
 """
 
 import argparse

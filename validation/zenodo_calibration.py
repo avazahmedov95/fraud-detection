@@ -1,34 +1,6 @@
-"""
-Calibrate the generator's assumptions against a real production dataset.
+"""Calibrates the rule thresholds against the Zenodo card-fraud set.
 
-Zenodo record 20030065 (DOI 10.5281/zenodo.20030065, CC-BY-4.0): 56,962 online
-banking transactions from a live cloud-deployed fraud detection system, 30 days
-of January 2026, 98 confirmed fraud (0.172%). Each row also carries that system's
-own model outputs, including response latency in milliseconds.
-
-**This does not validate detection.** The dataset carries no account identifiers
-— they are exactly what cannot be published — so 14 of this project's 24 features
-cannot be computed on it. Attempting a detection comparison would compare a
-crippled version of this system against a full one, and the number would mean
-nothing.
-
-What it can do is check three assumptions that the synthetic generator states and
-that a real dataset can contradict:
-
-  1. **Fraud base rate.** The generator uses 1.5%; this dataset shows 0.172%.
-     If the real figure is an order of magnitude lower, every precision figure
-     measured on synthetic data is optimistic, because precision depends
-     directly on class balance.
-  2. **Amount distribution.** The generator assumes lognormal. A real
-     right-skewed heavy tail either supports that or does not.
-  3. **Latency.** An independently measured production system, reported in ms,
-     as an external anchor for this project's own 217 ms p99.
-
-    python zenodo_calibration.py --file fraud_tests_export_20260501_080333.csv
-
-Column names are discovered rather than assumed: the record's description lists
-what the columns mean but not what they are called, so the script reports what it
-found and works with what is present.
+Why that dataset was ultimately rejected: docs/related-work.md 7.
 """
 
 import argparse

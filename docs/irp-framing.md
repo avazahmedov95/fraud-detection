@@ -699,6 +699,25 @@ with the caveat that the cost shows up in bandwidth and storage rather than in
 the 300 ms budget — and that a keyed topic still discloses metadata, since the
 partitioning key must stay readable to the broker.
 
+Two invariants of the envelope, recorded here because they are easy to break
+later and neither is visible from the measurement:
+
+- **Hash the plaintext, then encrypt.** `ingress_hash` is computed over the
+  plaintext fields and travels inside the encrypted payload. Hashing the
+  ciphertext instead would break the audit guarantee outright: GCM nonces make
+  every encryption of the same event distinct, so an auditor holding the
+  original event could never recompute it.
+- **The routing key is authenticated, not merely appended.** It is the GCM
+  associated data, so altering it makes the record undecryptable rather than
+  silently misrouted. A record steered into the wrong key group would
+  accumulate into another sender's velocity and structuring windows — an
+  integrity failure in the detection logic, not only a privacy one.
+
+The key comes from `PAYLOAD_KEY_HEX` with no default. A hard-coded fallback
+would be worse than a startup failure, because it encrypts everything under a
+value that is in the source tree; the version digit in the magic prefix is what
+a rotation scheme would extend.
+
 Transport security (mTLS between the switch, the broker and the consumers) is a
 separate measurement with a different cost profile — per-connection handshakes
 rather than per-record work — and is taken in §7.5 and §7.5a below.

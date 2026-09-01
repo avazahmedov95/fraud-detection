@@ -1,13 +1,7 @@
-"""
-Shared feature extraction — the single train/serve feature contract.
+"""The single train/serve feature contract.
 
-The SAME function produces the feature vector for:
-  * offline model training (replay over the CSV), and
-  * online scoring inside the Flink job (per event, from keyed state).
-
-This guarantees the model sees identical features at train and serve time. The
-CEP rule engine (rules.py) also consumes these features, so rules and ML never
-drift apart. Pure: no Flink/Redis/Neo4j imports.
+The SAME function builds the vector for offline training and for online scoring,
+so the model cannot be served features it was not trained on. Pure.
 """
 
 import logging
@@ -118,15 +112,10 @@ def payee_key(event: dict) -> str:
         pinfl = str(event.get("receiver_pinfl", "") or "")
         if pinfl:
             return pinfl
-        # Asked for pinfl, given an event that does not carry one. This is the
-        # normal state of the LIVE stream: receiver_pinfl left the wire because
-        # a sending bank cannot resolve the destination PAN to a person, so the
-        # mode is reachable only from the offline harnesses, which read the CSV.
-        #
-        # Returning "" here would be the quiet catastrophe: an empty key makes
-        # ReceiverStore skip the write and the read, and the whole fan-in signal
-        # disappears with the knob showing "on". So fall back to the card and
-        # say so, once.
+        # The normal state of the LIVE stream - receiver_pinfl is not on the
+        # wire, so this mode is reachable only from the offline harnesses.
+        # Returning "" would make ReceiverStore skip both write and read and the
+        # fan-in signal would vanish with the knob showing "on".
         _warn_pinfl_unavailable()
     return str(event.get("receiver_card", "") or "")
 

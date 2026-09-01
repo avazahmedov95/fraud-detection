@@ -1,23 +1,9 @@
-"""
-PyFlink job (phase 4 + phase 6): streaming CEP + ML score fusion.
+"""The PyFlink job: enrich, apply the CEP rules, score with ONNX, decide.
 
-  transactions.raw --(key by sender)--> enrich (Neo4j/Redis) + CEP rules
-                                      --> ONNX model on the feature vector
-                                      --> final_score = model prob; CEP adds
-                                          deterministic must-flags + reason codes
-                   --> transactions.scored        (every event)
-                   --> fraud.alerts               (decision != ALLOW)
+    transactions.raw --(key by sender)--> transactions.scored + fraud.alerts
 
-Per-sender behavioural state lives in Flink keyed state; the receiver-account
-lookup is Redis-cached Neo4j; the LightGBM model is served via ONNX Runtime
-(bundled in the Flink image) on the SAME feature vector used in training. If the
-ONNX model is absent the job degrades gracefully to CEP-only scoring.
-
-Submit (dir mounted at /opt/flink/usrjobs, with model.onnx copied alongside):
-
-  flink run -py /opt/flink/usrjobs/fraud_job.py \
-      --pyFiles /opt/flink/usrjobs/config.py,/opt/flink/usrjobs/features.py,\
-/opt/flink/usrjobs/rules.py,/opt/flink/usrjobs/enrichment.py,/opt/flink/usrjobs/fusion.py
+Degrades to CEP-only if the model is absent, and stamps the record with what
+actually ran rather than with what was configured.
 """
 
 import json

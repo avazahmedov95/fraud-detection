@@ -57,26 +57,10 @@ def test_unknown_issuer_is_never_on_us():
 
 # --- the guard that stops a placeholder column inflating a measured result ---
 
-def test_placeholder_code_column_falls_back_to_name():
-    """banks.csv ships with `code` unfilled (every row "00000"). Comparing that
-    column would make is_on_us() true for EVERY transfer, turning the on_us
-    receiver-age mode into `always` and inflating its measured coverage from
-    ~7% to 100%. The fallback must trigger, and must be visible."""
-    rows = [{"code": "00000", "name": "A"}, {"code": "00000", "name": "B"}]
-    assert B._choose_identity(rows) == "name"
-
-
-def test_filled_code_column_is_preferred():
-    rows = [{"code": "00873", "name": "A"}, {"code": "00420", "name": "B"}]
-    assert B._choose_identity(rows) == "code"
-
-
 def _unresolved_bins_in_population():
     """BINs held by generated accounts that the current table does not resolve.
 
-    Returns None when the population has not been generated - a fresh clone has
-    no out/ directory, and this is a consistency check rather than a
-    requirement to run.
+    None when the population has not been generated.
     """
     import csv
     import os
@@ -92,58 +76,57 @@ def _unresolved_bins_in_population():
 
 
 def test_unresolved_bins_are_all_accounted_for():
-    """The table and the population may legitimately disagree - but only in ways
-    somebody has looked at.
-
-    banks.csv tracks the card market as it stands; persons.csv was generated
-    against the market as it stood then. A bank that has since closed therefore
-    shows up as an unresolvable BIN, and that is correct - its cards are not
-    issued by anyone any more. What must not happen is a row being deleted by
-    accident and reading as the same thing. So every unresolved BIN has to be
-    named in bins.RETIRED_BINS with a reason.
-    """
+    """banks.csv tracks the market as it stands; persons.csv was generated
+    against the market as it stood then. A bank that has since closed shows up
+    as an unresolvable BIN, and that is correct. A row deleted by accident must
+    not read as the same thing, so every unresolved BIN has to be named in
+    bins.RETIRED_BINS with a reason."""
     found = _unresolved_bins_in_population()
     if found is None:
-        pytest.skip("population not generated; nothing to check the table against")
+        pytest.skip("population not generated")
     unresolved, _, _ = found
     unaccounted = [b for b in unresolved if b not in B.RETIRED_BINS]
     assert not unaccounted, (
         f"BIN(s) {unaccounted} are held by generated accounts, are absent from "
-        f"banks.csv, and are not listed in bins.RETIRED_BINS. Either the row "
-        f"was deleted by mistake - restore it - or the institution is gone, in "
-        f"which case add it to RETIRED_BINS with the reason. Leaving it makes "
-        f"those cards issuer-less rather than wrong, which is the quieter and "
-        f"worse failure.")
+        f"banks.csv, and are not in bins.RETIRED_BINS. Restore the row, or add "
+        f"it there with the reason.")
 
 
 def test_the_unresolvable_share_stays_small():
-    """A bound, not an exactness. Some unresolvable traffic is the normal state
-    of any BIN table. A large share is not: it would mean the table has come
-    apart from the data, and every is_on_us would answer False - silently
-    withdrawing the receiver_age capability across the board rather than for a
-    slice."""
+    """A bound, not an exactness. Some unresolvable traffic is normal; a large
+    share means the table has come apart from the data and every is_on_us would
+    answer False, withdrawing receiver_age across the board."""
     found = _unresolved_bins_in_population()
     if found is None:
         pytest.skip("population not generated")
     _, total, n_unresolved = found
-    assert n_unresolved / total < 0.05, (
-        f"{n_unresolved}/{total} accounts hold an unresolvable BIN")
+    assert n_unresolved / total < 0.05, f"{n_unresolved}/{total}"
 
 
 def test_a_retired_issuer_is_never_on_us():
-    """Fail closed, and for the right reason.
-
-    Two parties both holding cards of the SAME closed bank must still not be
-    on-us: the institution that would perform the account lookup no longer
-    exists. This works because issuer_of returns "" for a retired BIN and
-    is_on_us rejects empty on either side - so it is not a special case, it is
-    the unknown-issuer rule doing its job. Pinned because a later "helpful"
-    change making issuer_of fall back to RETIRED_BINS would break it.
-    """
+    """Two parties at the same CLOSED bank are still not on-us: the institution
+    that would perform the account lookup no longer exists. Works through the
+    unknown-issuer rule, not a special case - pinned so a later fallback to
+    RETIRED_BINS inside issuer_of does not break it."""
     retired = next(iter(B.RETIRED_BINS))
     a, b = retired + "0000000001", retired + "0000000002"
     assert B.issuer_of(a) == ""
     assert F.is_on_us({"sender_card": a, "receiver_card": b}) is False
+
+
+def test_an_unfilled_code_column_is_refused():
+    """banks.csv shipped with `code` unfilled - every row "00000". Comparing
+    that column makes is_on_us() true for EVERY transfer, turning the on_us
+    receiver-age mode into `always` and inflating its coverage from 6.85% to
+    100%. Refused at load rather than worked around."""
+    rows = [{"code": "00000", "name": "A"}, {"code": "00000", "name": "B"}]
+    with pytest.raises(ValueError, match="must be filled"):
+        B._bank_identity(rows)
+
+
+def test_a_filled_code_column_identifies_the_bank():
+    rows = [{"code": "00873", "name": "A"}, {"code": "00420", "name": "B"}]
+    assert B._bank_identity(rows) == "code"
 
 
 def test_malformed_bin_is_rejected_loudly(tmp_path, monkeypatch):
@@ -157,7 +140,7 @@ def test_malformed_bin_is_rejected_loudly(tmp_path, monkeypatch):
     """
     import config as C
     csv = tmp_path / "banks.csv"
-    csv.write_text("bin,code,name,cards_mln\n8600,00937,Broken,1.0\n",
+    csv.write_text("bin,code,name,cards_mln\n8600,00937,Broken,1.0\n860033,00440,Fine,2.0\n",
                    encoding="utf-8")
     monkeypatch.setattr(C, "BANKS_CSV_PATH", str(csv))
     with pytest.raises(ValueError, match="6 digits"):

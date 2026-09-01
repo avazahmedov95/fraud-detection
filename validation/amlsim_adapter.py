@@ -1,36 +1,7 @@
-"""
-Run this project's CEP rules on IBM AMLSim, to test the one claim PaySim cannot.
+"""Replays the deployed rules over an IBM AMLSim run.
 
-WHY THIS EXISTS. Receiver-side aggregation is this project's largest measured
-effect (-0.032 PR-AUC) and its only structural design finding. It has no
-external validation, because the one foreign dataset run so far - PaySim -
-models fraud as draining an account straight to cash-out and contains no
-collection stage for MULE_FAN_IN to see. "The rule has nothing to detect" is
-true there, and is also the most convenient possible outcome, which is reason
-enough to distrust it.
-
-AMLSim (IBM, Apache-2.0) generates `fan_in` as an explicit typology: several
-accounts sending substantial funds to one main account, over a configured
-number of steps. It also generates `fan_out` and `cycle` separately, and labels
-every transaction with the alert it belongs to. That makes it the first foreign
-dataset on which the fan-in/fan-out asymmetry reported in ml/README.md can be
-reproduced rather than asserted.
-
-WHAT IT SUPPORTS THAT PAYSIM DID NOT. AMLSim's accounts file carries `open_dt`,
-so `receiver_age` is computable from the data instead of being switched off.
-That is one more capability of the six PaySim forced off, and it means the
-FRESH_RECEIVER rule is exercised here for the first time on foreign data.
-
-SCOPE. AMLSim models INTERBANK anti-money-laundering flows, not consumer
-card-to-card transfer. Amounts, cadence and account population all differ. This
-tests whether the rules' SHAPE transfers, not their thresholds - which is the
-only kind of transfer test a threshold-carrying rule can pass on foreign data,
-and the same scope the PaySim run settled on.
-
-    python amlsim_adapter.py --dir /path/to/AMLSim/outputs/<simulation_name>
-
-Nothing is retrained and no threshold is tuned. See validation/README.md,
-"Why not train on it".
+AMLSim generates the mule collection stage PaySim lacks. Toolchain landmines and
+the negative result: validation/README.md 3.
 """
 
 import argparse

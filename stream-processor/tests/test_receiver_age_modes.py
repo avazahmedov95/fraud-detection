@@ -118,7 +118,3 @@ def test_audit_trail_records_what_the_bank_could_see(mode):
     mode("on_us")
     res = evaluate(_ev("BankA", "BankB"), 5, SenderState(), now=1000)
     assert res["receiver_account_age_days"] is None
-
-
-if __name__ == "__main__":
-    raise SystemExit(pytest.main([__file__, "-q"]))

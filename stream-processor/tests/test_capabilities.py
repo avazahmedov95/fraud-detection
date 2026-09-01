@@ -134,7 +134,3 @@ def test_minimal_deployment_still_has_a_usable_contract(set_mode):
     names = CAP.feature_names()
     assert names == list(CAP.BY_KEY["core_history"].features)
     assert len(names) == 12
-
-
-if __name__ == "__main__":
-    raise SystemExit(pytest.main([__file__, "-q"]))

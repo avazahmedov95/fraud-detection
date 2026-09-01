@@ -1,17 +1,4 @@
-"""
-SHAP explainability for the fraud model.
-
-Explainability is a hard requirement here: every BLOCK/REVIEW decision must be
-justifiable to an analyst and to the regulator. SHAP gives both the global
-picture (which features drive the model) and a per-transaction reason code that
-can accompany each alert.
-
-Produces:
-  models/shap_summary.png     global beeswarm
-  models/shap_importance.png  global mean |SHAP| bar
-  + prints a worked per-alert explanation
-
-  python explain.py
+"""SHAP over the trained model: the global importance plots and a per-alert view.
 """
 
 import json

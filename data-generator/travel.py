@@ -1,23 +1,5 @@
-"""
-Legitimate travel, and the journeys that are not legitimate.
-
-The IMPOSSIBLE_TRAVEL rule claims to separate a hijacked session from an
-ordinary trip. That claim is only testable if the data contains both. Injecting
-the fraud pattern alone would guarantee the rule detects it — the rule would be
-finding what the generator was told to plant, which proves nothing.
-
-So this module does two things:
-
-  * `plan_trips` sends ordinary people on real journeys. Their transactions
-    appear in another region, and the pipeline must NOT flag them. This is the
-    negative control, and it is the more important half.
-  * `hijack_origin` picks a region far enough from the victim that reaching it
-    in the available time is physically impossible. This is the positive case:
-    a session continuing from somewhere the account holder cannot be.
-
-Both use the same coordinate table the detector uses (`stream-processor/geo.py`),
-so the simulation cannot disagree with the detector about how far apart two
-regions are.
+"""Moves people between regions over time, so IMPOSSIBLE_TRAVEL has something
+real to contradict rather than flagging any inter-region transfer.
 """
 
 import importlib.util

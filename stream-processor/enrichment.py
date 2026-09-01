@@ -1,20 +1,7 @@
-"""
-Enrichment: the Neo4j account lookup, cached in Redis.
+"""The receiver account-age lookup: Neo4j, cached in Redis, keyed by whatever
+identity the deployment can pin the payee to.
 
-For each transaction the pipeline needs one fact that is NOT in the raw switch
-message:
-  * receiver_account_age_days — how old is the receiver's account?
-
-Results are cached in Redis (most lookups then hit the cache, keeping per-event
-latency low). If Redis or Neo4j is unreachable, lookups fail open (unknown age)
-and the pipeline keeps running on behavioural signals alone.
-
-An earlier design also looked up a MyID-style kinship edge (`is_family_transfer`).
-It was removed: on synthetic data it ranked first in SHAP, but as an artefact of
-how the data was constructed rather than as a real signal.
-
-NOTE: synchronous lookups are fine for a prototype; in production this stage
-would use Flink async I/O.
+Fails open - an unreachable backend means "age unknown", not a stalled pipeline.
 """
 
 import logging

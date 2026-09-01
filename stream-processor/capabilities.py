@@ -1,27 +1,13 @@
-"""
-Capability registry — what the deploying bank can actually observe.
+"""Registry of what the deploying bank can observe.
 
-A detection feature is only as deployable as the data behind it. A bank with a
-mobile app can see whether the customer was on a call while confirming; one
-operating through USSD cannot. A bank integrated with MyID can check whether the
-payee is a verified relative; one without that integration cannot. Neither is a
-better or worse antifraud system — they have different inputs.
-
-This module is the single source of truth for that. Each capability declares the
-integration it needs, the model features it contributes and the CEP rules it
-enables. `features.py` assembles FEATURE_NAMES from it and `rules.py` gates each
-rule on it, so a capability can be switched off in one place and the whole
-pipeline follows — including the train/serve feature contract, which is derived
+Each capability declares the integration it needs, the model features it
+contributes and the CEP rules it enables. features.py assembles FEATURE_NAMES
+from it and rules.py gates each rule on it, so switching one off follows through
+the whole pipeline - including the train/serve contract, which is derived here
 rather than maintained by hand.
 
-Configure per capability via environment variable, e.g.
-
-    CAP_GEO_TELEMETRY=off
-    CAP_RECEIVER_AGE=on_us
-    CAP_MYID_KINSHIP=on
-
-Changing any of these changes the FEATURE CONTRACT: retrain and re-export the
-model afterwards. `ml/ablation.py` sweeps configurations and does that for you.
+Configure with CAP_<KEY> env vars. Changing any of them changes the feature
+contract: retrain and re-export afterwards.
 """
 
 import os

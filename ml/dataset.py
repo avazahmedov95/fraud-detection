@@ -1,9 +1,5 @@
-"""
-Build the training matrix by replaying the dataset through the SAME feature
-extractor the Flink job uses (stream-processor/features.py). This guarantees the
-model trains on exactly the features it will receive at serve time.
-
-Each row = the per-event feature vector + the rule-based cep_score + label.
+"""Builds the training matrix by replaying the CSV through the SAME feature
+extractor the Flink job uses, so the model trains on what it will be served.
 """
 
 import os
@@ -23,11 +19,8 @@ _EVENT_KEYS = ("amount_uzs", "sender_pinfl", "receiver_pinfl", "device_id", "sen
                # behavioural session signals (backlog #7) — must be forwarded,
                # otherwise active_call / secs_login_z train as constant zeros.
                "active_call", "secs_login_to_confirm",
-               # The cards, from which features.py derives the issuer via the
-               # BIN table - the on-us test behind the receiver_age capability.
-               # Forwarded rather than the bank names so the offline replay
-               # resolves the issuer through exactly the code path the live job
-               # uses; kinship, for the myid_kinship capability.
+               # The cards: features.py derives the issuer from the BIN, so the
+               # replay resolves it through the same path the live job uses.
                "sender_card", "receiver_card", "is_family_transfer")
 
 

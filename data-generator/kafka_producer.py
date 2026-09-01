@@ -1,18 +1,7 @@
-"""
-Replay generated transactions into a Kafka topic for the Flink pipeline.
+"""Replays a generated CSV into transactions.raw, one JSON message per row.
 
-Reads transactions.csv (already sorted by event_time) and produces one JSON
-message per row. Messages are keyed by `sender_card`, so a keyBy(sender) in Flink
-receives an ordered per-sender stream — exactly what the velocity / structuring
-CEP patterns need.
-
-  python kafka_producer.py --file out/transactions.csv \
-      --bootstrap localhost:9092 --topic transactions.raw
-
-  # simulate a live stream paced to the original inter-event gaps (200x faster):
-  python kafka_producer.py --file out/transactions.csv --realtime --speed 200
-
-Requires a running Kafka broker and `kafka-python` (see requirements.txt).
+Keyed by sender_card, so keyBy(sender) in Flink gets an ordered per-sender
+stream. Stamps ingested_at (t0 for every latency figure) and ingress_hash.
 """
 
 import argparse

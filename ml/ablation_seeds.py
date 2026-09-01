@@ -1,26 +1,5 @@
-"""
-Multi-seed capability ablation — separating real effects from sampling noise.
-
-`ablation.py` measures each configuration once. On a single dataset a PR-AUC
-delta of a few thousandths is meaningless: it reflects which transactions the
-generator happened to emit. This script repeats the whole sweep over several
-generator seeds — a fresh population and event stream each time — and reports
-each delta as mean +/- standard deviation across seeds.
-
-Use it before quoting any ablation figure: a delta whose spread straddles zero
-is not a finding.
-
-  python ablation_seeds.py                       resume until finished
-  python ablation_seeds.py --seeds 42,7,13       choose the seeds
-  python ablation_seeds.py --budget 600          run for longer per invocation
-  python ablation_seeds.py --report              print results, run nothing
-  python ablation_seeds.py --reset               discard progress and start over
-
-The run is RESUMABLE: it works through the grid until its time budget expires,
-saving after every training run, so it can be invoked repeatedly. Nothing in
-models/ is touched — each run trains into a scratch directory.
-
-Results are design targets on synthetic data, not validated findings.
+"""Runs the capability ablation across generator seeds and reports paired deltas
+with intervals, so an effect is not read off a single run.
 """
 
 import argparse

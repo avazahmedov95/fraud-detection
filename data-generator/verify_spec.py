@@ -1,15 +1,5 @@
-"""
-Check the generated dataset against docs/generator-spec.md.
-
-A specification that nobody re-checks drifts from the code within a release or
-two, and a drifted specification is worse than none — a reader trusts it. This
-recomputes the quantities the spec states and flags any that moved.
-
-Tolerances are wide on purpose: these are finite-sample draws, not identities.
-A flagged row means "the generator changed", not "the generator is broken".
-
-  python verify_spec.py                       check ./out
-  python verify_spec.py --file path/to.csv
+"""Checks a generated dataset against the parameters docs/generator-spec.md
+declares, so the spec cannot drift from what the generator produces.
 """
 
 import argparse

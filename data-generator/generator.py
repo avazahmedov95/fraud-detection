@@ -1,16 +1,6 @@
-"""
-Synthetic P2P transaction generator for the Uzbekistan fraud-detection pipeline.
+"""Builds the dataset: population, normal behaviour, travel, injected fraud.
 
-Produces two CSV files:
-  transactions.csv   — the event stream (raw + enriched + labels), sorted by time
-  persons.csv        — accounts (Person nodes for Neo4j)
-
-Usage:
-  python generator.py --persons 5000 --transactions 50000 --fraud-rate 0.015 --out ./out
-
-The output is calibrated to Uzbekistan-specific parameters (UzCard/HUMO BINs,
-UZS amounts, Central Bank limits). Results derived from it are design targets for
-prototype experimentation, not measured findings.
+Every parameter and the dataset of record: docs/generator-spec.md.
 """
 
 import argparse

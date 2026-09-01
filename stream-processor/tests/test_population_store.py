@@ -152,7 +152,3 @@ def test_the_hash_gets_a_ttl_so_an_idle_deployment_does_not_score_on_old_traffic
     assert r.hash, "something was written"
     # TTL is applied in the same pipeline as the increments
     assert PopulationStore.TTL_S > 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(pytest.main([__file__, "-q"]))

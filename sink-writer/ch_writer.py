@@ -1,21 +1,7 @@
-"""
-Batched ClickHouse writer for fraud.transactions_scored and fraud.audit_log.
+"""Batched ClickHouse writer for the scored rows and the audit log.
 
-Buffers rows and flushes in batches (ClickHouse strongly prefers batched inserts).
-Fails open: if ClickHouse is unreachable the sink is disabled and the consumer
-keeps running rather than blocking the pipeline — but it retries, and it says so.
-
-The original version connected once at startup and, on failure, disabled itself
-for the life of the process while flush() cleared its buffer silently. Because
-`depends_on: condition: service_started` only waits for the ClickHouse container
-to exist rather than to accept queries, a cold start on a fresh volume — where
-the server also has to run the schema in docker-entrypoint-initdb.d — reliably
-lost that race. The observable result was 331 events consumed from Kafka, offsets
-committed, and zero rows stored, with nothing in the log after boot. Offsets
-advance regardless, so those events are unrecoverable.
-
-Silent loss in an audit path is worse than loud failure, hence: retry on every
-flush, and log at ERROR with a running total whenever rows are discarded.
+Fails open, but retries and logs every discarded row with a running total: silent
+loss in an audit path is worse than loud failure.
 """
 
 import logging

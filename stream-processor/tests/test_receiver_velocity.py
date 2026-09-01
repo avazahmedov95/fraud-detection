@@ -95,7 +95,3 @@ def test_receiver_state_is_pruned_to_the_window():
     _fan_in(5, rs, spacing_s=C.RECEIVER_WINDOW_S // 2)
     assert all(rs.inbound[-1][0] - ts <= C.RECEIVER_WINDOW_S
                for ts, _, _ in rs.inbound)
-
-
-if __name__ == "__main__":
-    raise SystemExit(pytest.main([__file__, "-q"]))

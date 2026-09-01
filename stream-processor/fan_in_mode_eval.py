@@ -1,29 +1,7 @@
-"""
-Paired comparison of the two MULE_FAN_IN threshold modes, across generator seeds.
+"""Pairs the absolute and population-relative MULE_FAN_IN thresholds within each
+generator seed, reporting the false-positive row beside recall.
 
-WHY A SEPARATE SCRIPT. `replay_eval.py` reports one dataset under one mode. The
-first comparison done that way gave +8.2 points of MULE recall for the relative
-mode - measured on ONE dataset, after sweeping three quantiles and reporting the
-best. This project has been wrong exactly that way twice before (`ml/README.md`:
-a single-seed sweep put receiver_age at -0.043 against an honest -0.025), so the
-number is not quotable until it is paired across seeds with an interval.
-
-Deltas are paired WITHIN each seed: the same dataset scored under both modes, so
-the comparison removes everything that varies between datasets and leaves the
-mode. The interval is a t-based 95% CI for the mean delta, the same convention
-`ablation_seeds.py` settled on after an earlier version compared the mean
-against the standard deviation instead of the standard error.
-
-    # generate the seeds first (each takes a couple of minutes)
-    cd ../data-generator
-    for %s in (1 2 3 4 5) do python generator.py --seed %s --out ./out_seed%s
-
-    cd ../stream-processor
-    python fan_in_mode_eval.py --files ../data-generator/out_seed*/transactions.csv
-
-The quantile is NOT swept here. Sweeping it per seed and reporting the best
-would reintroduce the selection this script exists to remove; pass --quantile
-once, and if a different value is tried, report both runs.
+Result: docs/irp-framing.md 6, third RQ3 result.
 """
 
 import argparse

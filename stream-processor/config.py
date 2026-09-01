@@ -1,16 +1,6 @@
-"""
-Configuration for the Flink stream processor (enrichment + CEP).
+"""Every tunable of the stream processor, with the reason for each value.
 
-Connection defaults assume the job runs INSIDE the Flink container on the Docker
-network (service names). Override via environment variables for other setups.
-
-Thresholds and weights are deliberately explicit so they can be tuned and
-documented. STRUCTURING_THRESHOLD and LIMIT_DAILY are mirrored from the
-generator and MUST match it - the generator places structuring amounts just
-under the threshold this side watches, which is why that pattern's recall is
-partly true by construction. Neither is a figure from Regulation No. 3759: that
-document sets information-security requirements and no sum thresholds. See the
-correction in data-generator/config.py.
+Thresholds mirrored from the generator are marked as such and MUST match it.
 """
 
 import os
@@ -270,7 +260,7 @@ MODEL_VERSION_CEP_ONLY = os.getenv("MODEL_VERSION_CEP_ONLY", "cep-only-fallback"
 # both artefacts actually live (docker-compose: ./stream-processor mounted at
 # /opt/flink/usrjobs on jobmanager and taskmanager alike).
 JOB_DIR = os.path.dirname(os.path.abspath(__file__))
-MOUNTED_JOB_DIR = os.getenv("FLINK_JOB_DIR", "/opt/flink/usrjobs")
+MOUNTED_JOB_DIR = "/opt/flink/usrjobs"
 
 
 def _resolve_artefact(env_var, filename, extra_dirs=()):

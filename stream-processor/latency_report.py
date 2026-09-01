@@ -1,28 +1,8 @@
-"""
-End-to-end latency against the design target.
+"""End-to-end latency against the 300 ms target, from the three wall-clock
+stamps a scored record carries.
 
-Reads the wall-clock stamps written by the live pipeline and reports the
-distribution of time from "event entered Kafka" to "decision durable in
-ClickHouse".
-
-    t0  ingested_at    producer, at send
-    t1  scored_at_job  Flink, after fusion
-    t2  scored_at      ClickHouse, at write (column default now64)
-
-    end-to-end = t2 - t0
-    scoring    = scoring_ms, the work inside process_element
-
-Reported with order statistics — median, p95, p99, max — and a distribution-free
-confidence interval for the median. Latency distributions are heavy-tailed and
-strongly right-skewed; a mean and standard deviation describe them badly, and
-the tail is the part a real-time claim lives or dies on.
-
-    python latency_report.py                    read from ClickHouse
-    python latency_report.py --target-ms 300    change the design target
-
-Requires the stack to be running and traffic to have been produced:
-
-    make up && make produce && make submit-job
+Nearest-rank order statistics and a distribution-free CI for the median, because
+the distribution is not normal. Figures: docs/irp-framing.md 7.
 """
 
 import argparse
@@ -219,14 +199,8 @@ def main():
     # Holding the warehouse write to the same target would be measuring the
     # reporting stack against a real-time requirement.
     #
-    # SCOPE, stated because the split above invites the assumption: publishing
-    # is not enforcement. Nothing in this system answers an authorisation
-    # request, declines a transfer, or challenges a customer. fraud.alerts is
-    # consumed by the case-manager, which opens an analyst case. So the figure
-    # below is the latency of REACHING A DECISION, which is the necessary
-    # condition for acting before settlement, not evidence that anything acted.
-    # An earlier version of this comment said the topic existed "for the switch
-    # to act on", which asserted an integration that has never existed.
+    # SCOPE: publishing is not enforcement. Nothing here declines a transfer.
+    # This is the latency of REACHING a decision, not evidence anything acted.
     print("DECISION PATH - what the <%.0f ms target is about" % args.target_ms)
     print(f"{'stage':<22}{'n':>8}{'median':>10}{'95% CI':>13}"
           f"{'p95':>10}{'p99':>10}{'max':>10}   (ms)")

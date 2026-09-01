@@ -1,26 +1,6 @@
-"""
-Ablation over RECEIVER_AGE_MODE: what the model loses when the receiver's
-account age is unavailable.
+"""Ablation over the receiver_age modes: always / on_us / off.
 
-`receiver_age` is the model's strongest feature, but the sending bank can only
-look it up for its own clients. Across the UzCard / HUMO switch no such field is
-exchanged, so on inter-bank transfers it cannot be obtained at all. This script
-retrains and re-evaluates the pipeline under each availability regime:
-
-  always   the age is always known (idealised baseline)
-  on_us    known only for same-issuer transfers, NaN otherwise (realistic)
-  off      removed entirely (upper bound on the damage)
-
-Each mode has its OWN feature contract, so each gets its own training run. The
-comparison is therefore between models, not between thresholds on one model.
-
-The trained artefacts in models/ are restored afterwards, so running this does
-not leave the repository holding a model from whichever mode happened to run
-last. Per-mode metrics are written to models/ablation/.
-
-  python ablation_receiver_age.py
-
-Results are design targets on synthetic data, not validated findings.
+on_us is the honest default - the age is resolvable for 6.85% of transfers.
 """
 
 import json

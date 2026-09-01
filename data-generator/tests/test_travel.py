@@ -128,7 +128,3 @@ def test_hijack_origin_gives_up_rather_than_inventing_a_journey():
     rng = np.random.default_rng(1)
     assert T.hijack_origin("Tashkent City", minutes_available=7 * 24 * 60,
                            rng=rng) is None
-
-
-if __name__ == "__main__":
-    raise SystemExit(pytest.main([__file__, "-q"]))

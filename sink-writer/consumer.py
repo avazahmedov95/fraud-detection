@@ -1,11 +1,5 @@
-"""
-Sink-writer service: consumes transactions.scored from Kafka and persists every
-event to ClickHouse (analytics + WORM audit) and each alert to the Neo4j graph.
-
-Batched by size and time; commits offsets after processing. A clean SIGINT/SIGTERM
-flushes and closes so no buffered rows are lost on shutdown.
-
-  python consumer.py
+"""Sink-writer service: transactions.scored -> ClickHouse (analytics + audit)
+and Neo4j (the alert graph). Batched by size and time.
 """
 
 import json

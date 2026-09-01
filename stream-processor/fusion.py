@@ -1,23 +1,8 @@
-"""
-Score fusion + decisioning — shared by the Flink job and the offline eval.
+"""Turns two scores into one decision: ALLOW / REVIEW / BLOCK, plus reason codes.
 
-Design (evidence-driven): we evaluated naive score blends (noisy-OR, weighted
-average, ML-augmented-by-CEP) and every one DEGRADED ranking versus the model
-alone (PR-AUC 0.953 -> ~0.91-0.94), because the rule score is lower-resolution
-and dilutes a strong model. We therefore fuse at the DECISION layer:
-
-  * final_score = the model probability (graded risk) when the model is available,
-    falling back to the CEP score only if the model is down;
-  * the CEP layer adds DETERMINISTIC regulatory must-flags (structuring, daily
-    limit) that force at least REVIEW regardless of the model score — high-
-    precision on synthetic data (38 fraud vs 2 legit) — plus per-alert reason
-    codes (rule_hits) and the model-down fallback.
-
-This both beats CEP-only and ML-only at the chosen operating point and matches how
-regulated systems actually combine rules with ML. Pure: no Flink/onnx/numpy here.
-
-`predicted_type` is NOT an ML output (the model is a binary classifier); it is a
-rule-pattern label explaining *why* an alert fired.
+Fusion happens at the DECISION layer, not by blending the scores - every blend
+tried degraded ranking. Pure: no Flink, onnx or numpy here.
+Rationale and the measured comparison: docs/irp-framing.md 7.
 """
 
 import config as C

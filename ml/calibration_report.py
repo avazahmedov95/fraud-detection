@@ -1,29 +1,8 @@
-"""Add calibration figures to metrics.json for a model that is ALREADY trained.
+"""Adds calibration figures to metrics.json for a model that is already trained.
 
-Why this exists as a separate step rather than only inside train.py:
-
-Calibration describes a MODEL, not a training run. Retraining to obtain it would
-rewrite model.joblib while model.onnx - the artefact that actually serves - stayed
-where it was, so the two would diverge and case-manager/explain.py would start
-refusing to explain (MODEL_MISMATCH, by design). It would also move every
-reported figure in docs/, because a retrain is a retrain: PR-AUC, F1 and the
-per-type recalls would all shift and the documents would no longer describe the
-deployed model. Adding a metric is not a reason to change the thing being
-measured.
-
-So this scores the DEPLOYED model over the same time-ordered held-out slice
-train.py uses, computes train._calibration - the same function, so there is one
-definition and not two - and merges the result into metrics.json without touching
-any other key.
-
-Scores through model.onnx by default, because that is what the pipeline serves;
-the native model agrees to 3.3e-07 across 50,000 events, so the choice does not
-move the figures, but it means they describe the artefact in production rather
-than one beside it.
-
-  python calibration_report.py
-  python calibration_report.py --native      # score with model.joblib instead
-  python calibration_report.py --dry-run     # print, do not write
+Retraining to obtain them would rewrite model.joblib while model.onnx - the
+artefact that serves - stayed put, and would move every reported figure.
+See --help for the modes; the finding is docs/irp-framing.md 9.1.
 """
 
 import argparse

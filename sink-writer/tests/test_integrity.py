@@ -137,7 +137,3 @@ def test_missing_ingress_hash_still_chains():
     events = [dict(EVENT, transaction_id=f"tx-{i}", decision="ALLOW")
               for i in range(5)]
     assert verify(_build_chain(events)) == []
-
-
-if __name__ == "__main__":
-    raise SystemExit(pytest.main([__file__, "-q"]))

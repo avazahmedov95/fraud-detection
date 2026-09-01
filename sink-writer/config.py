@@ -24,11 +24,7 @@ NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "fraud_neo4j")
 # Batching.
 BATCH_SIZE = int(os.getenv("SINK_BATCH_SIZE", "500"))
 # The warehouse path has no real-time requirement — by the time this runs the
-# decision already EXISTS and has been published to fraud.alerts, and ClickHouse
-# is where it is queried afterwards. (This used to say the decision "has already
-# reached the switch", which named an integration that does not exist: nothing
-# enforces a decision here. The case-manager consumes that topic and opens an
-# analyst case; enforcement is out of scope and declared as such.) Batching here
+# decision already EXISTS and has been published to fraud.alerts. Batching here
 # is therefore free latency-wise
 # and good for MergeTree, which dislikes many small inserts. Lower it only if
 # dashboards need to be fresher, not to chase the detection target.

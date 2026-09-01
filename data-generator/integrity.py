@@ -1,47 +1,35 @@
 """
 Tamper-evidence for the audit trail: an ingress hash and a hash chain.
 
-Two independent guarantees, because they defend different things:
+  * ingress_hash binds a stored decision to the event that produced it. An
+    auditor holding the original event recomputes it and confirms the decision
+    was made on that event and not a substituted one.
 
-  * ingress_hash binds a stored decision to the exact event that produced it.
-    Computed by the producer over the raw fields, carried through Flink
-    untouched, stored in the audit row. An auditor holding the original event
-    (from the raw archive) can recompute it and confirm the decision was made on
-    that event and not a substituted one.
+  * record_hash chains the records: each folds in the previous hash, so
+    altering, deleting or reordering any record breaks every link after it.
+    WORM grants make the log append-only; the chain makes a bypass evident.
 
-  * record_hash chains the audit records: each record's hash folds in the
-    previous record's hash, so altering, deleting or reordering any record
-    breaks every link after it. ClickHouse WORM grants make the log
-    append-only; the chain makes a bypass of those grants *evident*.
+A standalone per-row hash would prove nothing against someone who can write the
+table - they recompute it. A chain forces recomputing the whole tail, and a
+periodically published head hash (verify_audit.py) closes even that.
 
-Why a chain and not a per-row hash: a standalone hash is recomputed by whoever
-edits the row, so it proves nothing against someone who can write the table. A
-chain forces an attacker who edits one record to recompute all later ones, and a
-periodically published head hash (external anchor — see verify_audit.py) closes
-even that.
-
-THIS FILE IS DUPLICATED in data-generator/ and sink-writer/ because they deploy
-as separate units with no shared package. The two copies MUST stay byte-identical
-— test_integrity.py in each pins the same known-answer vector, so a drift in
-either copy fails a test rather than silently producing an unverifiable chain.
+DUPLICATED in data-generator/ and sink-writer/, which deploy as separate units.
+The copies MUST stay byte-identical: test_integrity.py in each pins the same
+known-answer vector, so a drift fails a test rather than silently producing an
+unverifiable chain.
 """
 
 import hashlib
 
-# Raw fields covered by the ingress hash, in this exact order. The producer and
-# any verifier must agree on the list and the order, so changing it is a
-# breaking change to every hash already stored. These are the fields the switch
-# emits and that survive unchanged through the pipeline.
+# Changing this list or its order is a BREAKING change to every hash already
+# stored. receiver_pinfl was removed from it on 01.09.2026 when it left the
+# wire; see docs/audit-anchors.md, where the anchored head is recorded together
+# with the field list it was computed over.
 INGRESS_FIELDS = (
     "transaction_id", "event_time",
     "sender_pinfl", "sender_card", "receiver_card",
     "amount_uzs", "channel", "sender_region", "receiver_region",
 )
-# receiver_pinfl was removed from this tuple when it was removed from the wire.
-# The hash can only bind fields the event actually carries, and receiver_card is
-# the identifier the sending bank holds for the payee. This is a BREAKING change
-# to every hash computed before it: see docs/audit-anchors.md, where the
-# anchored head is recorded together with the field list it was computed over.
 
 GENESIS = "0" * 64          # prev_hash of the first record in a chain
 
@@ -49,11 +37,10 @@ GENESIS = "0" * 64          # prev_hash of the first record in a chain
 def _canonical(values) -> bytes:
     """Deterministic bytes from an ordered list of values.
 
-    Unit-separated (0x1f) rather than JSON: no key ordering can enter the bytes,
-    numbers cannot pick up incidental float formatting, and the separator cannot
-    occur in any of the string fields here (ids, cards, ISO timestamps, region
-    names). Every value is normalised to str first so 9000000 and "9000000" hash
-    alike — the producer sends an int, a verifier reading CSV sees a string.
+    Unit-separated (0x1f) rather than JSON: no key ordering enters the bytes and
+    numbers pick up no incidental float formatting. Values are normalised to str
+    so 9000000 and "9000000" hash alike - the producer sends an int, a verifier
+    reading CSV sees a string.
     """
     parts = []
     for v in values:
@@ -70,9 +57,8 @@ def ingress_hash(event: dict) -> str:
 def record_hash(prev_hash: str, seq: int, core_values) -> str:
     """Chain link: SHA-256(prev_hash || seq || the record's content).
 
-    `core_values` is the ordered content of the audit record (everything except
-    the chain columns themselves). Folding `seq` in as well means a record cannot
-    be moved to a different position without changing its hash.
+    Folding `seq` in means a record cannot be moved to a different position
+    without changing its hash.
     """
     h = hashlib.sha256()
     h.update((prev_hash or GENESIS).encode("ascii"))

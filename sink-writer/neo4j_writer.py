@@ -1,26 +1,10 @@
-"""
-Batched Neo4j writer: persists ALERT transactions (decision != ALLOW) as
-:Transaction nodes linking the sender and receiver :Person nodes.
+"""Batched Neo4j writer for ALERT transactions.
 
-  (s:Person)-[:SENT]->(t:Transaction)-[:TO]->(r:Person)
+    (s:Person)-[:SENT]->(t:Transaction)-[:TO]->(r:Person)
 
-Both ends are matched by CARD. The payee's PINFL is not on the wire - a sending
-bank does not hold it - so the money-flow network is the card-to-card graph the
-switch actually sees.
-
-This puts the flagged-flow network next to the account population, so mule
-fan-in/out and transfer rings become graph-queryable. Only alerts are written to
-keep the graph focused. Fails open if Neo4j is unreachable.
-
-The Transaction is created only when both Persons exist, so no orphan nodes are
-left for alerts that reference an unknown PINFL.
-
-"Fails open" means the pipeline keeps running, NOT that losses go unrecorded.
-The original version disabled the sink permanently when the driver could not be
-opened and cleared its buffer with no log on every flush thereafter — the same
-defect that made the ClickHouse sink discard 331 consumed events in silence
-while Kafka offsets advanced. Alerts are the output this system exists to
-produce, so losing them quietly is the worst available failure mode.
+Both ends match by CARD: the payee's PINFL is not on the wire, so this is the
+card-to-card graph the switch sees. Fails open, and says so with a running
+total - losing alerts quietly is the worst available failure.
 """
 
 import logging

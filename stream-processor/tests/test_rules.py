@@ -141,11 +141,3 @@ def test_impossible_travel_is_independent_of_home_region():
     res = evaluate(_ev(150_000, payee="friend", region="Khorezm"), 800, st, now=1060)
     assert "IMPOSSIBLE_TRAVEL" in res["rule_hits"]
     assert "GEO_ANOMALY" not in res["rule_hits"]
-
-
-if __name__ == "__main__":
-    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    for fn in fns:
-        fn()
-        print(f"PASS  {fn.__name__}")
-    print(f"\n{len(fns)} tests passed")

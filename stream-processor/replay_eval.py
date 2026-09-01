@@ -1,16 +1,5 @@
-"""
-Offline replay of the synthetic dataset through the pure CEP rule engine.
-
-Runs WITHOUT Flink/Kafka/Redis/Neo4j: it reads transactions.csv (which already
-carries the enrichment columns the live Neo4j lookup would return) and feeds each
-event, in time order, through `rules.evaluate`, keeping per-sender state in a
-plain dict — exactly the logic the Flink job runs, minus the runtime.
-
-Output is the *design behaviour* of the CEP layer on synthetic data: how it
-separates fraud from legitimate traffic, and which rules drive it. These are
-tuning targets, not validated production metrics.
-
-  python replay_eval.py --file ../data-generator/out/transactions.csv
+"""Replays a generated CSV through the deployed rule engine and reports what the
+CEP layer alone would have done.
 """
 
 import argparse

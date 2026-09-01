@@ -1,34 +1,7 @@
-"""
-What one connection costs: plaintext against mutual TLS.
+"""Microbenchmark: the cost of one Kafka connection, plaintext versus mutual TLS.
 
-docs/irp-framing.md 7.5 measures the transport arms with ONE long-lived
-connection each, so the handshake is amortised over the whole arm and what
-remains is mostly TLS record framing. That leaves the question the reviewer
-actually asked unanswered: a payment switch opens and closes connections, and a
-handshake is per-connection.
-
-This measures the handshake directly, the way 7.4 measured AES-256-GCM with a
-microbenchmark when the pipeline could not resolve it.
-
-METHOD. One KafkaProducer is constructed and closed per iteration. The
-constructor blocks until it has bootstrapped: TCP, then the TLS handshake on the
-SSL listener, then an API-version probe and a metadata fetch. Both arms pay the
-TCP, probe and metadata cost, so the DIFFERENCE between them isolates the TLS
-handshake while the absolute figures do not. Both are reported.
-
-The arms ALTERNATE rather than running in two blocks. Running all of one and
-then all of the other is what produced a transport effect that reversed sign
-when the order was reversed in 7.5, and the same trap applies here at a smaller
-scale: a JIT that warms, a broker that caches, a machine that drifts. Alternating
-makes the order a within-pair constant instead of a between-block confound.
-
-Order statistics, not means: connection setup is right-skewed, and one slow
-handshake would move a mean by more than the effect being measured.
-
-Run inside the Docker network, where the certificates are mounted:
-
-    .\\run.ps1 handshake-bench          # 30 pairs
-    .\\run.ps1 handshake-bench 60
+Arms alternate within each pair and one warm-up pair is discarded. Result and
+why it is measured separately from the pipeline: docs/irp-framing.md 7.5a.
 """
 
 import argparse

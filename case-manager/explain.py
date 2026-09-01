@@ -1,32 +1,8 @@
-"""Why the model said what it said, in words an analyst can use.
+"""Turns a model-only alert into words: the top tree contributions, phrased as
+findings an analyst can read out.
 
-WHY THIS LIVES HERE AND NOT IN THE FLINK JOB
---------------------------------------------
-Exact tree contributions cost 1.89 ms per event (measured: 400 trees, 24
-features, LightGBM `pred_contrib`, one row at a time). Restricted to alerts that
-is ~1.5% of traffic, so putting it on the scoring path was affordable - and it
-was still the wrong place, for two reasons:
-
-  * it would put a SECOND copy of the model in the serving worker beside
-    model.onnx, and two artefacts of one model is how a system starts
-    explaining a different model than the one that decided;
-  * nobody consumes an explanation at decision time. The analyst reads it from
-    the case, and the auditor reads it from the record. Both are downstream.
-
-So the job publishes the feature vector it scored on, and the explanation is
-computed here, off the hot path, where being a millisecond slower costs nothing.
-The measured 1.89 ms is the price of the alternative, recorded so the choice is
-a comparison rather than an assertion.
-
-THE GUARD
----------
-This module loads model.joblib; the pipeline scores with model.onnx. If those
-two ever diverge, an explanation would be a plausible story about a model that
-did not make the decision - worse than no explanation, because it reads as
-authoritative. So every explanation is checked: the probability recomputed here
-must match the ml_score the job recorded. They agree to 3.3e-07 across the whole
-dataset today; the tolerance below is three orders looser than that, so it flags
-divergence rather than noise.
+Refuses to speak rather than risk a wrong reason - see Explainer.explain.
+Why it runs here and not on the scoring path: docs/irp-framing.md 9.2.
 """
 
 import logging
@@ -52,17 +28,12 @@ TOP_N = 3
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
-#: model.txt first: a bare LightGBM Booster, loadable with lightgbm alone.
-#: model.joblib is an LGBMClassifier, and unpickling one drags scikit-learn
-#: (~30 MB) into a service that only reads trees - so it is the fallback for a
-#: workspace that has not re-run export_onnx.py, not the shipped artefact.
+#: A bare LightGBM Booster, written by ml/export_onnx.py from the same object
+#: it converts to ONNX. Not model.joblib: unpickling an LGBMClassifier drags
+#: scikit-learn (~30 MB) into a service that only reads trees.
 _MODEL_CANDIDATES = (
-    os.getenv("MODEL_TXT"),
     os.path.join(_HERE, "model.txt"),
     os.path.join(_HERE, "..", "ml", "models", "model.txt"),
-    os.getenv("MODEL_JOBLIB"),
-    os.path.join(_HERE, "model.joblib"),
-    os.path.join(_HERE, "..", "ml", "models", "model.joblib"),
 )
 
 #: The booster itself carries no usable names - it was trained on a bare numpy
@@ -72,7 +43,6 @@ _MODEL_CANDIDATES = (
 #: available outcome here: a confident, specific, wrong reason. So the count is
 #: checked against the booster and mislabelling fails loudly.
 _NAMES_CANDIDATES = (
-    os.getenv("FEATURE_NAMES_JSON"),
     os.path.join(_HERE, "feature_names.json"),
     os.path.join(_HERE, "..", "ml", "models", "feature_names.json"),
 )
@@ -150,17 +120,12 @@ class Explainer:
         self._loaded = True
         path = next((p for p in _MODEL_CANDIDATES if p and os.path.exists(p)), None)
         if path is None:
-            log.warning("no model.joblib found; alerts will be queued without "
-                        "an explanation (status %s)", NO_MODEL)
+            log.warning("no model.txt found; alerts will be queued without an "
+                        "explanation (status %s). Run ml/export_onnx.py.", NO_MODEL)
             return
         try:
-            if path.endswith(".txt"):
-                import lightgbm as lgb
-                self._booster = lgb.Booster(model_file=path)
-            else:
-                import joblib
-                clf = joblib.load(path)
-                self._booster = clf.booster_ if hasattr(clf, "booster_") else clf
+            import lightgbm as lgb
+            self._booster = lgb.Booster(model_file=path)
             if self._names is None:
                 self._names = _load_names()
             n_model = self._booster.num_feature()
@@ -195,11 +160,8 @@ class Explainer:
         state, which does not exist in this process, and would explain a
         different event than the one that alerted.
         """
-        # Features first, deliberately. Checking the model first made NO_MODEL
-        # mask whether the alert even carried a feature vector, which hid the
-        # more actionable of the two problems: a missing artefact is fixed by a
-        # rebuild here, a missing vector means the SCORING JOB is the wrong
-        # version and no amount of work on this service will help.
+        # Features first: checking the model first made NO_MODEL mask whether
+        # the alert carried a vector at all, hiding the upstream problem.
         if not features:
             return NO_FEATURES, []
         self._load()

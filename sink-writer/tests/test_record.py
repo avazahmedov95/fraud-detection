@@ -161,11 +161,3 @@ def test_row_builders_emit_one_value_per_column():
     # columns to reach the full AUDIT_COLUMNS.
     assert len(R.audit_core(SCORED)) == len(R.AUDIT_CORE_COLUMNS)
     assert len(R.AUDIT_COLUMNS) == len(R.AUDIT_CORE_COLUMNS) + 3
-
-
-if __name__ == "__main__":
-    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    for fn in fns:
-        fn()
-        print(f"PASS  {fn.__name__}")
-    print(f"\n{len(fns)} tests passed")

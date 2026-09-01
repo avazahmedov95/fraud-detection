@@ -1,26 +1,8 @@
-"""
-Receiver-side inbound history, shared across Flink partitions via Redis.
+"""Receiver-side state in Redis: the payee's inbound window, and the population
+distribution its threshold is compared against.
 
-Every other piece of state in this job lives in Flink keyed state, which works
-because the stream is keyed by sender. Receiver-side aggregation cannot: the
-transfers arriving at one payee are spread across every partition, since they
-come from different senders. Seeing a mule's fan-in therefore requires state
-outside the partitioning — hence Redis.
-
-The window is a sorted set per payee, scored by timestamp:
-
-    rcv:{payee}  ->  ZSET of "ts|sender_pinfl|amount|txid", score = ts
-
-where {payee} is whatever identity this deployment can pin the payee to -
-the destination PAN by default, the PINFL at switch/platform level. See
-features.payee_key; the choice is one place, not one per call site.
-
-Reads take the window with ZRANGEBYSCORE; writes append and prune expired
-members in one pipeline. A TTL on the key means a payee who stops receiving
-disappears on its own rather than accumulating forever.
-
-Fails open: if Redis is unreachable the caller gets None and the pipeline scores
-without the fan-in signal, exactly as the enrichment lookups degrade.
+Both live outside Flink keyed state because the stream is keyed by SENDER, so
+one payee's transfers are spread across every partition. Fails open.
 """
 
 import logging

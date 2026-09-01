@@ -146,7 +146,3 @@ def test_load_distinguishes_unavailable_from_empty(store):
         type(store.load("never-paid", now=1000).inbound)()
     s = ReceiverStore("h", 1)
     assert s.load("never-paid", now=1000) is None
-
-
-if __name__ == "__main__":
-    raise SystemExit(pytest.main([__file__, "-q"]))

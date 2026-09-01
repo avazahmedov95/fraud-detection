@@ -1,15 +1,5 @@
-"""
-Export the trained LightGBM model to ONNX for serving inside Flink via ONNX
-Runtime (already bundled in the Flink image). Verifies that the ONNX model
-reproduces the native model's probabilities, so phase-6 serving is faithful.
-
-Produces:
-  models/model.onnx     - what the Flink job serves
-  models/model.txt      - the same trees as a bare LightGBM Booster, for the
-                          case-manager's explanations
-  + parity check against the native model
-
-  python export_onnx.py
+"""Exports the trained model to ONNX for serving inside Flink, plus model.txt
+for the case-manager's explanations, and checks both against the native model.
 """
 
 import json

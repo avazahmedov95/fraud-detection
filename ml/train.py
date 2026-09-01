@@ -1,15 +1,7 @@
-"""
-Train the gradient-boosting fraud model (LightGBM) on the synthetic features.
+"""Trains the LightGBM model on a time-ordered split and writes metrics.json.
 
-Why gradient boosting (not deep learning) here: small labelled fraud sets, hard
-explainability requirements (SHAP), and CPU-speed inference inside Flink. Neural
-nets fit later as specialised feature providers, not as the core model.
-
-Evaluation uses a TIME-ORDERED split (train on earlier events, test on later) to
-avoid look-ahead leakage. All metrics are DESIGN TARGETS on synthetic data, not
-validated production findings.
-
-  python train.py
+Reports calibration beside the AUCs: a rank statistic cannot see a score that
+ranks well and cannot order a queue - docs/irp-framing.md 9.1.
 """
 
 import json

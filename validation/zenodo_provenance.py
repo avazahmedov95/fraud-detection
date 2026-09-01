@@ -1,32 +1,7 @@
-"""
-Provenance check for Zenodo record 20030065.
+"""Checks whether a published dataset is what its paper says it is.
 
-The record is published as "A Production-Collected Online Banking Fraud
-Detection Dataset from a Live Cloud-Based Deep Learning System". Before citing
-it as real-world validation in a thesis, the claim is worth testing — a citation
-that collapses under a reviewer's question is worse than no citation.
-
-Three things prompted this check:
-
-  1. The columns are named `v1..v28`, which is the signature of a PCA-transformed
-     feature space — and PCA anonymisation is exactly why this project rejected
-     the ULB/Kaggle credit-card dataset (SHAP over principal components is
-     meaningless, and CBU 3759 requires explainability).
-
-  2. The arithmetic lines up with a 1/5 sample of that same ULB dataset:
-       284,807 / 5 = 56,961.4   vs 56,962 rows claimed
-           492 / 5 = 98.4       vs 98 fraud claimed
-       ULB fraud rate 0.1727%   vs 0.172% claimed
-
-  3. The published description promises "response latency in milliseconds" per
-     record. No such column exists in the file.
-
-This script tests the PCA hypothesis directly rather than by resemblance.
-
-    python zenodo_provenance.py --file fraud_tests_export_20260501_080333.csv
-
-A finding here does not accuse anyone of anything. It establishes what the data
-IS, which determines what it can support.
+Written after the row count disagreed with the publication; the discrepancy was
+resolved exactly - docs/related-work.md 7.
 """
 
 import argparse

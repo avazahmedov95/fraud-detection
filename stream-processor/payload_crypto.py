@@ -1,94 +1,13 @@
+"""AES-256-GCM envelope for the event topics, and the plaintext routing key.
+
+Wire format:  "FDE1:" + routing_key + ":" + base64(nonce(12) || ct || tag(16))
+
+Two invariants a change here must not break: hash the plaintext BEFORE
+encrypting (see integrity.py), and keep the two copies of this file - in
+data-generator/ and stream-processor/ - byte-identical, since each package
+deploys separately and test_payload_crypto.py in each pins the same vector.
+Rationale and the measured cost: docs/irp-framing.md 7.4.
 """
-Payload encryption at rest and in transit on the event topics (AES-256-GCM).
-
-Reviewer point 3 asks for the measured cost of mTLS and payload encryption. The
-two are deliberately separable here: transport security protects the channel,
-payload encryption protects the record even from someone holding the broker's
-disk or a topic-read grant. A bank's own operators are inside the TLS boundary;
-they are not inside this one.
-
-WIRE FORMAT
------------
-    "FDE1:" + routing_key + ":" + base64( nonce(12) || ciphertext || tag(16) )
-
-The magic prefix means a consumer can tell an encrypted record from a plaintext
-one by looking at it, so the two sides do not have to be switched over
-atomically and a topic containing both remains readable. That property is what
-makes the A/B measurement possible at all: the same job binary consumes both
-arms of the experiment. `{` is the only other first byte a record can have, so
-the discrimination is unambiguous.
-
-WHY A CLEAR ROUTING KEY
------------------------
-The Flink job keys the stream by sender before scoring:
-
-    .key_by(lambda v: ...["sender_card"])
-
-which means the record is read TWICE - once to partition it, once to score it.
-Decrypting in both places would double the cryptographic cost of every event and
-corrupt the very measurement this module exists to produce, so the partitioning
-field travels in clear and `routing_key()` extracts it with a string split.
-
-It is authenticated, not merely appended: the routing key is the GCM associated
-data, so altering it makes the record undecryptable rather than silently
-misrouted. That matters here beyond tidiness - a record steered to the wrong key
-group would accumulate into another sender's velocity and structuring windows,
-which is an integrity failure in the detection logic rather than a privacy one.
-
-WHAT IS AND IS NOT PROTECTED
-----------------------------
-The routing key discloses no more than the topic already does: Kafka partitions
-on the message key, which is `sender_card`, so an adversary with topic-read
-access already learns which cards transacted and how often. What payload
-encryption adds is that amounts, counterparties, regions and session telemetry
-stay closed. Stating that limit is part of the answer: payload encryption on a
-keyed topic buys confidentiality of the record, not of the metadata.
-
-WHY TEXT AND NOT RAW BYTES
---------------------------
-The envelope is base64 rather than binary because the Flink source deserialises
-with `SimpleStringSchema`, which decodes the record as UTF-8 - and AES-GCM
-ciphertext is not valid UTF-8, so a binary envelope would be corrupted in
-transit rather than rejected. PyFlink 1.19 exposes no byte-array deserialiser to
-`set_value_only_deserializer` without dropping to Java.
-
-This costs roughly 33% in message size ON TOP of the envelope's fixed overhead,
-and that inflation must be reported as part of the measured cost rather than
-quietly excluded. It is an artefact of the deserialiser, not of encryption: a
-pipeline with a binary schema pays the same CPU and none of the base64
-expansion. The measurement therefore gives an UPPER bound on the transport cost
-and an accurate figure for the compute cost.
-
-One asymmetry to disclose when reporting: on the encrypted arm `key_by` does a
-string split, while on the plaintext arm it parses JSON. That makes partitioning
-marginally CHEAPER under encryption, slightly flattering the encrypted arm - in
-the opposite direction to the effect being measured, so it cannot manufacture
-the result, but it should be stated rather than discovered.
-
-ORDER OF OPERATIONS (important)
--------------------------------
-`ingress_hash` is computed over the PLAINTEXT fields, before encryption, and
-travels inside the encrypted payload. Encrypting first and hashing the
-ciphertext would break the audit guarantee: an auditor holding the original
-event could no longer recompute the hash, since GCM nonces make every encryption
-of the same event distinct. Hash the plaintext, then encrypt; decrypt, then
-verify.
-
-KEY MANAGEMENT
---------------
-The key comes from PAYLOAD_KEY_HEX (64 hex characters = 32 bytes). There is no
-default: a hard-coded fallback key is worse than a startup failure, because it
-encrypts everything under a value that is in the source tree. A real deployment
-would source this from a KMS or HSM with rotation; the version digit in the
-magic prefix is what a rotation scheme would extend.
-
-THIS FILE IS DUPLICATED in data-generator/ and stream-processor/ because they
-deploy as separate units with no shared package. The two copies MUST stay
-byte-identical - test_payload_crypto.py in each pins the same known-answer
-vector, so a drift in either copy fails a test rather than silently producing
-records the other side cannot read.
-"""
-
 import base64
 import json
 import os

@@ -1,7 +1,7 @@
-"""ClickHouse access for the case queue: open cases, read them, resolve them.
+"""ClickHouse access for the case queue: open, read, resolve, count.
 
-Kept separate from the consumer so the analyst CLI can use the same code paths
-and cannot invent a second opinion about how a case is stored.
+Shared with the analyst CLI so the two cannot hold different opinions about how
+a case is stored.
 """
 
 import logging
@@ -213,15 +213,9 @@ class CaseStore:
         counts["_resolved"] = resolved
         counts["_precision"] = (confirmed / resolved) if resolved else None
 
-        # Explanation coverage, and when the queue last received anything.
-        #
-        # Added after a live run where the answer to "are explanations working?"
-        # had to be deduced from an ABSENT log line. An operator should be able
-        # to read it: an empty status means the row was written by a build that
-        # predates the column, NO_FEATURES means the scoring job is not
-        # publishing its feature vector yet, and a stale max(opened_at) means
-        # nothing has been consumed at all - three different problems that all
-        # look identical in the queue itself.
+        # Three problems look identical in the queue: a build predating the
+        # column (empty status), a scoring job not publishing features
+        # (NO_FEATURES), and nothing consumed at all (stale max(opened_at)).
         q = (f"SELECT explanation_status, count() FROM {self._db}.{_TABLE} FINAL "
              f"GROUP BY explanation_status")
         counts["_explanation"] = {(d or "(written before the column existed)"): n
