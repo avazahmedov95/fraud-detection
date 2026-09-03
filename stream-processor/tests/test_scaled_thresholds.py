@@ -1,13 +1,9 @@
-"""
-Unit tests for capability-scaled decision thresholds.
+"""Unit tests for capability-scaled decision thresholds.
 
-The behaviour under test was found empirically: run on PaySim with two rules
-available, the highest CEP score any fraud reached was 0.35 against a 0.40
-review cutoff, so nothing was ever flagged — while the same rules separated the
-classes 4:1. A fixed additive threshold turns a reduced deployment into a silent
-one rather than a degraded one.
-
-Run: python -m pytest test_scaled_thresholds.py -q
+Found empirically: on PaySim with two rules available, the highest CEP score any
+fraud reached was 0.35 against a 0.40 review cutoff, so nothing was ever flagged
+— while the same rules separated the classes 4:1. A fixed additive threshold
+turns a reduced deployment into a silent one, not a degraded one.
 """
 
 import pytest
@@ -61,8 +57,7 @@ def test_signature_rules_are_all_known_to_the_registry():
 # --- scaling ----------------------------------------------------------------
 
 def test_full_capability_leaves_the_calibrated_threshold_untouched(profile):
-    """The hand-calibrated operating point must not move; only reduced
-    deployments are meant to be affected."""
+    """The hand-calibrated operating point must not move; only reduced ones do."""
     profile(**{c.key: ("on" if "on" in c.modes else c.modes[0])
                for c in CAP.REGISTRY if not c.always_on})
     assert CAP.scaled_threshold(C.REVIEW_THRESHOLD) == pytest.approx(
@@ -96,8 +91,7 @@ def _ev(amount, payee, bank="BankA"):
 
 
 def test_single_rule_can_flag_when_it_is_all_that_is_available(profile):
-    """The PaySim case. One rule at 0.35 is below the 0.40 fixed cutoff, but is
-    the strongest signal a minimal deployment can produce, so it must act."""
+    """The PaySim case: one rule at 0.35 is below the 0.40 cutoff but must act."""
     profile(receiver_age="off", myid_kinship="off", device_telemetry="off",
             geo_telemetry="off", session_telemetry="off", channel="off")
 

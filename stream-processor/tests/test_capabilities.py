@@ -1,8 +1,4 @@
-"""
-Unit tests for the capability registry.
-
-Run: python -m pytest test_capabilities.py -q
-"""
+"""Unit tests for the capability registry."""
 
 import pytest
 
@@ -31,10 +27,9 @@ def test_every_rule_is_declared_exactly_once():
     assert len(seen) == len(set(seen))
 
 
-#: Capabilities that legitimately have no "off", with the reason. A capability
-#: that SELECTS between data sources has no null option: switching it off would
-#: not model a poorer deployment, it would model one that cannot key its state
-#: at all. Exemptions are listed rather than the rule weakened, so a new
+#: Capabilities that legitimately have no "off". One that SELECTS between data
+#: sources has no null option: off would model a deployment that cannot key its
+#: state at all. Listed as exemptions rather than weakening the rule, so a new
 #: capability without "off" still has to be argued for here.
 _NO_OFF_MODE = {
     "payee_identity": "selects which identity the payee is keyed by; there is "
@@ -50,8 +45,7 @@ def test_off_is_available_wherever_it_makes_sense():
 
 
 def test_exempt_capabilities_contribute_no_features():
-    """The exemption above is only safe while such a capability adds no columns:
-    a feature that can never be removed would be an undeclared requirement."""
+    """The exemption is safe only while such a capability adds no columns."""
     for key in _NO_OFF_MODE:
         assert CAP.BY_KEY[key].features == ()
 
@@ -77,8 +71,7 @@ def test_every_capability_documents_why_it_may_be_missing():
 # --- derived contract -------------------------------------------------------
 
 def test_disabling_a_capability_drops_its_features(set_mode):
-    # Set both states explicitly: these tests must not depend on whatever the
-    # ambient CAP_* environment happens to be.
+    # Set both states explicitly: no dependence on the ambient CAP_* environment.
     set_mode(geo_telemetry="on")
     before = CAP.feature_names()
     assert "geo_is_anomaly" in before
@@ -128,8 +121,7 @@ def test_feature_order_is_stable_across_calls():
 
 
 def test_minimal_deployment_still_has_a_usable_contract(set_mode):
-    """With every optional integration off, the contract is exactly the features
-    computable from the bank's own transaction stream."""
+    """With every optional integration off, only own-stream features remain."""
     set_mode(**{cap.key: "off" for cap in CAP.REGISTRY if not cap.always_on})
     names = CAP.feature_names()
     assert names == list(CAP.BY_KEY["core_history"].features)

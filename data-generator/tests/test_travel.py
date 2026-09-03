@@ -1,11 +1,7 @@
-"""
-Unit tests for travel simulation.
+"""Travel simulation - the negative control.
 
-The point of these is the negative control: legitimate journeys must never be
-constructible as physically impossible, or the IMPOSSIBLE_TRAVEL rule would be
-validated against data that guarantees its own success.
-
-Run: python -m pytest test_travel.py -q
+Legitimate journeys must never be constructible as physically impossible, or
+IMPOSSIBLE_TRAVEL would be validated against data guaranteeing its own success.
 """
 
 import os
@@ -114,8 +110,7 @@ def test_hijack_origin_is_genuinely_unreachable():
 
 
 def test_hijack_origin_respects_the_detector_distance_floor():
-    """Below the floor the rule ignores the move regardless of speed, so a
-    hijack placed there would be undetectable by construction."""
+    """Below the distance floor the rule ignores the move; a hijack there is unseen."""
     rng = np.random.default_rng(1)
     for _ in range(50):
         origin = T.hijack_origin("Tashkent City", minutes_available=10, rng=rng)
@@ -123,8 +118,7 @@ def test_hijack_origin_respects_the_detector_distance_floor():
 
 
 def test_hijack_origin_gives_up_rather_than_inventing_a_journey():
-    """With a week available, every region is reachable — the pattern must not
-    be forced into data whose geography cannot support it."""
+    """With a week available every region is reachable; do not force the pattern."""
     rng = np.random.default_rng(1)
     assert T.hijack_origin("Tashkent City", minutes_available=7 * 24 * 60,
                            rng=rng) is None

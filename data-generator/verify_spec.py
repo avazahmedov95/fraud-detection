@@ -1,6 +1,5 @@
-"""Checks a generated dataset against the parameters docs/generator-spec.md
-declares, so the spec cannot drift from what the generator produces.
-"""
+"""Checks a generated dataset against the parameters docs/generator-spec.md declares,
+so the spec cannot drift from what the generator produces."""
 
 import argparse
 import os

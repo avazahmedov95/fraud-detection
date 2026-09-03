@@ -1,0 +1,1219 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Разбор антифрод-системы</title>
+<style>
+  html{color-scheme:light dark}
+  @media print{
+    nav{display:none !important}
+    .wrap{grid-template-columns:1fr !important; max-width:none !important}
+    h2,h3,.file,.note,.tw,.plain{break-inside:avoid}
+    h2{break-before:page}
+    h2:first-of-type{break-before:auto}
+  }
+</style>
+</head>
+<body>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Spectral:ital,wght@0,400;0,500;1,400&display=swap">
+<style>
+:root{
+  --ground:#F6F8FA; --surface:#FFFFFF; --surface-2:#EEF2F6;
+  --ink:#131A22; --ink-2:#3D4A58; --muted:#66727F;
+  --rule:#DCE3EA; --rule-soft:#E9EEF3;
+  --accent:#1D5C89; --accent-soft:#E7F0F7;
+  --plain:#F0F6E9; --plain-rule:#8FAE6B; --plain-ink:#2E3D1E;
+  --good:#2C6A4E; --warn:#8A5A08; --crit:#8E3128;
+  --good-bg:#E6F0EA; --warn-bg:#F7EFE0; --crit-bg:#F6E7E5;
+  --shadow:0 1px 2px rgba(19,26,34,.06), 0 4px 14px rgba(19,26,34,.05);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0F141A; --surface:#161D25; --surface-2:#1D262F;
+    --ink:#E3E9EF; --ink-2:#BAC5D0; --muted:#8D9AA7;
+    --rule:#2A343F; --rule-soft:#222B34;
+    --accent:#6FB2D9; --accent-soft:#17303F;
+    --plain:#1B2418; --plain-rule:#7A9A57; --plain-ink:#D5E3C4;
+    --good:#7FC3A0; --warn:#D8AC63; --crit:#DE9188;
+    --good-bg:#172A22; --warn-bg:#2C2417; --crit-bg:#2E1D1B;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0F141A; --surface:#161D25; --surface-2:#1D262F;
+  --ink:#E3E9EF; --ink-2:#BAC5D0; --muted:#8D9AA7;
+  --rule:#2A343F; --rule-soft:#222B34;
+  --accent:#6FB2D9; --accent-soft:#17303F;
+  --plain:#1B2418; --plain-rule:#7A9A57; --plain-ink:#D5E3C4;
+  --good:#7FC3A0; --warn:#D8AC63; --crit:#DE9188;
+  --good-bg:#172A22; --warn-bg:#2C2417; --crit-bg:#2E1D1B;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.3);
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:Spectral,Georgia,serif; font-size:17px; line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{display:grid; grid-template-columns:1fr; max-width:1200px; margin:0 auto; padding:0 20px}
+@media(min-width:1020px){ .wrap{grid-template-columns:244px 1fr; gap:52px; padding:0 32px} }
+
+nav{display:none}
+@media(min-width:1020px){
+  nav{display:block; position:sticky; top:0; align-self:start; max-height:100vh; overflow-y:auto; padding:46px 0 40px}
+}
+nav .navtitle{font-family:'IBM Plex Sans',system-ui,sans-serif; font-size:10.5px; letter-spacing:.13em;
+  text-transform:uppercase; color:var(--muted); margin-bottom:14px}
+nav ol{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:1px}
+nav a{display:flex; gap:9px; text-decoration:none; color:var(--ink-2); font-family:'IBM Plex Sans',system-ui,sans-serif;
+  font-size:13px; line-height:1.4; padding:5px 8px; border-radius:4px}
+nav a:hover{background:var(--surface-2); color:var(--ink)}
+nav a:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+nav a .n{color:var(--muted); font-variant-numeric:tabular-nums; min-width:18px}
+nav li.sep{height:1px; background:var(--rule); margin:10px 8px; list-style:none}
+
+main{padding:46px 0 96px; min-width:0}
+header.top{border-bottom:1px solid var(--rule); padding-bottom:30px; margin-bottom:34px}
+header.top .eyebrow{font-family:'IBM Plex Sans',system-ui,sans-serif; font-size:11px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--accent); font-weight:600}
+h1{font-family:'IBM Plex Sans',system-ui,sans-serif; font-weight:600; font-size:37px; line-height:1.15;
+  letter-spacing:-.02em; margin:14px 0 12px; text-wrap:balance}
+header.top p{margin:0; color:var(--ink-2); max-width:64ch}
+h2{font-family:'IBM Plex Sans',system-ui,sans-serif; font-weight:600; font-size:25px; letter-spacing:-.015em;
+  line-height:1.25; margin:58px 0 6px; text-wrap:balance; scroll-margin-top:24px}
+h2 .num{color:var(--accent); font-variant-numeric:tabular-nums; margin-right:11px; font-weight:500}
+h3{font-family:'IBM Plex Sans',system-ui,sans-serif; font-weight:600; font-size:18px; letter-spacing:-.005em;
+  margin:38px 0 4px; scroll-margin-top:24px}
+p{margin:12px 0; max-width:68ch}
+ul,ol.body{margin:12px 0; padding-left:22px; max-width:68ch}
+li{margin:6px 0}
+strong{font-weight:500; color:var(--ink)}
+a{color:var(--accent)}
+code{font-family:'IBM Plex Mono',ui-monospace,monospace; font-size:.855em; background:var(--surface-2);
+  padding:1px 5px; border-radius:3px; color:var(--ink)}
+hr{border:0; border-top:1px solid var(--rule); margin:46px 0}
+.lede{font-size:18.5px; color:var(--ink-2); max-width:64ch}
+
+.note{border-left:3px solid var(--accent); background:var(--surface); padding:14px 18px; margin:22px 0;
+  border-radius:0 5px 5px 0; box-shadow:var(--shadow); max-width:68ch}
+.note.warn{border-left-color:var(--warn)}
+.note.crit{border-left-color:var(--crit)}
+.note p:first-child{margin-top:0} .note p:last-child{margin-bottom:0}
+.note .lbl{font-family:'IBM Plex Sans',system-ui,sans-serif; font-size:10.5px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--muted); display:block; margin-bottom:5px}
+
+.tw{overflow-x:auto; margin:22px 0; border:1px solid var(--rule); border-radius:6px; background:var(--surface)}
+table{border-collapse:collapse; width:100%; font-family:'IBM Plex Sans',system-ui,sans-serif; font-size:13.5px}
+th{text-align:left; font-weight:600; font-size:11px; letter-spacing:.07em; text-transform:uppercase;
+  color:var(--muted); padding:11px 14px; border-bottom:1px solid var(--rule); white-space:nowrap; background:var(--surface-2)}
+td{padding:10px 14px; border-bottom:1px solid var(--rule-soft); vertical-align:top; color:var(--ink-2)}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap}
+td code{font-size:12px; background:transparent; padding:0}
+td strong{color:var(--ink)}
+
+.chip{display:inline-block; font-family:'IBM Plex Sans',system-ui,sans-serif; font-size:11px; font-weight:600;
+  letter-spacing:.03em; padding:2px 8px; border-radius:20px; white-space:nowrap}
+.chip.ok{background:var(--good-bg); color:var(--good)}
+.chip.part{background:var(--warn-bg); color:var(--warn)}
+.chip.no{background:var(--crit-bg); color:var(--crit)}
+
+/* ---- the two-level file entry: the core component of this document ---- */
+.file{margin:30px 0 0; max-width:74ch}
+.file > h4{font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:15.5px; color:var(--ink);
+  margin:0 0 8px; display:flex; flex-wrap:wrap; align-items:baseline; gap:10px; scroll-margin-top:24px}
+.file > h4 .ln{font-family:'IBM Plex Sans',sans-serif; font-weight:400; font-size:11.5px; color:var(--muted);
+  font-variant-numeric:tabular-nums; letter-spacing:.02em}
+.plain{background:var(--plain); border-left:3px solid var(--plain-rule); color:var(--plain-ink);
+  padding:11px 16px; border-radius:0 5px 5px 0; margin:0 0 12px; font-size:16.5px}
+.plain .lbl{font-family:'IBM Plex Sans',sans-serif; font-size:10px; letter-spacing:.13em; text-transform:uppercase;
+  opacity:.72; display:block; margin-bottom:3px; font-weight:600}
+.plain p{margin:5px 0; max-width:none; color:inherit}
+.plain p:first-of-type{margin-top:0} .plain p:last-child{margin-bottom:0}
+
+dl.inside{margin:0 0 4px; padding:0 0 0 3px; font-size:15.5px; display:grid;
+  grid-template-columns:minmax(0,max-content) 1fr; gap:3px 16px; align-items:baseline}
+dl.inside dt{font-family:'IBM Plex Mono',monospace; font-size:12.8px; color:var(--ink); white-space:nowrap;
+  overflow-x:auto; max-width:38ch}
+dl.inside dd{margin:0; color:var(--ink-2); line-height:1.5}
+@media(max-width:640px){
+  dl.inside{grid-template-columns:1fr; gap:0}
+  dl.inside dt{margin-top:9px}
+  dl.inside dd{margin-bottom:2px}
+}
+.grouplbl{font-family:'IBM Plex Sans',sans-serif; font-size:10px; letter-spacing:.13em; text-transform:uppercase;
+  color:var(--muted); font-weight:600; margin:14px 0 5px}
+.links{font-family:'IBM Plex Sans',sans-serif; font-size:13px; color:var(--muted); margin:10px 0 0;
+  padding:8px 0 0; border-top:1px dashed var(--rule); max-width:74ch}
+.links b{font-weight:600; color:var(--ink-2)}
+.links code{font-size:12px; background:transparent; padding:0; color:var(--ink-2)}
+
+pre.tree{font-family:'IBM Plex Mono',monospace; font-size:12.5px; line-height:1.75; background:var(--surface);
+  border:1px solid var(--rule); border-radius:6px; padding:16px 18px; overflow-x:auto; margin:22px 0; color:var(--ink-2)}
+pre.tree b{color:var(--ink); font-weight:500}
+pre.tree i{color:var(--muted); font-style:normal}
+
+.pipe{margin:26px 0; border-left:2px solid var(--rule); padding-left:0; list-style:none; max-width:72ch}
+.pipe li{position:relative; padding:0 0 20px 26px; margin:0}
+.pipe li::before{content:""; position:absolute; left:-6px; top:7px; width:10px; height:10px; border-radius:50%;
+  background:var(--accent); box-shadow:0 0 0 3px var(--ground)}
+.pipe .st{font-family:'IBM Plex Sans',sans-serif; font-weight:600; font-size:14.5px; color:var(--ink);
+  display:block; margin-bottom:2px}
+.pipe .where{font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--muted); display:block; margin-bottom:5px}
+.pipe p{margin:4px 0; font-size:16px}
+
+.stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1px; background:var(--rule);
+  border:1px solid var(--rule); border-radius:6px; overflow:hidden; margin:24px 0}
+.stat{background:var(--surface); padding:14px 16px}
+.stat .k{font-family:'IBM Plex Sans',sans-serif; font-size:10.5px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--muted); display:block}
+.stat .v{font-family:'IBM Plex Sans',sans-serif; font-size:23px; font-weight:600; color:var(--ink);
+  font-variant-numeric:tabular-nums; display:block; margin-top:3px; line-height:1.1}
+.stat .s{font-size:12.5px; color:var(--muted); display:block; margin-top:3px; font-family:'IBM Plex Sans',sans-serif}
+</style>
+
+<div class="wrap">
+<nav>
+  <div class="navtitle">Разделы</div>
+  <ol>
+    <li><a href="#s1"><span class="n">1</span>Как читать</a></li>
+    <li><a href="#s2"><span class="n">2</span>Что делает система</a></li>
+    <li><a href="#s3"><span class="n">3</span>Путь одной транзакции</a></li>
+    <li class="sep" aria-hidden="true"></li>
+    <li><a href="#s4"><span class="n">4</span>data-generator</a></li>
+    <li><a href="#s5"><span class="n">5</span>stream-processor</a></li>
+    <li><a href="#s6"><span class="n">6</span>sink-writer</a></li>
+    <li><a href="#s7"><span class="n">7</span>case-manager</a></li>
+    <li><a href="#s8"><span class="n">8</span>ml</a></li>
+    <li><a href="#s9"><span class="n">9</span>tools, validation, infra</a></li>
+    <li class="sep" aria-hidden="true"></li>
+    <li><a href="#s10"><span class="n">10</span>Связи между файлами</a></li>
+    <li><a href="#s11"><span class="n">11</span>Замеры</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="top">
+  <div class="eyebrow">Файл за файлом, в два уровня</div>
+  <h1>Разбор антифрод-системы</h1>
+  <p class="lede">Каждый файл сначала объясняется простыми словами — за что он отвечает и зачем вообще существует. Потом идёт разбор: классы, функции, константы, связи. В конце то же самое про замеры.</p>
+</header>
+
+<h2 id="s1"><span class="num">1</span>Как читать</h2>
+<p>Документ устроен в два уровня, и они визуально разделены.</p>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Зелёный блок — объяснение на пальцах. Без терминов, без имён функций. Если читать только зелёные блоки подряд, получится связный рассказ о том, как работает система.</p></div>
+<p>Дальше — обычный текст и таблица «что внутри»: конкретные классы, функции, константы. Это уровень для того, кто уже понял смысл и хочет найти нужное место в коде.</p>
+<p>Каждый файл заканчивается строкой <b>Связи</b> — кто его вызывает и что вызывает он.</p>
+<div class="note"><span class="lbl">Где источник истины</span>
+<p>Числа здесь дублируют репозиторий. При расхождении верить репозиторию: <code>docs/irp-framing.md</code> (все замеры с интервалами), <code>docs/threat-model.md</code>, <code>docs/generator-spec.md</code>, <code>validation/README.md</code>, <code>ml/README.md</code>.</p></div>
+
+<h2 id="s2"><span class="num">2</span>Что делает система</h2>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Человек переводит деньги с карты на карту. Перевод мгновенный и <strong>необратимый</strong>: ушли — не вернёшь. Значит решить «пропускать или нет» надо <em>до</em> того, как деньги ушли, и очень быстро — за 300 миллисекунд.</p>
+<p>Система стоит на этом пути. Она берёт перевод, дописывает к нему то, чего в самом переводе нет (например, сколько дней счёту получателя), считает по нему два десятка чисел-признаков, прогоняет через набор жёстких правил и через обученную модель, и выдаёт один из трёх ответов: <strong>пропустить</strong>, <strong>отправить на проверку</strong>, <strong>заблокировать</strong>. Всё, что она при этом видела и решила, складывается в архив — чтобы потом можно было показать аналитику и регулятору, почему решили именно так.</p></div>
+
+<div class="stats">
+  <div class="stat"><span class="k">Бюджет решения</span><span class="v">300 мс</span><span class="s">держится до 25 соб/с</span></div>
+  <div class="stat"><span class="k">Правил CEP</span><span class="v">12</span><span class="s">жёсткие паттерны</span></div>
+  <div class="stat"><span class="k">Признаков модели</span><span class="v">24</span><span class="s">из реестра возможностей</span></div>
+  <div class="stat"><span class="k">Типов фрода</span><span class="v">4</span><span class="s">APP, ATO, MULE, STRUCTURING</span></div>
+  <div class="stat"><span class="k">Сервисов</span><span class="v">10</span><span class="s">в docker-compose</span></div>
+  <div class="stat"><span class="k">Тестов</span><span class="v">285</span><span class="s">все зелёные</span></div>
+</div>
+
+<h3>Четыре типа фрода</h3>
+<div class="tw"><table>
+<tr><th>Тип</th><th>Что происходит на самом деле</th><th>За что цепляемся</th></tr>
+<tr><td><strong>APP</strong><br><span style="color:var(--muted)">35% фрода</span></td><td>Мошенник звонит и уговаривает владельца счёта самому отправить крупную сумму. Владелец настоящий, перевод настоящий, согласие настоящее — обманут только смысл</td><td>Сумма против личной базы, новый получатель, свежий счёт получателя, активный звонок, задержка при подтверждении</td></tr>
+<tr><td><strong>ATO</strong><br><span style="color:var(--muted)">20%</span></td><td>Захват чужой сессии: 2–4 быстрых перевода на свежие счета с чужого устройства</td><td>Новое устройство, другой регион, невозможное перемещение, скорость</td></tr>
+<tr><td><strong>MULE</strong><br><span style="color:var(--muted)">25%</span></td><td>На счёт-дроп сходятся переводы от многих людей, потом одним куском уходят дальше</td><td>Концентрация разных отправителей на одном получателе за час</td></tr>
+<tr><td><strong>STRUCTURING</strong><br><span style="color:var(--muted)">20%</span></td><td>Дробление одной большой суммы на много мелких, чтобы каждая осталась под порогом отчётности</td><td>Несколько подпороговых переводов в коротком окне</td></tr>
+</table></div>
+
+<div class="note"><span class="lbl">Главный тезис работы</span>
+<p>Качество real-time детекции P2P-фрода определяется тем, <strong>какие данные институт способен наблюдать</strong>, а не тем, каким методом он их обрабатывает. Отсюда весь дизайн: реестр возможностей, абляция по источникам данных, вывод о том, что топология потока сама ограничивает детектируемость.</p></div>
+
+<h3>Десять сервисов стенда</h3>
+<pre class="tree">fraud-detection/
+├── <b>docker-compose.yml</b>   kafka, kafka-init, redis, clickhouse, jobmanager,
+│                        taskmanager, grafana, sink-writer, case-manager, neo4j
+├── <b>run.ps1</b>              единая точка входа: поднять, сгенерировать, замерить
+│
+├── <b>data-generator/</b>      откуда берутся данные      <i>11 файлов</i>
+├── <b>stream-processor/</b>    где принимается решение    <i>18 файлов</i>
+├── <b>sink-writer/</b>         куда всё складывается      <i>7 файлов</i>
+├── <b>case-manager/</b>        что видит аналитик         <i>6 файлов</i>
+├── <b>ml/</b>                  обучение модели            <i>11 файлов</i>
+├── <b>tools/</b>               аудит стыков между всеми   <i>1 файл</i>
+├── <b>validation/</b>          те же правила на чужих данных
+├── <b>infra/</b>               схемы БД, дашборды, сертификаты
+└── <b>docs/</b>                доказательная база
+</pre>
+<p>Разделение не по слоям, а <strong>по ответственности за утверждение</strong>: генератор отвечает за то, <em>какие данные</em>; stream-processor — за то, <em>как считаем</em>; ml — за то, <em>сколько это стоит</em>; validation — за то, <em>переносится ли</em>; docs — за то, <em>чем это доказано</em>.</p>
+
+<h2 id="s3"><span class="num">3</span>Путь одной транзакции</h2>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Одна транзакция проходит одиннадцать шагов. Всё остальное в этом документе — подробности одного из них. Стоит прочитать этот список целиком: дальше будет понятнее, зачем нужен каждый файл.</p></div>
+
+<ol class="pipe">
+<li><span class="st">Событие входит в Kafka</span><span class="where">data-generator/kafka_producer.py → topic transactions.raw</span>
+<p>Продюсер читает CSV и выдаёт по одному JSON-событию, соблюдая исходный темп. Прямо перед отправкой ставит <code>ingested_at</code> — это <strong>t₀</strong>, от которого меряется вся латентность, — и <code>ingress_hash</code>, SHA-256 самого события, который дальше пойдёт неизменным в аудит.</p></li>
+
+<li><span class="st">Flink забирает и ключует по отправителю</span><span class="where">stream-processor/fraud_job.py</span>
+<p>Поток партиционируется <code>keyBy(sender_card)</code>. Это решение с далеко идущими последствиями — см. §10.</p></li>
+
+<li><span class="st">Обогащение: возраст счёта получателя</span><span class="where">enrichment.py → Redis-кеш → Neo4j</span>
+<p>Единственный факт, которого нет в сообщении от свитча. Сначала кеш в Redis, промах — запрос в Neo4j. Если недоступны оба, возраст возвращается как «неизвестен» и конвейер продолжает работать. <strong>Отказ наружу, а не остановка.</strong></p></li>
+
+<li><span class="st">Чтение окна получателя</span><span class="where">receiver_store.py → Redis ZSET</span>
+<p>Кто и сколько прислал этому получателю за последний час. Живёт вне Flink-состояния — потому что поток ключован по отправителю, а входящие одного получателя размазаны по всем партициям.</p></li>
+
+<li><span class="st">Извлечение признаков</span><span class="where">features.py :: extract()</span>
+<p>24 признака из состояния отправителя, окна получателя и самого события. Список собирается из реестра возможностей, а не пишется руками.</p></li>
+
+<li><span class="st">Правила CEP</span><span class="where">rules.py :: evaluate()</span>
+<p>12 правил над теми же признаками. Сработавшие складываются в <code>cep_score</code> и в список <code>rule_hits</code> — это и есть причины для аналитика.</p></li>
+
+<li><span class="st">Модель</span><span class="where">fraud_job.py :: _ml_score() → ONNX Runtime</span>
+<p>Тот же вектор признаков идёт в LightGBM, экспортированный в ONNX и выполняемый <strong>внутри</strong> Flink-воркера, без сетевого вызова к модель-серверу.</p></li>
+
+<li><span class="st">Слияние и решение</span><span class="where">fusion.py</span>
+<p><code>final_score</code> — вероятность модели, если она доступна; <code>cep_score</code> только как запасной вариант. Плюс обязательные правила, форсирующие REVIEW независимо от модели.</p></li>
+
+<li><span class="st">Запись состояния</span><span class="where">features.py :: update_state / update_receiver_state</span>
+<p>Состояние обновляется <strong>после</strong> решения. Событие не может входить в базу, против которой само же и оценивалось.</p></li>
+
+<li><span class="st">Выход в Kafka</span><span class="where">topic transactions.scored, алерты → fraud.alerts</span>
+<p>Решение плюс все признаки, оценки, сработавшие правила и <code>ingress_hash</code>.</p></li>
+
+<li><span class="st">Persist, аудит и очередь аналитика</span><span class="where">sink-writer/consumer.py → ClickHouse + Neo4j · case-manager/consumer.py</span>
+<p>Каждое событие уходит в ClickHouse (аналитика + аудит с хеш-цепочкой), алерты — в граф Neo4j и в очередь кейсов.</p></li>
+</ol>
+
+<h2 id="s4"><span class="num">4</span>data-generator — откуда берутся данные</h2>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Настоящих данных по узбекским P2P-переводам нет и не будет: номера карт и личности — это ровно то, что нельзя опубликовать. Поэтому данные <strong>порождаются</strong>.</p>
+<p>Но это не «накидать случайных чисел». Это <em>спецификация</em>: каждое распределение записано в <code>docs/generator-spec.md</code>, и отдельный файл проверяет документ против того, что реально получилось (16 проверок из 16). Генератор строит настоящую популяцию — людей с домохозяйствами, картами, привычками, поездками, — а потом впрыскивает туда четыре сценария фрода.</p></div>
+
+<div class="file">
+<h4>config.py <span class="ln">287 строк</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Все настройки генератора в одном месте, и рядом с каждой написано, почему она такая. Регионы Узбекистана и их веса, банки с настоящими долями карт, суммы переводов, пороги, доли фрода.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>class GeneratorConfig</dt><dd>Контейнер параметров одного прогона: сид, число людей, число дней, доля фрода</dd>
+<dt>_load_banks()</dt><dd>Читает таблицу BIN/МФО из <code>banks.csv</code>. Если файла нет — <strong>падает</strong>, а не подставляет синтетику молча</dd>
+<dt>_bank_weights()</dt><dd>Веса выбора банка, пропорциональные его доле карт в обращении</dd>
+<dt>REGIONS, REGION_WEIGHTS</dt><dd>14 регионов и распределение населения</dd>
+<dt>CARD_NETWORKS, CARD_LENGTH</dt><dd>UzCard / HUMO и длина PAN — 16 цифр</dd>
+<dt>AMOUNT_MIN / MAX</dt><dd>Границы суммы перевода в сумах</dd>
+<dt>STRUCTURING_THRESHOLD</dt><dd>Порог отчётности, под который дробят суммы</dd>
+<dt>LIMIT_DAILY, LIMIT_PER_TRANSACTION, LIMIT_MONTHLY</dt><dd>Операционные лимиты банка</dd>
+<dt>ACTIVE_CALL_BASE_RATE / _APP_RATE</dt><dd>Как часто человек на звонке при подтверждении: обычно и во время APP-фрода</dd>
+<dt>DECISION_TIME_MEDIAN_SEC, _SIGMA, _CLIENT_SPREAD</dt><dd>Время от входа до подтверждения. <em>Client spread</em> — у каждого человека своя скорость</dd>
+<dt>FAMILY_PAYEE_SHARE, FAMILY_FRAUD_SHARE</dt><dd>Доли переводов родственникам — отдельно для честных, отдельно для фрода</dd>
+<dt>MULE_RECRUITED_SHARE</dt><dd>Доля дропов, которые не спецсчета, а завербованные обычные люди</dd>
+<dt>SEEDED_PAYEE_SHARE</dt><dd>Доля APP-эпизодов, где получателя «прогрели» мелким переводом заранее</dd>
+<dt>CHANNELS, CHANNEL_WEIGHTS</dt><dd>Мобильное приложение, USSD, веб, банкомат</dd>
+</dl>
+<p class="links"><b>Связи:</b> читают его <code>persons.py</code>, <code>events.py</code>, <code>fraud_patterns.py</code>, <code>generator.py</code>, <code>verify_spec.py</code>. Таблица <code>banks.csv</code> потом уезжает на Flink-кластер и там становится источником для <code>bins.py</code>.</p>
+</div>
+
+<div class="file">
+<h4>persons.py <span class="ln">193 строки</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Создаёт людей. У каждого — идентификатор, имя, регион, возраст, карта. Люди рождаются не поодиночке, а <strong>домохозяйствами</strong>: члены одной семьи живут в одном регионе и переводят друг другу. Это нужно, чтобы «перевод родственнику» существовал как честное поведение, а не только как признак фрода.</p>
+<p>Номер карты не случайный: он начинается с BIN настоящего банка и проходит проверку Луна. Значит по номеру можно восстановить банк — ровно так, как это делает настоящий банк.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>class Person</dt><dd>Поля: <code>pinfl</code>, <code>full_name</code>, <code>card</code>, <code>region</code>, <code>age</code>, <code>household_id</code>, <code>typical_amount</code>, <code>secs_login_mu</code> — личная скорость подтверждения, <code>account_age_days</code>, <code>is_fraud_account</code></dd>
+<dt>gen_pinfl(rng)</dt><dd>14-значный идентификатор. Синтетический, не настоящий ПИНФЛ</dd>
+<dt>gen_full_name(rng)</dt><dd>Узбекское ФИО вида «Фамилия Имя Отчество{o'g'li|qizi}»</dd>
+<dt>gen_card(rng)</dt><dd>Возвращает (сеть, 16-значный PAN). PAN начинается с настоящего BIN и валиден по Луну</dd>
+<dt>network_from_bin(bin6)</dt><dd>UzCard или HUMO по первым цифрам</dd>
+<dt>bank_from_card(pan)</dt><dd>Обратная операция: (код банка, название) из шести первых цифр</dd>
+<dt>households(persons)</dt><dd>Словарь household_id → члены семьи</dd>
+<dt>relatives_of(person, by_household)</dt><dd>Родственники человека; пусто для одиночного домохозяйства</dd>
+<dt>build_population(config, rng)</dt><dd>Главная функция: возвращает (список людей, индекс по pinfl). Люди набираются кластерами размером с семью</dd>
+<dt>build_fraud_accounts(n, rng, aged_share)</dt><dd>Пул счетов-получателей для фрода. <code>aged_share</code> — доля не-свежих, чтобы <code>FRESH_RECEIVER</code> не ловил фрод по построению</dd>
+<dt>BANK_BY_BIN</dt><dd>Индекс BIN → банк, построенный из <code>config.BANKS</code></dd>
+</dl>
+<p class="links"><b>Связи:</b> использует <code>config</code>. Используется <code>generator.py</code> и <code>fraud_patterns.py</code>.</p>
+</div>
+
+<div class="file">
+<h4>travel.py <span class="ln">149 строк</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Отправляет людей в поездки между регионами. Зачем: правило «невозможное перемещение» ловит того, кто минуту назад платил в Ташкенте, а теперь в Нукусе. Но люди правда ездят. Если в данных никто никогда не путешествует, правило будет выглядеть идеальным — и это будет враньё.</p>
+<p>Поэтому часть людей реально едет, и их транзакции переносятся на момент <em>после прибытия</em>, а не оставляются посреди дороги.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>travel_hours(a, b)</dt><dd>Сколько часов занимает переезд между двумя регионами</dd>
+<dt>plan_trips(persons, rng, start_dt, days)</dt><dd>Даёт части людей одну-две настоящие поездки</dd>
+<dt>locate(person, trips, ts)</dt><dd>Где человек в момент <code>ts</code> и находится ли он в пути</dd>
+<dt>settle_after_transit(...)</dt><dd>Сдвигает момент транзакции за пределы окна поездки — «сразу после прибытия»</dd>
+<dt>hijack_origin(home_region, minutes_available, rng)</dt><dd>Регион, в котором владелец счёта <em>физически не мог</em> оказаться за отведённое время. Нужен ATO-сценарию</dd>
+<dt>_load_from_detector(module_name)</dt><dd>Подгружает модуль stream-processor по явному пути — чтобы генератор считал расстояния <strong>той же</strong> географией, что и детектор</dd>
+<dt>MAX_PLAUSIBLE_KMH, MIN_TRAVEL_DISTANCE_KM, TRAVEL_SPEED_KMH</dt><dd>Физика поездки</dd>
+<dt>TRIP_SHARE, MAX_TRIPS, STAY_HOURS</dt><dd>Сколько людей ездит, как часто, сколько гостит</dd>
+</dl>
+<p class="links"><b>Связи:</b> напрямую подтягивает <code>stream-processor/geo.py</code> — единственное место, где генератор зависит от детектора, и это сделано намеренно: расстояния обязаны совпадать.</p>
+</div>
+
+<div class="file">
+<h4>events.py <span class="ln">82 строки</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Собирает одно событие-перевод из его частей: кто, кому, сколько, когда, с какого устройства, из какого канала. Плюс два поведенческих сигнала, которых нет в обычном платёжном сообщении, — был ли человек на звонке и сколько секунд думал перед подтверждением.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>make_event(...)</dt><dd>Одно событие. Аргументы: отправитель, получатель, сумма, время, канал, устройство, новый ли получатель, остаток до перевода, метка фрода и его тип</dd>
+<dt>gen_session_signals(sender, fraud_type, rng)</dt><dd>Активный звонок + задержка «вход → подтверждение». При APP звонок вероятнее, а время растягивается; при ATO — сжимается</dd>
+<dt>EVENT_FIELDS</dt><dd>Полный список полей события — контракт CSV</dd>
+</dl>
+<p class="links"><b>Связи:</b> вызывается из <code>generator.py</code> (честный трафик) и <code>fraud_patterns.py</code> (фрод). Его <code>EVENT_FIELDS</code> — вход для <code>kafka_producer.RAW_FIELDS</code>.</p>
+</div>
+
+<div class="file">
+<h4>fraud_patterns.py <span class="ln">229 строк</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Впрыскивает в честный поток четыре сценария мошенничества, каждому — свой бюджет транзакций. Здесь же самое тонкое место всей работы: <strong>антиартефактные доли</strong>.</p>
+<p>Если фрод никогда не идёт родственникам, то признак «получатель — родственник» разделит классы идеально. Но это будет свойство генератора, а не открытие про фрод. Поэтому часть фрода намеренно идёт через настоящих родственников, а часть дропов — это обычные завербованные люди, а не специально созданные счета.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>inject_fraud(...)</dt><dd>Главная функция. Крутится по кругу, пока каждый паттерн не выберет бюджет</dd>
+<dt>FRAUD_MIX</dt><dd><code>APP 0.35, MULE 0.25, ATO 0.20, STRUCTURING 0.20</code></dd>
+<dt>maybe_relative(person, fallback)</dt><dd>Часть плеч фрода направляет через настоящего родственника</dd>
+<dt>maybe_seed_payee(victim, payee, ts, balance)</dt><dd>«Прогрев» получателя: мелкий перевод за 1–21 день до фрода. Помечен <code>is_fraud=0</code> намеренно — на нём убытка нет</dd>
+<dt>ветка APP</dt><dd>Жертва под давлением шлёт крупную сумму. 40% случаев — умеренная сумма, чтобы не отделялась тривиально</dd>
+<dt>ветка ATO</dt><dd>2–4 быстрых перевода. 40% — «тихий» захват с <em>родного</em> устройства жертвы: остаются только поведенческие сигналы</dd>
+<dt>ветка STRUCTURING</dt><dd>5–12 переводов по 85–99% от порога</dd>
+<dt>ветка MULE</dt><dd>Сбор от 4–8 отправителей, затем вывод 1–2 переводами</dd>
+</dl>
+<p class="links"><b>Связи:</b> использует <code>config</code>, <code>persons</code>, <code>events</code>, <code>travel</code>. ATO-ветка берёт <code>legit_activity</code> из <code>generator.py</code>, чтобы привязать захват к реальному моменту в истории жертвы.</p>
+</div>
+
+<div class="note warn"><span class="lbl">Почему это важнее, чем кажется</span>
+<p>Ранняя версия объявила <code>is_family</code> главным вкладом работы: признак был первым по SHAP. Оказалось, генератор просто <strong>не отправлял фрод родственникам вообще</strong>. После исправления признак даёт +0.004, то есть ничего. Отсюда правило: признак, доминирующий на синтетике, подозрителен, пока не показано, что генератор моделирует <em>обе</em> стороны его поведения.</p></div>
+
+<div class="file">
+<h4>generator.py <span class="ln">257 строк</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Дирижёр. Вызывает всё по очереди: сделать людей → раздать им привычных получателей → спланировать поездки → сгенерировать честный трафик → впрыснуть фрод → перемешать по времени → записать CSV. В конце сам себя проверяет.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>build_dataset(config)</dt><dd>Весь конвейер от популяции до готового DataFrame</dd>
+<dt>generate_normal(...)</dt><dd>Честный трафик: зарплата, аренда, переводы родне, платежи — поведенчески согласованные</dd>
+<dt>_assign_payees(persons, rng)</dt><dd>Каждому 3–8 постоянных получателей</dd>
+<dt>_signal_check(df)</dt><dd>Считает <code>is_new_payee</code> так, <strong>как его считает конвейер</strong>, а не как записано в колонке — и печатает разделение классов</dd>
+<dt>_summary(df)</dt><dd>Сводка: сколько событий, какая доля фрода, разбивка по типам</dd>
+<dt>main(), parse_args()</dt><dd>CLI: <code>--seed</code>, <code>--persons</code>, <code>--days</code>, <code>--out</code></dd>
+</dl>
+<p class="links"><b>Связи:</b> тянет <code>config</code>, <code>persons</code>, <code>travel</code>, <code>events</code>, <code>fraud_patterns</code>. Пишет <code>out/transactions.csv</code>, который потом читают <code>kafka_producer.py</code> и <code>ml/dataset.py</code>.</p>
+</div>
+
+<div class="file">
+<h4>kafka_producer.py <span class="ln">307 строк</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Играет CSV в Kafka, как пластинку: строка за строкой, с соблюдением исходного темпа. Это «свитч» — то место, откуда события попадают в систему. Здесь же ставится <strong>t₀</strong> для замера задержки и хеш события для аудита.</p>
+<p>Отдельно важно: он <em>приводит типы</em>. CSV отдаёт всё строками, и строка <code>"False"</code> в Python истинна. Один такой недосмотр стоил четырёхсот лишних ложных срабатываний — см. §10.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>_row_to_message(row, include_labels)</dt><dd>Строка CSV → JSON-сообщение с приведёнными типами</dd>
+<dt>RAW_FIELDS</dt><dd>16 полей, которые реально едут по проводу. <strong>Не едут:</strong> <code>receiver_pinfl</code> (банк не резолвит чужой PAN в личность) и названия банков (выводятся из BIN)</dd>
+<dt>_BOOL_FIELDS, _INT_FIELDS, _FLOAT_FIELDS, _FALSEY</dt><dd>Приведение типов. <code>_FALSEY</code> — набор строк, считающихся ложью</dd>
+<dt>main()</dt><dd>CLI: <code>--realtime</code>, <code>--speed</code>, <code>--rate</code>, <code>--limit</code>, <code>--skip</code>, <code>--reconnect-every</code>, <code>--encrypt</code>, TLS-опции</dd>
+<dt>пейсинг по дедлайну</dt><dd><code>due = t0 + n/rate</code>, а не <code>sleep(1/rate)</code>: наивная форма добавляет стоимость отправки в каждый интервал и тихо занижает темп</dd>
+<dt>SATURATED</dt><dd>Если достигнутый темп ниже 95% от запрошенного — кричит об этом: иначе замер описывает продюсера, а не систему</dd>
+</dl>
+<p class="links"><b>Связи:</b> использует <code>integrity</code> (хеш) и <code>payload_crypto</code> (шифрование). Пишет в <code>transactions.raw</code>, откуда читает <code>fraud_job.py</code>.</p>
+</div>
+
+<div class="file">
+<h4>integrity.py <span class="ln">69 строк</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Делает аудит-след неподделываемым. Две вещи: хеш самого события на входе, и цепочка, где каждая запись подписывает предыдущую. Если кто-то потом отредактирует, удалит или переставит запись — цепочка порвётся, и это будет видно.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>ingress_hash(event)</dt><dd>SHA-256 по полям <code>INGRESS_FIELDS</code> исходного события</dd>
+<dt>record_hash(prev_hash, seq, core_values)</dt><dd>Звено цепи: SHA-256(предыдущий хеш ‖ номер ‖ содержимое)</dd>
+<dt>_canonical(values)</dt><dd>Детерминированные байты из упорядоченного списка значений</dd>
+<dt>INGRESS_FIELDS</dt><dd>Какие именно поля покрывает хеш. <strong>Изменение этого списка ломает старые хеши</strong> — 01.09 оттуда убрали <code>receiver_pinfl</code>, это записано в <code>docs/audit-anchors.md</code></dd>
+<dt>GENESIS</dt><dd>Нулевое звено цепи</dd>
+</dl>
+<p class="links"><b>Связи:</b> файл <strong>побайтово продублирован</strong> в <code>sink-writer/</code> — иначе быть не может, это разные деплой-юниты. Аудит границ проверяет, что копии идентичны.</p>
+</div>
+
+<div class="file">
+<h4>payload_crypto.py <span class="ln">170 строк</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Шифрует содержимое сообщения, но <strong>оставляет снаружи ключ маршрутизации</strong> — номер карты отправителя. Иначе Kafka не сможет разложить сообщения по партициям, не расшифровав их. Это и есть главный трюк файла.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>encrypt(event, key, field)</dt><dd>Событие → конверт вида <code>МАГИЯ|ключ_маршрутизации|base64(шифротекст)</code></dd>
+<dt>decrypt(blob, key)</dt><dd>Обратно. Падает, если конверт не тот</dd>
+<dt>routing_key(blob, field)</dt><dd>Ключ партиционирования <strong>без расшифровки</strong> — ради этого всё и затевалось</dd>
+<dt>is_encrypted(blob)</dt><dd>Зашифровано ли это вообще</dd>
+<dt>loads_maybe_encrypted(blob, key)</dt><dd>Читает запись, которая может быть и той и другой — так поддерживаются оба плеча замера</dd>
+<dt>key_from_env(var)</dt><dd>Читает 32-байтовый ключ из окружения или падает. <strong>Дефолта нет намеренно:</strong> зашитый ключ хуже, чем отказ старта</dd>
+<dt>_aad(routing)</dt><dd>Associated data для AES-GCM: магия + открытый ключ маршрутизации, чтобы его нельзя было подменить</dd>
+<dt>MAGIC, PREFIX, SEP, NONCE_BYTES=12, KEY_BYTES=32</dt><dd>Формат конверта</dd>
+<dt>POISON_KEY</dt><dd>Заведомо неверный ключ для теста, что расшифровка действительно проверяется</dd>
+</dl>
+<p class="links"><b>Связи:</b> тоже продублирован в <code>stream-processor/</code>. Замер §11.3 меряет его цену.</p>
+</div>
+
+<div class="file">
+<h4>verify_spec.py <span class="ln">110 строк</span> · handshake_bench.py <span class="ln">95 строк</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p><code>verify_spec</code> проверяет, что сгенерированный датасет соответствует тому, что написано в спецификации. Не «работает ли код», а «получилось ли то, что обещано в документе» — 16 проверок.</p>
+<p><code>handshake_bench</code> отдельно замеряет, сколько стоит одно установление соединения с Kafka: без шифрования и с взаимным TLS.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>verify_spec._check(...)</dt><dd>Одна проверка: наблюдённое против ожидаемого с допуском</dd>
+<dt>handshake_bench.one_connection(...)</dt><dd>Одно соединение, замер</dd>
+<dt>handshake_bench._quantile(...)</dt><dd>Порядковая статистика по ближайшему рангу — та же конвенция, что в <code>latency_report.py</code></dd>
+</dl>
+<p class="links"><b>Связи:</b> <code>verify_spec</code> сверяет выход генератора с <code>docs/generator-spec.md</code>. Результат <code>handshake_bench</code> — в §11.3.</p>
+</div>
+
+<h2 id="s5"><span class="num">5</span>stream-processor — где принимается решение</h2>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Это сердце системы. Сюда прилетает перевод, отсюда выходит решение. Восемнадцать файлов, но понимать надо порядок: сначала <code>capabilities.py</code> — он объявляет, <em>что банк вообще способен увидеть</em>. Из этого выводится список признаков. По признакам работают правила и модель. Результат склеивает <code>fusion.py</code>. Всё это запускает <code>fraud_job.py</code>.</p>
+<p>Остальные файлы — либо помощники (география, банки, шифрование), либо офлайн-инструменты замера, которые в боевом пути не участвуют.</p></div>
+
+<h3>5.1 Ядро решения</h3>
+
+<div class="file">
+<h4>capabilities.py <span class="ln">312 строк · ключевой файл</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Банк с мобильным приложением видит, был ли клиент на звонке в момент подтверждения. Банк, работающий через USSD, — не видит. Банк с интеграцией MyID может проверить родство. Без интеграции — не может.</p>
+<p>Это <strong>не «хуже» и «лучше»</strong>, это разные входные данные. Файл объявляет девять таких «возможностей». Выключил одну — и весь конвейер следует за этим сам: из списка признаков пропадают её признаки, отключаются её правила, пересчитываются пороги. Именно это делает возможным центральный эксперимент работы — измерить, <em>сколько стоит отсутствие источника данных</em>.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>class Capability</dt><dd>Поля: <code>key</code>, <code>modes</code> — допустимые режимы, <code>default</code>, <code>features</code> — какие признаки даёт, <code>rules</code> — какие правила включает, <code>needs</code> — какая интеграция нужна</dd>
+<dt>REGISTRY</dt><dd>Девять возможностей списком. Порядок здесь задаёт порядок признаков модели</dd>
+<dt>mode(key)</dt><dd>Текущий режим возможности, из переменной окружения</dd>
+<dt>enabled(key)</dt><dd>Включена ли вообще</dd>
+<dt>feature_names()</dt><dd>Вектор признаков модели в порядке реестра. <strong>Единственный источник этого списка</strong></dd>
+<dt>rule_enabled(rule)</dt><dd>Доступны ли данные, на которых стоит это правило</dd>
+<dt>reachable_score(pattern)</dt><dd>Максимальная оценка CEP, которую этот тип фрода может набрать при текущем профиле</dd>
+<dt>weakest_reachable()</dt><dd>Самый трудный для обнаружения паттерн — тот, что определяет порог</dd>
+<dt>scaled_threshold(base, base_weakest)</dt><dd>Пересчитывает вручную откалиброванный порог под текущий профиль. Иначе выключение возможности молча ужесточает решение</dd>
+<dt>PATTERN_SIGNATURES</dt><dd>Какие правила теоретически может задеть каждый тип фрода</dd>
+<dt>RULE_CAPABILITY</dt><dd>Правило → возможность, которая ему нужна</dd>
+<dt>describe()</dt><dd>Человекочитаемая сводка активного профиля — печатается при старте джобы</dd>
+</dl>
+<div class="tw"><table>
+<tr><th>Возможность</th><th>Режимы</th><th>Что даёт</th></tr>
+<tr><td><code>core_history</code></td><td><code>on</code></td><td>Собственный поток банка. Выключить нельзя — это и есть вход</td></tr>
+<tr><td><code>receiver_age</code></td><td><code>always / on_us / off</code></td><td><code>receiver_age</code>, <code>receiver_is_fresh</code> → правило <code>FRESH_RECEIVER</code></td></tr>
+<tr><td><code>receiver_velocity</code></td><td><code>on / off</code></td><td><code>rcv_distinct_senders_1h</code>, <code>rcv_inflow_1h</code> → <code>MULE_FAN_IN</code></td></tr>
+<tr><td><code>session_telemetry</code></td><td><code>on / off</code></td><td><code>active_call</code>, <code>secs_login_z</code> → <code>COACHED_SESSION</code></td></tr>
+<tr><td><code>device_telemetry</code></td><td><code>on / off</code></td><td><code>device_is_new</code> → <code>DEVICE_CHANGE</code></td></tr>
+<tr><td><code>geo_telemetry</code></td><td><code>on / off</code></td><td><code>geo_is_anomaly</code> → <code>GEO_ANOMALY</code>, <code>IMPOSSIBLE_TRAVEL</code></td></tr>
+<tr><td><code>myid_kinship</code></td><td><code>off / on</code></td><td><code>is_family</code>. По умолчанию выключено — эффекта не даёт</td></tr>
+<tr><td><code>payee_identity</code></td><td><code>card / pinfl</code></td><td>Чем опознаётся получатель. По умолчанию картой: ПИНФЛ по проводу не едет</td></tr>
+<tr><td><code>channel</code></td><td><code>on / off</code></td><td>4 one-hot признака канала</td></tr>
+</table></div>
+<p class="links"><b>Связи:</b> из него <code>features.py</code> собирает <code>FEATURE_NAMES</code>, <code>rules.py</code> гейтит каждое правило, <code>ml/ablation*.py</code> перебирает профили. Один файл управляет всем конвейером.</p>
+</div>
+
+<div class="file">
+<h4>features.py <span class="ln">322 строки · контракт признаков</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Превращает событие в числа. Одна функция считает все 24 признака — и та же самая функция используется и при обучении модели, и в бою. Поэтому модель гарантированно видит в проде ровно то же, что видела при обучении. Это не везение, а решение: расхождение здесь — классическая причина, по которой модель «работает на тестах и не работает в жизни».</p>
+<p>Важная деталь: состояние отправителя обновляется <em>после</em> расчёта признаков. Событие не должно попадать в базу, против которой само же и сравнивается.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>extract(event, receiver_age_days, state, now, receiver_state)</dt><dd>Главная функция. <strong>Только чтение</strong> — ничего не меняет</dd>
+<dt>to_vector(feat)</dt><dd>Словарь признаков → упорядоченный вектор чисел по <code>FEATURE_NAMES</code></dd>
+<dt>update_state(state, event, now)</dt><dd>Двигает состояние отправителя. Вызывается <strong>после</strong> extract</dd>
+<dt>update_receiver_state(receiver_state, event, now)</dt><dd>Двигает окно получателя, тоже после</dd>
+<dt>truthy(v)</dt><dd>Приводит флаг с провода к 0/1. Общий контракт — именно его отсутствие стоило 459 ложных срабатываний</dd>
+<dt>payee_key(event)</dt><dd>Чем этот банк опознаёт получателя: картой или ПИНФЛ, по режиму <code>payee_identity</code></dd>
+<dt>is_on_us(event)</dt><dd>Обе стороны в одном банке? Сравниваются <em>коды</em> банков, выведенные из BIN</dd>
+<dt>_issuer(event, side)</dt><dd>Эмитент одной стороны, через <code>bins.issuer_of</code></dd>
+<dt>visible_receiver_age(event, days)</dt><dd>Что банк <em>реально может увидеть</em> при текущем режиме: всегда / только для своих / никогда</dd>
+<dt>FEATURE_NAMES</dt><dd>24 имени в порядке реестра — единственный список, от которого зависят все</dd>
+</dl>
+<div class="grouplbl">24 признака</div>
+<dl class="inside">
+<dt>log_amount, amount_to_mean, amount_z</dt><dd>Сумма: логарифм, отношение к личному среднему, отклонение в сигмах</dd>
+<dt>is_new_payee</dt><dd>Получатель раньше не встречался. <strong>Признак №1 по SHAP</strong></dd>
+<dt>vel_10m, vel_1h</dt><dd>Сколько переводов за 10 минут и за час</dd>
+<dt>distinct_payees_10m</dt><dd>Сколько разных получателей за 10 минут — веер наружу</dd>
+<dt>sub_threshold_1h</dt><dd>Сколько подпороговых переводов за час — дробление</dd>
+<dt>secs_since_last</dt><dd>Секунд с предыдущего перевода</dd>
+<dt>daily_sum_ratio</dt><dd>Какая доля суточного лимита уже израсходована</dd>
+<dt>hour</dt><dd>Час суток</dd>
+<dt>cross_network</dt><dd>UzCard → HUMO или наоборот</dd>
+<dt>receiver_age, receiver_is_fresh</dt><dd>Возраст счёта получателя и флаг «моложе 30 дней»</dd>
+<dt>rcv_distinct_senders_1h, rcv_inflow_1h</dt><dd>Сколько разных людей и сколько денег пришло получателю за час — веер внутрь</dd>
+<dt>device_is_new</dt><dd>Устройство не из известных отправителю</dd>
+<dt>geo_is_anomaly</dt><dd>Регион не из обычных для отправителя</dd>
+<dt>active_call, secs_login_z</dt><dd>На звонке при подтверждении; отклонение времени подтверждения от <em>личной</em> нормы</dd>
+<dt>ch_mobile_app, ch_ussd, ch_web, ch_atm</dt><dd>Канал, one-hot</dd>
+</dl>
+<p class="links"><b>Связи:</b> использует <code>capabilities</code>, <code>bins</code>, <code>geo</code>, <code>config</code>. Используется <code>rules.py</code>, <code>fraud_job.py</code>, <code>receiver_store.py</code>, <code>ml/dataset.py</code>, <code>replay_eval.py</code>.</p>
+</div>
+
+<div class="file">
+<h4>rules.py <span class="ln">257 строк · 12 правил</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Жёсткие правила. Каждое либо срабатывает, либо нет. Они нужны там, где нельзя полагаться на «модель как-нибудь разберётся»: дробление сумм и превышение лимита — это регуляторные требования, они обязаны срабатывать всегда и одинаково. Плюс сработавшее правило даёт аналитику <em>причину</em>, а вероятность модели — нет.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>evaluate(event, receiver_age_days, state, now, receiver_state, population)</dt><dd>Главная функция: считает признаки, проверяет 12 правил, возвращает оценку и список сработавших</dd>
+<dt>class SenderState</dt><dd>История одного отправителя: окна скорости, база сумм по Уэлфорду, множество виденных получателей, известные устройства, последний регион и время</dd>
+<dt>class ReceiverState</dt><dd>Входящая история одного получателя — ключ по получателю, не по отправителю</dd>
+<dt>class PopulationBaseline</dt><dd>Живое распределение <code>rcv_distinct_senders_1h</code> по <strong>всей</strong> популяции</dd>
+<dt>quantile_threshold(counts, n, q)</dt><dd>Наименьшее <code>k</code>, при котором получатель попадает в верхние 0.1% — выученный порог вместо константы</dd>
+<dt>_thresholds()</dt><dd>Пороги REVIEW/BLOCK для активного профиля возможностей</dd>
+<dt>FAN_IN_FLOOR</dt><dd>Нижняя граница выученного порога — защита от вырожденной популяции</dd>
+</dl>
+<div class="tw"><table>
+<tr><th>Правило</th><th>Срабатывает когда</th></tr>
+<tr><td><code>AMOUNT_DEVIATION</code></td><td>Сумма сильно отклоняется от <em>личной</em> базы отправителя</td></tr>
+<tr><td><code>NEW_PAYEE_HIGH_AMOUNT</code></td><td>Крупная сумма новому получателю</td></tr>
+<tr><td><code>VELOCITY</code></td><td>Больше 5 переводов в окне скорости</td></tr>
+<tr><td><code>DISTINCT_PAYEE_BURST</code></td><td>Больше 5 разных получателей в окне — веер наружу</td></tr>
+<tr><td><code>STRUCTURING</code></td><td>≥3 подпороговых перевода в часовом окне</td></tr>
+<tr><td><code>DAILY_LIMIT_BREACH</code></td><td>Превышен суточный операционный лимит</td></tr>
+<tr><td><code>FRESH_RECEIVER</code></td><td>Счёту получателя меньше 30 дней</td></tr>
+<tr><td><code>MULE_FAN_IN</code></td><td>Много разных отправителей сходятся на одном получателе за час</td></tr>
+<tr><td><code>DEVICE_CHANGE</code></td><td>Устройство не из известных отправителю</td></tr>
+<tr><td><code>GEO_ANOMALY</code></td><td>Регион не из обычных для отправителя</td></tr>
+<tr><td><code>IMPOSSIBLE_TRAVEL</code></td><td>Скорость между двумя регионами физически недостижима</td></tr>
+<tr><td><code>COACHED_SESSION</code></td><td>Активный звонок + аномальная задержка подтверждения</td></tr>
+</table></div>
+<p class="links"><b>Связи:</b> стоит на <code>features.py</code>, гейтится через <code>capabilities.py</code>, вызывается из <code>fraud_job.py</code> и из <code>ml/dataset.py</code> — один и тот же код в бою и в обучении.</p>
+</div>
+
+<div class="file">
+<h4>fusion.py <span class="ln">44 строки</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Самый короткий файл и одно из самых важных решений. У нас две оценки — от правил и от модели. Наивная идея: смешать их. Проверили все разумные способы смешивания — <strong>все ухудшили результат</strong>. Причина: оценка правил грубая, дискретная, и она разбавляет точную вероятность модели.</p>
+<p>Поэтому склейка происходит не на уровне <em>оценки</em>, а на уровне <em>решения</em>: итоговая оценка — это вероятность модели, а правила добавляют то, чего модель дать не может: обязательные флаги, которые форсируют проверку независимо от вероятности.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>final_score(cep_score, ml_score)</dt><dd>Вероятность модели, если она есть; оценка правил — только как запасной вариант</dd>
+<dt>decide(score, rule_hits)</dt><dd>ALLOW / REVIEW / BLOCK. Обязательные правила форсируют минимум REVIEW</dd>
+<dt>classify_type(rule_hits)</dt><dd>Метка типа фрода для алерта по сработавшим правилам. <code>None</code>, если ничего характерного</dd>
+<dt>_TYPE_PRIORITY</dt><dd>Что важнее, если сработало несколько</dd>
+</dl>
+<p class="links"><b>Связи:</b> берёт пороги из <code>config</code> (включая <code>MANDATORY_REVIEW_RULES</code>), вызывается из <code>fraud_job.py</code>.</p>
+</div>
+
+<div class="file">
+<h4>fraud_job.py <span class="ln">414 строк · сама джоба Flink</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Тот файл, который реально запускается на кластере. Он собирает всё вместе: читает Kafka, раскладывает поток по отправителям, для каждого события зовёт обогащение, признаки, правила, модель и слияние, и пишет результат обратно в Kafka.</p>
+<p>Модель работает <strong>внутри</strong> этого процесса — не по сети к отдельному модель-серверу. При бюджете 300 мс сетевой вызов туда-обратно был бы заметной частью бюджета.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>class FraudDetector</dt><dd>Наследник <code>KeyedProcessFunction</code>. Живёт по одному экземпляру на партицию и хранит состояние отправителей</dd>
+<dt>.open(runtime_ctx)</dt><dd>Разовая инициализация: загрузить ONNX, подключить Redis и Neo4j, прочитать профиль возможностей</dd>
+<dt>.process_element(event, ctx)</dt><dd>Обработка одного события — те самые шаги 3–10 из §3</dd>
+<dt>._ml_score(vector)</dt><dd>Один прогон ONNX Runtime</dd>
+<dt>.close()</dt><dd>Закрыть соединения</dd>
+<dt>_positive_proba(outputs)</dt><dd>Достать вероятность фрод-класса из выхода ONNX</dd>
+<dt>_warn_cep_only(reason)</dt><dd>Громко объявить деградированный режим. Появился после того, как джоба <strong>молча</strong> проработала без модели</dd>
+<dt>_kafka_source() / _kafka_sink(topic)</dt><dd>Источник и приёмник с настройками транспорта</dd>
+<dt>_apply_security(builder)</dt><dd>Добавляет TLS-свойства, если они настроены</dd>
+<dt>_tune_for_latency(env)</dt><dd>Меняет умолчания Flink с пропускной способности на задержку. <strong>Один параметр здесь дал 1923 мс из 1931</strong></dd>
+<dt>_event_epoch(event)</dt><dd>Время события в эпохе</dd>
+</dl>
+<p class="links"><b>Связи:</b> тянет <code>config</code>, <code>enrichment</code>, <code>features</code>, <code>fusion</code>, <code>payload_crypto</code>, <code>receiver_store</code>, <code>rules</code>. Читает <code>transactions.raw</code>, пишет <code>transactions.scored</code> и <code>fraud.alerts</code>.</p>
+</div>
+
+<h3>5.2 Данные, которых нет в сообщении</h3>
+
+<div class="file">
+<h4>enrichment.py <span class="ln">105 строк</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Отвечает на единственный вопрос, ответа на который нет в платёжном сообщении: <em>сколько дней счёту получателя?</em> Свежий счёт — сильный признак дропа.</p>
+<p>Сначала смотрит в быстрый кеш Redis, при промахе идёт в граф Neo4j. Если недоступны оба — возвращает «не знаю», и конвейер едет дальше на поведенческих сигналах. Остановить платёжную систему из-за упавшего кеша хуже, чем работать чуть хуже.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>class EnrichmentClient</dt><dd>Одно соединение к Redis и Neo4j на воркер</dd>
+<dt>.lookup(payee, ...)</dt><dd>Возраст счёта: кеш → граф → «неизвестно»</dd>
+<dt>.open() / .close()</dt><dd>Жизненный цикл соединений</dd>
+<dt>_AGE_QUERY_BY_FIELD</dt><dd>Cypher-запросы: по карте или по ПИНФЛ, в зависимости от режима</dd>
+<dt>ключ кеша</dt><dd><code>age:{поле}:{значение}</code> с TTL из <code>ENRICH_CACHE_TTL_S</code></dd>
+</dl>
+<div class="note warn"><span class="lbl">Здесь же — узкое место всей системы</span>
+<p>Поход в Redis и Neo4j <strong>синхронный</strong>: слот обрабатывает по одной транзакции. Async I/O у Flink для этого и существует, но не реализован. Замер §11.2 превратил этот известный срез в цифру: цель 300 мс держится только до 25 событий в секунду.</p></div>
+<p class="links"><b>Связи:</b> вызывается из <code>fraud_job.FraudDetector.process_element</code>. Режим берёт из <code>capabilities</code>.</p>
+</div>
+
+<div class="file">
+<h4>receiver_store.py <span class="ln">232 строки · два класса, одна причина</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Поток разложен по отправителям. Значит внутри одной партиции видна вся история <em>отправителя</em> — и совсем не видна история <em>получателя</em>: переводы одному дропу приходят от разных людей и попадают в разные партиции.</p>
+<p>Поэтому окно получателя живёт снаружи, в Redis. А потом выяснилось, что и <em>порог</em>, с которым это окно сравнивается, тоже нельзя вывести внутри партиции — для него нужна картина по всей популяции. Отсюда второй класс.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>class ReceiverStore</dt><dd>Окно входящих по получателю</dd>
+<dt>.load(payee, now)</dt><dd>Читает окно: <code>ZRANGEBYSCORE</code> по ключу <code>rcv:{payee}</code></dd>
+<dt>.record(event, now)</dt><dd>Дописывает событие пайплайном: <code>ZADD</code> + подрезка старого + <code>EXPIRE</code></dd>
+<dt>class PopulationStore</dt><dd>Распределение концентрации по всей популяции</dd>
+<dt>.observe(count)</dt><dd>Добавляет наблюдение в гистограмму</dd>
+<dt>.threshold()</dt><dd>Возвращает выученный порог по квантилю</dd>
+<dt>._sync()</dt><dd>Периодическая синхронизация с Redis, не на каждое событие</dd>
+<dt>KEY = "mule:fanin:hist"</dt><dd>Ключ гистограммы</dd>
+<dt>BINS = 257, TTL_S = 7 дней</dt><dd>Разрешение и срок жизни</dd>
+</dl>
+<p class="links"><b>Связи:</b> ключ строится через <code>features.payee_key</code>, порог используется в <code>rules.MULE_FAN_IN</code>. При недоступности Redis <strong>падает закрыто</strong> — к известной константе, а не к локальному срезу одного воркера.</p>
+</div>
+
+<div class="file">
+<h4>bins.py <span class="ln">106 строк</span> · geo.py <span class="ln">63 строки</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p><code>bins.py</code>: по номеру карты определяет банк. Настоящий банк делает именно так — он не получает название чужого банка в сообщении, он смотрит на первые шесть цифр номера и ищет их в своей таблице.</p>
+<p><code>geo.py</code>: 14 регионов Узбекистана как координаты и расстояние между ними по дуге большого круга. Нужен, чтобы посчитать, с какой скоростью человеку пришлось бы лететь, чтобы оказаться там, где он оказался.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>bins.issuer_of(pan)</dt><dd>Идентификатор эмитента или пустая строка, если BIN не в таблице. Пусто — это «неизвестен», а не значение: два неизвестных не равны друг другу</dd>
+<dt>bins._bank_identity(rows)</dt><dd>Сравнивается <strong>код</strong> банка, а не название: один банк держит несколько BIN, а названия — свободный текст</dd>
+<dt>bins.RETIRED_BINS</dt><dd>Закрывшиеся банки. Yangi Bank (986040) закрылся — это нормальное состояние BIN-таблицы, и тест требует, чтобы каждый нерезолвящийся BIN был здесь назван</dd>
+<dt>geo.haversine_km(a, b)</dt><dd>Расстояние по дуге большого круга</dd>
+<dt>geo.region_distance_km(r1, r2)</dt><dd>Между двумя названными регионами, или <code>None</code></dd>
+<dt>geo.implied_speed_kmh(r1, r2, elapsed_s)</dt><dd>Скорость, которую пришлось бы выдерживать. Основа <code>IMPOSSIBLE_TRAVEL</code></dd>
+<dt>geo.REGION_COORDS</dt><dd>14 регионов с координатами</dd>
+</dl>
+<p class="links"><b>Связи:</b> <code>bins</code> читает <code>banks.csv</code> по пути из <code>config.BANKS_CSV_PATH</code> — <strong>никогда не через <code>__file__</code></strong>, потому что Flink распаковывает модули во временный каталог, где данных нет. Эта ошибка дважды роняла джобу. <code>geo</code> используют и <code>features.py</code>, и генератор.</p>
+</div>
+
+<div class="file">
+<h4>config.py <span class="ln">315 строк</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Все настройки конвейера, и рядом с каждой — причина, почему она такая. Адреса сервисов, окна правил, веса, пороги решения, настройки Flink, пути к артефактам.</p></div>
+<div class="grouplbl">Что внутри — по группам</div>
+<dl class="inside">
+<dt>KAFKA_*, TOPIC_*, CONSUMER_GROUP</dt><dd>Транспорт: адрес, протокол безопасности, сертификаты, четыре топика</dd>
+<dt>NEO4J_*, REDIS_*</dt><dd>Адреса хранилищ, <code>ENRICH_CACHE_TTL_S</code></dd>
+<dt>VELOCITY_WINDOW_S, STRUCTURING_WINDOW_S, DISTINCT_PAYEE_WINDOW_S, DAILY_WINDOW_S, RECEIVER_WINDOW_S</dt><dd>Окна правил</dd>
+<dt>VELOCITY_MAX_COUNT, STRUCTURING_MIN_COUNT, DISTINCT_PAYEE_MAX, FRESH_RECEIVER_DAYS</dt><dd>Пороги срабатывания</dd>
+<dt>MULE_FAN_IN_MODE, _QUANTILE, _MIN_OBS, _MIN_SENDERS</dt><dd>Абсолютный или относительный порог веера, квантиль, минимум наблюдений</dd>
+<dt>W_NEW_PAYEE_HIGH, W_FRESH_RECEIVER, W_VELOCITY, …</dt><dd>Вес каждого правила в оценке CEP</dd>
+<dt>REVIEW_THRESHOLD, BLOCK_THRESHOLD, FINAL_*</dt><dd>Пороги решения — до и после масштабирования по возможностям</dd>
+<dt>MANDATORY_REVIEW_RULES</dt><dd>Правила, форсирующие проверку независимо от модели</dd>
+<dt>PY_BUNDLE_TIME_MS, PY_BUNDLE_SIZE, BUFFER_TIMEOUT_MS, KAFKA_FETCH_MAX_WAIT_MS</dt><dd>Настройки Flink под <em>задержку</em>, а не пропускную способность</dd>
+<dt>CHECKPOINT_INTERVAL_MS, RESTART_*</dt><dd>Чекпоинты и политика перезапуска</dd>
+<dt>MODEL_ONNX_PATH, FEATURE_NAMES_PATH, BANKS_CSV_PATH</dt><dd>Пути к артефактам деплоя</dd>
+<dt>_resolve_artefact(env_var, filename, extra_dirs)</dt><dd><strong>Единственный правильный способ найти артефакт.</strong> Смонтированный каталог первым, <code>__file__</code> — никогда</dd>
+<dt>kafka_security_properties()</dt><dd>Свойства транспорта; пусто при PLAINTEXT</dd>
+</dl>
+<p class="links"><b>Связи:</b> читают все модули пакета. Аудит границ отдельно проверяет, что ни один путь к данным не выводится из <code>__file__</code>.</p>
+</div>
+
+<h3>5.3 Офлайн-инструменты этого пакета</h3>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Эти файлы в бою не участвуют. Они запускаются руками, чтобы что-то измерить или проверить.</p></div>
+<div class="tw"><table>
+<tr><th>Файл</th><th>Строк</th><th>Зачем</th></tr>
+<tr><td><code>replay_eval.py</code></td><td class="num">126</td><td>Прогоняет CSV через <strong>боевой</strong> движок правил и печатает, что бы поймали одни правила. Так получена цифра «только CEP: F1 0.417»</td></tr>
+<tr><td><code>latency_report.py</code></td><td class="num">285</td><td>Задержка против цели 300 мс. Квантили по ближайшему рангу, распределённо-свободный доверительный интервал медианы, детектор насыщения, поправка на расхождение часов</td></tr>
+<tr><td><code>throughput_report.py</code></td><td class="num">130</td><td>Задержка против <em>нагрузки</em>: одна строка на каждый темп подачи. Заголовок — путь до решения, отдельно от складского</td></tr>
+<tr><td><code>fault_injection.py</code></td><td class="num">285</td><td>Убивает воркер на потоке и считает, что потерялось и что задвоилось</td></tr>
+<tr><td><code>dependency_failure.py</code></td><td class="num">282</td><td>Гасит по одной зависимости и сравнивает с контрольным проходом. Разобран в §11.4</td></tr>
+<tr><td><code>fan_in_mode_eval.py</code></td><td class="num">121</td><td>Абсолютный порог веера против относительного, парно внутри каждого сида</td></tr>
+<tr><td><code>seeded_payee_eval.py</code></td><td class="num">114</td><td>Насколько падает детекция APP, если мошенник «прогрел» получателя заранее</td></tr>
+</table></div>
+
+<h2 id="s6"><span class="num">6</span>sink-writer — куда всё складывается</h2>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Отдельный сервис, который слушает поток решений и раскладывает его по хранилищам: всё подряд — в ClickHouse для аналитики и аудита, только алерты — в граф Neo4j.</p>
+<p>Главное здесь — <strong>аудит-след</strong>. У каждой записи есть хеш исходного события и хеш, связывающий её с предыдущей записью. Если кто-то потом что-то отредактирует или удалит, цепочка порвётся, и отдельная программа это покажет. Для банковской системы это и есть ответ на вопрос «докажите, что вы не переписали журнал задним числом».</p></div>
+
+<div class="file">
+<h4>consumer.py <span class="ln">77 строк</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Главный цикл сервиса: читает сообщения из Kafka, кладёт в два накопителя, время от времени сбрасывает их в базы. Пачками — потому что вставлять по одной строке в ClickHouse неэффективно.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>main()</dt><dd>Цикл: <code>KafkaConsumer</code> → <code>ch.add(event)</code> + <code>neo.add(event)</code> → сброс по размеру или по времени</dd>
+<dt>_stop()</dt><dd>Обработчик сигнала для аккуратной остановки</dd>
+<dt>enable_auto_commit=True</dt><dd><strong>Оффсеты коммитятся по таймеру</strong>, независимо от успеха вставки. Отсюда и берётся единственная точка потери данных — см. §11.4</dd>
+<dt>BATCH_SIZE, FLUSH_INTERVAL_S</dt><dd>500 строк или 5 секунд, что раньше</dd>
+</dl>
+<p class="links"><b>Связи:</b> использует <code>ch_writer</code>, <code>neo4j_writer</code>, <code>config</code>. Читает <code>transactions.scored</code>.</p>
+</div>
+
+<div class="file">
+<h4>record.py <span class="ln">173 строки</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Чистое преобразование: JSON, который выдала джоба → строки для таблиц. Никаких соединений, никакого состояния — только раскладка полей по колонкам с приведением типов. Именно поэтому его легко тестировать и легко проверять аудитом границ.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>scored_row(e)</dt><dd>Событие → строка таблицы <code>transactions_scored</code></dd>
+<dt>audit_core(e)</dt><dd>Содержательные колонки одной аудит-записи, ещё без полей цепочки</dd>
+<dt>audit_signed_values(core)</dt><dd>Что именно подписывает хеш: <code>[ingress_hash, payload]</code></dd>
+<dt>is_alert(e)</dt><dd>Это алерт или обычный пропуск</dd>
+<dt>alert_params(e)</dt><dd>Параметры для Cypher-запроса записи в граф</dd>
+<dt>SCORED_COLUMNS, AUDIT_CORE_COLUMNS, AUDIT_CHAIN_COLUMNS, AUDIT_COLUMNS</dt><dd>Списки колонок — контракт со схемой ClickHouse</dd>
+<dt>_dt, _i, _f, _b, _epoch_dt</dt><dd>Приведение типов: дата, целое, дробное, булево, метка времени</dd>
+</dl>
+<p class="links"><b>Связи:</b> аудит границ проверяет, что <code>SCORED_COLUMNS</code> совпадает со схемой таблицы, а <code>alert_params</code> — с параметрами Cypher-запроса. <strong>Первый же запуск аудита нашёл здесь дефект:</strong> три колонки объявлены и читались, но джоба их никогда не заполняла — константный ноль на 13 000 записей.</p>
+</div>
+
+<div class="file">
+<h4>ch_writer.py <span class="ln">146 строк</span> · neo4j_writer.py <span class="ln">113 строк</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Два писателя, устроенные одинаково: копят пачку, пробуют записать, при неудаче <strong>выбрасывают пачку и громко пишут в лог</strong>, сколько потеряли. Не блокируют конвейер.</p>
+<p>Это осознанный размен, и он стоит того, чтобы его назвать: остановить приём решений по живым платежам из-за упавшего склада — хуже, чем потерять записи в складе. Но цена размена реальна, и она измерена в §11.4.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>class ClickHouseWriter</dt><dd>Пишет и аналитику, и аудит</dd>
+<dt>.add(event)</dt><dd>Кладёт строку в буфер и <strong>продолжает хеш-цепочку</strong></dd>
+<dt>.flush()</dt><dd>Две вставки: <code>transactions_scored</code> и <code>audit_log</code></dd>
+<dt>._resume_chain()</dt><dd>При старте поднимает последнее звено цепи из базы — чтобы перезапуск сервиса не рвал цепочку</dd>
+<dt>._discard(reason)</dt><dd>Сбросить буфер, но <strong>никогда молча</strong>: в логе — сколько строк и накопленный итог за прогон</dd>
+<dt>._reconnect_due()</dt><dd>Не долбить упавший сервер на каждом сбросе</dd>
+<dt>.dropped()</dt><dd>Счётчик потерянного</dd>
+<dt>class Neo4jWriter</dt><dd>То же для алертов, интерфейс намеренно такой же</dd>
+<dt>_MERGE, _CONSTRAINT</dt><dd>Cypher: слияние узлов и ограничение уникальности</dd>
+</dl>
+<p class="links"><b>Связи:</b> <code>ch_writer</code> использует <code>record</code> и <code>integrity</code>. Строка лога <code>DISCARDING …</code> — то, чем подтверждается результат §11.4.</p>
+</div>
+
+<div class="file">
+<h4>verify_audit.py <span class="ln">116 строк</span> · integrity.py <span class="ln">69 строк</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p><code>verify_audit</code> проходит всю цепочку и говорит, цела она или нет. Это тот инструмент, который на защите демонстрируется живьём: «вот журнал, вот проверка, вот результат INTACT».</p>
+<p><code>integrity.py</code> — побайтовая копия файла из генератора. Копия, а не общий модуль, потому что это разные разворачиваемые сервисы. Аудит границ отдельно следит, чтобы копии не разошлись.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>verify(records)</dt><dd>Список находок; пустой — цепочка цела</dd>
+<dt>_fetch(limit)</dt><dd>Достаёт записи из ClickHouse по порядку</dd>
+<dt>main()</dt><dd>Печатает вердикт и хеш последнего звена — его надо публиковать вне базы</dd>
+</dl>
+<p class="links"><b>Связи:</b> результат якорится в <code>docs/audit-anchors.md</code>. Важно: изменение <code>INGRESS_FIELDS</code> ломает старые хеши — это записано там же.</p>
+</div>
+
+<h2 id="s7"><span class="num">7</span>case-manager — что видит аналитик</h2>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Система выдаёт алерты. Но алерт, который никто не смотрит, — не результат. Этот сервис превращает поток алертов в <strong>очередь дел</strong>: каждый алерт становится кейсом, аналитик его открывает, читает объяснение и ставит вердикт — «настоящий фрод» или «ложное срабатывание».</p>
+<p>И вот тут появляется то, чего у системы больше нигде нет: <strong>настоящая разметка</strong>. Всё остальное в проекте обучено на синтетике, где метку поставил генератор. Вердикт аналитика — единственная метка, которую система способна произвести сама.</p></div>
+
+<div class="file">
+<h4>consumer.py <span class="ln">87 строк</span> · config.py <span class="ln">27 строк</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Слушает топик алертов и складывает кейсы. Устроен так же, как sink-writer: накопитель плюс сброс пачкой.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>main()</dt><dd><code>fraud.alerts</code> → <code>store.add(alert)</code> → сброс по размеру или времени</dd>
+<dt>TOPIC_ALERTS, CONSUMER_GROUP, BATCH_SIZE, FLUSH_INTERVAL_S</dt><dd>Настройки</dd>
+</dl>
+<p class="links"><b>Связи:</b> <code>store</code>, <code>config</code>.</p>
+</div>
+
+<div class="file">
+<h4>case.py <span class="ln">135 строк</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Чистое преобразование: алерт → кейс, вердикт → обновлённый кейс. Здесь же решается, что показать аналитику первым.</p>
+<p>Тонкость с приоритетом: сортировка идёт по <strong>полосе решения</strong>, а не по числовой оценке. Причина — в §11.1: 89% алертов округляются до 1.000, и сортировать по такой оценке бессмысленно, порядок был бы случайным.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>case_row(alert, explanation, explanation_status)</dt><dd>Алерт → строка кейса, детерминированно</dd>
+<dt>resolution_row(case, disposition, by, at_epoch)</dt><dd>Кейс + вердикт → та же строка с новой версией</dd>
+<dt>priority_of(alert)</dt><dd>0 — работать первым. <strong>Только полоса</strong>, намеренно не оценка</dd>
+<dt>DISPOSITIONS</dt><dd><code>CONFIRMED_FRAUD</code> / <code>FALSE_POSITIVE</code></dd>
+<dt>OPEN_VERSION = 0, OPEN_VERSION_EXPLAINED = 1</dt><dd>Версии открытого кейса. Разрешённый кейс пишется с версией = время в миллисекундах</dd>
+<dt>CASE_COLUMNS</dt><dd>Контракт со схемой</dd>
+</dl>
+<div class="note"><span class="lbl">Зачем такие версии</span>
+<p>Таблица — <code>ReplacingMergeTree</code> по <code>case_id</code>: из строк с одинаковым ключом выживает та, у которой версия больше. Открытие кейса пишет 0 или 1, вердикт — эпоху в миллисекундах. Значит <strong>переигранный алерт никогда не отменит вердикт человека</strong>, какой бы порядок сообщений ни случился. Читать такую таблицу обязательно с <code>FINAL</code>.</p></div>
+<p class="links"><b>Связи:</b> используется <code>store.py</code> и <code>queue_cli.py</code>.</p>
+</div>
+
+<div class="file">
+<h4>explain.py <span class="ln">194 строки</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Отвечает на вопрос «почему модель это заблокировала», словами, которые аналитик может прочитать вслух клиенту.</p>
+<p>Зачем понадобилось: 15% алертов приходили <strong>без единого сработавшего правила</strong> — модель права, но молчит. И это не редкие случаи: 98% из них оказались настоящим фродом. Файл берёт вклад каждого признака в конкретное решение и превращает три самых сильных в фразы.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>class Explainer</dt><dd>Ленивая загрузка: нет артефактов — объяснений нет, но сервис не падает</dd>
+<dt>.explain(features)</dt><dd><code>booster.predict(x, pred_contrib=True)</code> — это <strong>точный</strong> TreeSHAP, не приближение. 1.89 мс на событие, <em>вне</em> горячего пути</dd>
+<dt>phrase(name, value, contribution)</dt><dd>Один вклад → человеческая фраза</dd>
+<dt>OK / NO_MODEL / NO_FEATURES / MODEL_MISMATCH / FAILED</dt><dd>Статусы. Признаки проверяются <strong>раньше</strong> модели: без вектора объяснять нечего в любом случае</dd>
+<dt>TOLERANCE = 1e-4</dt><dd>Если <code>model.txt</code> и <code>model.onnx</code> расходятся сильнее — объяснение не выдаётся. Объяснять решение <em>другой</em> модели хуже, чем не объяснять вовсе</dd>
+<dt>TOP_N</dt><dd>Сколько вкладов показывать</dd>
+<dt>_PHRASES</dt><dd>Шаблоны формулировок по именам признаков</dd>
+</dl>
+<p class="links"><b>Связи:</b> вызывается из <code>store.py</code> при открытии кейса. Артефакты — те же, что у боевой джобы.</p>
+</div>
+
+<div class="file">
+<h4>store.py <span class="ln">238 строк</span> · queue_cli.py <span class="ln">154 строки</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p><code>store</code> — работа с базой кейсов. <code>queue_cli</code> — то, что аналитик реально набирает в консоли: посмотреть очередь, открыть кейс, поставить вердикт, увидеть статистику.</p></div>
+<div class="grouplbl">Что внутри</div>
+<dl class="inside">
+<dt>class CaseStore</dt><dd>Соединение, схема, чтение и запись</dd>
+<dt>.add(alert)</dt><dd>Кейс в буфер, попутно попытка объяснить</dd>
+<dt>.open_cases(limit)</dt><dd>Очередь: только открытые, в порядке приоритета</dd>
+<dt>.resolve(case_id, disposition, by)</dt><dd>Записать вердикт новой версией</dd>
+<dt>.stats()</dt><dd>Сколько открыто, сколько закрыто, как распределились вердикты, сколько объяснено</dd>
+<dt>._apply_schema()</dt><dd>Применяет DDL при каждом подключении. Нужно потому, что init-скрипты ClickHouse выполняются <strong>только на пустом каталоге данных</strong> — файл написан как миграция</dd>
+<dt>_statements(sql)</dt><dd>Режет DDL на команды. Комментарии вырезаются <em>до</em> разрезания: точка с запятой внутри комментария однажды разорвала <code>CREATE TABLE</code> пополам</dd>
+<dt>cmd_list / cmd_show / cmd_resolve / cmd_stats</dt><dd>Команды CLI</dd>
+</dl>
+<p class="links"><b>Связи:</b> <code>.\run.ps1 cases</code> / <code>-Case ID</code> / <code>-Verdict … -By …</code> / <code>-Stats</code>.</p>
+</div>
+
+<h2 id="s8"><span class="num">8</span>ml — обучение модели</h2>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Здесь модель обучается, объясняется и экспортируется в формат, который умеет исполнять Flink. Плюс здесь живёт главный эксперимент работы — абляция: <em>сколько стоит отсутствие каждого источника данных</em>.</p>
+<p>Ключевой момент: обучающая матрица строится <strong>прогоном CSV через боевой код</strong>. Не через отдельную «обучающую» реализацию признаков, а через тот же <code>features.extract</code> и тот же <code>rules.evaluate</code>, которые работают в бою.</p></div>
+
+<div class="tw"><table>
+<tr><th>Файл</th><th>Строк</th><th>За что отвечает</th></tr>
+<tr><td><code>dataset.py</code></td><td class="num">74</td><td>Проигрывает CSV через <strong>боевой</strong> экстрактор → матрица признаков. Отсюда отсутствие train/serve skew</td></tr>
+<tr><td><code>train.py</code></td><td class="num">158</td><td>LightGBM, разбиение <strong>по времени</strong> (не случайное — иначе утечка из будущего), метрики + сравнение с CEP-only, калибровка</td></tr>
+<tr><td><code>export_onnx.py</code></td><td class="num">90</td><td>Экспорт в ONNX + проверка паритета с нативной моделью (сходятся до 3.3e-07) + запись манифеста</td></tr>
+<tr><td><code>manifest.py</code></td><td class="num">163</td><td>Связывает поданную модель с тем, что её породило: хеши артефактов, датасет, контракт признаков, профиль возможностей, коммит</td></tr>
+<tr><td><code>explain.py</code></td><td class="num">75</td><td>SHAP: глобальная важность признаков и разбор конкретного алерта</td></tr>
+<tr><td><code>calibration_report.py</code></td><td class="num">116</td><td>Насколько вероятности пригодны <em>как величины</em>, а не только как порядок. Считается <strong>без переобучения</strong></td></tr>
+<tr><td><code>fusion_eval.py</code></td><td class="num">82</td><td>Проверка способов слияния оценок. Именно он показал, что все наивные смеси хуже модели в одиночку</td></tr>
+<tr><td><code>ablation.py</code></td><td class="num">132</td><td>Один прогон по профилям возможностей</td></tr>
+<tr><td><code>ablation_seeds.py</code></td><td class="num">267</td><td><strong>Он и цитируется.</strong> Тот же перебор по пяти сидам с парными дельтами и интервалами</td></tr>
+<tr><td><code>ablation_receiver_age.py</code></td><td class="num">117</td><td>Отдельно три режима возраста получателя: всегда / только свои / никогда</td></tr>
+<tr><td><code>recall_by_type.py</code></td><td class="num">146</td><td>Полнота по каждому типу фрода с интервалами Вильсона — они корректны при малых выборках</td></tr>
+</table></div>
+
+<div class="grouplbl">Ключевые функции</div>
+<dl class="inside">
+<dt>dataset.build_matrix(csv_path)</dt><dd>Матрица признаков через боевой путь</dd>
+<dt>train._metrics(y, proba, thr)</dt><dd>PR-AUC, ROC-AUC, precision/recall/F1</dd>
+<dt>train._calibration(y, proba, review, block)</dt><dd>Brier, доля насыщенных оценок, заселённость полосы REVIEW</dd>
+<dt>export_onnx._onnx_positive_proba(outputs)</dt><dd>Достать вероятность фрод-класса из любого формата выхода</dd>
+<dt>manifest.build() / .write() / .check()</dt><dd>Собрать, записать, сверить. <code>check()</code> возвращает список расхождений</dd>
+<dt>manifest._contract()</dt><dd>Контракт признаков <em>как его сейчас определяет код</em> — сверяется с тем, что записано</dd>
+<dt>ablation_seeds._contract_fingerprint()</dt><dd>Отпечаток того, от чего зависят сохранённые результаты: набор признаков <strong>и</strong> версия генератора</dd>
+<dt>recall_by_type.wilson(caught, n, z)</dt><dd>Интервал Вильсона — корректен при малых <code>n</code> и долях у краёв</dd>
+</dl>
+
+<div class="note"><span class="lbl">Почему градиентный бустинг, а не нейросеть</span>
+<p>Три причины, и все три надо назвать самому: малые размеченные выборки; требование объяснимости — аналитику и регулятору нужны причины, а не «модель так решила»; инференс на CPU внутри Flink в пределах 300 мс. Нейросети встают позже как <em>поставщики признаков</em>, а не как замена.</p></div>
+
+<h2 id="s9"><span class="num">9</span>tools, validation, infra</h2>
+
+<div class="file">
+<h4>tools/boundary_audit.py <span class="ln">514 строк · 19 проверок</span></h4>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Самый полезный инструмент проекта, и появился он последним. Идея простая: прочитать файл и убедиться, что он правильный, — можно. Но это <strong>не говорит, что он производит именно то, чего ждёт следующий файл.</strong></p>
+<p>Три дефекта за один день жили ровно в этом зазоре: каждый компонент по отдельности был верен. Поэтому здесь 19 проверок, и каждая делает реальный артефакт одной стороной и суёт его другой стороне.</p>
+<p>Первый же запуск нашёл настоящий дефект: три колонки в ClickHouse объявлены, читаются кодом — и никогда не заполнялись. Ноль на 13 000 записей.</p></div>
+<div class="grouplbl">Что проверяется</div>
+<dl class="inside">
+<dt>b_producer_types</dt><dd>Продюсер отдаёт те типы, которых ждёт экстрактор</dd>
+<dt>b_wire_extracts_like_typed</dt><dd>Событие с провода даёт те же признаки, что типизированное</dd>
+<dt>b_extractor_needs_nothing_absent</dt><dd>Каждое поле, которое читает <code>extract</code>, продюсер действительно шлёт</dd>
+<dt>b_hash_covers_only_sent_fields</dt><dd>Хеш не подписывает то, чего нет на проводе</dd>
+<dt>b_duplicated_modules_are_identical</dt><dd>Модули, <em>объявившие себя копиями</em>, побайтово совпадают</dd>
+<dt>b_routing_key_survives_the_wire</dt><dd>Ключ маршрутизации читается без расшифровки</dd>
+<dt>b_sink_reads_only_emitted_keys</dt><dd>Sink читает только те ключи, которые джоба кладёт</dd>
+<dt>b_case_manager_reads_only_emitted_keys</dt><dd>То же для очереди кейсов</dd>
+<dt>b_neo4j_params_match_the_cypher</dt><dd>Параметры совпадают с запросом</dd>
+<dt>b_scored_row_matches_the_schema</dt><dd>Колонки строки совпадают со схемой таблицы</dd>
+<dt>b_case_row_matches_the_schema</dt><dd>То же для кейсов</dd>
+<dt>b_job_modules_cover_every_import</dt><dd>Список модулей, отправляемых на кластер, покрывает все импорты</dd>
+<dt>b_serve_prep_ships_every_artefact</dt><dd>Подготовка деплоя копирует все нужные файлы</dd>
+<dt>b_no_artefact_path_derived_from_file</dt><dd><strong>Ни один путь к данным не выводится из <code>__file__</code></strong> — ловушка, дважды убившая джобу</dd>
+<dt>b_manifest_matches_the_deployment</dt><dd>Поданные артефакты, датасет и контракт признаков — одно целое</dd>
+<dt>b_receiver_store_round_trips</dt><dd>Записанное в Redis читается обратно тем же</dd>
+<dt>b_latency_query_matches_its_parser</dt><dd>SELECT и парсер строки согласны о числе колонок</dd>
+<dt>b_dataset_keys_exist_in_the_csv</dt><dd>Ключи обучающей матрицы есть в CSV</dd>
+<dt>b_compose_env_names_are_read</dt><dd>Переменные окружения из compose кто-то действительно читает</dd>
+<dt>pkg(name, module)</dt><dd>Изолирует импорт пакета — в проекте три пары одноимённых модулей, и без изоляции они перетирают друг друга</dd>
+</dl>
+<p class="links"><b>Запуск:</b> <code>.\run.ps1 boundaries</code>. Сейчас 19 из 19 зелёные.</p>
+</div>
+
+<h3>validation — те же правила на чужих данных</h3>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Все результаты выше получены на генераторе, который написал тот же человек, что и детектор. Это замкнутый круг, и его надо разомкнуть. Здесь боевые правила запускаются на данных, которых этот проект не порождал.</p>
+<p>Результат оказался отрицательным — и это <em>сам по себе</em> результат работы.</p></div>
+<div class="tw"><table>
+<tr><th>Датасет</th><th>Что показал</th></tr>
+<tr><td>PaySim</td><td><code>NEW_PAYEE_HIGH_AMOUNT</code> разделяет классы в 4.0× на чужих данных. <code>MULE_FAN_IN</code> не находит ничего — и правильно: PaySim не моделирует стадию сбора</td></tr>
+<tr><td>Zenodo 20030065</td><td><strong>Отвергнут.</strong> Заявлен как собранный с живой системы, а на деле переупакованная выборка из ULB плюс 432 строки чьего-то тестирования</td></tr>
+<tr><td>IBM AMLSim</td><td>Не может проверить главную находку. Три измеренные причины, все структурные</td></tr>
+</table></div>
+<p><strong>Сквозная находка:</strong> четыре датасета — свой генератор, PaySim, Zenodo, AMLSim — и каждый посадил положительный класс так, что <em>способ посадки</em> оказался лучшим предиктором. Отсюда в коде появились <code>leakage_screen()</code> и <code>drift_screen()</code>: проверка на это — первый шаг работы с чужими данными, а не последний.</p>
+<p>Формулировка для защиты: <em>реляционную детекцию нельзя валидировать end-to-end на публичных реальных данных, потому что идентификаторы, делающие её реляционной, — это ровно то, что делает данные непубликуемыми.</em></p>
+
+<h3>infra — схемы и обвязка</h3>
+<div class="tw"><table>
+<tr><th>Каталог</th><th>Что там</th></tr>
+<tr><td><code>infra/clickhouse/init/</code></td><td>Схемы таблиц: <code>transactions_scored</code>, <code>audit_log</code> с WORM-грантами, <code>cases</code></td></tr>
+<tr><td><code>infra/neo4j/</code></td><td>Cypher-импорт популяции счетов</td></tr>
+<tr><td><code>infra/kafka/</code></td><td>Создание топиков, выпуск сертификатов и truststore для взаимного TLS</td></tr>
+<tr><td><code>infra/flink/</code></td><td>Dockerfile с PyFlink. Сюда пришлось добавить <code>libgomp1</code> — LightGBM без него не импортируется, и это не ошибка Python</td></tr>
+<tr><td><code>infra/case-manager/</code></td><td>Dockerfile сервиса очереди</td></tr>
+<tr><td><code>infra/grafana/</code></td><td>Дашборд, провижинится из репозитория</td></tr>
+</table></div>
+
+<h2 id="s10"><span class="num">10</span>Связи между файлами</h2>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Файлы связаны не как попало. Есть несколько «контрактов» — мест, где один файл обещает что-то другому. Если понять эти шесть контрактов, понятна вся система: остальное — детали внутри них.</p></div>
+
+<h3>10.1 Реестр возможностей → всё остальное</h3>
+<p>Односторонняя связь сверху вниз, и это главный контракт проекта.</p>
+<pre class="tree">capabilities.REGISTRY
+      │
+      ├──> features.FEATURE_NAMES     <i>какие признаки существуют, и в каком порядке</i>
+      │         ├──> features.extract()          <i>что считать</i>
+      │         ├──> features.to_vector()        <i>в каком порядке класть в вектор</i>
+      │         ├──> ml/dataset.build_matrix()   <i>чему учить</i>
+      │         └──> ONNX model input            <i>что подавать в бою</i>
+      │
+      ├──> rules.rule_enabled()       <i>какие правила вообще включены</i>
+      └──> capabilities.scaled_threshold()  <i>какой порог решения при этом профиле</i>
+</pre>
+<p>Одна правка в реестре — и обучение, рантайм и пороги следуют за ней автоматически. <strong>Именно поэтому нет train/serve skew</strong>: не потому, что за этим следят, а потому, что список признаков физически один.</p>
+
+<h3>10.2 Один экстрактор в обучении и в бою</h3>
+<pre class="tree"><b>Обучение:</b>  transactions.csv ──> ml/dataset.py ──> features.extract() ──> LightGBM
+<b>Бой:</b>       Kafka event      ──> fraud_job.py  ──> features.extract() ──> ONNX
+                                                          <i>^^^^^^^^^^^^^^^^ один и тот же код</i>
+</pre>
+<p>Классическая причина, по которой модель «работает на тестах и не работает в жизни», — расхождение между тем, как признаки считались при обучении и как считаются в бою. Здесь такого расхождения нет по построению.</p>
+<div class="note warn"><span class="lbl">И всё же оно один раз возникло</span>
+<p>Флаг <code>active_call</code> ехал по проводу как <strong>строка</strong> <code>"False"</code>, а непустая строка в Python истинна. Все офлайн-пути конвертировали флаг правильно, каждый своим способом, — поэтому дефект существовал <strong>только в бою</strong>. Боевая джоба считала признак истинным на 100% событий против 3.5% при обучении. Цена: ложных срабатываний <strong>20 → 459</strong>. Лечение: приведение типа переехало в <code>features.truthy()</code> — общий контракт, через который к модели идут все.</p></div>
+
+<h3>10.3 Ключевание по отправителю → три следствия</h3>
+<div class="note"><span class="lbl">Самая сильная находка работы</span>
+<p>Поток партиционирован <strong>по отправителю</strong>. Значит внутри партиции видна вся история отправителя. Веер <em>наружу</em> виден: мул сам отправляет, скорость и число получателей срабатывают. <strong>Веер внутрь не виден:</strong> для каждого вносящего это один обычный перевод новому получателю, и ничто в sender-keyed состоянии не может увидеть, что ещё шестеро отправили тому же получателю за час.</p>
+<p>Разложение по плечам: fan-in — 80% mule-событий и recall 57.8%; fan-out — 20% и 93.8%. Лечится только состоянием, ключованным <em>по получателю</em>, то есть внешним хранилищем. После этого MULE поднялся с 55.7% до <strong>83.4%</strong>.</p>
+<p>Обобщение: <strong>топология, партиционированная по одной стороне перевода, не может выразить агрегацию по другой</strong> — одинаково во Flink и в Spark. Это свойство архитектуры, а не движка.</p></div>
+<p>И ограничение проявилось трижды подряд, на трёх уровнях:</p>
+<div class="tw"><table>
+<tr><th>Что невычислимо внутри партиции</th><th>Куда пришлось вынести</th></tr>
+<tr><td><strong>Признак</strong> — сколько разных людей прислало этому получателю</td><td><code>receiver_store.ReceiverStore</code> → Redis ZSET</td></tr>
+<tr><td><strong>Состояние</strong> — окно входящих получателя</td><td>там же, вне чекпоинта Flink</td></tr>
+<tr><td><strong>Порог</strong> — с чем сравнивать это окно</td><td><code>receiver_store.PopulationStore</code> → гистограмма по всей популяции</td></tr>
+</table></div>
+<p>Одно решение о партиционировании — три следствия. На защите это самая сильная линия рассуждения, потому что она архитектурная, а не про настройки.</p>
+
+<h3>10.4 Слияние на уровне решения, а не оценки</h3>
+<pre class="tree">rules.evaluate()  ──> cep_score, rule_hits ──┐
+                                             ├──> fusion.decide() ──> ALLOW / REVIEW / BLOCK
+ONNX model        ──> ml_score              ──┘        <i>^ обязательные правила форсируют REVIEW</i>
+
+fusion.final_score() = ml_score, если модель есть;  cep_score — только запасной путь
+</pre>
+<p>Проверялись naive-смеси: noisy-OR, взвешенное среднее, ML-скорректированный-CEP. <strong>Все ухудшали ранжирование</strong> (PR-AUC 0.953 → 0.91–0.94): оценка правил дискретна и низкого разрешения, она разбавляет непрерывную вероятность модели. Правила дают то, чего модель дать не может — детерминированные обязательные флаги, причины алерта и запасной путь при отказе модели.</p>
+
+<h3>10.5 Три пары одноимённых модулей</h3>
+<pre class="tree">data-generator/integrity.py     ══ побайтово ══  sink-writer/integrity.py
+data-generator/payload_crypto.py ══ побайтово ══ stream-processor/payload_crypto.py
+data-generator/config.py  ≠  stream-processor/config.py  ≠  sink-writer/config.py
+</pre>
+<p>Первые две пары — намеренные копии: это разные разворачиваемые юниты, общего модуля между ними быть не может. Проверка <code>b_duplicated_modules_are_identical</code> следит, чтобы копии не разошлись, и <strong>определяет себя сама</strong> — по слову «byte-identical» в докстринге, так что новая пара попадает под проверку без правки аудита.</p>
+<p>Практическое следствие: тесты гоняются <strong>по пакетам отдельно</strong>. Совместный сбор падает на конфликте имён.</p>
+
+<h3>10.6 Что едет по проводу</h3>
+<div class="tw"><table>
+<tr><th>Топик</th><th>Кто пишет</th><th>Кто читает</th><th>Что несёт</th></tr>
+<tr><td><code>transactions.raw</code></td><td>kafka_producer</td><td>fraud_job</td><td>16 полей + <code>ingested_at</code> + <code>ingress_hash</code>. Ключ — карта отправителя</td></tr>
+<tr><td><code>transactions.scored</code></td><td>fraud_job</td><td>sink-writer</td><td>Решение, оценки, признаки, сработавшие правила, <code>ingress_hash</code></td></tr>
+<tr><td><code>fraud.alerts</code></td><td>fraud_job</td><td>case-manager</td><td>То же плюс вектор <code>features</code> — он нужен для объяснений</td></tr>
+<tr><td><code>cbu.reports</code></td><td>—</td><td>—</td><td>Заявлен для интеграции с ЦБ; самой интеграции нет</td></tr>
+</table></div>
+<p><strong>Чего на проводе нет намеренно:</strong> <code>receiver_pinfl</code> — банк не резолвит чужой PAN в личность; <code>sender_bank_name</code> / <code>receiver_bank_name</code> — эмитент выводится из BIN, как в настоящем банке.</p>
+
+<h2 id="s11"><span class="num">11</span>Замеры</h2>
+<div class="plain"><span class="lbl">Простыми словами</span>
+<p>Дальше — что именно мерили, зачем, что вышло и на что это влияет. Каждый замер сначала объясняется на пальцах, потом идут числа.</p>
+<p>Одно общее правило, которое стоит держать в голове: <strong>каждая цитируемая цифра идёт с интервалом.</strong> Одиночные прогоны в этом проекте ошибались трижды — один раз вдвое, два раза в знаке. После этого правило стало жёстким.</p></div>
+
+<h3>11.1 Качество детекции</h3>
+<div class="plain"><span class="lbl">Зачем этот замер</span>
+<p>Самый простой вопрос: сколько фрода ловим и сколько честных людей задеваем зря. Плюс отдельно — <em>сколько добавляет модель поверх одних правил</em>: если бы разница была маленькой, всю ML-часть было бы честнее выбросить.</p></div>
+<div class="tw"><table>
+<tr><th>Метрика</th><th class="num">Слияние</th><th class="num">Только CEP</th></tr>
+<tr><td>PR-AUC</td><td class="num"><strong>0.959</strong></td><td class="num">—</td></tr>
+<tr><td>ROC-AUC</td><td class="num">0.999</td><td class="num">—</td></tr>
+<tr><td>Precision @0.50</td><td class="num">0.860</td><td class="num">0.344</td></tr>
+<tr><td>Recall @0.50</td><td class="num">0.902</td><td class="num">0.528</td></tr>
+<tr><td>F1 @0.50</td><td class="num"><strong>0.881</strong></td><td class="num">0.417</td></tr>
+</table></div>
+<p>Полнота по типам: STRUCTURING 97.1%, APP 89.5%, ATO 86.4%, MULE 85.7%.</p>
+<div class="note warn"><span class="lbl">Оговорка, которая едет вместе с цифрами</span>
+<p><strong>ROC-AUC 0.999 — артефакт синтетики, а не достижение.</strong> При доле положительных 1.5% читать надо PR-AUC. И даже он — проектная цель, а не измеренный производственный результат. Насколько данные легче реальных, теперь измерено: публичный бейзлайн на PaySim даёт AUPRC 0.380 против 0.966 здесь, то есть <strong>фактор 2.5</strong>.</p></div>
+
+<div class="plain"><span class="lbl">Что нашлось сверх метрик</span>
+<p>Метрики качества оказались слепы к вещи, которую видно только в очереди аналитика. <strong>89% алертов округляются до 1.000.</strong> Различных значений оценки — 35 штук на всю очередь. Значит сортировать очередь по оценке бессмысленно: порядок будет случайным.</p>
+<p>AUC этого не показывает и не может — она ранговая статистика, ей всё равно, 0.9991 или 0.9999. Очередь пересортирована по <strong>сумме перевода</strong>, а приоритет считается по полосе решения, а не по числу.</p></div>
+<div class="stats">
+  <div class="stat"><span class="k">Brier</span><span class="v">0.00244</span><span class="s">калибровка</span></div>
+  <div class="stat"><span class="k">Насыщено до 1.000</span><span class="v">89.1%</span><span class="s">из 758 алертов</span></div>
+  <div class="stat"><span class="k">Различных оценок</span><span class="v">35</span><span class="s">на всю очередь</span></div>
+  <div class="stat"><span class="k">В полосе REVIEW</span><span class="v">14</span><span class="s">из 758</span></div>
+</div>
+<p><strong>На что влияет:</strong> порог нельзя настраивать «по оценке» — вариантов практически нет. И полоса REVIEW почти пуста, то есть механизм step-up-проверки в такой калибровке почти не задействуется. Это надо назвать в главе ограничений самим.</p>
+
+<h3>11.2 Задержка и пропускная способность</h3>
+<div class="plain"><span class="lbl">Зачем этот замер</span>
+<p>Система заявлена как real-time с бюджетом 300 мс. Значит надо доказать две разные вещи: <em>как быстро принимается одно решение</em> и <em>сколько решений в секунду выдерживает система</em>. Второе — не то же самое, что первое: одна транзакция может решаться быстро, а под нагрузкой встать в очередь.</p></div>
+<div class="stats">
+  <div class="stat"><span class="k">Медиана</span><span class="v">80 мс</span><span class="s">тёплый кеш</span></div>
+  <div class="stat"><span class="k">p99</span><span class="v">186 мс</span><span class="s">цель 300</span></div>
+  <div class="stat"><span class="k">Сама работа</span><span class="v">2.3 мс</span><span class="s">правила+ONNX+Redis+Neo4j</span></div>
+  <div class="stat"><span class="k">Цель держится до</span><span class="v">25 соб/с</span><span class="s">дальше p99 выше 300</span></div>
+</div>
+<div class="tw"><table>
+<tr><th>Подача, соб/с</th><th class="num">p50</th><th class="num">p95</th><th class="num">p99</th><th class="num">работа</th><th>состояние</th></tr>
+<tr><td class="num">5</td><td class="num">87</td><td class="num">101</td><td class="num">116</td><td class="num">5.5</td><td><span class="chip ok">в бюджете</span></td></tr>
+<tr><td class="num">10</td><td class="num">87</td><td class="num">139</td><td class="num">156</td><td class="num">1.9</td><td><span class="chip ok">в бюджете</span></td></tr>
+<tr><td class="num">25</td><td class="num">124</td><td class="num">218</td><td class="num">340</td><td class="num">1.6</td><td><span class="chip part">p99 выше цели</span></td></tr>
+<tr><td class="num">50</td><td class="num">156</td><td class="num">282</td><td class="num">382</td><td class="num">1.2</td><td><span class="chip part">p99 выше цели</span></td></tr>
+<tr><td class="num">100</td><td class="num">240</td><td class="num">805</td><td class="num">1162</td><td class="num">0.9</td><td><span class="chip part">p99 выше цели</span></td></tr>
+<tr><td class="num">250</td><td class="num">5671</td><td class="num">9263</td><td class="num">9515</td><td class="num">1.0</td><td><span class="chip no">насыщение</span></td></tr>
+</table></div>
+<div class="plain"><span class="lbl">Что тут главное</span>
+<p>Смотри на колонку «работа». Она держится около <strong>одной миллисекунды на всём диапазоне</strong>, пока время решения растёт в шестьдесят раз. Значит система не «тормозит» — она <strong>стоит в очереди</strong>. Собственно вычисление не при чём.</p>
+<p>Причина названа в комментарии самого кода: походы в Redis и Neo4j синхронные, слот обрабатывает по одной транзакции за раз. У Flink для этого есть async I/O — не реализован. Замер превратил известный срез в цифру.</p></div>
+<p><strong>На что влияет:</strong> формулировка меняется с «система real-time» на «система держит 300 мс до 25 событий в секунду на слот, дальше нужен async I/O или больше слотов». Это на два порядка ниже нагрузки национального свитча — и это надо сказать самому, потому что вопрос «а сколько она держит?» будет задан наверняка.</p>
+<div class="note"><span class="lbl">Отдельная находка про задержку</span>
+<p>Работа — 2.3 мс из 300. <strong>Всё остальное — буферизация фреймворка.</strong> Один параметр — <code>python.fn-execution.bundle.time</code> с 1000 мс на 50 — дал 1923 мс из 1931 мс улучшения. Оценка бюджета по времени инференса ошиблась бы <strong>в 400 раз</strong>. Каждый дефолт Flink, который имел значение, выбран под пропускную способность, а не под задержку.</p></div>
+
+<h3>11.3 Абляция по источникам данных — центральный эксперимент</h3>
+<div class="plain"><span class="lbl">Зачем этот замер</span>
+<p>Главный вопрос работы: <em>что важнее — метод обработки или доступные данные?</em> Проверяется прямо: выключаем по одному источнику данных и смотрим, насколько просела детекция.</p>
+<p>Практический смысл выходит за рамки диплома. Поле, отсутствие которого измеримо ухудшает детекцию, — <strong>кандидат на нормативное предписание</strong>. Это перевод инженерного результата в рекомендацию Центробанку, и это самый прикладной вывод работы.</p></div>
+<p>Базовый PR-AUC 0.966 ± 0.008 по 5 сидам; дельты парные внутри сида.</p>
+<div class="tw"><table>
+<tr><th>Конфигурация</th><th class="num">Дельта (95% ДИ)</th><th class="num">Знак</th><th>Вердикт</th></tr>
+<tr><td><code>receiver_velocity=off</code></td><td class="num">−0.032 [−0.055, −0.009]</td><td class="num">5/5</td><td><span class="chip ok">есть эффект</span></td></tr>
+<tr><td><code>session_telemetry=off</code></td><td class="num">−0.019 [−0.025, −0.014]</td><td class="num">5/5</td><td><span class="chip ok">есть эффект</span></td></tr>
+<tr><td><code>receiver_age=off</code></td><td class="num">−0.011 [−0.020, −0.001]</td><td class="num">5/5</td><td><span class="chip ok">есть эффект</span></td></tr>
+<tr><td><code>myid_kinship=on</code></td><td class="num">+0.004 [+0.001, +0.007]</td><td class="num">5/5</td><td><span class="chip part">нет эффекта</span></td></tr>
+<tr><td><code>channel=off</code></td><td class="num">−0.002 [−0.004, +0.001]</td><td class="num">5/5</td><td><span class="chip part">нет эффекта</span></td></tr>
+<tr><td><code>geo_telemetry=off</code></td><td class="num">−0.001 [−0.004, +0.003]</td><td class="num">3/5</td><td><span class="chip part">нет эффекта</span></td></tr>
+<tr><td><code>device_telemetry=off</code></td><td class="num">+0.000 [+0.000, +0.000]</td><td class="num">5/5</td><td><span class="chip part">нет эффекта</span></td></tr>
+</table></div>
+<div class="note warn"><span class="lbl">Оговорка обязательна</span>
+<p>Абляция меряет только <strong>ранжирующую способность модели</strong>. Источник, ценность которого лежит в детерминированном правиле, для неё невидим. <code>geo</code> — ровно этот случай: один слабый признак, но <code>IMPOSSIBLE_TRAVEL</code> даёт 22 перехвата при нуле ложных на 775 легитимных междугородних поездках. Выключать geo по результату абляции было бы ошибкой.</p></div>
+<p><strong>Третий результат, полученный отсюда же:</strong> порог <code>MULE_FAN_IN</code> сделали относительным — квантилем живого распределения вместо константы «6 отправителей». По пяти сидам: <strong>MULE recall +6.9 п.п.</strong> [+4.2, +9.7], общий +1.8 п.п. [+1.1, +2.5], 5/5 по знаку. Выученный порог оказался 4–5 против ручной шестёрки — и это смыкается с находкой SHAP: модель систематически видит веер ниже константы.</p>
+<p><strong>Четвёртый результат — про личность получателя.</strong> Доля переводов внутри одного банка — 6.85%. Значит возраст счёта получателя доступен банку только на <strong>7% переводов</strong>, а на остальных 93% его нет физически. Это количественный аргумент за платформу ЦБ: без общего справочника этот признак недоступен, каким бы полезным он ни был.</p>
+
+<h3>11.4 Security overhead</h3>
+<div class="plain"><span class="lbl">Зачем этот замер</span>
+<p>Шифрование стоит времени. Вопрос: сколько именно, и влезает ли это в бюджет 300 мс. Заказчик такой системы обязан знать цену безопасности в миллисекундах, а не «ну, немного».</p></div>
+<div class="tw"><table>
+<tr><th>Что</th><th>Результат</th></tr>
+<tr><td>Шифрование payload (AES-256-GCM)</td><td>На решающем пути неразличимо; ~6.8 мкс на расшифровку. Измеримая цена — <strong>размер, +50%</strong> на сообщение</td></tr>
+<tr><td>Транспорт (взаимный TLS)</td><td>Четыре контрбалансированных плеча A-B-B-A: эффект <strong>не переживает смены порядка</strong>. Цена ниже дрейфа, ~4 мс на плечо</td></tr>
+<tr><td>Оборот соединений</td><td>Микробенчмарк: <strong>+11.2 мс</strong> на одно рукопожатие. Но платится клиентом <em>до</em> отметки <code>ingested_at</code>, значит ложится на бюджет свитча, а не банка</td></tr>
+</table></div>
+<p><strong>На что влияет:</strong> закрывает пункт рецензии про security overhead числом, а не рассуждением. И заодно даёт методологический урок: без контрбалансировки порядка плеч результат по TLS вышел бы с обратным знаком.</p>
+
+<h3>11.5 Отказоустойчивость: убийство воркера</h3>
+<div class="plain"><span class="lbl">Зачем этот замер</span>
+<p>Система не даёт exactly-once и <strong>не заявляет этого</strong>. Значит вопрос «а даёт ли она exactly-once» неправильный. Правильные два: <em>теряется ли что-нибудь</em> и <em>чего стоят допустимые дубли</em>. Это то, что важно для денег.</p></div>
+<p>Шесть убийств taskmanager с джиттером 45 ± 12 секунды, на чистом складе, каждый раунд шлёт непересекающийся срез.</p>
+<div class="stats">
+  <div class="stat"><span class="k">Потеряно</span><span class="v">0</span><span class="s">из 12 убийств в двух сериях</span></div>
+  <div class="stat"><span class="k">Дублирование</span><span class="v">0.89%</span><span class="s">медиана [0.40, 1.38]</span></div>
+  <div class="stat"><span class="k">Разошлись в оценке</span><span class="v">3 из 26</span><span class="s">не более 0.0003</span></div>
+  <div class="stat"><span class="k">Решение изменилось</span><span class="v">0</span><span class="s">ни в одном случае</span></div>
+</div>
+<div class="plain"><span class="lbl">Результат не в частоте</span>
+<p>Важно не то, что дублей 0.89%. Важно, что два экземпляра <em>одной и той же транзакции</em> получили <strong>разные оценки</strong>. Причина: запись в хранилище получателя идемпотентна, а <strong>чтение — нет</strong>. При повторной обработке окно получателя уже другое.</p>
+<p>Обобщение для главы: точно воспроизводится только состояние <em>внутри</em> чекпоинта. Любой признак, прочитанный из внешнего хранилища, — нет. Это цена вынесенного состояния из §10.3, и она здесь измерена.</p></div>
+<div class="note warn"><span class="lbl">Методологический эпизод, который стоит рассказать</span>
+<p>Первая серия дала значения 1.96, 1.38, 1.19, 0.60, 0.20, 0.20 процента — строго убывающие. Шесть независимых наблюдений дали бы такую последовательность <strong>один раз из 720</strong>. Причина: убийство ставилось с фиксированным сдвигом, поэтому оно не <em>сэмплировало</em> фазу чекпоинта, а <em>следовало</em> за ней. После добавления джиттера значения перестали быть упорядоченными. Ранее опубликованная цифра 0.20% оказалась минимумом диапазона, а не типичным значением.</p></div>
+
+<h3>11.6 Матрица зависимостей: что молча отваливается</h3>
+<div class="plain"><span class="lbl">Зачем этот замер</span>
+<p>Предыдущий замер убивал <em>саму систему</em>. Этот убивает то, на что она опирается: Redis, Neo4j, ClickHouse, Kafka — по одному.</p>
+<p>Ключевая мысль: всё это устроено «падать открыто». Redis не ответил — едем дальше с нулями. Neo4j не ответил — едем дальше без возраста счёта. Так и надо: платёжная система, замершая из-за упавшего кеша, — авария хуже, чем система, работающая хуже обычного.</p>
+<p>Но цена этому — <strong>деградация молчаливая</strong>. Контейнеры <code>Up</code>, ошибок нет, алерты идут. Поэтому вопрос замера не «упадёт ли», а: <em>что именно система перестаёт замечать, и узнает ли об этом хоть кто-нибудь?</em></p></div>
+<p>Ожидание для каждого плеча записано <strong>до</strong> прогона, в константе <code>EXPECTED</code>. Так результат становится проверкой предсказания, а не описанием того, что вышло.</p>
+<div class="tw"><table>
+<tr><th>Выключен</th><th class="num">Отдано</th><th class="num">Сохранено</th><th class="num">Потеряно</th><th>Предсказание</th></tr>
+<tr><td><strong>control</strong> — ничего</td><td class="num">1000</td><td class="num">1000</td><td class="num">0</td><td>эталон для остальных</td></tr>
+<tr><td>redis</td><td class="num">1000</td><td class="num">1000</td><td class="num">0</td><td><span class="chip ok">сбылось</span></td></tr>
+<tr><td>neo4j</td><td class="num">1000</td><td class="num">1000</td><td class="num">0</td><td><span class="chip ok">сбылось</span></td></tr>
+<tr><td>clickhouse</td><td class="num">1000</td><td class="num"><strong>0</strong></td><td class="num"><strong>1000</strong></td><td><span class="chip ok">сбылось</span></td></tr>
+<tr><td>kafka, на середине потока</td><td class="num">1000</td><td class="num">1000</td><td class="num">0</td><td><span class="chip ok">сбылось</span></td></tr>
+</table></div>
+<div class="plain"><span class="lbl">Как это честно подавать</span>
+<p><strong>По колонке потерь</strong> все четыре предсказания сбылись и ничего нового не обнаружено. Так и выглядит инженерная валидация, когда систему понимают: это законный результат, но выдавать его за открытие нельзя. Открытие пришло из второй колонки, и его пришлось добывать в два захода — см. §11.7.</p>
+<p>В частности, строка ClickHouse — <strong>тавтология</strong>. Выключили базу, в базу не записалось. Механизм 100% тоже был известен заранее и лежит в самом коде: <code>consumer.py</code> ставит <code>enable_auto_commit=True</code>, оффсеты уходят по таймеру независимо от успеха вставки, а <code>ch_writer._discard</code> прямым текстом пишет в лог: «оффсеты Kafka уже ушли вперёд, эти события не будут доставлены повторно».</p></div>
+<p>Замер добавил к коду ровно две вещи, и обе стоит назвать в их настоящем размере: путь повторного подключения не спасает <strong>ничего</strong> — ни хвост, ни часть пачки; и отказ молчалив <em>через границы компонентов</em>, чего по одному файлу не видно — скоринг цел, алерты публикуются, очередь аналитика наполняется, пока в складе дырка на 1000 строк.</p>
+<div class="note"><span class="lbl">Что из этого идёт в текст</span>
+<p>Не дефект-репорт, а <strong>цифра под осознанный размен</strong>: конвейер продолжает решать по живым платежам, пока склада нет, и платит за это полнотой аудит-следа. Блокировать было бы хуже — это остановка детекции на настоящих транзакциях. Формулировка: <em>запись — та часть системы, которая уступает первой, и уступает по выбору</em>; обычного рестарта склада достаточно, чтобы это проявить. Для работы, где аудит-след заявлен как аргумент защитимости, эту оговорку надо сделать самому.</p></div>
+
+<h3>11.7 Что нашлось, когда замер починили</h3>
+<div class="plain"><span class="lbl">Что было сломано</span>
+<p>У матрицы есть вторая колонка: какие <em>типы алертов замолчали</em>, пока зависимость лежала. Она интереснее первой — молчаливая деградация видна как раз тут.</p>
+<p>Первый прогон дал одинаковую картину во всех плечах, <strong>включая то, где деградации не предсказывалось</strong>. Эффект, одинаково видный в контроле, — не эффект. Причины были в измерительном инструменте: сравнение шло со всей таблицей вместо контрольного прохода; дренаж шёл после рестарта, поэтому хвост скорился уже здоровым; и состояние копилось между плечами.</p>
+<p>Схему перестроили: все плечи гоняют одну и ту же тысячу транзакций, здоровый контрольный проход даёт эталон, Redis чистится перед каждым проходом (все три пространства имён, а не одно), зависимость лежит <em>сквозь дренаж</em>.</p></div>
+<div class="tw"><table>
+<tr><th>Плечо</th><th class="num">MULE</th><th class="num">STRUCTURING</th><th class="num">ATO</th><th>Время дренажа</th></tr>
+<tr><td>control — всё здорово</td><td class="num">23</td><td class="num">4</td><td class="num">1</td><td>~6 с</td></tr>
+<tr><td>redis выключен</td><td class="num">22</td><td class="num">4</td><td class="num">1</td><td><strong>не дренировалось за 300 с</strong></td></tr>
+<tr><td>neo4j выключен</td><td class="num">31</td><td class="num">4</td><td class="num">1</td><td><strong>не дренировалось за 300 с</strong></td></tr>
+<tr><td>clickhouse выключен</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td>~6 с</td></tr>
+<tr><td>kafka на середине потока</td><td class="num">25</td><td class="num">4</td><td class="num">1</td><td>~6 с</td></tr>
+</table></div>
+<p>Отсюда следует три вещи, и третья — настоящий результат.</p>
+
+<h4 style="font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:15px;margin:26px 0 4px">Колонка типов не может проверить собственное предсказание</h4>
+<p>Предсказание для redis-плеча: «<code>MULE_FAN_IN</code> перестанет срабатывать». Колонка показывает <code>predicted_type</code>, а <code>fusion._TYPE_PRIORITY</code> ставит метку MULE по правилам <code>DISTINCT_PAYEE_BURST</code> и <code>VELOCITY</code> — <strong><code>MULE_FAN_IN</code> в этой таблице отсутствует вообще.</strong> Оба сопоставленных правила работают по стороне отправителя, из состояния Flink, и не трогают ни Redis, ни Neo4j.</p>
+<p>То есть выключение Redis и не могло сдвинуть это число, а «22 против 23» не говорит о предсказании ничего. Это не конфаунд эксперимента, а <strong>ошибка категории в самой метрике</strong>: предсказание — про <em>правило</em>, колонка — про <em>метку паттерна</em>, собранную из других правил. Чтобы проверить предсказание, нужен <code>rule_hits</code>, который в складе лежит, но этот запрос его не читает.</p>
+
+<h4 style="font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:15px;margin:26px 0 4px">Kafka-плечо даёт уровень шума</h4>
+<p>Оно предсказывает отсутствие деградации и работает вторым контролем: <strong>+2 MULE относительно эталона без всякого воздействия</strong>. Redis с его −1 внутри этого шума. Neo4j с +8 — за его пределами.</p>
+
+<h4 style="font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:15px;margin:26px 0 4px">Падать открыто — не то же самое, что падать быстро</h4>
+<div class="plain"><span class="lbl">Это и есть находка</span>
+<p>Здоровый проход прожевал 1000 событий примерно за <strong>шесть секунд</strong>. С выключенным Redis — и отдельно с выключенным Neo4j — те же 1000 событий <strong>не дренировались за пять минут</strong>. Замедление минимум в пятьдесят раз.</p>
+<p>ClickHouse-плечо дренировалось нормально, и это локализует причину: ClickHouse стоит <em>ниже</em> решения, а Redis и Neo4j — на синхронном пути обогащения, том самом, который в §11.2 ограничивает пропускную способность двадцатью пятью событиями в секунду.</p></div>
+<p>Механизм лежит в <code>enrichment.py</code> и перестаёт быть неочевидным, как только его ищешь. <strong>Ни у одного клиента не выставлен таймаут</strong> — ни <code>socket_timeout</code> у Redis, ни <code>connection_timeout</code> у драйвера Neo4j. И объект клиента обнуляется только внутри <code>open()</code>, который выполняется один раз при старте воркера: зависимость, умершая <em>позже</em>, оставляет после себя живой объект — и <strong>каждое следующее событие платит за неудачный поход</strong>. Для Redis это неудачное чтение плюс неудачная запись в кеш, для Neo4j — открытие сессии, которая не может подключиться.</p>
+<p>Конвейер продолжает принимать решения — ровно как спроектировано — и перестаёт успевать.</p>
+<div class="note crit"><span class="lbl">Почему это важно именно здесь</span>
+<p>Вся заявка системы — бюджет 300 мс. В этом свете разница принципиальна: <strong>решение, пришедшее после того, как платёж ушёл, — это не ухудшенное решение, это отсутствие решения.</strong></p>
+<p>Ни счётчик строк, ни смесь алертов этого не видят, контейнеры всё время <code>Up</code>. Место этой находки — в разделе тихих отказов, а не в колонке потерь.</p></div>
+<p>И она <em>складывается</em> с §11.2, а не дублирует её. Там синхронный поход ограничивает здоровую пропускную способность 25 событиями в секунду. Здесь тот же синхронный поход, но к <em>отсутствующей</em> зависимости и без таймаута, который его ограничил бы, сводит эту цифру почти к нулю. Одно проектное решение — две измеренные цены.</p>
+<p><strong>Лечение маленькое и намеренно не сделано, а объявлено:</strong> выставить таймауты обоим клиентам и помечать клиента мёртвым после N подряд неудач, чтобы путь «падаем открыто» перестал платить за соединение, которое не вернётся. Это идёт в главу ограничений — правка кода после замеров обесценила бы сами замеры.</p>
+
+<h4 style="font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:15px;margin:26px 0 4px">Второй результат, слабее, и подан как слабый</h4>
+<p>Потеря Neo4j не убрала алерты, а <strong>добавила</strong>: +8 MULE, выше того уровня шума ±2, который задаёт kafka-плечо. Механизм в коде есть, и направление совпадает.</p>
+<p>В режиме <code>receiver_age</code> по умолчанию неизвестный возраст кодируется как <code>-1.0</code> — а это <em>меньше любого настоящего возраста счёта</em>. Для модели, обученной на «моложе значит опаснее», недоступный Neo4j читается не как «неизвестно», а как <strong>«моложе самого молодого счёта, который существует»</strong>.</p>
+<div class="note warn"><span class="lbl">Аргумент против этого уже написан в самом коде</span>
+<p>В <code>features.py</code> есть комментарий, объясняющий, почему ветка <code>on_us</code> использует NaN, а не сентинел: «сентинел вроде −1 будет упорядочен против настоящих возрастов». Ровно это. К ветке по умолчанию рассуждение просто не применили.</p>
+<p>Одного плеча мало, чтобы это установить, — и кластер для проверки не нужен: достаточно переиграть тот же срез офлайн с принудительно неизвестным возрастом.</p></div>
+
+<h3>11.8 Что пошло не по плану</h3>
+<div class="plain"><span class="lbl">Зачем этот раздел</span>
+<p>На защите он работает лучше всех остальных. Не потому, что комиссия любит ошибки, а потому, что он показывает: человек понимает свою систему настолько, что знает, где она врала.</p></div>
+<div class="tw"><table>
+<tr><th>Что случилось</th><th>Чем это оказалось</th></tr>
+<tr><td><strong>Джоба работала без модели</strong></td><td><code>config.py</code> искал <code>model.onnx</code> относительно <code>__file__</code>, а Flink распаковывает модули во временный каталог. Джоба молча ушла в CEP-only и <strong>штамповала записи меткой «модель применена»</strong>. Июльские цифры отозваны. Вывод: деградировавший прогон был неотличим от здорового именно в том хранилище, где такое обычно и проверяют</td></tr>
+<tr><td><strong>Датасет был невоспроизводим</strong></td><td><code>list(set(...))</code> в раздаче получателей. CPython рандомизирует хеширование строк на процесс, поэтому <strong>36 072 строки из 50 000</strong> разошлись при одинаковом сиде. Вывод: закрепление версий необходимо, но недостаточно — расходилось незадекларированное свойство интерпретатора</td></tr>
+<tr><td><strong>Типы на проводе</strong></td><td>Строка <code>"False"</code> истинна. Ложных срабатываний 20 → 459. Дефект существовал <strong>только в бою</strong>, потому что каждый офлайн-путь конвертировал флаг сам</td></tr>
+<tr><td><strong>Три колонки — константный ноль</strong></td><td>Объявлены в схеме, читались кодом, никогда не заполнялись. 13 000 записей. Найдено <em>первым же</em> запуском аудита границ</td></tr>
+<tr><td><strong>Порог кодировал свою популяцию</strong></td><td>На AMLSim <code>MULE_FAN_IN</code> срабатывал на 3.12% честного трафика и ловил 0.0% веера. Константа «6 отправителей» кодировала плотность <em>той</em> популяции, на которой её настроили, и путешествовала молча</td></tr>
+<tr><td><strong>Одиночные прогоны ошиблись трижды</strong></td><td>Один раз вдвое, два раза в знаке. Отсюда правило: каждая цифра с интервалом, эксперименты контрбалансируются</td></tr>
+</table></div>
+<div class="note crit"><span class="lbl">Сквозное утверждение</span>
+<p>Тринадцать тихих отказов за две рабочие сессии. <strong>Десять из них оставляли систему выглядящей здоровой:</strong> контейнеры <code>Up</code>, исключений нет, оффсеты двигаются, продюсер рапортует об успехе.</p>
+<p>В потоковом антифроде опасны не те отказы, что его останавливают, а те, что оставляют все индикаторы зелёными, пока система молча перестаёт делать часть работы.</p></div>
+
+<hr>
+<p style="color:var(--muted); font-size:14px; font-family:'IBM Plex Sans',sans-serif; max-width:68ch">
+Документ ориентирующий. Числа продублированы из репозитория; при расхождении верить репозиторию — список авторитетных файлов в разделе 1.
+</p>
+</main>
+</div>
+
+</body>
+</html>

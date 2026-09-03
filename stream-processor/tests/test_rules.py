@@ -1,7 +1,4 @@
-"""
-Unit tests for the pure CEP rule engine. Run: python -m pytest test_rules.py -q
-(or: python test_rules.py for a plain run without pytest).
-"""
+"""Unit tests for the pure CEP rule engine."""
 
 import pytest
 
@@ -10,8 +7,7 @@ import config as C
 import capabilities as CAP
 from conftest import bank_card, payee_card
 
-# A rule cannot fire when the capability behind it is switched off, so tests
-# asserting on those rules are skipped rather than weakened.
+# A rule cannot fire with its capability off; those tests skip, not weaken.
 needs_receiver_age = pytest.mark.skipif(
     not CAP.enabled("receiver_age"),
     reason="receiver age is disabled by CAP_RECEIVER_AGE=off")
@@ -25,10 +21,9 @@ needs_device = pytest.mark.skipif(
 
 def _ev(amount, payee="rcv", device="dev-1", region="Tashkent City",
         sender_bank="BankA", receiver_bank="BankA"):
-    # Both sides default to the SAME issuer so these tests behave identically
-    # under every RECEIVER_AGE_MODE: on-us means the age is always visible, so
-    # the rules under test here are exercised on their own terms. The effect of
-    # the mode switch is covered in test_receiver_age_modes.py.
+    # Both sides default to the SAME issuer so these behave identically under
+    # every RECEIVER_AGE_MODE: on-us means the age is always visible. The mode
+    # switch itself is covered in test_receiver_age_modes.py.
     return {"amount_uzs": amount, "receiver_pinfl": payee,
             "device_id": device, "sender_region": region,
             "sender_card": bank_card(sender_bank),
@@ -112,8 +107,7 @@ def test_real_travel_is_not_flagged():
 
 @needs_geo
 def test_adjacent_regions_are_never_impossible():
-    """Tashkent City and Tashkent Region border each other; centre-to-centre
-    distance is an artefact of the reference table, not a real journey."""
+    """Bordering regions: centre-to-centre distance is a table artefact, not a trip."""
     st = SenderState()
     evaluate(_ev(150_000, payee="friend", region="Tashkent City"), 800, st, now=1000)
     res = evaluate(_ev(150_000, payee="friend", region="Tashkent Region"),
@@ -133,8 +127,7 @@ def test_unknown_region_does_not_fire():
 
 @needs_geo
 def test_impossible_travel_is_independent_of_home_region():
-    """A sender with no established home has no GEO_ANOMALY, but physics still
-    applies — the two rules must not be coupled."""
+    """No established home means no GEO_ANOMALY, but physics still applies."""
     st = SenderState()
     evaluate(_ev(150_000, payee="friend", region="Termez-like"), 800, st, now=1000)
     st.last_region = "Surkhandarya"

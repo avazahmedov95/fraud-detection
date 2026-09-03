@@ -1,7 +1,5 @@
 """Recomputes the audit hash chain and reports where it breaks.
-
-Anchored heads: docs/audit-anchors.md.
-"""
+Anchored heads: docs/audit-anchors.md."""
 
 import argparse
 import json
@@ -20,8 +18,7 @@ CH_DB = os.getenv("CLICKHOUSE_DB", "fraud")
 def _fetch(limit):
     import urllib.parse
     import urllib.request
-    # Ordered by seq so the chain is walked in the order it was built, not in
-    # ClickHouse storage order.
+    # Ordered by seq: the order the chain was built, not ClickHouse storage order.
     tail = f"WHERE seq >= (SELECT max(seq) - {limit} FROM {CH_DB}.audit_log)" if limit else ""
     query = (f"SELECT seq, prev_hash, record_hash, ingress_hash, payload, "
              f"decision, transaction_id "
@@ -53,7 +50,6 @@ def verify(records):
                             f"record(s) missing or duplicated)")
             expected_seq = seq
 
-        # 1. chain link
         if r["prev_hash"] != prev_hash:
             findings.append(f"seq {seq}: prev_hash does not match the previous "
                             f"record_hash — records reordered or one deleted")
@@ -63,7 +59,6 @@ def verify(records):
             findings.append(f"seq {seq} (txn {r['transaction_id']}): record_hash "
                             f"does not recompute — content was altered")
 
-        # 3. projection vs signed payload
         try:
             payload = json.loads(r["payload"])
             if payload.get("decision", "") != r["decision"]:

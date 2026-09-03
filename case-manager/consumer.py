@@ -1,7 +1,5 @@
-"""Case-manager service: fraud.alerts -> the analyst work queue.
-
-The consumer the alert topic did not have. Scope and design: case-manager/README.md.
-"""
+"""Case-manager service: fraud.alerts -> the analyst work queue - the consumer the
+alert topic did not have. Scope and design: case-manager/README.md."""
 
 import json
 import logging
@@ -38,10 +36,9 @@ def main():
         bootstrap_servers=C.KAFKA_BOOTSTRAP,
         group_id=C.CONSUMER_GROUP,
         enable_auto_commit=True,
-        # From the beginning on first run: an alert raised before this service
-        # existed is still an alert nobody worked. Re-consumption is safe -
-        # case_row() is deterministic and the open version is 0, so a case that
-        # was already resolved cannot be reopened by a replay.
+        # From the beginning on first run: alerts raised before this service existed
+        # are still unworked. Replay is safe - case_row() is deterministic and the
+        # open version 0 can never outrank a resolution.
         auto_offset_reset="earliest",
         value_deserializer=lambda v: json.loads(v.decode("utf-8")),
         consumer_timeout_ms=1000,
@@ -57,10 +54,8 @@ def main():
         for msg in consumer:
             received = True
             alert = msg.value
-            # Defensive: the topic is fed by a filter on decision != ALLOW, but
-            # a filter is a line of code and this is the only reader. An ALLOW
-            # reaching the queue would be an analyst asked to investigate a
-            # transfer the system approved.
+            # Defensive: an ALLOW reaching the queue would be an analyst asked to
+            # investigate a transfer the system approved.
             if alert.get("decision") == "ALLOW":
                 log.warning("ALLOW on the alert topic (transaction %s) - "
                             "skipped; check the alerts-sink filter",

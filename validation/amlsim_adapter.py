@@ -1,7 +1,5 @@
-"""Replays the deployed rules over an IBM AMLSim run.
-
-AMLSim generates the mule collection stage PaySim lacks. Toolchain landmines and
-the negative result: validation/README.md 3.
+"""Replays the deployed rules over an IBM AMLSim run, which generates the mule
+collection stage PaySim lacks. Landmines and the negative result: README.md 3.
 """
 
 import argparse
@@ -20,11 +18,8 @@ import config as C             # noqa: E402
 from rules import SenderState, ReceiverState, evaluate   # noqa: E402
 
 
-# AMLSim's currency is unspecified and its default amounts are ~100-1000, three
-# orders below UZS. Rules with absolute thresholds (NEW_PAYEE_ABS_FLOOR,
-# STRUCTURING_THRESHOLD, LIMIT_DAILY) would never fire without rescaling. One
-# factor, derived from the medians, applied to every row: a unit conversion,
-# not tuning. Identical treatment to paysim_adapter.scale_factor.
+# AMLSim's amounts are ~100-1000, three orders below UZS, so rules with absolute
+# thresholds would never fire. A unit conversion, not tuning; same as paysim_adapter.
 def scale_factor(amounts, our_median_uzs=138_740.0):
     med = float(amounts.median())
     return our_median_uzs / med if med > 0 else 1.0
@@ -51,18 +46,11 @@ def load(dirpath):
 
 
 def _epoch(series):
-    """AMLSim timestamps are dates derived from `base_date` + step, so the clock
-    granularity is ONE DAY by default. That is coarser than PaySim's hourly
-    step, and it cuts in a specific direction: RECEIVER_WINDOW_S is 3600 s, so a
-    one-hour window covers at most one simulated day of inbound traffic, while
-    AMLSim's fan_in typology is configured to spread over min_period..max_period
-    STEPS (5-20 in the shipped parameter files). The deployed window therefore
-    sees a FRACTION of each fan-in pattern by construction.
-
-    This is reported rather than corrected. Widening the window to fit the
-    dataset would be tuning on the validation set, which is what this directory
-    exists to avoid; the sensitivity section of the report shows what a wider
-    window would have seen, explicitly not adopted.
+    """AMLSim's clock granularity is ONE DAY (dates from `base_date` + step).
+    RECEIVER_WINDOW_S is 3600 s, so a one-hour window covers at most one simulated day of
+    inbound traffic while fan_in spreads over 5-20 STEPS in the shipped parameter files:
+    the deployed window sees a FRACTION of each fan-in pattern by construction. Reported
+    rather than corrected - widening it to fit the dataset would be tuning on validation.
     """
     dt = pd.to_datetime(series, errors="coerce")
     if dt.notna().any():
@@ -83,8 +71,7 @@ def run(dirpath, limit):
     if limit:
         tx = tx.head(limit)
 
-    # Typology per transaction, so recall can be split by leg the way
-    # ml/README.md splits it on our own data.
+    # Typology per transaction, so recall splits by leg the way ml/README.md does.
     typ = {}
     if alerts is not None and "alert_type" in alerts.columns:
         typ = dict(zip(alerts["tran_id"], alerts["alert_type"]))
@@ -109,8 +96,8 @@ def run(dirpath, limit):
         label = 1 if str(getattr(r, "is_sar")).lower() in ("true", "1") else 0
         bene = getattr(r, "bene_acct")
 
-        # Receiver account age in days, from the accounts file. PaySim had no
-        # equivalent field, so this capability was forced off there.
+        # Receiver account age in days, from the accounts file. PaySim had no equivalent
+        # field, so this capability was forced off there.
         opened = open_dt.get(bene, pd.NaT)
         age_days = None
         if pd.notna(opened):
@@ -218,10 +205,9 @@ def main():
     if not os.path.isdir(args.dir):
         raise SystemExit(f"{args.dir} is not a directory")
 
-    # AMLSim carries account ids, amounts, a clock and account open dates.
-    # Everything not backed by real data is switched OFF rather than defaulted,
-    # so no rule can fire on a fabricated zero. receiver_age stays ON - the one
-    # capability this dataset supports and PaySim did not.
+    # Anything not backed by real data is switched OFF rather than defaulted, so no
+    # rule can fire on a fabricated zero. receiver_age stays ON - the one capability
+    # this dataset supports and PaySim did not.
     for key in ("myid_kinship", "device_telemetry", "geo_telemetry",
                 "session_telemetry", "channel"):
         CAP.MODES[key] = "off"

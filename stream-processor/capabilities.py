@@ -1,13 +1,8 @@
-"""Registry of what the deploying bank can observe.
-
-Each capability declares the integration it needs, the model features it
-contributes and the CEP rules it enables. features.py assembles FEATURE_NAMES
-from it and rules.py gates each rule on it, so switching one off follows through
-the whole pipeline - including the train/serve contract, which is derived here
-rather than maintained by hand.
-
-Configure with CAP_<KEY> env vars. Changing any of them changes the feature
-contract: retrain and re-export afterwards.
+"""Registry of what the deploying bank can observe: each capability declares the
+integration it needs, the model features it contributes and the CEP rules it enables.
+features.py and rules.py derive from it, so switching one off follows through the
+whole pipeline. Configure with CAP_<KEY> env vars - changing any of them changes the
+feature contract: retrain and re-export afterwards.
 """
 
 import os
@@ -17,9 +12,9 @@ from dataclasses import dataclass, field
 @dataclass(frozen=True)
 class Capability:
     key: str
-    requires: str                       # the integration or data source needed
-    features: tuple = ()                # model features it contributes
-    rules: tuple = ()                   # CEP rules it enables
+    requires: str
+    features: tuple = ()
+    rules: tuple = ()
     modes: tuple = ("on", "off")        # allowed settings, richest first
     rationale: str = ""                 # why it may be unavailable
 
@@ -163,28 +158,21 @@ def mode(key: str) -> str:
 
 
 def enabled(key: str) -> bool:
-    """True unless the capability is switched off entirely.
-
-    A capability with no "off" among its modes (payee_identity) is therefore
-    always enabled: it selects BETWEEN data sources rather than declaring one
-    absent. It contributes no features, so this does not affect the vector.
-    """
+    """True unless the capability is switched off entirely. One with no "off" mode
+    (payee_identity) is therefore always enabled: it selects BETWEEN data sources
+    and adds no features, so the vector is unaffected."""
     return MODES[key] != "off"
 
 
 def feature_names() -> list:
-    """The model's feature vector, in registry order.
-
-    Derived rather than hand-maintained: a capability that is off contributes no
-    columns, so the train/serve contract cannot drift from the configuration.
-    """
+    """The model's feature vector, in registry order (derived, never hand-written)."""
     names = []
     for cap in REGISTRY:
         if not enabled(cap.key):
             continue
         names.extend(cap.features)
-        # 'on_us' cannot distinguish "new account" from "not our client" without
-        # saying which it is, so the flag only exists in that mode.
+        # 'on_us' cannot distinguish "new account" from "not our client" without saying
+        # which, so the flag exists only in that mode.
         if cap.key == "receiver_age" and MODES[cap.key] == "on_us":
             names.append("receiver_age_known")
     return names
@@ -194,19 +182,15 @@ RULE_CAPABILITY = {rule: cap.key for cap in REGISTRY for rule in cap.rules}
 
 
 def rule_enabled(rule: str) -> bool:
-    """True when the data behind a CEP rule is available.
-
-    Unknown rules are enabled: a rule with no declared dependency runs on the
-    core stream, and failing open here would silently disable detection.
-    """
+    """True when the data behind a CEP rule is available. Unknown rules are enabled:
+    a rule with no declared dependency runs on the core stream, and failing open
+    here would silently disable detection."""
     key = RULE_CAPABILITY.get(rule)
     return True if key is None else enabled(key)
 
 
-# Rules that characterise each fraud pattern — the ones that plausibly fire
-# TOGETHER on one episode. Distinct from fusion._TYPE_PRIORITY, which names an
-# alert from whichever rule fired first: this is the full co-firing signature,
-# and it is what determines how much score a pattern can actually accumulate.
+# Rules that plausibly fire TOGETHER on one episode - distinct from
+# fusion._TYPE_PRIORITY, which names an alert from whichever rule fired first.
 PATTERN_SIGNATURES = {
     "APP":         ("NEW_PAYEE_HIGH_AMOUNT", "FRESH_RECEIVER", "COACHED_SESSION"),
     "ATO":         ("DEVICE_CHANGE", "GEO_ANOMALY", "IMPOSSIBLE_TRAVEL", "VELOCITY"),
@@ -216,12 +200,8 @@ PATTERN_SIGNATURES = {
 
 
 def _rule_weights():
-    """Rule -> weight, read from config by naming convention.
-
-    Kept as a lookup rather than a second hand-maintained table: a rule whose
-    weight constant is renamed shows up as missing here rather than silently
-    contributing zero to the reachability calculation.
-    """
+    """Rule -> weight, read from config by naming convention. A renamed weight
+    constant shows up as missing here rather than silently contributing zero."""
     import config as C
     explicit = {
         "NEW_PAYEE_HIGH_AMOUNT": "W_NEW_PAYEE_HIGH",
@@ -242,11 +222,7 @@ def _rule_weights():
 
 
 def reachable_score(pattern: str) -> float:
-    """Highest CEP score this fraud pattern can reach under the current profile.
-
-    A pattern whose signature rules are mostly disabled cannot accumulate score,
-    however obvious the fraud is. This is the quantity a fixed threshold ignores.
-    """
+    """Highest CEP score this fraud pattern can reach under the current profile."""
     weights = _rule_weights()
     fired = [weights.get(r, 0.0) for r in PATTERN_SIGNATURES.get(pattern, ())
              if rule_enabled(r)]
@@ -263,24 +239,14 @@ def weakest_reachable() -> float:
 def scaled_threshold(base_threshold: float, base_weakest: float = None) -> float:
     """Re-express a hand-calibrated threshold for the current capability profile.
 
-    The CEP score is additive, so a threshold is implicitly a statement about how
-    many rules must agree. Hold that statement fixed while the available rules
-    change, and a reduced deployment does not get a slightly worse rule layer —
-    it gets a silent one. Measured on PaySim: with two rules available the
-    highest score any fraud reached was 0.35, against a 0.40 cutoff. Nothing was
-    ever flagged, while the rules themselves separated the classes 4:1.
-
-    So the threshold is carried across as a PROPORTION of what the weakest
-    pattern can reach:
-
         threshold = base_threshold x (weakest_now / weakest_at_full_capability)
 
-    At full capability this returns base_threshold unchanged, so the calibrated
-    operating point is preserved and only reduced deployments move.
-
-    This rescales sensitivity, it does not recover it: a profile that cannot see
-    a pattern still cannot see it. It only stops the layer from going mute.
-    """
+    An additive threshold implicitly states how many rules must agree; held fixed as
+    the available rules shrink, a reduced deployment gets a SILENT rule layer.
+    Measured on PaySim: with two rules available the highest score any fraud reached
+    was 0.35, against a 0.40 cutoff - nothing was ever flagged, while the rules
+    themselves separated the classes 4:1. At full capability this returns
+    base_threshold unchanged; it rescales sensitivity, it does not recover it."""
     if base_weakest is None:
         saved = dict(MODES)
         try:

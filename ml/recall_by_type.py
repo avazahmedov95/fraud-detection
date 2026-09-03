@@ -1,6 +1,5 @@
-"""Recall per fraud type, with counts beside the rates - a per-type figure on a
-few dozen events carries a wide interval.
-"""
+"""Recall per fraud type, with counts beside the rates: a per-type figure on a few
+dozen events carries a wide interval."""
 
 import argparse
 import json
@@ -117,7 +116,6 @@ def report(state):
             print(f"  {t:<12}{p:>7.1%}  (n={one[t]['n']:<4}) "
                   f"CI [{lo:.1%}, {hi:.1%}]")
 
-    # Which gaps survive pooling: non-overlapping intervals only.
     print("\ntypes whose intervals do not overlap the best type's:")
     best = max(rows, key=lambda r: r[3])
     for t, caught, n, p, lo, hi in rows:

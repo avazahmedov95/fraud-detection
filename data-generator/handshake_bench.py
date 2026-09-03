@@ -1,8 +1,5 @@
-"""Microbenchmark: the cost of one Kafka connection, plaintext versus mutual TLS.
-
-Arms alternate within each pair and one warm-up pair is discarded. Result and
-why it is measured separately from the pipeline: docs/irp-framing.md 7.5a.
-"""
+"""Microbenchmark: the cost of one Kafka connection, plaintext versus mutual TLS. Arms
+alternate within each pair, one warm-up pair is discarded; docs/irp-framing.md 7.5a."""
 
 import argparse
 import statistics as st
@@ -61,8 +58,7 @@ def main():
 
     plain, tls = [], []
     for i in range(args.n):
-        # Alternate the order within each pair as well, so neither transport is
-        # always the one that follows the other's teardown.
+        # Alternate: neither transport always follows the other's teardown.
         if i % 2 == 0:
             plain.append(one_connection(args.plain, False, args))
             tls.append(one_connection(args.tls, True, args))
@@ -74,8 +70,7 @@ def main():
     m_plain = report("plaintext", plain)
     m_tls = report("mutual TLS", tls)
 
-    # Paired differences: each TLS connection against the plaintext one made
-    # beside it, which removes drift shared by both.
+    # Paired differences remove drift shared by both arms.
     diffs = sorted(t - p for t, p in zip(tls, plain))
     print(f"\n  paired difference, TLS minus plaintext:")
     print(f"    median {st.median(diffs):+.1f} ms    "

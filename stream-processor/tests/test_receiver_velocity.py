@@ -1,11 +1,6 @@
-"""
-Unit tests for the receiver-side (fan-in) signals.
-
-Every other feature is computed from per-sender state. These are the only ones
-that look at the payee's inbound history, which is what a mule's fan-in shape
-actually is.
-
-Run: python -m pytest test_receiver_velocity.py -q
+"""Unit tests for the receiver-side (fan-in) signals. Every other feature comes
+from per-sender state; these are the only ones that look at the payee's inbound
+history, which is a mule's fan-in shape.
 """
 
 import pytest
@@ -54,8 +49,7 @@ def test_fan_in_below_threshold_is_not_flagged():
 
 @needs_cap
 def test_repeat_transfers_from_one_sender_are_not_fan_in():
-    """Ten transfers from one person is a habit; one each from ten people is a
-    collection point. The rule counts distinct senders for that reason."""
+    """Ten transfers from one person is a habit; the rule counts DISTINCT senders."""
     rs = ReceiverState()
     res = None
     for i in range(C.MULE_FAN_IN_MIN_SENDERS + 4):
@@ -82,8 +76,7 @@ def test_inbound_features_reach_the_vector():
 
 
 def test_missing_receiver_state_fails_open():
-    """If the shared store is unreachable the pipeline must keep scoring on the
-    remaining signals, not stall or crash."""
+    """An unreachable shared store must keep scoring, not stall or crash."""
     res = evaluate(_ev("s1"), 800, SenderState(), now=1000, receiver_state=None)
     assert "MULE_FAN_IN" not in res["rule_hits"]
     assert res["decision"] in ("ALLOW", "REVIEW", "BLOCK")

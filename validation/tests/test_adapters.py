@@ -1,12 +1,8 @@
-"""
-Tests for the external-dataset adapters.
+"""Tests for the external-dataset adapters.
 
-These run against small fixtures in the shape of the real files, so the harness
-is known to work before anyone downloads 470 MB. They test the ADAPTER — the
-mapping from a foreign schema onto this project's event contract — not the
-detection result, which is the point of the actual run.
-
-Run: python -m pytest test_adapters.py -q
+Small fixtures shaped like the real files, so the harness is known to work
+before anyone downloads 470 MB. They test the ADAPTER — the mapping from a
+foreign schema onto this project's event contract — not the detection result.
 """
 
 import os
@@ -16,8 +12,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-# The package itself is put on sys.path by tests/conftest.py; this adds the
-# stream-processor modules the adapters replay through.
+# conftest.py puts the package on sys.path; this adds stream-processor's modules.
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "..", "stream-processor"))
 
@@ -52,9 +47,7 @@ def paysim_df():
 
 
 def test_scale_factor_normalises_the_median():
-    """Amounts are rescaled so absolute-threshold rules are meaningful. Without
-    it, PaySim amounts sit ~1000x below the UZS thresholds and no absolute rule
-    could ever fire."""
+    """Without rescaling, PaySim amounts sit ~1000x below the UZS thresholds."""
     amounts = pd.Series([100.0, 200.0, 300.0])
     s = PS.scale_factor(amounts, our_median_uzs=2000.0)
     assert abs(float(amounts.median()) * s - 2000.0) < 1e-6
@@ -80,8 +73,7 @@ def test_step_becomes_an_hourly_timestamp(paysim_df):
 
 
 def test_rules_fire_on_foreign_data(paysim_df, tmp_path):
-    """The substantive check: rules written against our generator produce hits on
-    a dataset built by someone else, without retraining or tuning."""
+    """Rules written against our generator must hit a foreign dataset untuned."""
     path = tmp_path / "paysim.csv"
     paysim_df.to_csv(path, index=False)
 
@@ -96,9 +88,8 @@ def test_rules_fire_on_foreign_data(paysim_df, tmp_path):
 
     assert len(res) == len(paysim_df)
     assert hits["fraud"], "no rule fired on fraud — the adapter is not wiring up"
-    # Separation, not a specific rate: the fixture is not calibrated, so a
-    # threshold here would be meaningless. What must hold is that fraud is
-    # flagged more often than legitimate traffic.
+    # Separation, not a rate: the fixture is not calibrated, so a threshold here
+    # would be meaningless. Fraud must simply be flagged more often than legit.
     flagged = res.decision.isin(["REVIEW", "BLOCK"])
     fraud_rate = flagged[res.label == 1].mean()
     legit_rate = flagged[res.label == 0].mean()
@@ -106,8 +97,7 @@ def test_rules_fire_on_foreign_data(paysim_df, tmp_path):
 
 
 def test_capabilities_without_data_are_off_in_the_run(paysim_df, tmp_path):
-    """PaySim has no device, geo, session or channel. Any rule from those
-    capabilities firing would mean the run invented data."""
+    """PaySim has no device, geo, session or channel; a rule firing means invented data."""
     path = tmp_path / "paysim.csv"
     paysim_df.to_csv(path, index=False)
 
@@ -127,17 +117,15 @@ def test_capabilities_without_data_are_off_in_the_run(paysim_df, tmp_path):
 
 
 
-# ---------------------------------------------------------------------------
-# AMLSim. Fixtures in the shape of AMLSim's three output files, so the harness
-# is known to work before anyone builds a Java simulator. AMLSim supports one
-# capability PaySim does not — receiver_age, from accounts.open_dt — so the
-# "capabilities without data" test differs from PaySim's by exactly that entry.
-# ---------------------------------------------------------------------------
+# --- AMLSim ----------------------------------------------------------------
+# Fixtures shaped like its three output files, so the harness works before
+# anyone builds a Java simulator. AMLSim supports one capability PaySim does
+# not — receiver_age, from accounts.open_dt — so the "capabilities without
+# data" test differs from PaySim's by exactly that entry.
 
 @pytest.fixture
 def amlsim_dir(tmp_path):
-    """accounts.csv + transactions.csv + alert_transactions.csv, with fan_in and
-    fan_out labelled separately — the reason this dataset was chosen."""
+    """AMLSim's three files, with fan_in and fan_out labelled separately."""
     rng = np.random.default_rng(0)
     base = pd.Timestamp("2017-01-01")
 
@@ -200,8 +188,7 @@ def test_amlsim_daily_timestamps_become_epoch_seconds(amlsim_dir):
 
 
 def test_amlsim_receiver_age_is_read_from_accounts(amlsim_dir):
-    """The capability PaySim could not support. If open_dt were ignored,
-    receiver_age would be None everywhere and FRESH_RECEIVER could never fire."""
+    """If open_dt were ignored, receiver_age would be None and FRESH_RECEIVER never fire."""
     saved = dict(CAP.MODES)
     try:
         for key in ("myid_kinship", "device_telemetry", "geo_telemetry",
@@ -215,8 +202,7 @@ def test_amlsim_receiver_age_is_read_from_accounts(amlsim_dir):
 
 
 def test_amlsim_typology_labels_survive_to_the_result(amlsim_dir):
-    """Section B of the report exists only if alert_type reaches the rows. The
-    fan_in/fan_out split is the whole reason for using this dataset."""
+    """Section B needs alert_type on the rows; the fan_in/fan_out split is why this dataset."""
     saved = dict(CAP.MODES)
     try:
         for key in ("myid_kinship", "device_telemetry", "geo_telemetry",
@@ -230,8 +216,7 @@ def test_amlsim_typology_labels_survive_to_the_result(amlsim_dir):
 
 
 def test_amlsim_capabilities_without_data_are_off(amlsim_dir):
-    """AMLSim has no device, geo, session or channel. FRESH_RECEIVER is NOT in
-    the forbidden set here — unlike the PaySim test — because open_dt is real."""
+    """FRESH_RECEIVER is NOT forbidden here, unlike the PaySim test: open_dt is real."""
     saved = dict(CAP.MODES)
     try:
         for key in ("myid_kinship", "device_telemetry", "geo_telemetry",

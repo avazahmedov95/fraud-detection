@@ -23,6 +23,9 @@ venv/
 ml/models/*.joblib
 ml/models/*.onnx
 ml/models/*.txt
+# manifest.json is the PROVENANCE record and IS tracked - it is what says the
+# untracked artefacts above belonged together.
+!ml/models/manifest.json
 ml/models/*.png
 ml/models/_pre_ablation/
 
@@ -52,6 +55,8 @@ infra/kafka/certs/
 # every round, so tracking it means a dirty tree after every experiment.
 stream-processor/fault_injection_state.json
 stream-processor/fault_injection_duplicates.txt
+stream-processor/dependency_failure_state.json
+stream-processor/throughput_windows.json
 
 # Vendored external simulator for the receiver-side cross-check
 # (validation/README.md 3). Cloned, not authored here, and its outputs

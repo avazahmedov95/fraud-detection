@@ -1,8 +1,6 @@
-"""Adds calibration figures to metrics.json for a model that is already trained.
-
+"""Adds calibration figures to metrics.json for an already-trained model.
 Retraining to obtain them would rewrite model.joblib while model.onnx - the
 artefact that serves - stayed put, and would move every reported figure.
-See --help for the modes; the finding is docs/irp-framing.md 9.1.
 """
 
 import argparse
@@ -45,21 +43,11 @@ def _native_proba(X):
     path = os.path.join(MODELS_DIR, "model.joblib")
     clf = joblib.load(path)
     with warnings.catch_warnings():
-        # "X does not have valid feature names, but LGBMClassifier was fitted
-        # with feature names" - emitted on some sklearn/lightgbm combinations
-        # and benign here, VERIFIED rather than assumed:
-        #
-        #   * the model was fitted on a bare numpy array (train.py), so its
-        #     booster carries positional names, Column_0..23;
-        #   * feature_names.json matches capabilities.feature_names() exactly,
-        #     which is the order those columns were in;
-        #   * scoring this same slice through model.onnx returns identical
-        #     figures to five decimal places.
-        #
-        # Suppressed narrowly, and only here, because a warning on every run
-        # that never means anything teaches an operator to ignore warnings.
-        # stream-processor/test_artefact_consistency.py is what actually
-        # guards the hazard the message gestures at.
+        # "X does not have valid feature names..." - benign here, VERIFIED not assumed:
+        # fitted on a bare numpy array (train.py) so the booster carries positional names
+        # Column_0..23; feature_names.json matches capabilities.feature_names() exactly; and
+        # scoring this same slice through model.onnx returns identical figures to five
+        # decimal places. test_artefact_consistency.py guards the hazard itself.
         warnings.filterwarnings("ignore", message=".*valid feature names.*")
         proba = clf.predict_proba(X.astype(np.float64))[:, 1]
     return proba, os.path.basename(path)
@@ -75,9 +63,7 @@ def main():
     args = ap.parse_args()
 
     df = D.build_matrix(CSV)
-    # The SAME split train.py uses. A calibration figure computed over a
-    # different slice than the AUCs it sits beside would invite comparison
-    # between numbers that were never measured on the same events.
+    # The SAME split train.py uses, so calibration and the AUCs describe the same events.
     cut = int(len(df) * 0.80)
     test = df.iloc[cut:]
     X = test[D.FEATURE_NAMES].astype("float32").values
@@ -104,8 +90,7 @@ def main():
         raise SystemExit(f"{METRICS} not found - train the model first")
     with open(METRICS, encoding="utf-8") as fh:
         metrics = json.load(fh)
-    # Merge, never rewrite: every other key belongs to the training run that
-    # produced this model and must keep describing it.
+    # Merge, never rewrite: every other key belongs to the training run.
     metrics["calibration"] = cal
     with open(METRICS, "w", encoding="utf-8") as fh:
         json.dump(metrics, fh, indent=2)

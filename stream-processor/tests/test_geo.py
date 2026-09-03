@@ -1,7 +1,4 @@
-"""
-Unit tests for the geographic reference table and distance maths.
-Run: python -m pytest test_geo.py -q
-"""
+"""Unit tests for the geographic reference table and distance maths."""
 
 import geo as G
 import config as C
@@ -45,8 +42,7 @@ def test_implied_speed_matches_distance_over_time():
 
 
 def test_same_second_move_is_not_infinite():
-    """Zero elapsed time must clamp, not divide by zero — and must still be
-    far above the plausible-speed ceiling."""
+    """Zero elapsed time must clamp, not divide by zero, and stay above the ceiling."""
     v = G.implied_speed_kmh("Tashkent City", "Karakalpakstan", 0)
     assert v > C.MAX_PLAUSIBLE_KMH
 

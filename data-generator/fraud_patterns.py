@@ -1,8 +1,5 @@
-"""The seven fraud scenarios injected into the generated traffic.
-
-Each leaves a signature a specific rule is meant to catch; the parameters and
-the injection method are docs/generator-spec.md 5.
-"""
+"""The seven fraud scenarios injected into the generated traffic; each leaves a
+signature a specific rule is meant to catch. Parameters: docs/generator-spec.md 5."""
 
 import numpy as np
 from datetime import datetime, timedelta
@@ -15,9 +12,8 @@ from persons import households, relatives_of
 from travel import hijack_origin
 
 
-# Target share of *fraudulent transactions* per pattern. APP is weighted up
-# because it is the central research target, yet each APP episode is a single
-# transaction (whereas mule/structuring episodes emit many).
+# Target share of *fraudulent transactions*, not episodes: one APP episode is a single
+# transaction while mule/structuring emit many. APP is weighted up as the research target.
 FRAUD_MIX = {"APP": 0.35, "ATO": 0.20, "STRUCTURING": 0.20, "MULE": 0.25}
 
 
@@ -25,10 +21,8 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
                  legit_activity=None):
     """Generate fraud episodes until each pattern hits its transaction budget.
 
-    `legit_activity` maps pinfl -> sorted [(event_time, region)] of the person's
-    legitimate transactions. ATO uses it to anchor a hijacked session to a real
-    moment in the victim's history, which is what makes the resulting journey
-    impossible rather than merely unusual.
+    `legit_activity` maps pinfl -> sorted [(event_time, region)]; ATO anchors a hijacked
+    session to a real moment in the victim's history, making the journey impossible.
     """
     legit_activity = legit_activity or {}
     events = []
@@ -44,10 +38,8 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
     def maybe_relative(person, fallback):
         """Route a minority of fraud legs through a genuine relative.
 
-        Real fraud is not kinship-free: mule networks recruit inside families,
-        and relatives' accounts are used as drops. Without this, `is_family`
-        would separate fraud perfectly by construction and any importance it
-        showed would be an artefact of this generator rather than a finding.
+        Real fraud is not kinship-free (mules recruit inside families). Without this,
+        `is_family` separates fraud by construction and its importance is an artefact.
         """
         kin = relatives_of(person, by_household)
         if kin and rng.random() < FAMILY_FRAUD_SHARE:
@@ -57,44 +49,29 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
     def pick(pool):
         return pool[int(rng.integers(len(pool)))]
 
-    # Seed transfers live in their own list: `produced[kind]` counts everything
-    # appended to `events` inside a pattern block, so putting a non-fraud event
-    # there would silently consume the fraud budget and shrink the dataset's
-    # fraud count.
+    # Seed transfers live in their own list: `produced[kind]` counts everything appended
+    # to `events` in a pattern block, so a non-fraud event there would eat the fraud budget.
     seeds = []
 
     def maybe_seed_payee(victim, payee, fraud_ts, balance):
-        """Establish the payee before the fraud, the way the threat model says
-        an adversary would.
+        """Establish the payee before the fraud, as the threat model says an adversary would.
 
-        docs/threat-model.md 4 rates NEW_PAYEE_HIGH_AMOUNT "low cost to evade -
-        a prior small transfer establishes the payee". This produces exactly
-        that: a small transfer from the victim to the same destination, days
-        earlier, which leaves the payee no longer new to the stream by the time
-        the real transfer arrives.
-
-        The seed is labelled is_fraud=0 ON PURPOSE. No loss happens on it, and
-        under this project's label definition a detector firing on it is a false
-        positive. Labelling it fraud would hand the model a second positive per
-        episode and quietly inflate recall.
-
-        Known unrealism, recorded rather than modelled: receiver_account_age_days
-        is a static property of the Person, so the destination looks the same age
-        at seed time as at fraud time. Modelling it would mean ageing accounts
-        along the timeline, which affects every event in the dataset for the sake
-        of one.
+        docs/threat-model.md 4 rates NEW_PAYEE_HIGH_AMOUNT "low cost to evade - a prior
+        small transfer establishes the payee": this emits that transfer days earlier, so the
+        payee is no longer new to the stream. Labelled is_fraud=0 ON PURPOSE: no loss happens
+        on it, a detector firing on it is a false positive, and labelling it fraud would hand
+        the model a second positive per episode and inflate recall. Known unrealism, recorded
+        rather than modelled: receiver_account_age_days is static on the Person, so the
+        destination looks the same age at seed time as at fraud time.
         """
         if SEEDED_PAYEE_SHARE <= 0 or rng.random() >= SEEDED_PAYEE_SHARE:
             return
         seed_ts = fraud_ts - timedelta(days=float(rng.uniform(1.0, 21.0)))
         if seed_ts < start_dt:
-            # Outside the observed window: the payee would still be stream-new,
-            # so emitting nothing is the honest outcome rather than clamping the
-            # timestamp and pretending the seeding happened inside it.
+            # Outside the window: the payee would still be stream-new, so emit nothing.
             return
-        # Small enough that the seed itself trips neither the absolute floor of
-        # NEW_PAYEE_HIGH_AMOUNT nor the personal AMOUNT_DEVIATION baseline: an
-        # evasion that raises its own alert is not an evasion.
+        # Small enough to trip neither NEW_PAYEE_HIGH_AMOUNT's floor nor the personal
+        # AMOUNT_DEVIATION baseline: an evasion that raises its own alert is not one.
         amount = float(np.clip(np.exp(rng.normal(10.8, 0.4)), AMOUNT_MIN, AMOUNT_MAX))
         seeds.append(make_event(
             victim, payee, amount, seed_ts, "MOBILE_APP",
@@ -102,7 +79,6 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
             is_new_payee=True, balance_before=balance,
             is_fraud=0, fraud_type="NONE", rng=rng))
 
-    # Round-robin over patterns whose budget is not yet met.
     while sum(produced.values()) < n_fraud:
         remaining = [k for k in FRAUD_MIX if produced[k] < budget[k]]
         if not remaining:
@@ -112,13 +88,10 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
 
         if kind == "APP":
             victim = pick(persons)
-            # Usually a purpose-made account; sometimes a complicit relative's,
-            # which is a documented APP variant (the payee is family, the
-            # instruction still came from a fraudster).
+            # Sometimes a complicit relative's account - a documented APP variant.
             fraudster = maybe_relative(victim, pick(fraud_accounts))
             balance = float(np.exp(rng.normal(15.5, 0.6)))          # larger-than-usual balance
-            # Most APP fraud drains a large amount, but a portion is moderate so it
-            # overlaps ordinary large transfers and isn't trivially separable.
+            # A portion of amounts are moderate, so APP overlaps ordinary large transfers.
             if rng.random() < 0.40:
                 amount = float(np.clip(np.exp(rng.normal(14.0, 0.5)), AMOUNT_MIN, AMOUNT_MAX))
             else:
@@ -133,20 +106,13 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
 
         elif kind == "ATO":
             victim = pick(persons)
-            # 40% "stealth" takeover: the fraudster operates from the victim's own
-            # device and region (e.g. on-device malware), leaving only behavioural
-            # signals (velocity, amount) — much harder to catch.
+            # 40% "stealth" takeover: fraudster operates from the victim's own device and
+            # region (on-device malware), leaving only behavioural signals - harder to catch.
             stealth = rng.random() < 0.40
             device = f"dev-{victim.pinfl[-8:]}" if stealth else f"dev-NEW-{int(rng.integers(10**6))}"
             region, base = victim.region, rand_time()
 
             if not stealth:
-                # Anchor the takeover to a real moment in the victim's history:
-                # the session continues minutes after they were last seen, from
-                # somewhere they could not have travelled to in that time. This
-                # is what a hijacked session looks like — not a random region at
-                # a random hour, which only produces an impossible journey by
-                # coincidence.
                 seen = legit_activity.get(victim.pinfl)
                 if seen:
                     when, where = seen[int(rng.integers(len(seen)))]
@@ -157,9 +123,6 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
                         base = datetime.fromisoformat(when) + timedelta(
                             minutes=gap_min)
                     else:
-                        # No region is far enough to be unreachable in the time
-                        # available. Leave the session where it is rather than
-                        # inventing a journey the geography does not support.
                         region = where
                 else:
                     region = str(rng.choice(REGIONS))
@@ -191,17 +154,15 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
                     is_fraud=1, fraud_type="STRUCTURING", rng=rng))
 
         else:  # MULE — fan-in then fan-out
-            # A share of mules are ordinary people recruited into the network
-            # rather than purpose-made accounts. Only those have relatives, so
-            # only those can show family fan-in.
+            # A share of mules are ordinary people recruited into the network, not
+            # purpose-made accounts. Only those have relatives / family fan-in.
             recruited = rng.random() < MULE_RECRUITED_SHARE
             mule = pick(persons) if recruited else pick(fraud_accounts)
             base = rand_time()
             n_in = int(rng.integers(4, 9))
             collected = 0.0
             for i in range(n_in):
-                # Recruitment runs through personal networks, so some of the
-                # senders feeding a recruited mule are their own relatives.
+                # Recruitment runs through personal networks: some senders are relatives.
                 sender = maybe_relative(mule, pick(persons))
                 amount = float(np.clip(np.exp(rng.normal(13.5, 0.6)), AMOUNT_MIN, AMOUNT_MAX))
                 collected += amount

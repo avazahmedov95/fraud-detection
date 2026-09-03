@@ -1,4 +1,4 @@
-"""Unit tests for the sink-writer mapping + batching. Run: python test_record.py"""
+"""Unit tests for the sink-writer mapping + batching."""
 
 import json
 
@@ -11,7 +11,7 @@ SCORED = {
     "sender_card": "8600...1", "receiver_card": "9860...2",
     "sender_pinfl": "S1", "receiver_pinfl": "R1",
     "amount_uzs": 9_000_000, "channel": "MOBILE_APP",
-    "sender_region": "Tashkent City", "receiver_region": "Andijan",
+    "sender_region": "Tashkent City",
     "is_new_payee": True,
     "cep_score": 0.5, "ml_score": 0.93, "final_score": 0.93,
     "decision": "BLOCK", "predicted_type": "APP",
@@ -49,13 +49,10 @@ def test_is_alert():
 
 
 def test_alert_params_links_by_card():
-    """Both ends of a graph edge are keyed by CARD.
-
-    receiver_pinfl is no longer on the wire — a sending bank cannot resolve the
-    destination PAN to a person — so the money-flow network is the card-to-card
-    graph the switch actually sees. Keying one end by pinfl and the other by
-    card would make the graph inconsistent rather than merely partial.
-    """
+    """Both ends of a graph edge are keyed by CARD: receiver_pinfl is no longer on
+    the wire — a sending bank cannot resolve the destination PAN to a person — so
+    the money-flow network is the card-to-card graph the switch sees; keying one
+    end by pinfl and the other by card would make it inconsistent, not partial."""
     p = R.alert_params(SCORED)
     assert p["sender"] == SCORED["sender_card"]
     assert p["receiver"] == SCORED["receiver_card"]
@@ -63,8 +60,7 @@ def test_alert_params_links_by_card():
 
 
 def test_alert_params_survive_a_record_without_a_payee_identity():
-    """A scored record carries no receiver_pinfl at all now; alert_params must
-    not reintroduce a dependency on it."""
+    """alert_params must not reintroduce a dependency on the absent receiver_pinfl."""
     without = {k: v for k, v in SCORED.items() if k != "receiver_pinfl"}
     p = R.alert_params(without)
     assert p["receiver"] == SCORED["receiver_card"]
@@ -115,10 +111,9 @@ def test_neo4j_writer_only_buffers_alerts():
 
 
 # --- schema alignment -------------------------------------------------------
-# Rows are inserted positionally, so a column added to one side only shifts every
-# value after it into the wrong column. ClickHouse accepts that silently when the
-# types happen to line up, which makes it a data-corruption bug rather than an
-# error. These tests keep the two definitions honest.
+# Rows are inserted positionally: a column added to one side only shifts every
+# later value into the wrong column, which ClickHouse accepts silently when the
+# types line up - a data-corruption bug rather than an error.
 
 import os
 import re
@@ -143,8 +138,7 @@ def _schema_columns(table):
 
 
 def test_scored_columns_match_the_schema_in_order():
-    # `scored_at` is filled by the column DEFAULT at insert time, so the writer
-    # deliberately does not send it.
+    # `scored_at` is filled by the column DEFAULT at insert time; not sent.
     schema = [c for c in _schema_columns("transactions_scored") if c != "scored_at"]
     assert schema == R.SCORED_COLUMNS
 
@@ -157,7 +151,6 @@ def test_audit_columns_match_the_schema_in_order():
 
 def test_row_builders_emit_one_value_per_column():
     assert len(R.scored_row(SCORED)) == len(R.SCORED_COLUMNS)
-    # audit_core produces the content columns; the writer appends the 3 chain
-    # columns to reach the full AUDIT_COLUMNS.
+    # audit_core gives the content columns; the writer appends the 3 chain columns.
     assert len(R.audit_core(SCORED)) == len(R.AUDIT_CORE_COLUMNS)
     assert len(R.AUDIT_COLUMNS) == len(R.AUDIT_CORE_COLUMNS) + 3

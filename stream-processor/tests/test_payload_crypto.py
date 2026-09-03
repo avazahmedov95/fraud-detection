@@ -1,20 +1,12 @@
-"""
-Known-answer test pinning the encrypted wire format.
+"""Known-answer test pinning the encrypted wire format.
 
 payload_crypto.py is duplicated between data-generator/ and stream-processor/,
-which deploy as separate units. If the copies drift, the producer writes records
-the job cannot read - and because the job's decoder falls back to plaintext JSON
-on anything without the magic prefix, a format drift could surface as mangled
-events rather than as an error. This test makes drift fail loudly in both places
-instead.
-
-The vector is a DECRYPT vector, not an encrypt one: AES-GCM uses a fresh random
-nonce per record, so encryption is deliberately non-deterministic and cannot be
-pinned by output comparison. Fixing the key, the nonce and the resulting
-envelope pins everything that matters - magic, routing key placement, base64
-framing, serialisation of the plaintext, and the associated data.
-
-    python -m pytest test_payload_crypto.py -q
+which deploy separately. On drift the producer writes records the job cannot
+read, and because the decoder falls back to plaintext JSON without the magic
+prefix, drift could surface as mangled events, not an error. A DECRYPT vector:
+AES-GCM uses a fresh random nonce per record, so encryption is non-deterministic;
+fixing key, nonce and envelope pins magic, routing-key placement, base64 framing,
+plaintext serialisation and the associated data.
 """
 
 import base64
@@ -47,9 +39,7 @@ def test_magic_is_detectable_without_the_key():
 
 
 def test_routing_key_needs_no_key_and_no_decryption():
-    """This is what key_by calls, once per record, before scoring. If it needed
-    the key or the plaintext, every event would be decrypted twice and the
-    security-overhead measurement would be measuring the wrong thing."""
+    """key_by calls this per record; needing the key would decrypt every event twice."""
     assert pc.routing_key(KAT_ENVELOPE) == "8600123456789012"
 
 
@@ -59,9 +49,7 @@ def test_routing_key_works_on_the_plaintext_arm_too():
 
 
 def test_routing_key_is_authenticated():
-    """Re-pointing a record at another sender must break it, not misroute it: a
-    record landing in the wrong key group would corrupt that sender's velocity
-    and structuring windows."""
+    """A record in the wrong key group corrupts that sender's velocity windows."""
     routing, body = KAT_ENVELOPE[len(pc.PREFIX):].split(":", 1)
     forged = pc.PREFIX + "9860000000000001" + ":" + body
     assert pc.routing_key(forged) == "9860000000000001"   # split still parses
@@ -80,14 +68,12 @@ def test_routing_key_is_authenticated():
 def test_routing_key_never_raises(bad):
     """key_by has no error handling: an exception there crash-loops the job on
     that record for as long as it is in the topic. The 'older envelope format'
-    case is not hypothetical - it is what happens whenever the wire format
-    changes while records are still unconsumed."""
+    case is what happens when the format changes with records still unconsumed."""
     assert pc.routing_key(bad) == pc.POISON_KEY
 
 
 def test_poison_records_still_fail_to_decode():
-    """Routing must be lenient; decoding must not be. A record that cannot be
-    read has to be counted and dropped, never scored as if it were valid."""
+    """An unreadable record must be counted and dropped, never scored as valid."""
     with pytest.raises(Exception):
         pc.loads_maybe_encrypted("FDE1:no-separator-after-this", KAT_KEY)
 
@@ -99,14 +85,12 @@ def test_roundtrip():
 
 
 def test_nonce_is_fresh_per_record():
-    """Reusing a nonce under one key breaks GCM catastrophically, so two
-    encryptions of one event must differ."""
+    """Reusing a nonce under one key breaks GCM: two encryptions must differ."""
     assert pc.encrypt(KAT_EVENT, KAT_KEY) != pc.encrypt(KAT_EVENT, KAT_KEY)
 
 
 def test_tampering_is_detected():
-    # Flip one bit inside the ciphertext, keeping the base64 well-formed, so the
-    # failure comes from the GCM tag rather than from a decoding error.
+    # Flip a bit inside the ciphertext, base64 still valid: GCM tag fails, not decode.
     routing, body = KAT_ENVELOPE[len(pc.PREFIX):].split(":", 1)
     raw = bytearray(base64.b64decode(body))
     raw[-17] ^= 0x01
@@ -121,15 +105,13 @@ def test_wrong_key_is_rejected():
 
 
 def test_bytes_and_str_are_both_accepted():
-    """Kafka hands the job a str via SimpleStringSchema; the producer and the
-    tests deal in both. Neither form may change the result."""
+    """Kafka hands the job a str via SimpleStringSchema; both forms must decode alike."""
     assert pc.decrypt(KAT_ENVELOPE.encode(), KAT_KEY) == KAT_EVENT
     assert pc.decrypt(KAT_ENVELOPE, KAT_KEY) == KAT_EVENT
 
 
 def test_both_arms_share_one_decode_path():
-    """The measurement compares encrypted against plaintext; if the two used
-    different decoders, the difference would not be the cost of crypto."""
+    """Both arms must share a decoder, or the measured difference is not crypto."""
     plain = json.dumps(KAT_EVENT).encode()
     assert pc.loads_maybe_encrypted(plain) == KAT_EVENT
     assert pc.loads_maybe_encrypted(KAT_ENVELOPE, KAT_KEY) == KAT_EVENT

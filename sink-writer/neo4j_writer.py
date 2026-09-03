@@ -1,11 +1,6 @@
-"""Batched Neo4j writer for ALERT transactions.
-
-    (s:Person)-[:SENT]->(t:Transaction)-[:TO]->(r:Person)
-
-Both ends match by CARD: the payee's PINFL is not on the wire, so this is the
-card-to-card graph the switch sees. Fails open, and says so with a running
-total - losing alerts quietly is the worst available failure.
-"""
+"""Batched Neo4j writer for ALERT transactions, as
+(s:Person)-[:SENT]->(t:Transaction)-[:TO]->(r:Person). Both ends match by CARD:
+the payee's PINFL is not on the wire. Fails open, with a running total - never quietly."""
 
 import logging
 import time
@@ -14,8 +9,7 @@ import record as R
 
 log = logging.getLogger("neo4j_writer")
 
-# Matches ch_writer: retry a dead connection at most this often.
-RECONNECT_INTERVAL_S = 10.0
+RECONNECT_INTERVAL_S = 10.0  # same throttle as ch_writer
 
 _MERGE = """
 UNWIND $rows AS row
@@ -94,9 +88,7 @@ class Neo4jWriter:
             self._dropped += len(self._buf)
             log.error("Neo4j write FAILED (dropped %d alert(s); total lost this "
                       "run: %d): %s", len(self._buf), self._dropped, exc)
-            # Revalidate the connection on the next flush: a write that fails
-            # against a supposedly-live driver is as likely to be a dead session
-            # as a bad statement.
+            # As likely a dead session as a bad statement; revalidate on the next flush.
             self._driver = None
         finally:
             self._buf.clear()

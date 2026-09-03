@@ -1,8 +1,6 @@
-"""Tests for issuer resolution from the PAN's BIN.
-
-The behaviour worth pinning is not the lookup - it is the two ways this can go
-wrong quietly: a bank whose several BINs stop being recognised as one bank, and
-a placeholder `code` column that would make every transfer look on-us.
+"""Issuer resolution from the PAN's BIN. The two quiet failures: a bank whose
+several BINs stop being recognised as one bank, and a placeholder `code` column
+that makes every transfer look on-us.
 """
 
 import pytest
@@ -24,21 +22,15 @@ def test_unknown_bin_is_empty_not_a_value():
 
 
 def test_short_pan_does_not_partially_match():
-    """A truncated PAN must not resolve: slicing 6 characters off a 4-digit
-    string yields the whole string, which would match nothing - but only by
-    luck. Pinned so a future change to the slice width fails here."""
+    """A truncated PAN must not resolve; it matches nothing only by luck."""
     assert B.issuer_of("8600") == ""
 
 
 def test_one_bank_owning_several_bins_is_one_issuer():
-    """The reason the identity is the bank, not the BIN.
-
-    Ipotekabank issues under both 860033 (UzCard) and 986001 (HUMO). A customer
-    holding one of each banks at ONE institution, so a transfer between them is
-    on-us and the receiver's account age is visible. Comparing BINs directly
-    would call it inter-bank and silently discard the receiver_age capability
-    for every dual-network customer of every multi-BIN bank.
-    """
+    """Ipotekabank issues under both 860033 (UzCard) and 986001 (HUMO), so a
+    customer holding one of each banks at ONE institution. Comparing BINs
+    directly would call the transfer inter-bank and silently discard
+    receiver_age for every dual-network customer of every multi-BIN bank."""
     uzcard, humo = "8600330000000001", "9860010000000002"
     assert B.issuer_of(uzcard) == B.issuer_of(humo) != ""
     assert F.is_on_us({"sender_card": uzcard, "receiver_card": humo}) is True
@@ -58,10 +50,7 @@ def test_unknown_issuer_is_never_on_us():
 # --- the guard that stops a placeholder column inflating a measured result ---
 
 def _unresolved_bins_in_population():
-    """BINs held by generated accounts that the current table does not resolve.
-
-    None when the population has not been generated.
-    """
+    """Unresolved BINs held by generated accounts; None if no population."""
     import csv
     import os
     here = os.path.dirname(os.path.abspath(__file__))
@@ -76,11 +65,9 @@ def _unresolved_bins_in_population():
 
 
 def test_unresolved_bins_are_all_accounted_for():
-    """banks.csv tracks the market as it stands; persons.csv was generated
-    against the market as it stood then. A bank that has since closed shows up
-    as an unresolvable BIN, and that is correct. A row deleted by accident must
-    not read as the same thing, so every unresolved BIN has to be named in
-    bins.RETIRED_BINS with a reason."""
+    """banks.csv tracks the market now, persons.csv as it stood: a bank that closed
+    is legitimately unresolvable, an accidentally deleted row is not, so every
+    unresolved BIN has to be named in bins.RETIRED_BINS with a reason."""
     found = _unresolved_bins_in_population()
     if found is None:
         pytest.skip("population not generated")
@@ -93,9 +80,7 @@ def test_unresolved_bins_are_all_accounted_for():
 
 
 def test_the_unresolvable_share_stays_small():
-    """A bound, not an exactness. Some unresolvable traffic is normal; a large
-    share means the table has come apart from the data and every is_on_us would
-    answer False, withdrawing receiver_age across the board."""
+    """A large unresolvable share means the table has come apart from the data."""
     found = _unresolved_bins_in_population()
     if found is None:
         pytest.skip("population not generated")
@@ -104,10 +89,8 @@ def test_the_unresolvable_share_stays_small():
 
 
 def test_a_retired_issuer_is_never_on_us():
-    """Two parties at the same CLOSED bank are still not on-us: the institution
-    that would perform the account lookup no longer exists. Works through the
-    unknown-issuer rule, not a special case - pinned so a later fallback to
-    RETIRED_BINS inside issuer_of does not break it."""
+    """Two parties at the same CLOSED bank are not on-us - the institution that
+    would do the lookup is gone - via the unknown-issuer rule, not a special case."""
     retired = next(iter(B.RETIRED_BINS))
     a, b = retired + "0000000001", retired + "0000000002"
     assert B.issuer_of(a) == ""
@@ -115,10 +98,9 @@ def test_a_retired_issuer_is_never_on_us():
 
 
 def test_an_unfilled_code_column_is_refused():
-    """banks.csv shipped with `code` unfilled - every row "00000". Comparing
-    that column makes is_on_us() true for EVERY transfer, turning the on_us
-    receiver-age mode into `always` and inflating its coverage from 6.85% to
-    100%. Refused at load rather than worked around."""
+    """banks.csv shipped with `code` unfilled - every row "00000". Comparing that
+    column makes is_on_us() true for EVERY transfer, turning the on_us
+    receiver-age mode into `always` and inflating coverage from 6.85% to 100%."""
     rows = [{"code": "00000", "name": "A"}, {"code": "00000", "name": "B"}]
     with pytest.raises(ValueError, match="must be filled"):
         B._bank_identity(rows)
@@ -130,14 +112,10 @@ def test_a_filled_code_column_identifies_the_bank():
 
 
 def test_malformed_bin_is_rejected_loudly(tmp_path, monkeypatch):
-    """A short or non-numeric BIN can never match a 6-character slice, so it
-    would read as 'unknown issuer' for every card of that bank. Fail at load
-    rather than degrade silently.
-
-    The path is patched on config, not on the environment: BANKS_CSV_PATH is
-    resolved once at import, the same way MODEL_ONNX_PATH is, because in a
-    deployment the artefact does not move while the job runs.
-    """
+    """A short or non-numeric BIN never matches a 6-character slice, so it reads as
+    'unknown issuer' for every card of that bank. The path is patched on config,
+    not the environment: BANKS_CSV_PATH resolves once at import, like
+    MODEL_ONNX_PATH, because the artefact does not move while the job runs."""
     import config as C
     csv = tmp_path / "banks.csv"
     csv.write_text("bin,code,name,cards_mln\n8600,00937,Broken,1.0\n860033,00440,Fine,2.0\n",
@@ -148,8 +126,7 @@ def test_malformed_bin_is_rejected_loudly(tmp_path, monkeypatch):
 
 
 def test_a_missing_table_names_the_fix(tmp_path, monkeypatch):
-    """The job dies at import if this file is absent, so the message has to say
-    what to run - this is the failure an operator meets after a fresh clone."""
+    """The job dies at import without this file; the message must name the fix."""
     import config as C
     monkeypatch.setattr(C, "BANKS_CSV_PATH", str(tmp_path / "nope.csv"))
     with pytest.raises(FileNotFoundError, match="serve-prep"):

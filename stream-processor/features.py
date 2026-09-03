@@ -1,8 +1,6 @@
-"""The single train/serve feature contract.
-
-The SAME function builds the vector for offline training and for online scoring,
-so the model cannot be served features it was not trained on. Pure.
-"""
+"""The single train/serve feature contract: the SAME function builds the vector for
+offline training and for online scoring, so the model cannot be served features it
+was not trained on. Pure."""
 
 import logging
 import math
@@ -13,9 +11,8 @@ import geo as G
 import capabilities as CAP
 import bins as B
 
-# The model's feature vector, derived from the capability registry rather than
-# maintained by hand — so the train/serve contract cannot drift from what the
-# deployment can actually observe. See capabilities.py.
+# Derived from the capability registry, so the train/serve contract cannot
+# drift from what the deployment can observe.
 FEATURE_NAMES = CAP.feature_names()
 
 _CHANNEL_KEY = {"MOBILE_APP": "ch_mobile_app", "USSD": "ch_ussd",
@@ -26,8 +23,7 @@ _warned_no_pinfl = False
 
 
 def _warn_pinfl_unavailable():
-    """Once per process. This runs on the 300 ms path and the condition is a
-    deployment mistake that does not change between events."""
+    """Once per process: on the 300 ms path, and the condition never changes."""
     global _warned_no_pinfl
     if not _warned_no_pinfl:
         _warned_no_pinfl = True
@@ -45,87 +41,52 @@ _FALSEY_TEXT = {"", "0", "false", "f", "no", "n", "none", "null", "nan"}
 def truthy(v) -> int:
     """Coerce a wire-shaped flag to 0/1.
 
-    `1 if v else 0` is wrong at this boundary and was wrong in production. A
-    Kafka record built from csv.DictReader carries every field as TEXT, so
-    active_call arrived as the string "False" - which is a non-empty string and
-    therefore true. The live job scored active_call = 1 on 100% of events while
-    the model had been trained on 3.5%: not a missing feature, a constant one,
-    and constant at the RARE value.
-
-    Coercing here rather than only in the producer is deliberate. This module is
-    the single train/serve feature contract; every caller - the Flink job, the
-    offline replay, ml/dataset.py, the tests - reaches the model through it, and
-    the contract should not depend on each of them having typed its input
-    correctly. The producer is fixed too, but that fix protects one caller.
-    """
+    `1 if v else 0` was wrong here in production: csv.DictReader gives every Kafka
+    field as TEXT, so active_call arrived as "False" - non-empty, therefore true.
+    The live job scored active_call = 1 on 100% of events while the model had been
+    trained on 3.5%: not a missing feature, a constant one, at the RARE value.
+    Coerced here as well as in the producer, so no caller's typing can break it."""
     if isinstance(v, str):
         return 0 if v.strip().lower() in _FALSEY_TEXT else 1
     return 1 if v else 0
 
 
 def _issuer(event: dict, side: str) -> str:
-    """Card issuer for one side of the transfer, resolved from the PAN's BIN.
-
-    This is what a deployment actually does, and it used to be faked: the two
-    `*_bank_name` fields travelled in the Kafka message, which made the wire
-    format carry something UzCard / HUMO does not carry and made the on-us test
-    - and with it the whole receiver_age capability - depend on a convenience of
-    the generator. The switch message carries the PAN; the bank resolves the
-    issuer from its 6-digit BIN against its own table. See bins.py.
-    """
+    """Card issuer for one side of the transfer, resolved from the PAN's BIN. Used to
+    be faked: the two `*_bank_name` fields travelled in the Kafka message, making the
+    wire carry what UzCard / HUMO does not and the on-us test - with it the whole
+    receiver_age capability - depend on a convenience of the generator."""
     return B.issuer_of(event.get(f"{side}_card"))
 
 
 def is_on_us(event: dict) -> bool:
-    """True when both parties bank with the same issuer.
-
-    Only then can the sending bank look the receiver's account age up in its own
-    core system. Unknown issuers are treated as inter-bank: the pessimistic
-    reading, since an unresolvable BIN is not evidence of a shared institution.
-    """
+    """True when both parties bank with the same issuer. Unknown issuers count as
+    inter-bank: an unresolvable BIN is not evidence of a shared institution."""
     s, r = _issuer(event, "sender"), _issuer(event, "receiver")
     return bool(s) and bool(r) and s == r
 
 
 def payee_key(event: dict) -> str:
-    """The identity this deployment can pin the payee to.
+    """The identity this deployment pins the payee to: card (the destination PAN,
+    default) or pinfl (the person behind it - a platform-level deployment).
 
-    Everything receiver-side is keyed on this: the payee history behind
-    `is_new_payee`, the inbound window behind the fan-in features, and the
-    account-age lookup. It must therefore be an identifier present on EVERY
-    event, which is what rules out resolving it only where the bank can.
-
-    card  - the destination PAN, which is what a card-to-card transfer actually
-            delivers to the sending bank. The default.
-    pinfl - the person behind the PAN. Available to the switch or the CBU
-            platform for everyone, and to a bank only for its own clients.
-            Models a platform-level deployment.
-
-    There is deliberately no per-transfer mode. Resolving to PINFL where the
-    bank can and to PAN otherwise makes the key depend on the SENDER's bank,
-    which splits one payee's inbound window into two by a property that is not
-    about the payee at all. Measured: 24 MULE_FAN_IN hits under either uniform
-    key, 19 under the mixed one - a 17.4% loss of the rule's true positives for
-    no gain. See capabilities.payee_identity.
-    """
+    Everything receiver-side keys on this, so it must be present on EVERY event.
+    No per-transfer mode: resolving to PINFL where the bank can and to PAN otherwise
+    makes the key depend on the SENDER's bank. Measured: 24 MULE_FAN_IN hits under
+    either uniform key, 19 under the mixed one - a 17.4% loss of true positives."""
     if CAP.mode("payee_identity") == "pinfl":
         pinfl = str(event.get("receiver_pinfl", "") or "")
         if pinfl:
             return pinfl
-        # The normal state of the LIVE stream - receiver_pinfl is not on the
-        # wire, so this mode is reachable only from the offline harnesses.
-        # Returning "" would make ReceiverStore skip both write and read and the
-        # fan-in signal would vanish with the knob showing "on".
+        # Normal for the LIVE stream: receiver_pinfl is not on the wire. Returning ""
+        # would make ReceiverStore skip write and read, and fan-in would silently
+        # vanish with the knob still showing "on".
         _warn_pinfl_unavailable()
     return str(event.get("receiver_card", "") or "")
 
 
 def visible_receiver_age(event: dict, receiver_age_days):
-    """Apply RECEIVER_AGE_MODE: what the sending bank can actually see.
-
-    Returns None when the age is not obtainable, which callers must treat as
-    "unknown" rather than as a value.
-    """
+    """Apply RECEIVER_AGE_MODE; None means "not obtainable", never a value."""
     mode = CAP.mode("receiver_age")
     if mode == "off":
         return None
@@ -136,13 +97,9 @@ def visible_receiver_age(event: dict, receiver_age_days):
 
 def extract(event: dict, receiver_age_days, state, now: float,
             receiver_state=None) -> dict:
-    """Read-only feature extraction. Does NOT mutate either state.
-
-    `state` is the sender's history (Flink keyed state); `receiver_state` is the
-    payee's inbound history from the shared store, and may be None when that
-    store is unavailable — the inbound features then read as zero, which is the
-    fail-open behaviour the rest of the enrichment path also uses.
-    """
+    """Read-only feature extraction; does NOT mutate either state. `receiver_state`
+    may be None when the shared store is down - inbound features then read as zero,
+    the fail-open behaviour used elsewhere."""
     amount = float(event["amount_uzs"])
     payee = payee_key(event)
     device = event.get("device_id", "")
@@ -176,10 +133,8 @@ def extract(event: dict, receiver_age_days, state, now: float,
         if sum(state.region_counts.values()) >= 3 and region != home:
             geo_is_anomaly = 1
 
-    # Implied travel speed since the sender's previous transaction. Kept as a
-    # rule helper rather than a model feature: it is near-zero for almost every
-    # event, so it carries little gradient for the model, while as a rule it is
-    # a deterministic physical contradiction the CEP layer can act on alone.
+    # Rule helper, not a model feature: near-zero for almost every event so it
+    # carries little gradient, but as a rule it is a physical contradiction.
     travel_kmh = 0.0
     travel_distance_km = 0.0
     if state.last_region and region and region != state.last_region:
@@ -195,25 +150,22 @@ def extract(event: dict, receiver_age_days, state, now: float,
     amount_to_mean = (amount / mean) if mean > 0 else float(C.NEW_PAYEE_AMOUNT_FACTOR + 1)
     amount_z = ((amount - mean) / std) if std > 0 else 0.0
 
-    # What the sending bank can actually see, per RECEIVER_AGE_MODE.
     age = visible_receiver_age(event, receiver_age_days)
     age_known = 1 if age is not None else 0
     if age is not None:
         receiver_age = float(age)
         receiver_is_fresh = 1.0 if age < C.FRESH_RECEIVER_DAYS else 0.0
     elif CAP.mode("receiver_age") == "on_us":
-        # NaN, not a sentinel: LightGBM branches on missing values natively, so
-        # "unknown" stays distinguishable from "known and unremarkable". A
-        # sentinel such as -1 would be ordered against real ages instead.
+        # NaN, not a sentinel: LightGBM branches on missing natively, so "unknown"
+        # stays distinct. A sentinel like -1 would be ordered against real ages.
         receiver_age = float("nan")
         receiver_is_fresh = float("nan")
     else:
         receiver_age = -1.0
         receiver_is_fresh = 0.0
 
-    # Inbound concentration on the PAYEE — the fan-in shape sender-keyed state
-    # cannot see. Counting distinct senders rather than transfers: ten transfers
-    # from one person is a habit, one each from ten people is a collection point.
+    # Inbound concentration on the PAYEE - the fan-in shape sender-keyed state
+    # cannot see. Distinct senders, not transfers: ten from one person is a habit.
     rcv_senders, rcv_inflow = 0, 0.0
     if receiver_state is not None:
         recent = [e for e in receiver_state.inbound
@@ -224,8 +176,8 @@ def extract(event: dict, receiver_age_days, state, now: float,
     active_call = truthy(event.get("active_call"))
     secs_login = float(event.get("secs_login_to_confirm") or 0.0)
 
-    # z-score in LOG space: session latency is lognormal, so log() first —
-    # otherwise the right tail dominates and z is meaningless.
+    # z-score in LOG space: session latency is lognormal, so untransformed the
+    # right tail dominates and z is meaningless.
     log_secs = math.log1p(secs_login)
     secs_login_z = 0.0
     if state.n_secs >= C.SECS_LOGIN_MIN_HISTORY:
@@ -243,8 +195,7 @@ def extract(event: dict, receiver_age_days, state, now: float,
         "receiver_age": receiver_age,
         "receiver_is_fresh": receiver_is_fresh,
         "receiver_age_known": age_known,
-        # MyID-verified kinship between sender and payee. Only meaningful when
-        # the myid_kinship capability is on; otherwise it is not in the vector.
+        # MyID kinship; in the vector only when the myid_kinship capability is on.
         "is_family": truthy(event.get("is_family_transfer")),
         "vel_10m": win_count(C.VELOCITY_WINDOW_S),
         "vel_1h": win_count(C.STRUCTURING_WINDOW_S),
@@ -291,9 +242,8 @@ def update_receiver_state(receiver_state, event: dict, now: float) -> None:
 def update_state(state, event: dict, now: float) -> None:
     """Advance per-sender state with the current event (call AFTER extract)."""
     amount = float(event["amount_uzs"])
-    # The same resolver extract() used. Keying the write differently from the
-    # read would leave `seen_payees` permanently missing what it just recorded,
-    # and is_new_payee would read 1 on every event forever.
+    # Same resolver as extract(): a differently-keyed write would make
+    # is_new_payee read 1 on every event forever.
     payee = payee_key(event)
     state.seen_payees.add(payee)
     state.events.append((now, amount, payee, event.get("device_id", "")))
@@ -303,9 +253,8 @@ def update_state(state, event: dict, now: float) -> None:
     state.known_devices.add(event.get("device_id", ""))
     region = event.get("sender_region", "")
     state.region_counts[region] += 1
-    # Last *located* event, for the travel-speed check. Only advanced when the
-    # event actually carries a region, so a region-less event cannot reset the
-    # origin point and mask an impossible journey around it.
+    # Last *located* event: only advanced when the event carries a region, so a
+    # region-less event cannot reset the origin and mask an impossible journey.
     if region:
         state.last_region = region
         state.last_region_ts = now

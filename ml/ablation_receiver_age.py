@@ -1,5 +1,4 @@
 """Ablation over the receiver_age modes: always / on_us / off.
-
 on_us is the honest default - the age is resolvable for 6.85% of transfers.
 """
 
@@ -47,12 +46,9 @@ def _train(mode):
 
 def _on_us_share():
     """Share of transfers the sending bank could resolve in-house.
-
-    Resolved from the PANs through bins.py, not from the CSV's bank-name
-    columns. The columns are the generator's own bookkeeping; the issuer the
-    PIPELINE sees comes from the BIN table, and reporting a capability's
-    coverage from a different source than the capability uses is how a number
-    ends up describing something other than what ran.
+    From the PANs via bins.py, not the CSV's bank-name columns: the issuer the PIPELINE
+    sees comes from the BIN table, so a number taken from those columns would describe
+    something other than what ran.
     """
     import pandas as pd
     import bins as B

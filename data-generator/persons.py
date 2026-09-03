@@ -1,6 +1,5 @@
-"""The synthetic population: PINFL, a valid-Luhn card whose BIN encodes the
-issuer, region, device, household, and a per-person decision-time baseline.
-"""
+"""Synthetic population: PINFL, valid-Luhn cards whose BIN encodes the issuer,
+plus region, device, household and a per-person decision-time baseline."""
 
 from dataclasses import dataclass
 import numpy as np
@@ -10,7 +9,6 @@ from config import (CARD_LENGTH, CARD_NETWORKS, BANKS_SOURCE, REGIONS,
                     MALE_FIRST, FEMALE_FIRST, SURNAME_STEMS,
                     DECISION_TIME_MEDIAN_SEC, DECISION_TIME_CLIENT_SPREAD)
 
-# Fast BIN -> bank lookup (the bank is derivable from the first 6 PAN digits).
 BANK_BY_BIN = {b["bin"]: b for b in BANKS}
 
 
@@ -43,11 +41,8 @@ def gen_pinfl(rng):
 
 
 def gen_full_name(rng):
-    """Synthetic Uzbek full name 'Surname First Father{o'g'li|qizi}'.
-
-    The male/female split is only to keep the name grammatically correct
-    (surname -ov/-ova, patronymic o'g'li/qizi); no gender is stored.
-    """
+    """Synthetic Uzbek full name; the male/female split only keeps the grammar
+    correct (surname -ov/-ova, patronymic o'g'li/qizi), no gender is stored."""
     is_male = rng.random() < 0.5
     first = str(rng.choice(MALE_FIRST if is_male else FEMALE_FIRST))
     surname = str(rng.choice(SURNAME_STEMS)) + ("ov" if is_male else "ova")
@@ -59,15 +54,9 @@ def gen_full_name(rng):
 def network_from_bin(bin6):
     """Card network from the BIN's leading digits, per config.CARD_NETWORKS.
 
-    Refuses an unrecognised prefix instead of guessing. This used to read
-    `"UZCARD" if bin6.startswith("8600") else "HUMO"`, which had two faults at
-    once: it labelled ANY unknown BIN as HUMO without a word, and it left
-    CARD_NETWORKS defined and read by nothing, so a reader who corrected that
-    table changed nothing at all.
-
-    A BIN outside the registry's networks is worth stopping for rather than
-    absorbing: the network feeds `cross_network`, which the model uses as a
-    feature, so a mislabelled card does not fail - it quietly shifts a feature.
+    An earlier revision read `"UZCARD" if bin6.startswith("8600") else "HUMO"`: it
+    labelled ANY unknown BIN as HUMO without a word and left CARD_NETWORKS read by
+    nothing. Unknown BINs raise - a mislabel silently shifts `cross_network`.
     """
     for name, prefix in CARD_NETWORKS.items():
         if bin6.startswith(prefix):
@@ -80,10 +69,8 @@ def network_from_bin(bin6):
 
 
 def gen_card(rng):
-    """Return (network, 16-digit PAN). The PAN starts with a real bank BIN, so the
-    issuing bank can be recovered from the number via `bank_from_card`."""
-    # Sampled by market share, not uniformly: see WEIGHT_BANKS_BY_CARD_SHARE in
-    # config.py for why the concentration of the card market matters here.
+    """Return (network, 16-digit PAN) starting with a real bank BIN."""
+    # Sampled by market share, not uniformly: see WEIGHT_BANKS_BY_CARD_SHARE.
     bank = BANKS[int(rng.choice(len(BANKS), p=BANK_WEIGHTS))]
     bin6 = bank["bin"]
     network = network_from_bin(bin6)
@@ -117,9 +104,8 @@ def _make_person(rng, region, age, household_id, is_fraud=False,
         account_age_days=age, typical_amount=typical_amount,
         active_start_hour=active_start, active_end_hour=active_end,
         household_id=household_id,
-        # Each person has their own habitual pace: a fast 20-year-old and a slow
-        # pensioner are both "normal". secs_login_z is measured against THIS
-        # baseline, not the population's, so the signal isn't trivially separable.
+        # secs_login_z is measured against THIS personal baseline, not the
+        # population's, so the signal isn't trivially separable.
         decision_time_median=float(
             DECISION_TIME_MEDIAN_SEC * np.exp(rng.normal(0, DECISION_TIME_CLIENT_SPREAD))
         ),
@@ -129,8 +115,7 @@ def _make_person(rng, region, age, household_id, is_fraud=False,
 
 
 def households(persons):
-    """Map household_id -> members. Household membership stands in for the
-    MyID-verified kinship a bank with that integration could look up."""
+    """Map household_id -> members; membership stands in for MyID-verified kinship."""
     out = {}
     for p in persons:
         out.setdefault(p.household_id, []).append(p)
@@ -144,8 +129,7 @@ def relatives_of(person, by_household):
 
 
 def build_population(config, rng):
-    """Return (persons, by_pinfl). Persons are drawn in household-sized clusters:
-    members share a region, and are treated as relatives of one another."""
+    """Return (persons, by_pinfl); household clusters share a region and are relatives."""
     persons, by_pinfl = [], {}
     region_p = _normalise(REGION_WEIGHTS)
     hh_id = 0
@@ -155,8 +139,8 @@ def build_population(config, rng):
         for _ in range(size):
             if len(persons) >= config.n_persons:
                 break
-            # A share of legitimate accounts are freshly opened -> "fresh receiver"
-            # is no longer a fraud-exclusive signal.
+            # A share of legitimate accounts are freshly opened, so "fresh
+            # receiver" is not a fraud-exclusive signal.
             if rng.random() < config.new_account_share:
                 age = int(rng.integers(1, 30))
             else:
@@ -173,20 +157,16 @@ def build_population(config, rng):
 
 
 def build_fraud_accounts(n, rng, aged_share=0.30):
-    """Pool of accounts used as fraud receivers / mules.
-
-    Most are freshly created, but a fraction are AGED (established mules) so a
-    low account age is not a perfect fraud indicator.
-    """
+    """Pool of fraud receivers / mules; a fraction are AGED (established mules)
+    so a low account age is not a perfect fraud indicator."""
     accounts = []
     for i in range(n):
         if rng.random() < aged_share:
             age = int(rng.integers(100, 1500))     # established mule
         else:
             age = int(rng.integers(1, 45))          # freshly created
-        # Each fraud account is its own household. A shared id would make every
-        # fraud account a "relative" of every other one, so mule fan-out would
-        # register as a family transfer.
+        # Each fraud account is its own household: a shared id would make mule
+        # fan-out register as a family transfer.
         accounts.append(_make_person(
             rng, region=str(rng.choice(REGIONS)), age=age, household_id=-(i + 1),
             is_fraud=True))

@@ -26,11 +26,7 @@ DEFAULT_SEEDS = (42, 7, 13, 99, 2026)
 
 def _configurations(only=None):
     """Baseline plus each capability flipped away from its default, one at a time.
-
-    `only` restricts the sweep to named capabilities. Resolving one borderline
-    delta needs many seeds, and training the configurations you are not asking
-    about multiplies that cost for nothing.
-    """
+    `only` restricts the sweep - resolving one borderline delta needs many seeds."""
     plan = [("baseline", {})]
     for cap in CAP.REGISTRY:
         if cap.always_on or (only and cap.key not in only):
@@ -42,8 +38,7 @@ def _configurations(only=None):
 
 def _dataset(seed):
     """Generate (once per generator version) the dataset for a seed."""
-    # Datasets are cached under the generator fingerprint, so a generator change
-    # produces fresh data instead of silently reusing the previous version's.
+    # Cached under the generator fingerprint, so a generator change produces fresh data.
     tag = _contract_fingerprint().split("gen-")[-1]
     out = os.path.join(SCRATCH, f"gen{tag}", f"seed{seed}")
     csv = os.path.join(out, "transactions.csv")
@@ -84,13 +79,8 @@ GEN_SOURCES = ("config.py", "persons.py", "events.py", "fraud_patterns.py",
 
 def _contract_fingerprint():
     """What the stored results depend on: the feature set AND the generator.
-
-    Adding a feature moves the baseline. So does changing the generator — new
-    travel behaviour or a reshaped fraud pattern produces a different dataset,
-    and deltas measured on the old one no longer describe the same experiment.
-    Both were learned the hard way; recording them makes stale reuse impossible
-    rather than merely unlikely.
-    """
+    Adding a feature moves the baseline; so does changing the generator, and old deltas
+    then describe a different experiment. Both were learned the hard way."""
     feats = "|".join(sorted(f for cap in CAP.REGISTRY for f in cap.features))
     h = hashlib.sha256()
     for name in GEN_SOURCES:
@@ -155,8 +145,8 @@ def report(results, only=None):
         return
     configs = [label for label, _ in _configurations(only)]
     seeds = sorted(results, key=int)
-    # Only seeds carrying every configuration under comparison, so the paired
-    # deltas are computed over one consistent set of datasets.
+    # Only seeds carrying every configuration compared, so the paired deltas come from
+    # one consistent set of datasets.
     seeds = [s for s in seeds if all(c in results[s] for c in configs)]
     if not seeds:
         print("no seed has all the requested configurations yet.")
@@ -168,8 +158,7 @@ def report(results, only=None):
         s = statistics.stdev(values) if len(values) > 1 else 0.0
         return m, s
 
-    # Two-sided 95% t critical values by degrees of freedom (n-1), so the
-    # confidence interval is honest at the small n these sweeps run at.
+    # Two-sided 95% t critical values by df (n-1) - honest at the small n here.
     T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447,
            7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228, 11: 2.201, 12: 2.179,
            13: 2.160, 14: 2.145, 15: 2.131, 16: 2.120, 17: 2.110, 18: 2.101,
@@ -177,13 +166,9 @@ def report(results, only=None):
 
     def ci95(values):
         """Half-width of the 95% confidence interval for the MEAN.
-
-        The quantity of interest is 'is the mean delta different from zero',
-        which is governed by the standard error (sd/sqrt(n)), not by the spread
-        of individual deltas. Comparing a mean against a standard deviation —
-        as an earlier revision of this script did — understates the evidence
-        and calls established effects unresolved.
-        """
+        Governed by the standard error (sd/sqrt(n)), not the spread of individual deltas:
+        an earlier revision compared a mean against a standard deviation, understating
+        the evidence and calling established effects unresolved."""
         n = len(values)
         if n < 2:
             return float("inf")
@@ -203,16 +188,14 @@ def report(results, only=None):
             print(f"{label:<24}{m:>13.3f} +/-{sd:<4.3f}"
                   f"{'':>28}{'':>8}{'':>13}")
             continue
-        # Paired deltas: same dataset, different configuration — removes the
-        # between-seed variation that both configurations share.
+        # Paired deltas: same dataset, so the between-seed variation drops out.
         pairs = [results[s][label]["pr_auc"] - results[s]["baseline"]["pr_auc"]
                  for s in seeds if label in results[s] and "baseline" in results[s]]
         dm, _ = stat(pairs)
         half = ci95(pairs)
         agree = sum(1 for p in pairs if (p < 0) == (dm < 0))
 
-        # Three outcomes, not two. "Cannot tell yet" is a different statement
-        # from "no effect", and collapsing them would overstate the evidence.
+        # Three outcomes, not two: "cannot tell yet" is not "no effect".
         excludes_zero = abs(dm) > half
         if excludes_zero and abs(dm) >= 0.005:
             verdict = "real"

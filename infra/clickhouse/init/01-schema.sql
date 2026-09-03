@@ -13,7 +13,6 @@ CREATE TABLE IF NOT EXISTS fraud.transactions_scored
     amount_uzs          UInt64,
     channel             LowCardinality(String),
     sender_region       LowCardinality(String),
-    receiver_region     LowCardinality(String),
     is_new_payee        UInt8,
     cep_score           Float32,                 -- rule/CEP contribution
     ml_score            Float32,                 -- gradient-boosting probability
@@ -69,3 +68,9 @@ ORDER BY (recorded_at, transaction_id);
 -- Example WORM grant (apply once the application user exists):
 --   GRANT INSERT, SELECT ON fraud.audit_log TO fraud;
 --   -- deliberately NOT granting ALTER / DELETE / TRUNCATE / DROP
+
+-- 03.09.2026: receiver_region dropped. A sending bank holds the destination
+-- PAN and nothing else - it cannot know where the receiver is, and no feature
+-- or rule ever read the column. Init scripts run only on an empty data dir,
+-- so existing deployments need this line.
+ALTER TABLE fraud.transactions_scored DROP COLUMN IF EXISTS receiver_region;

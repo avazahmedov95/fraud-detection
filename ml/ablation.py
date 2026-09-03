@@ -1,6 +1,4 @@
-"""Sweeps capability profiles, retraining and re-exporting for each, and reports
-what each capability is worth.
-"""
+"""Sweeps capability profiles, retraining for each, and reports what each is worth."""
 
 import json
 import os
@@ -48,7 +46,6 @@ def _train(label, env_overrides):
 
 
 def _plan(target):
-    """(label, env) pairs to train: baseline first, then the variations."""
     baseline = ("baseline", {})
     if target:
         cap = CAP.BY_KEY.get(target)
@@ -64,7 +61,6 @@ def _plan(target):
     for cap in CAP.REGISTRY:
         if cap.always_on:
             continue
-        # Flip each capability away from its default, one at a time.
         other = "on" if CAP.MODES[cap.key] == "off" else "off"
         plan.append((f"{cap.key}={other}", {f"CAP_{cap.key.upper()}": other}))
     return plan
@@ -84,8 +80,7 @@ def _report(results):
     types = {r[0]: r[3] for r in results}
     all_types = sorted({t for v in types.values() for t in v})
     if all_types:
-        # Column heads keep the distinguishing part of each label: when one
-        # capability is swept they all share a prefix, so show the mode.
+        # Column heads show the mode: when one capability is swept the labels share a prefix.
         heads = [l.split("=")[-1] if len(set(
             x.split("=")[0] for x in labels)) == 1 else l for l in labels]
         width = max(10, max(len(h) for h in heads) + 2)

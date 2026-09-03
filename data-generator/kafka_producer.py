@@ -1,17 +1,23 @@
 """Replays a generated CSV into transactions.raw, one JSON message per row.
-
-Keyed by sender_card, so keyBy(sender) in Flink gets an ordered per-sender
-stream. Stamps ingested_at (t0 for every latency figure) and ingress_hash.
-"""
+Keyed by sender_card so keyBy(sender) in Flink gets an ordered per-sender stream;
+stamps ingested_at (t0 for every latency figure) and ingress_hash."""
 
 import argparse
 import csv
 import json
 import time
+import warnings
 from datetime import datetime
 
 import integrity
 import payload_crypto
+
+# kafka-python 3.0.10 warns for any serializer that is not a subclass of its own
+# Serializer ABC - a plain callable is the documented, supported form. Silenced
+# narrowly: PowerShell renders a native stderr line as a red NativeCommandError block.
+warnings.filterwarnings("ignore", message=".*does not implement kafka.serializer.Serializer",
+                        category=DeprecationWarning)
+
 
 try:
     from kafka import KafkaProducer
@@ -19,41 +25,31 @@ except ImportError:  # allow --dry-run without the dependency installed
     KafkaProducer = None
 
 
-# Raw fields the switch would actually emit; enrichment/labels are dropped here
-# so the stream resembles production input. Flip --include-labels to keep labels
-# for offline evaluation harnesses.
+# Raw fields the switch would actually emit; enrichment and labels are dropped here.
 RAW_FIELDS = [
     "transaction_id", "event_time", "sender_pinfl", "sender_card", "sender_network",
     "receiver_card", "receiver_network", "amount_uzs", "channel",
-    "device_id", "sender_region", "receiver_region", "sender_balance_before",
-    # Session signals the mobile app observes and sends with the confirmation.
-    # These are raw, not enrichment: omitting them silently scores every live
-    # event as "no call, average hesitation" while the model was trained on the
-    # real values — the train/serve skew this project has already been bitten by
-    # twice. The session_telemetry capability is the second most valuable one
-    # measured, so dropping it here would quietly discard that.
+    "device_id", "sender_region", "sender_balance_before",
+    # Session signals the mobile app sends with the confirmation. Raw, not enrichment:
+    # omitting them scores every live event as "no call, average hesitation" while the
+    # model was trained on real values - the train/serve skew this project has been
+    # bitten by twice. session_telemetry is the second most valuable capability measured.
     "active_call", "secs_login_to_confirm",
 ]
-# NOT sent: receiver_pinfl. A card-to-card transfer reaches the sending bank as
-# a destination PAN; the person behind it is a core-banking lookup available for
-# the bank's own clients only (6.85% of transfers at the measured market
-# concentration). Carrying it made the wire format assert knowledge no
-# deployment has. sender_pinfl stays: the sender IS the bank's client.
-#
-# NOT sent: sender_bank_name / receiver_bank_name. The issuer is derived by the
-# stream processor from the PAN's BIN (stream-processor/bins.py), which is what
-# a bank does - the switch message carries the card, not the counterparty's
-# institution. Sending the names made the wire format carry a field UzCard /
-# HUMO does not, and put the on-us test behind the receiver_age capability on a
-# convenience of the generator rather than on data a deployment holds.
+# NOT sent: receiver_pinfl. A card-to-card transfer reaches the sending bank as a destination
+# PAN; the person behind it is a core-banking lookup available for the bank's own clients
+# only (6.85% of transfers at the measured market concentration). Carrying it made the wire
+# format assert knowledge no deployment has. sender_pinfl stays: the sender IS the client.
+# NOT sent: sender_bank_name / receiver_bank_name - the issuer is derived from the PAN's BIN
+# (stream-processor/bins.py). Sending them carried a field UzCard / HUMO does not and put the
+# on-us test on a convenience of the generator, not on data a deployment holds.
 
 
-#: Fields that are booleans, not text. csv.DictReader returns every column as a
-#: string, so without this `active_call` travelled as "False" - a non-empty
-#: string, and therefore TRUE to every consumer that tested it for truthiness.
-#: The live job scored active_call = 1 on 100% of events while the model had
-#: been trained on 3.5%. Numbers were cast here from the start; booleans were
-#: not, and the omission was invisible because the JSON looked right.
+#: Fields that are booleans, not text. csv.DictReader returns every column as a string,
+#: so without this `active_call` travelled as "False" - a non-empty string, therefore TRUE
+#: to every consumer that tested truthiness. The live job scored active_call = 1 on 100%
+#: of events while the model had been trained on 3.5%. Numbers were cast from the start,
+#: booleans were not, and the omission was invisible because the JSON looked right.
 _BOOL_FIELDS = ("active_call",)
 _INT_FIELDS = ("amount_uzs", "sender_balance_before")
 _FLOAT_FIELDS = ("secs_login_to_confirm",)
@@ -89,6 +85,10 @@ def main():
                     help="pace messages to original inter-event gaps")
     ap.add_argument("--speed", type=float, default=200.0,
                     help="time-compression factor when --realtime")
+    ap.add_argument("--rate", type=float, default=0.0, metavar="TPS",
+                    help="pace at a fixed events/s. 0 (default) sends as fast "
+                         "as the client can. Mutually exclusive with --realtime, "
+                         "which paces to the original inter-event gaps instead.")
     ap.add_argument("--include-labels", action="store_true")
     ap.add_argument("--dry-run", action="store_true",
                     help="print messages instead of producing to Kafka")
@@ -127,8 +127,7 @@ def main():
                          "sleeping out the gap it was never going to send")
     args = ap.parse_args()
 
-    # Resolved once, before the loop, so a missing key fails at startup rather
-    # than part-way through a measurement run.
+    # Resolved before the loop so a missing key fails at startup, not mid-run.
     crypto_key = payload_crypto.key_from_env() if args.encrypt else None
     if args.encrypt:
         print("payload encryption: ON (AES-256-GCM)")
@@ -136,10 +135,8 @@ def main():
     def _serialize(v):
         """One serialiser for both arms of the experiment.
 
-        The encrypted form is text - see payload_crypto for why the envelope is
-        base64 rather than binary - so both arms end up as UTF-8 on the wire and
-        the difference measured between them is cryptography plus framing, not a
-        change of transport type.
+        The encrypted form is text (base64 envelope, see payload_crypto), so both arms are
+        UTF-8 on the wire; the difference is cryptography plus framing, not transport.
         """
         if crypto_key is None:
             return json.dumps(v).encode()
@@ -151,11 +148,8 @@ def main():
             raise SystemExit("kafka-python not installed; use --dry-run or pip install -r requirements.txt")
         tls = {}
         if args.tls:
-            # ssl_check_hostname stays TRUE. Turning it off is the usual
-            # shortcut in a prototype, and it would quietly remove part of the
-            # handshake work this arm exists to measure - producing a
-            # "security overhead" figure for a weaker security posture than the
-            # one being claimed.
+            # ssl_check_hostname stays TRUE: turning it off removes part of the handshake
+            # work this arm measures, giving a "security overhead" for a weaker posture.
             tls = dict(security_protocol="SSL",
                        ssl_check_hostname=True,
                        ssl_cafile=args.ssl_ca,
@@ -173,17 +167,31 @@ def main():
         producer = _new_producer()
 
     sent, skipped, reconnects, prev_dt = 0, 0, 0, None
+    pace_t0, behind_max, behind_n = None, 0.0, 0
     interrupted = False
     try:
         with open(args.file, newline="") as f:
             for row in csv.DictReader(f):
-                # Before the pacing clock, deliberately: prev_dt must be set by
-                # the first row actually SENT, or the slice would open by
-                # sleeping out a gap belonging to rows it skipped.
+                # Before the pacing clock: prev_dt must be set by the first row actually
+                # SENT, or the slice opens by sleeping out a gap belonging to skipped rows.
                 if skipped < args.skip:
                     skipped += 1
                     continue
-                if args.realtime:
+                # Deadline pacing, not sleep(1/rate): per-message sleeps drift and cannot
+                # resolve the interval above a few hundred events/s - OS timer granularity
+                # is 1-15 ms and 5000 TPS needs 0.2 ms. An absolute schedule keeps the
+                # AVERAGE rate correct and makes falling behind measurable.
+                if args.rate > 0:
+                    if pace_t0 is None:
+                        pace_t0 = time.time()
+                    due = pace_t0 + sent / args.rate
+                    ahead = due - time.time()
+                    if ahead > 0:
+                        time.sleep(ahead)
+                    else:
+                        behind_max = max(behind_max, -ahead)
+                        behind_n += 1
+                elif args.realtime:
                     dt = datetime.fromisoformat(row["event_time"])
                     if prev_dt is not None:
                         gap = (dt - prev_dt).total_seconds() / args.speed
@@ -192,15 +200,12 @@ def main():
                     prev_dt = dt
 
                 msg = _row_to_message(row, args.include_labels)
-                # Wall clock at the moment the event enters the pipeline. `event_time`
-                # is the SIMULATED time the transaction happened, spread over weeks,
-                # so it cannot be used to measure anything about the pipeline. This
-                # is the t0 every latency figure is measured from.
+                # Wall clock at ingress. `event_time` is SIMULATED time spread over
+                # weeks, so it cannot measure anything about the pipeline.
                 msg["ingested_at"] = time.time()
-                # Integrity hash of the raw event, computed here at ingress and
-                # carried unchanged to the audit store. Binds the recorded decision
-                # to exactly this event. Set before the hash so ingested_at cannot be
-                # altered without detection, but excludes itself and the labels.
+                # Integrity hash of the raw event, carried unchanged to the audit store.
+                # Stamped after ingested_at so that cannot be altered undetected; it
+                # excludes itself and the labels.
                 msg["ingress_hash"] = integrity.ingress_hash(msg)
                 if args.dry_run:
                     print(msg["sender_card"], "->", json.dumps(msg))
@@ -209,37 +214,26 @@ def main():
                 sent += 1
                 if (args.reconnect_every and producer is not None
                         and sent % args.reconnect_every == 0):
-                    # flush() before close(): messages already buffered belong to
-                    # the run, and dropping them here would look like loss in
-                    # exactly the experiment that exists to rule loss out.
+                    # flush() before close(): buffered messages belong to the run, and
+                    # dropping them looks like loss in the experiment ruling loss out.
                     producer.flush()
                     producer.close(timeout=10)
                     reconnects += 1
                     producer = _new_producer()
-                    # SCOPE OF WHAT THIS MEASURES. The reconnect happens AFTER
-                    # the send, and _new_producer() blocks until bootstrap is
-                    # done, so the next row's ingested_at is stamped on the far
-                    # side of the handshake. The client-side handshake cost is
-                    # therefore EXCLUDED from every decision-latency figure by
-                    # construction; handshake_bench.py measures that directly.
-                    # What a churn arm can show is the broker-side spillover:
-                    # repeated handshakes competing with the partitions Flink is
-                    # reading. Note the confound in the other direction too - the
-                    # pause drains the pipeline's buffers, and the TLS arm pauses
-                    # longer, which biases TLS to look FASTER on decision
-                    # latency. Both arms reconnect so the pause exists in both;
-                    # only its length differs.
+                    # SCOPE: the reconnect happens AFTER the send and _new_producer()
+                    # blocks until bootstrap, so the next row's ingested_at is on the far
+                    # side of the handshake - client-side handshake cost is EXCLUDED from
+                    # every decision-latency figure by construction (handshake_bench.py
+                    # measures it). A churn arm shows broker-side spillover; the confound
+                    # the other way is that the pause drains buffers and the TLS arm pauses
+                    # longer, biasing TLS to look FASTER (both arms reconnect).
                 if args.limit is not None and sent >= args.limit:
                     break
     except KeyboardInterrupt:
-        # A paced stream is meant to be stopped by hand, so Ctrl+C is a normal
-        # exit rather than an error — but it must still reach the flush below.
-        # Messages buffered and never flushed are messages the pipeline never
-        # received, and in the fault-injection run they would be counted as
-        # transactions LOST after the kill: the script would report the exact
-        # correctness failure it exists to rule out. The count printed here is
-        # also what `fault_injection.py --expect` needs, and it is only knowable
-        # on this side of the wire.
+        # Ctrl+C is a normal exit for a paced stream but must still reach the flush
+        # below: messages buffered and never flushed would be counted in the
+        # fault-injection run as transactions LOST after the kill. The count printed here
+        # is what `fault_injection.py --expect` needs, knowable only on this side.
         interrupted = True
 
     if producer is not None:
@@ -248,6 +242,24 @@ def main():
     slice_note += f", {reconnects} reconnects" if reconnects else ""
     print(f"produced {sent:,} messages to '{args.topic}'" + slice_note
           + (" (stopped by hand)" if interrupted else ""))
+
+    # The achieved rate, always, and loudly when it is not the requested one: if the client
+    # cannot reach the requested rate, every latency figure from that arm describes the
+    # PRODUCER, not the pipeline, and the arm still looks successful unless the shortfall is
+    # printed. `ingested_at` is stamped before send(), so client-buffer time is inside it.
+    if pace_t0 is not None and sent:
+        elapsed = time.time() - pace_t0
+        achieved = sent / elapsed if elapsed > 0 else float("inf")
+        print(f"rate: requested {args.rate:,.0f}/s, achieved {achieved:,.0f}/s "
+              f"over {elapsed:.1f}s")
+        if behind_n:
+            print(f"  BEHIND SCHEDULE on {behind_n:,} of {sent:,} messages "
+                  f"({behind_n / sent:.1%}), worst lag {behind_max * 1000:.0f} ms")
+        if achieved < args.rate * 0.95:
+            print(f"  SATURATED: the client could not sustain the requested "
+                  f"rate. Latency from this arm measures the producer, not the "
+                  f"pipeline - report it as the saturation point, not as a "
+                  f"pipeline figure.")
 
 
 if __name__ == "__main__":

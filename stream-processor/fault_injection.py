@@ -30,7 +30,11 @@ def query(sql):
             body = resp.read().decode()
     except Exception as exc:                           # noqa: BLE001
         raise SystemExit(f"ClickHouse unreachable at {CH_HOST}:{CH_PORT} — {exc}")
-    return [line.split("\t") for line in body.strip().splitlines() if line]
+    # strip("\n"), not strip(): a bare .strip() eats the LEADING TAB of the first
+    # row when its first column is empty - and predicted_type is empty for every
+    # alert no rule explains. The row then parses as one field and the caller
+    # gets an IndexError on a query that returned perfectly good data.
+    return [line.split("\t") for line in body.strip("\n").splitlines() if line]
 
 
 def snapshot():

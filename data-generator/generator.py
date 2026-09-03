@@ -1,7 +1,5 @@
 """Builds the dataset: population, normal behaviour, travel, injected fraud.
-
-Every parameter and the dataset of record: docs/generator-spec.md.
-"""
+Every parameter and the dataset of record: docs/generator-spec.md."""
 
 import argparse
 import os
@@ -28,10 +26,8 @@ def _normalise(weights):
 def _assign_payees(persons, rng):
     """Each person gets 3..8 frequent payees.
 
-    A share of them are relatives (FAMILY_PAYEE_SHARE): people send money to
-    family more than to anyone else, so a kinship signal that never appeared in
-    legitimate traffic would be as unrealistic as one that never appeared in
-    fraud. The rest are drawn from the population at large.
+    A share are relatives (FAMILY_PAYEE_SHARE): a kinship signal that never appeared in
+    legitimate traffic would be as unrealistic as one that never appeared in fraud.
     """
     by_household = P.households(persons)
     payees = {}
@@ -48,16 +44,13 @@ def _assign_payees(persons, rng):
                 q = persons[int(rng.integers(len(persons)))].pinfl
             if q != p.pinfl:
                 chosen.add(q)
-        # sorted(), not list(): iterating a set of strings orders them by hash,
-        # and Python randomises string hashing per process (PYTHONHASHSEED).
-        # Under list() this payee list came out shuffled differently on every
-        # run, so the same seed, the same code and the same pinned versions
-        # still produced a different receiver for most transactions. Measured
-        # 2026-08-30 on two runs differing only in PYTHONHASHSEED: persons.csv
-        # byte-identical, 36,072 of 50,000 transaction rows different. Sorting
-        # makes the order a property of the data rather than of the process.
-        # NOTE: this fix changes the RNG stream, so it does not regenerate the
-        # frozen dataset of record - see the hashes in docs/generator-spec.md.
+        # sorted(), not list(): iterating a set of strings orders them by hash, and
+        # Python randomises string hashing per process (PYTHONHASHSEED), so under list()
+        # the same seed and pinned versions still produced a different receiver for most
+        # transactions. Measured 2026-08-30 on two runs differing only in PYTHONHASHSEED:
+        # persons.csv byte-identical, 36,072 of 50,000 transaction rows different.
+        # NOTE: this fix changes the RNG stream, so it does not regenerate the frozen
+        # dataset of record - see the hashes in docs/generator-spec.md.
         payees[p.pinfl] = sorted(chosen)
     return payees
 
@@ -77,17 +70,14 @@ def generate_normal(config, persons, by_pinfl, n_normal, rng, start_dt, trips):
     for i in range(n_normal):
         sender = persons[int(sender_idx[i])]
 
-        # Mostly pay a frequent payee; occasionally a brand-new one.
         rp = str(rng.choice(payees[sender.pinfl]))
         if rng.random() < 0.05:  # noise: a genuinely new legit payee
             cand = persons[int(rng.integers(len(persons)))].pinfl
             if cand != sender.pinfl:
                 rp = cand
 
-        # Hard negatives: legitimate but suspicious-looking transfers (e.g. a rent
-        # deposit, a one-off purchase) to a brand-new, unrelated payee. These
-        # overlap APP fraud on the obvious signals, so the model can't separate
-        # the classes trivially.
+        # Hard negatives: legitimate but suspicious-looking transfers (rent deposit, one-off
+        # purchase) to a new unrelated payee - they overlap APP fraud, so not separable.
         hard_neg = rng.random() < config.hard_negative_share
         if hard_neg:
             cand = persons[int(rng.integers(len(persons)))].pinfl
@@ -95,15 +85,10 @@ def generate_normal(config, persons, by_pinfl, n_normal, rng, start_dt, trips):
                 rp = cand
 
         receiver = by_pinfl[rp]
-        # NOTE the two senses of "new payee", which are NOT the same thing and
-        # differ on ~28% of rows. This one is generator-internal: is the
-        # receiver outside the sender's ASSIGNED regular-payee set. The feature
-        # the model and the rules actually use (features.py) is stream-derived:
-        # has this sender sent to this receiver BEFORE, within the observed
-        # window. A person's regular payee is still stream-new the first time
-        # they are paid here. The column below records the first; the signal
-        # check at the end of this file reports the second, because that is the
-        # one anything downstream reads.
+        # TWO senses of "new payee", NOT the same thing - they differ on ~28% of rows. This
+        # column is generator-internal: is the receiver outside the sender's ASSIGNED payee
+        # set. The one the model and rules use (features.py) is stream-derived: has this
+        # sender sent to this receiver BEFORE within the observed window.
         is_new = rp not in known[sender.pinfl]
         known[sender.pinfl].add(rp)
 
@@ -119,10 +104,6 @@ def generate_normal(config, persons, by_pinfl, n_normal, rng, start_dt, trips):
             minute=int(rng.integers(0, 60)),
             second=int(rng.integers(0, 60)))
 
-        # Travellers transact from where they are. Events falling mid-journey
-        # are re-timed to just after arrival: a transaction at the origin and
-        # the next at the destination minutes later would look like impossible
-        # travel in perfectly legitimate traffic.
         ts = T.settle_after_transit(sender, trips, ts, rng)
         region, _ = T.locate(sender, trips, ts)
 
@@ -150,9 +131,6 @@ def build_dataset(config):
     normal = generate_normal(config, persons, by_pinfl, n_normal, rng, start_dt,
                              trips)
 
-    # When and where each person was last legitimately active. A session
-    # hijack is defined relative to that: the takeover continues an account
-    # whose owner was just seen somewhere else.
     legit_activity = defaultdict(list)
     for e in normal:
         legit_activity[e["sender_pinfl"]].append(
@@ -189,15 +167,11 @@ def _summary(df):
 
 
 def _signal_check(df):
-    """Report `is_new_payee` as the PIPELINE computes it, not as the column
-    records it.
+    """Report `is_new_payee` as the PIPELINE computes it, not as the column records it.
 
-    The two disagreed on 14,201 of 50,000 rows and the check was reporting the
-    wrong one: the column said 8.11% of legitimate traffic went to a new payee,
-    while the value features.py derives from the stream says 36.93%. A check
-    that reports on a quantity nothing downstream reads is worse than no check,
-    because it looks like verification. Both are printed now, and the gap
-    between them is the point.
+    The two disagreed on 14,201 of 50,000 rows and the check reported the wrong one: the
+    column said 8.11% of legitimate traffic went to a new payee, while the value features.py
+    derives from the stream says 36.93%. Both are printed now.
     """
     seen, computed = {}, []
     for card, rcv in zip(df["sender_card"], df["receiver_pinfl"]):

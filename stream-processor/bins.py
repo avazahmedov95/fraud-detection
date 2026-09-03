@@ -1,29 +1,18 @@
-"""Resolves the card issuer from the PAN's BIN, the way a bank does.
-
-The switch message carries the card, not the counterparty's institution.
-`is_on_us` compares bank CODES: one bank owns several BINs, and names are free
-text. Table path comes from config, never from __file__ - see BANKS_CSV_PATH.
-"""
+"""Resolves the card issuer from the PAN's BIN. `is_on_us` compares bank CODES,
+not free-text names, because one bank owns several BINs. Table path comes from
+config, never from __file__ - see BANKS_CSV_PATH."""
 
 import csv
 import os
 
 import config as C
 
-#: Where the BIN table lives, in resolution order:
-#:   1. BANKS_CSV, for a deployment that keeps it elsewhere;
-#:   2. beside this module - where `run.ps1 serve-prep` copies it, so the file
-#:      ships to the Flink cluster with the job;
-#:   3. the generator's copy, for local runs and tests.
+#: Table path order: BANKS_CSV; beside this module, where `run.ps1 serve-prep`
+#: copies it so it ships to the Flink cluster; then the generator's copy.
 def _resolve_path():
-    """Where the BIN table is, per config.BANKS_CSV_PATH.
-
-    Deliberately NOT derived from this module's __file__. Flink ships the job's
-    modules with `--pyFiles`, which copies them into a Beam temp directory - so
-    `os.path.dirname(__file__)` inside the worker is that temp directory, and a
-    data file resolved against it is never found. config.py already owns this
-    problem for model.onnx; the same resolver answers for banks.csv.
-    """
+    """Where the BIN table is, per config.BANKS_CSV_PATH. NOT derived from
+    __file__: Flink ships job modules with `--pyFiles` into a Beam temp directory,
+    so a data file resolved against __file__ is never found."""
     path = C.BANKS_CSV_PATH
     if not os.path.exists(path):
         raise FileNotFoundError(
@@ -35,13 +24,11 @@ def _resolve_path():
 
 
 def _bank_identity(rows):
-    """The column that identifies a bank: the code.
+    """The column that identifies a bank: the code. Checked, not assumed.
 
-    Checked, not assumed. banks.csv shipped with `code` unfilled - every row
-    "00000" - and comparing that column would make is_on_us() true for EVERY
-    transfer, turning the on_us receiver-age mode into `always` and inflating
-    its measured coverage from 6.85% to 100%.
-    """
+    banks.csv shipped with `code` unfilled - every row "00000" - which would make
+    is_on_us() true for EVERY transfer, turning the on_us receiver-age mode into
+    `always` and inflating its measured coverage from 6.85% to 100%."""
     codes = {r["code"] for r in rows if r.get("code")}
     if len(codes) <= 1:
         raise ValueError(
@@ -73,25 +60,20 @@ def _load():
 BIN_TABLE, IDENTITY_FIELD = _load()
 
 
-#: BINs held by generated accounts but no longer in the table. NOT consulted by
-#: issuer_of(): a closed bank is correctly an unknown issuer. The list exists so
-#: the unresolvable slice is reviewed rather than silent - test_bins.py requires
-#: every unresolved BIN to appear here, so an accidental deletion still fails.
+#: BINs held by generated accounts but no longer in the table. NOT consulted
+#: by issuer_of(): a closed bank is correctly an unknown issuer. test_bins.py
+#: requires every unresolved BIN to appear here, so a deletion still fails.
 RETIRED_BINS = {
-    # Licence withdrawn; the bank ceased operations after the transaction set
-    # in data-generator/out was generated. 74 of the 5200 generated accounts
-    # hold a card on this BIN, ~1.1% of card sides in the stream.
+    # Licence withdrawn after the data-generator/out set was generated. 74 of
+    # the 5200 generated accounts hold a card on this BIN, ~1.1% of card sides.
     "986040": "Yangi Bank (closed)",
 }
 
 
 def issuer_of(pan) -> str:
-    """Issuer identity for a PAN, or "" when the BIN is not in the table.
-
-    Empty is "unknown issuer", and callers must treat it as such rather than as
-    a value: two unknown issuers are not evidence of a shared institution. See
-    `features.is_on_us`, which requires both sides to be non-empty.
-    """
+    """Issuer identity for a PAN, or "" when the BIN is not in the table. "" means
+    "unknown issuer", not a value: two unknown issuers are not evidence of a shared
+    institution, and `features.is_on_us` requires both sides to be non-empty."""
     return BIN_TABLE.get(str(pan or "")[:6], "")
 
 

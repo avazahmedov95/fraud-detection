@@ -1,5 +1,4 @@
 """Calibrates the rule thresholds against the Zenodo card-fraud set.
-
 Why that dataset was ultimately rejected: docs/related-work.md 7.
 """
 
@@ -14,9 +13,8 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_HERE, "..", "data-generator"))
 
 
-# Candidate names for each quantity, most likely first. Matching is case- and
-# separator-insensitive; whatever is found is printed so a wrong guess is
-# visible rather than silent.
+# Candidate names per quantity, most likely first. Matching is case- and
+# separator-insensitive; what is found is printed so a wrong guess is visible.
 CANDIDATES = {
     "label":   ["isfraud", "is_fraud", "fraud", "label", "actualfraud",
                 "confirmedfraud", "true_label", "y"],
@@ -141,8 +139,7 @@ def main():
         print(f"  {key:<10}-> {cols.get(key, '(not found)')}")
 
     if len(cols) < len(CANDIDATES):
-        # Print everything numeric so an unmatched quantity can be identified by
-        # eye rather than by guessing more candidate names.
+        # Print everything numeric so an unmatched quantity can be identified by eye.
         print("\nunmatched — numeric columns available, with medians:")
         for c in df.columns:
             if c in cols.values():

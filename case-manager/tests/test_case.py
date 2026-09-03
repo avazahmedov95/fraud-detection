@@ -28,9 +28,7 @@ def _as_dict(row):
 # --- determinism, which idempotence rests on --------------------------------
 
 def test_the_same_alert_produces_the_same_row():
-    """AT_LEAST_ONCE means this function runs more than once per alert. If any
-    field came from now(), the duplicate would be a second row the merge cannot
-    collapse and the analyst would see one case twice."""
+    """A now() field would make an AT_LEAST_ONCE duplicate a row the merge keeps."""
     assert CASE.case_row(ALERT) == CASE.case_row(dict(ALERT))
 
 
@@ -46,11 +44,10 @@ def test_open_writes_version_zero():
 
 
 def test_an_explained_open_outranks_an_unexplained_one():
-    """The same transaction is re-alerted whenever the producer replays a CSV it
-    has already sent. If both open rows carried the same version, which one
-    survived the merge would be luck - and it was: 16 cases picked up an
-    explanation on replay while 212 did not. More information about the same
-    event must win deterministically."""
+    """The same transaction is re-alerted whenever the producer replays a CSV. If
+    both open rows carried the same version, which survived the merge would be
+    luck - and it was: 16 cases picked up an explanation on replay while 212 did
+    not. More information about the same event must win deterministically."""
     bare = _as_dict(CASE.case_row(ALERT))
     explained = _as_dict(CASE.case_row(ALERT, ["amount: big (+9.9)"], "OK"))
     assert explained["version"] > bare["version"]
@@ -58,8 +55,7 @@ def test_an_explained_open_outranks_an_unexplained_one():
 
 
 def test_an_explained_open_still_loses_to_a_resolution():
-    """The whole reason open versions are tiny constants. Bumping one must not
-    let a replay overwrite a human's verdict."""
+    """Bumping a tiny open-version constant must not let a replay beat a verdict."""
     bare = _as_dict(CASE.case_row(ALERT))
     resolved = _as_dict(CASE.resolution_row(
         bare, "CONFIRMED_FRAUD", "analyst.k", at_epoch=1_772_000_100.0))
@@ -68,13 +64,9 @@ def test_an_explained_open_still_loses_to_a_resolution():
 
 
 def test_a_replayed_alert_cannot_revert_a_resolution():
-    """The property the whole engine choice exists for.
-
-    ReplacingMergeTree keeps the highest version per case_id. An alert
-    redelivered after an analyst resolved its case re-inserts the OPEN row; if
-    that row could outrank the resolution, the verdict would silently vanish and
-    the case would reappear in the queue as unworked.
-    """
+    """ReplacingMergeTree keeps the highest version per case_id, so an alert
+    redelivered after resolution re-inserts the OPEN row; if it outranked the
+    resolution the verdict would vanish and the case reappear as unworked."""
     opened = _as_dict(CASE.case_row(ALERT))
     resolved = _as_dict(CASE.resolution_row(
         opened, "CONFIRMED_FRAUD", "analyst.k", at_epoch=1_772_000_100.0))
@@ -98,8 +90,7 @@ def test_resolution_keeps_the_case_identity_and_facts():
 # --- what a verdict must carry ----------------------------------------------
 
 def test_a_verdict_must_name_its_author():
-    """A disposition is a label a model may be retrained on. An unattributed
-    label cannot be audited, questioned, or withdrawn."""
+    """A disposition may retrain a model; an unattributed label cannot be audited."""
     opened = _as_dict(CASE.case_row(ALERT))
     with pytest.raises(ValueError, match="name who"):
         CASE.resolution_row(opened, "CONFIRMED_FRAUD", "", at_epoch=1.0)
@@ -115,23 +106,18 @@ def test_only_terminal_dispositions_can_be_written(bad):
 # --- queue order -------------------------------------------------------------
 
 def test_block_outranks_every_review():
-    """A blocked transfer has a customer waiting on it; a review does not. The
-    cost of delay is a different quantity, so no review score overtakes a
-    block."""
+    """A blocked transfer has a customer waiting; no review score may overtake it."""
     worst_block = CASE.priority_of({"decision": "BLOCK", "final_score": 0.0})
     best_review = CASE.priority_of({"decision": "REVIEW", "final_score": 1.0})
     assert worst_block < best_review
 
 
 def test_priority_is_the_band_and_nothing_else():
-    """Score is deliberately absent from this column.
-
-    The live queue showed 89.1% of alerts carrying a probability that rounds to
-    1.000 - only 35 distinct rounded values across the whole alert set - so
-    score-within-band ordered nothing and every case arrived at priority 0.
-    Ordering by exposure happens in the query instead; see
-    CaseStore.open_cases.
-    """
+    """Score is deliberately absent from this column. The live queue showed 89.1%
+    of alerts carrying a probability that rounds to 1.000 - only 35 distinct
+    rounded values across the whole alert set - so score-within-band ordered
+    nothing and every case arrived at priority 0. Ordering by exposure happens in
+    the query; see CaseStore.open_cases."""
     for score in (0.0, 0.42, 0.95, 1.0):
         assert CASE.priority_of({"decision": "BLOCK", "final_score": score}) == 0
         assert CASE.priority_of({"decision": "REVIEW", "final_score": score}) == 1
@@ -147,14 +133,11 @@ def test_missing_or_malformed_score_does_not_crash_the_queue():
 
 def test_columns_match_the_clickhouse_schema():
     """CASE_COLUMNS is passed to insert() as column_names, so a column added to
-    the DDL and not here is inserted into the wrong position - silently, since
-    ClickHouse will happily coerce a String into a String.
-
-    The DDL is a migration, not just a CREATE: columns added after the table
-    first existed arrive through ALTER ... ADD COLUMN, because the file is
+    the DDL and not here lands in the wrong position - silently, since ClickHouse
+    coerces a String into a String. The DDL is a migration: columns added after
+    the table existed arrive via ALTER ... ADD COLUMN, because the file is
     re-applied on every connect and a widened CREATE would do nothing on a
-    cluster that already has the table. Both forms are read here.
-    """
+    cluster that already has the table. Both forms are read here."""
     ddl = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
                        "infra", "clickhouse", "init", "02-cases.sql")
     with open(ddl, encoding="utf-8") as fh:

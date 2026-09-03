@@ -1,5 +1,4 @@
-"""SHAP over the trained model: the global importance plots and a per-alert view.
-"""
+"""SHAP over the trained model: global importance plots and a per-alert view."""
 
 import json
 import os
@@ -41,7 +40,6 @@ def main():
     explainer = shap.TreeExplainer(model)
     shap_values = _positive_class(explainer.shap_values(X))
 
-    # --- global: beeswarm + bar ---
     plt.figure()
     shap.summary_plot(shap_values, X, max_display=15, show=False)
     plt.tight_layout(); plt.savefig(os.path.join(MODELS_DIR, "shap_summary.png"), dpi=130); plt.close()
@@ -56,7 +54,6 @@ def main():
     for i in order[:10]:
         print(f"  {feats[i]:<20} {mean_abs[i]:.4f}")
 
-    # --- local: a worked explanation for one fraud alert ---
     proba = model.predict_proba(X.values)[:, 1]
     fraud_idx = [i for i in range(len(y)) if y[i] == 1 and proba[i] >= 0.5]
     if fraud_idx:

@@ -1,11 +1,8 @@
-"""
-Unit tests for the RECEIVER_AGE_MODE ablation switch.
+"""Unit tests for the RECEIVER_AGE_MODE ablation switch.
 
-FEATURE_NAMES is fixed at import time, so the contract itself is tested through
-`_age_block`; the per-event gating is tested by flipping `C.RECEIVER_AGE_MODE`,
-which `visible_receiver_age` reads on every call.
-
-Run: python -m pytest test_receiver_age_modes.py -q
+FEATURE_NAMES is fixed at import time, so the contract is tested through
+`_age_block`; per-event gating by flipping `C.RECEIVER_AGE_MODE`, which
+`visible_receiver_age` reads on every call.
 """
 
 import math

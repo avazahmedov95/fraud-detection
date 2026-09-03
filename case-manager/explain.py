@@ -1,47 +1,38 @@
 """Turns a model-only alert into words: the top tree contributions, phrased as
-findings an analyst can read out.
-
-Refuses to speak rather than risk a wrong reason - see Explainer.explain.
-Why it runs here and not on the scoring path: docs/irp-framing.md 9.2.
-"""
+findings an analyst can read out. Refuses to speak rather than risk a wrong reason.
+Why it runs here and not on the scoring path: docs/irp-framing.md 9.2."""
 
 import logging
 import os
 
 log = logging.getLogger("explain")
 
-#: Statuses an explanation can carry. Stored beside it so a missing explanation
-#: is never mistaken for "nothing was notable".
+#: Stored beside the explanation so a missing one is never read as "nothing notable".
 OK = "OK"
 NO_MODEL = "NO_MODEL"                 # artefact absent from the image
 NO_FEATURES = "NO_FEATURES"           # the alert predates feature publication
 MODEL_MISMATCH = "MODEL_MISMATCH"     # joblib disagrees with what scored
 FAILED = "FAILED"
 
-#: Max |recomputed - recorded| before the explanation is refused. ONNX and the
-#: joblib booster agree to 3.3e-07 across 50k events; 1e-4 flags a real
-#: divergence (a stale artefact, a retrain that was not re-exported) without
-#: firing on float noise.
+#: Max |recomputed - recorded| before the explanation is refused. ONNX and the joblib
+#: booster agree to 3.3e-07 across 50k events; 1e-4 flags a stale or un-re-exported
+#: artefact without firing on float noise.
 TOLERANCE = 1e-4
 
 TOP_N = 3
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
-#: A bare LightGBM Booster, written by ml/export_onnx.py from the same object
-#: it converts to ONNX. Not model.joblib: unpickling an LGBMClassifier drags
-#: scikit-learn (~30 MB) into a service that only reads trees.
+#: A bare LightGBM Booster written by ml/export_onnx.py from the same object it
+#: converts to ONNX. Not model.joblib: unpickling drags scikit-learn (~30 MB) in.
 _MODEL_CANDIDATES = (
     os.path.join(_HERE, "model.txt"),
     os.path.join(_HERE, "..", "ml", "models", "model.txt"),
 )
 
-#: The booster itself carries no usable names - it was trained on a bare numpy
-#: array, so its feature_name() is ["Column_0", ...]. The real order lives in
-#: feature_names.json, the same artefact `serve-prep` copies next to the Flink
-#: job. Labelling a contribution with the wrong feature would be the worst
-#: available outcome here: a confident, specific, wrong reason. So the count is
-#: checked against the booster and mislabelling fails loudly.
+#: The booster carries no usable names - trained on a bare numpy array, its
+#: feature_name() is ["Column_0", ...]. The real order lives in feature_names.json,
+#: the artefact `serve-prep` copies next to the Flink job; mislabelling fails loudly.
 _NAMES_CANDIDATES = (
     os.path.join(_HERE, "feature_names.json"),
     os.path.join(_HERE, "..", "ml", "models", "feature_names.json"),
@@ -52,10 +43,8 @@ def _uzs(v):
     return f"{int(round(v)):,}".replace(",", " ")
 
 
-#: feature -> (phrase, value formatter). The phrase reads as a finding, not as a
-#: column name: an analyst acts on "payee's account is 2 days old", not on
-#: "receiver_age = 2.0". Anything absent here falls back to the raw name, which
-#: is ugly but never wrong.
+#: feature -> (phrase, value formatter). An analyst acts on "payee's account is
+#: 2 days old", not "receiver_age = 2.0". Absent here falls back to the raw name.
 _PHRASES = {
     "log_amount":             ("amount",                        lambda v: _uzs(pow(2.718281828, v) - 1) + " UZS"),
     "amount_to_mean":         ("amount vs this sender's average", lambda v: f"{v:.1f}x"),
@@ -105,8 +94,7 @@ def _load_names():
 
 
 class Explainer:
-    """Lazily loaded. Absent artefacts disable explanation; they never crash the
-    consumer, because an unexplained case is still a case worth queueing."""
+    """Lazily loaded. Absent artefacts disable explanation, never crash the consumer."""
 
     def __init__(self, feature_names=None):
         self._booster = None
@@ -142,9 +130,7 @@ class Explainer:
         except Exception as exc:                       # noqa: BLE001
             hint = ""
             if isinstance(exc, OSError) and "shared object" in str(exc):
-                # The wheel is installed and the import still fails: a native
-                # dependency is missing from the IMAGE, which no amount of
-                # pip-checking reveals. Name the fix rather than the symptom.
+                # The wheel is installed: a native dependency is missing from the IMAGE.
                 hint = (" - this is a missing system library, not a bad model. "
                         "lightgbm needs the OpenMP runtime; install libgomp1 in "
                         "the image (see infra/case-manager/Dockerfile).")
@@ -153,15 +139,10 @@ class Explainer:
             self._booster = None
 
     def explain(self, features, recorded_score):
-        """(status, [top-N phrases]) for one alert.
-
-        `features` is the vector the JOB scored on, republished in the alert -
-        not recomputed here. Recomputing would need the sender's streaming
-        state, which does not exist in this process, and would explain a
-        different event than the one that alerted.
-        """
-        # Features first: checking the model first made NO_MODEL mask whether
-        # the alert carried a vector at all, hiding the upstream problem.
+        """(status, [top-N phrases]) for one alert. `features` is the vector the JOB
+        scored on, republished in the alert: recomputing needs streaming state this
+        process lacks, and would explain a different event than the one that alerted."""
+        # Features first: checking the model first made NO_MODEL mask a missing vector.
         if not features:
             return NO_FEATURES, []
         self._load()
@@ -175,9 +156,7 @@ class Explainer:
             proba = 1.0 / (1.0 + pow(2.718281828, -margin))
             if recorded_score is not None and \
                     abs(proba - float(recorded_score)) > TOLERANCE:
-                # Say nothing rather than say something plausible about the
-                # wrong model. A confident-sounding wrong reason is worse than
-                # an admitted absence.
+                # Say nothing rather than something plausible about the wrong model.
                 log.error("explanation model disagrees with the scorer "
                           "(%.6f vs %.6f) - refusing to explain. model.joblib "
                           "and model.onnx are probably out of step; re-export.",
@@ -185,8 +164,7 @@ class Explainer:
                 return MODEL_MISMATCH, []
             pairs = sorted(zip(self._names, features, contrib[:len(features)]),
                            key=lambda t: -abs(t[2]))
-            # Only what pushed the score UP. A negative contribution is a reason
-            # the model was less suspicious, which is not what the case is about.
+            # Only what pushed the score UP, not reasons the model was less suspicious.
             top = [p for p in pairs if p[2] > 0][:TOP_N]
             return OK, [phrase(n, v, c) for n, v, c in top]
         except Exception as exc:                       # noqa: BLE001

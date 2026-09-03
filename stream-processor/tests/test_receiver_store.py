@@ -1,12 +1,8 @@
-"""
-Unit tests for the Redis-backed receiver store.
+"""Unit tests for the Redis-backed receiver store.
 
-The store lives OUTSIDE Flink's checkpoint, so it does not roll back when the
-job restores. Under AT_LEAST_ONCE delivery that means every event between the
-last checkpoint and a failure is recorded twice. These tests pin the two
-properties that makes acceptable.
-
-Run: python -m pytest test_receiver_store.py -q
+The store lives OUTSIDE Flink's checkpoint, so under AT_LEAST_ONCE every event
+between the last checkpoint and a failure is recorded twice; these tests pin the
+two properties that make that acceptable.
 """
 
 import pytest
@@ -73,28 +69,22 @@ def store():
 
 
 def _ev(txid, sender="S1", amount=100_000.0, receiver="R1"):
-    # Carries BOTH identities. The store keys on whichever the payee_identity
-    # capability selects (features.payee_key), so an event that named only one
-    # of them would silently exercise a single mode.
+    # Carries BOTH identities: the store keys on whichever payee_identity selects
+    # (features.payee_key), so naming one would silently exercise a single mode.
     return {"transaction_id": txid, "sender_pinfl": sender,
             "receiver_pinfl": receiver, "receiver_card": payee_card(receiver),
             "amount_uzs": amount}
 
 
 def _payee(receiver="R1"):
-    """The identity the store keys this payee by under the active mode.
-
-    load() takes an ALREADY-RESOLVED key - the job calls it with
-    features.payee_key(event) - so the test has to resolve it the same way.
-    Writing "R1" here instead is precisely the read/write key mismatch the
-    store's design exists to prevent, and it silently reads an empty window.
-    """
+    """The identity the store keys this payee by under the active mode. load() takes
+    an ALREADY-RESOLVED key, so writing "R1" here is the read/write key mismatch
+    the store exists to prevent, and it silently reads an empty window."""
     return F.payee_key(_ev("probe", receiver=receiver))
 
 
 def test_replay_of_the_same_event_is_idempotent(store):
-    """The at-least-once case: the store is not checkpointed, so replayed events
-    call record() again. A repeat must not inflate the payee's inflow."""
+    """A replayed event must not inflate the payee's inflow."""
     store.record(_ev("tx-1"), now=1000)
     store.record(_ev("tx-1"), now=1000)          # replayed after restart
     state = store.load(_payee(), now=1000)
@@ -102,9 +92,8 @@ def test_replay_of_the_same_event_is_idempotent(store):
 
 
 def test_distinct_transfers_sharing_time_sender_amount_are_both_kept(store):
-    """The bug this key format fixes. Identical amounts from one sender in the
-    same second is what a structuring or mule run looks like; under the previous
-    time|sender|amount key the second transfer vanished."""
+    """The bug this key format fixes: identical amounts from one sender in the same
+    second is a mule run, and the previous time|sender|amount key lost the second."""
     store.record(_ev("tx-1"), now=1000)
     store.record(_ev("tx-2"), now=1000)          # different transaction
     state = store.load(_payee(), now=1000)
@@ -139,9 +128,7 @@ def test_unavailable_redis_fails_open_rather_than_raising():
 
 
 def test_load_distinguishes_unavailable_from_empty(store):
-    """None means 'not computed' and is failed open; an empty window is a real
-    observation about a payee nobody has paid. Collapsing them would let a
-    broken store read as a quiet payee."""
+    """Collapsing 'not computed' with an empty window makes a broken store quiet."""
     assert store.load("never-paid", now=1000).inbound == \
         type(store.load("never-paid", now=1000).inbound)()
     s = ReceiverStore("h", 1)

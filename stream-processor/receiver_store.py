@@ -1,9 +1,7 @@
-"""Receiver-side state in Redis: the payee's inbound window, and the population
-distribution its threshold is compared against.
-
-Both live outside Flink keyed state because the stream is keyed by SENDER, so
-one payee's transfers are spread across every partition. Fails open.
-"""
+"""Receiver-side state in Redis: the payee's inbound window and the population
+distribution its threshold is compared against. Both live outside Flink keyed state
+because the stream is keyed by SENDER, spreading one payee across every partition.
+Fails open."""
 
 import logging
 
@@ -32,12 +30,8 @@ class ReceiverStore:
 
     def load(self, payee, now):
         """The payee's inbound window, or None when the store is unavailable.
-
-        None and an empty window are deliberately different: None means "this
-        signal is not being computed", which the feature extractor treats as
-        fail-open, while an empty window is a real observation about a payee
-        nobody has paid recently.
-        """
+        None and an empty window differ: None means "not being computed", which the
+        extractor treats as fail-open; an empty window is a real observation."""
         if self._redis is None or not payee:
             return None
         state = ReceiverState()
@@ -49,11 +43,9 @@ class ReceiverStore:
             return None
         for m in members:
             try:
-                # Split on the LEFT three separators: the trailing field is the
-                # transaction id, which is present only to make the member
-                # unique and is not part of the window state. A plain split(2)
-                # here silently dropped every entry, because the amount field
-                # then carried the id and failed to parse.
+                # Split on the LEFT three separators; the trailing field is the
+                # transaction id, not window state. A plain split(2) silently dropped
+                # every entry, because the amount field then carried the id.
                 parts = m.split("|", 3)
                 if len(parts) < 3:
                     continue
@@ -67,26 +59,17 @@ class ReceiverStore:
         """Append this transfer to the payee's window and prune what expired."""
         if self._redis is None:
             return
-        # Resolved through the same helper load() is called with, so a write
-        # can never land under a key the read will not look at.
+        # Same helper load() uses, so a write cannot land under a key the read ignores.
         payee = F.payee_key(event)
         if not payee:
             return
         key = f"rcv:{payee}"
-        # The member encodes transaction_id, which buys two distinct properties:
-        #
-        #   Idempotence under replay. This store is external, so it does NOT
-        #   roll back with a Flink checkpoint. Under AT_LEAST_ONCE the events
-        #   between the last checkpoint and a failure are replayed, and each
-        #   replay calls record() again. A member keyed on the transaction makes
-        #   the repeat a no-op instead of inflating the payee's inflow.
-        #
-        #   Correctness for genuine repeats. The previous key was
-        #   time|sender|amount, under which two DIFFERENT transfers that share
-        #   all three collapsed into one member and the second vanished from
-        #   rcv_inflow_1h. Identical amounts from one sender in the same second
-        #   is exactly what a structuring or mule run looks like, so the
-        #   collision landed on the traffic this store exists to catch.
+        # transaction_id in the member buys idempotence under replay - this store is
+        # external and does NOT roll back with a Flink checkpoint, so AT_LEAST_ONCE
+        # replays call record() again - and correctness for genuine repeats: the
+        # previous key was time|sender|amount, under which two DIFFERENT transfers
+        # sharing all three collapsed into one member and the second vanished from
+        # rcv_inflow_1h, the shape of a structuring or mule run.
         txid = event.get("transaction_id") or ""
         member = (f"{now}|{event.get('sender_pinfl', '')}|"
                   f"{float(event['amount_uzs'])}|{txid}")
@@ -94,8 +77,7 @@ class ReceiverStore:
             pipe = self._redis.pipeline()
             pipe.zadd(key, {member: now})
             pipe.zremrangebyscore(key, "-inf", now - self._window_s)
-            # Twice the window: long enough that nothing in use expires, short
-            # enough that idle payees do not accumulate in memory.
+            # Twice the window: nothing in use expires, idle payees do not accumulate.
             pipe.expire(key, int(self._window_s * 2))
             pipe.execute()
         except Exception as exc:                       # noqa: BLE001
@@ -110,44 +92,23 @@ class ReceiverStore:
 
 
 class PopulationStore:
-    """The population-wide distribution of `rcv_distinct_senders_1h`, shared
-    across Flink partitions via Redis.
-
-    Same argument as ReceiverStore one class up, one level higher. That store
-    exists because a payee's inbound transfers are spread across every
-    partition, so receiver-side STATE cannot live in Flink keyed state. This one
-    exists because the THRESHOLD that state is compared against is a property of
-    the whole population, and a worker that built its own histogram would hold a
-    partition baseline, not a population one - two workers would derive
-    different thresholds from different slices and judge identical transactions
-    differently depending on where they landed.
-
-    Topology constrains the feature, then the state, then the threshold. Three
-    consequences of one partitioning choice.
+    """Population-wide distribution of `rcv_distinct_senders_1h`, shared across
+    Flink partitions via Redis.
 
         mule:fanin:hist  ->  HASH { sender-count -> times observed }
 
-    WRITES ARE BATCHED. `observe()` only increments a local dict; the flush
-    happens on the same call that refreshes the threshold, once every
-    MULE_FAN_IN_REFRESH_EVERY observations. A HINCRBY per event would be a Redis
-    round trip per event on the 300 ms decision path, which is the kind of cost
-    7.3 spent a chapter tracking down.
-
-    READS ARE CACHED for the same reason: HGETALL every event is the same round
-    trip wearing a different name. The threshold moves slowly, so a stale one is
-    a far smaller error than a latency budget spent on freshness nobody needs.
-
-    Fails CLOSED to the absolute constant, not to a local histogram. Without
-    Redis the only baseline available is this worker's own slice, which is
-    precisely the wrong quantity - better the known constant than a confident
-    wrong number.
-    """
+    The THRESHOLD is a property of the whole population: a worker with its own
+    histogram would hold a partition baseline, and two workers would judge identical
+    transactions differently. WRITES ARE BATCHED and READS ARE CACHED - a HINCRBY or
+    HGETALL per event would be a Redis round trip on the 300 ms decision path, and
+    the threshold moves slowly enough that a stale one is the smaller error. Fails
+    CLOSED to the absolute constant, not a local histogram: this worker's own slice
+    is precisely the wrong quantity."""
 
     KEY = "mule:fanin:hist"
     BINS = 257
     #: Long enough to survive normal operation, short enough that a deployment
-    #: left idle for a week does not come back scoring against last month's
-    #: traffic.
+    #: left idle does not come back scoring against last month's traffic.
     TTL_S = 7 * 24 * 3600
 
     def __init__(self, host, port):
@@ -172,8 +133,7 @@ class PopulationStore:
             self._redis = None
 
     def observe(self, senders):
-        """Called by rules.evaluate AFTER the decision. Local only - see the
-        class docstring on why this does not touch Redis."""
+        """Called by rules.evaluate AFTER the decision. Local only, no Redis."""
         k = min(int(senders), self.BINS - 1)
         self._pending[k] = self._pending.get(k, 0) + 1
         self._since_sync += 1
@@ -217,8 +177,8 @@ class PopulationStore:
             self._thr = (quantile_threshold(counts, total, C.MULE_FAN_IN_QUANTILE)
                          if total else None)
         except Exception as exc:                       # noqa: BLE001
-            # Do not drop _pending: a transient Redis blip should cost accuracy
-            # of the next refresh, not the observations themselves.
+            # Do not drop _pending: a blip should cost the next refresh's accuracy, not
+            # the observations themselves.
             log.warning("fan-in baseline sync failed, keeping the last "
                         "threshold: %s", exc)
 

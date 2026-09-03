@@ -1,12 +1,8 @@
-"""
-Unit tests for the audit integrity chain.
+"""Unit tests for the audit integrity chain.
 
-The known-answer vectors are the mechanism that keeps the two copies of
-integrity.py (here and in data-generator/) in step: both files carry this test,
-and both must produce the same fixed hex for the same input. If a copy drifts, a
-vector fails rather than the chain silently becoming unverifiable.
-
-Run: python -m pytest test_integrity.py -q
+The known-answer vectors keep the two copies of integrity.py (here and in
+data-generator/) in step: both carry this test and must produce the same fixed
+hex, so a drifting copy fails a vector instead of leaving the chain unverifiable.
 """
 
 import pytest
@@ -21,25 +17,21 @@ EVENT = {
     "sender_pinfl": "S1", "sender_card": "8600000000000001",
     "receiver_pinfl": "R1", "receiver_card": "9860000000000002",
     "amount_uzs": 9_000_000, "channel": "MOBILE_APP",
-    "sender_region": "Tashkent City", "receiver_region": "Andijan",
+    "sender_region": "Tashkent City",
 }
 
 
 # --- known-answer vectors (pin the two copies together) ---------------------
 
-# Frozen vectors. These exact strings must also appear in
-# data-generator/test_integrity.py; equal vectors on both sides prove the two
-# integrity.py copies agree without a runtime dependency between them.
-# Changed when receiver_pinfl left the wire: the hash can only bind
-# fields the event carries. Both copies of integrity.py must produce
-# this same value - that is what these two test files are for.
-INGRESS_VECTOR = "80f4245868803adc2b0324e7a0a3b5ef43ec6cfcff45011f752eb3083c1591c6"
+# Frozen vectors; these exact strings must also appear in
+# data-generator/test_integrity.py. Changed when receiver_pinfl left the wire:
+# the hash binds only fields the event carries.
+INGRESS_VECTOR = "1e3525aea867ee6350005d2977b63d0e1a8c360e012a9d038a8c17f1b4dd3910"
 RECORD_VECTOR = "0b78fd33b284062eb5b9f6dc32f1c4507ed4fbb4c1d00c2a48cc4b885c964cad"
 
 
 def test_ingress_hash_known_answer():
-    """Fixed input -> fixed hex. If this changes, every stored hash is invalid,
-    and the two copies of integrity.py have diverged."""
+    """If this changes, every stored hash is invalid and the two copies diverged."""
     assert integrity.ingress_hash(EVENT) == INGRESS_VECTOR
     assert integrity.ingress_hash(dict(EVENT)) == INGRESS_VECTOR   # order-independent
 
@@ -132,8 +124,7 @@ def test_edited_flat_column_is_caught():
 
 
 def test_missing_ingress_hash_still_chains():
-    """A pre-integrity producer sends no ingress_hash; the chain still forms and
-    verifies, the ingress binding is simply absent."""
+    """A pre-integrity producer sends no ingress_hash; the chain still verifies."""
     events = [dict(EVENT, transaction_id=f"tx-{i}", decision="ALLOW")
               for i in range(5)]
     assert verify(_build_chain(events)) == []

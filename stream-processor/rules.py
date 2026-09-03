@@ -1,9 +1,6 @@
-"""The CEP rule engine, over the shared feature contract in features.py.
-
-Returns both the rule decision and the model's feature vector, so one call
-drives the rules and feeds fusion. No Flink, Redis or Neo4j imports, so it
-replays offline unchanged.
-"""
+"""The CEP rule engine over the shared feature contract in features.py; returns both
+the rule decision and the model's feature vector. No Flink, Redis or Neo4j imports,
+so it replays offline unchanged."""
 
 from dataclasses import dataclass, field
 from collections import deque, Counter
@@ -17,13 +14,8 @@ import capabilities as CAP
 
 @dataclass
 class ReceiverState:
-    """Inbound history for ONE receiver, keyed by payee rather than by sender.
-
-    The stream is partitioned by sender, so this state does not live in Flink
-    keyed state like SenderState does — in production it is a shared store
-    (Redis) written by every partition. Kept as a plain object here so the rule
-    engine stays testable and replayable offline.
-    """
+    """Inbound history for ONE receiver, keyed by payee: the stream is partitioned
+    by sender, so this lives in a shared Redis store, not Flink keyed state."""
     inbound: deque = field(default_factory=deque)     # (ts, sender_pinfl, amount)
 
 
@@ -32,18 +24,11 @@ FAN_IN_FLOOR = 2
 
 
 def quantile_threshold(counts, n, q):
-    """Smallest count k such that P(X < k) >= q — the value that puts a receiver
-    in the top (1-q) of the population right now.
-
-    Shared by the in-process baseline and the Redis-backed one so the floor
-    below cannot drift between them: two implementations of a threshold is two
-    thresholds.
-
-    A single sender is not concentration, whatever the distribution says. If
-    99.9% of receivers see zero or one, the raw quantile lands at 1 and the rule
-    would fire on every ordinary transfer. FAN_IN_FLOOR is a statement about
-    what the rule MEANS, not a tuning constant.
-    """
+    """Smallest count k with P(X < k) >= q - the top (1-q) of the population now.
+    Shared by the in-process and Redis-backed baselines so the floor cannot drift.
+    If 99.9% of receivers see zero or one, the raw quantile lands at 1 and the rule
+    would fire on every ordinary transfer; FAN_IN_FLOOR states what the rule MEANS,
+    it is not a tuning constant."""
     target = q * n
     cum = 0
     thr = len(counts) - 1
@@ -59,9 +44,7 @@ _warned_no_baseline = False
 
 
 def _warn_relative_without_baseline():
-    """Once per process. A per-event log line on the 300 ms path would be its own
-    defect, and the condition is a deployment mistake that does not change
-    between events."""
+    """Once per process: a per-event line on the 300 ms path would be its own defect."""
     global _warned_no_baseline
     if not _warned_no_baseline:
         _warned_no_baseline = True
@@ -76,24 +59,13 @@ def _warn_relative_without_baseline():
 
 @dataclass
 class PopulationBaseline:
-    """Live empirical distribution of `rcv_distinct_senders_1h` across ALL
-    receivers, so MULE_FAN_IN can fire on a quantile instead of a constant.
+    """Live empirical distribution of `rcv_distinct_senders_1h` across ALL receivers,
+    so MULE_FAN_IN can fire on a quantile instead of a constant.
 
-    Why this is a separate object rather than module state: the rule engine is
-    replayed offline and unit-tested, and a global counter would make results
-    depend on execution order across tests. It is passed in exactly the way
-    `ReceiverState` is, and is optional for the same reason - if it is absent
-    the rule falls back to the absolute threshold rather than stalling.
-
-    In production this is shared state, like ReceiverStore: every partition
-    observes into it. It is one small histogram, not per-key state, so the cost
-    is a bounded array rather than a store.
-
-    Exact rather than approximate: the quantity is a small count, so a bounded
-    histogram gives the true quantile with O(1) memory. Values above the last
-    bin land in it - a receiver with 256+ distinct senders in an hour is beyond
-    any threshold this would set.
-    """
+    A separate object rather than module state: a global counter would make results
+    depend on execution order across tests. Optional - if absent the rule falls back
+    to the absolute threshold rather than stalling. Values above the last bin land in
+    it; a receiver with 256+ distinct senders in an hour is beyond any threshold."""
     BINS: int = 257
     counts: list = field(default_factory=lambda: [0] * 257)
     n: int = 0
@@ -138,11 +110,7 @@ _THRESHOLD_CACHE = {}
 
 
 def _thresholds():
-    """Decision cutoffs for the active capability profile.
-
-    Cached on the profile rather than recomputed per event: this runs on every
-    transaction, and the answer only changes when the deployment changes.
-    """
+    """Decision cutoffs for the active capability profile, cached per profile."""
     if not C.SCALE_THRESHOLDS_BY_CAPABILITY:
         return C.REVIEW_THRESHOLD, C.BLOCK_THRESHOLD
     key = tuple(sorted(CAP.MODES.items()))
@@ -157,25 +125,19 @@ def evaluate(event: dict, receiver_age_days, state: SenderState, now: float,
              receiver_state: "ReceiverState | None" = None,
              population: "PopulationBaseline | None" = None) -> dict:
     """Score one event from the shared features. Mutates state (after extraction).
-
-    `receiver_state` carries the payee's inbound history. It is optional: if the
-    shared store is unreachable the pipeline fails open on this signal rather
-    than stalling, exactly as the Neo4j and Redis lookups do.
-    """
+    `receiver_state` is optional: an unreachable shared store fails open here."""
     f = F.extract(event, receiver_age_days, state, now, receiver_state)
 
     hits = []
     score = 0.0
     on = CAP.rule_enabled          # data behind the rule is available?
 
-    # APP-style: new, high-value payee above an absolute floor.
     if on("NEW_PAYEE_HIGH_AMOUNT") and (
             f["is_new_payee"] and f["amount"] >= C.NEW_PAYEE_ABS_FLOOR
             and f["amount_gt_factor_mean"]):
         hits.append("NEW_PAYEE_HIGH_AMOUNT"); score += C.W_NEW_PAYEE_HIGH
-    # Guarded on age_known: when the age is unavailable `receiver_is_fresh` is
-    # NaN, and NaN is truthy in Python — an unguarded test would fire this rule
-    # on every inter-bank transfer.
+    # Guarded on age_known: an unavailable age makes receiver_is_fresh NaN, and
+    # NaN is truthy - unguarded, this would fire on every inter-bank transfer.
     if on("FRESH_RECEIVER") and f["receiver_age_known"] and f["receiver_is_fresh"] == 1:
         hits.append("FRESH_RECEIVER"); score += C.W_FRESH_RECEIVER
     if on("VELOCITY") and f["vel_10m"] > C.VELOCITY_MAX_COUNT:
@@ -188,11 +150,8 @@ def evaluate(event: dict, receiver_age_days, state: SenderState, now: float,
         hits.append("DEVICE_CHANGE"); score += C.W_DEVICE_CHANGE
     if on("GEO_ANOMALY") and f["geo_is_anomaly"]:
         hits.append("GEO_ANOMALY"); score += C.W_GEO_ANOMALY
-    # Physically impossible journey since the sender's previous transaction.
-    # Distinct from GEO_ANOMALY: that one fires on any away-from-home region and
-    # so flags ordinary travellers, whereas this fires only when the move could
-    # not have happened at all — a signature of a hijacked session or a shared
-    # credential being used in two places at once.
+    # Distinct from GEO_ANOMALY: that flags ordinary travellers on any
+    # away-from-home region; this fires only when the move was impossible.
     if on("IMPOSSIBLE_TRAVEL") and (
             f["travel_distance_km"] >= C.MIN_TRAVEL_DISTANCE_KM
             and f["travel_kmh"] > C.MAX_PLAUSIBLE_KMH):
@@ -203,23 +162,17 @@ def evaluate(event: dict, receiver_age_days, state: SenderState, now: float,
         hits.append("COACHED_SESSION"); score += C.W_COACHED_SESSION
     if on("DAILY_LIMIT_BREACH") and f["daily_sum_ratio"] > 1.0:
         hits.append("DAILY_LIMIT_BREACH"); score += C.W_DAILY_LIMIT
-    # Fan-IN: many distinct senders converging on this payee. The mirror image
-    # of DISTINCT_PAYEE_BURST, and the only rule here that looks at the payee's
-    # history rather than the sender's.
+    # Fan-IN: the only rule here that looks at the payee's history, not the sender's.
     if on("MULE_FAN_IN"):
-        # The threshold is either the configured constant or a quantile of the
-        # live population - see MULE_FAN_IN_MODE in config.py for the measured
-        # reason the choice exists.
+        # Constant, or a quantile of the live population - see MULE_FAN_IN_MODE.
         fan_in_thr = C.MULE_FAN_IN_MIN_SENDERS
         if C.MULE_FAN_IN_MODE == "relative":
             if population is not None:
                 fan_in_thr = population.threshold(C.MULE_FAN_IN_QUANTILE,
                                                   C.MULE_FAN_IN_MIN_SENDERS)
             else:
-                # Asked for relative, given no baseline. Falling back silently is
-                # what this project catalogues as the dangerous failure: the knob
-                # is set, the operator believes it took effect, and the rule runs
-                # on the constant the mode exists to replace. Say so, once.
+                # Relative asked for, no baseline given: a silent fallback leaves the
+                # knob set while the rule runs on the constant it exists to replace.
                 _warn_relative_without_baseline()
         if f["rcv_distinct_senders_1h"] >= fan_in_thr:
             hits.append("MULE_FAN_IN"); score += C.W_MULE_FAN_IN
@@ -238,14 +191,12 @@ def evaluate(event: dict, receiver_age_days, state: SenderState, now: float,
     F.update_state(state, event, now)
     F.update_receiver_state(receiver_state, event, now)
     if population is not None:
-        # After the decision, never before: an event must not be part of the
-        # baseline it is judged against.
+        # After the decision: an event must not join the baseline it is judged against.
         population.observe(f["rcv_distinct_senders_1h"])
 
     return {
         "is_new_payee": bool(f["is_new_payee"]),
-        # The age the bank could actually see, not the ground truth — so the
-        # audit trail matches what the decision was based on.
+        # The age the bank could see, not ground truth, so the audit trail matches.
         "receiver_account_age_days": (
             receiver_age_days if f["receiver_age_known"] else None),
         "cep_score": round(score, 4),

@@ -1,8 +1,5 @@
-"""ClickHouse access for the case queue: open, read, resolve, count.
-
-Shared with the analyst CLI so the two cannot hold different opinions about how
-a case is stored.
-"""
+"""ClickHouse access for the case queue: open, read, resolve, count. Shared with
+the analyst CLI so the two cannot hold different opinions about how a case is stored."""
 
 import logging
 import os
@@ -16,17 +13,12 @@ log = logging.getLogger("case_store")
 RECONNECT_INTERVAL_S = 10.0
 _TABLE = "cases"
 
-#: The table DDL, shipped into the image beside this module.
-#:
-#: Applied on every connect rather than left to ClickHouse's initdb. Scripts in
-#: docker-entrypoint-initdb.d run ONLY when the data directory is empty, so on
-#: any cluster that has been up before - which is every cluster that has
-#: produced a measurement - a newly added schema file is never executed. The
-#: failure is quiet in the worst way: the service starts, consumes the alert
-#: topic, commits offsets, and every insert fails against a table that does not
-#: exist. That is the same shape as the 331 events the sink-writer once
-#: discarded in silence, and it is avoidable here for the cost of one idempotent
-#: statement per connect.
+#: The table DDL, shipped into the image beside this module and applied on every
+#: connect: docker-entrypoint-initdb.d scripts run ONLY when the data directory is
+#: empty, so on any cluster that has been up before a newly added schema file is never
+#: executed. The failure is quiet - the service starts, consumes the alert topic,
+#: commits offsets, and every insert fails against a table that does not exist: the
+#: same shape as the 331 events the sink-writer once discarded in silence.
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _DDL_CANDIDATES = (
     os.path.join(_HERE, "02-cases.sql"),                       # in the image
@@ -45,18 +37,11 @@ def _ddl_file():
 def _statements(sql: str):
     """Split a DDL file into executable statements.
 
-    Comments are stripped BEFORE splitting, not after. The first version dropped
-    only whole comment lines and then split on ";" - which silently tore the
-    CREATE TABLE in half at the semicolon inside an inline comment
-    ("-- one case per alert; see note below"), producing three fragments of
-    which none was valid SQL. Comment text is not syntax, so it has to be gone
-    before the delimiter is looked for.
-
-    Line comments only: this file has no /* */ and no string literal containing
-    "--", so a real SQL parser would be more machinery than the job needs. That
-    is an assumption about THIS file, which is why test_store.py asserts the
-    shipped schema parses to exactly one statement.
-    """
+    Comments are stripped BEFORE splitting: the first version dropped only whole comment
+    lines and then split on ";", which silently tore the CREATE TABLE in half at the
+    semicolon inside an inline comment ("-- one case per alert; see note below") into
+    three fragments, none valid SQL. Line comments only - an assumption about THIS file,
+    which is why test_store.py asserts the shipped schema parses to one statement."""
     stripped = "\n".join(ln.split("--", 1)[0] for ln in sql.splitlines())
     for chunk in stripped.split(";"):
         chunk = chunk.strip()
@@ -73,12 +58,8 @@ class CaseStore:
         self._buf = []
         self._dropped = 0
         self._last_attempt = 0.0
-        # Lazily loads its model on first use; an absent artefact disables
-        # explanations without stopping the queue, because an unexplained case
-        # is still a case worth working.
+        # Lazy: an absent artefact disables explanations, not the queue.
         self._explainer = Explainer()
-
-    # --- connection ---------------------------------------------------------
 
     def open(self):
         self._last_attempt = time.time()
@@ -94,12 +75,9 @@ class CaseStore:
             self._client = None
 
     def _apply_schema(self):
-        """CREATE TABLE IF NOT EXISTS, every connect. Idempotent by construction.
-
-        Failing here is fatal to this connection rather than tolerated: a store
-        that cannot guarantee its table exists would spend the run discarding
-        cases and reporting itself connected.
-        """
+        """CREATE TABLE IF NOT EXISTS, every connect; idempotent by construction.
+        Failing here is fatal to this connection rather than tolerated: a store whose
+        table may not exist would discard cases while reporting itself connected."""
         ddl = _ddl_file()
         if not os.path.exists(ddl):
             raise FileNotFoundError(
@@ -118,8 +96,6 @@ class CaseStore:
             self.open()
         return self._client is not None
 
-    # --- writing ------------------------------------------------------------
-
     def add(self, alert: dict):
         status, lines = self._explainer.explain(alert.get("features"),
                                                 alert.get("ml_score"))
@@ -132,9 +108,7 @@ class CaseStore:
         if not self._buf:
             return
         if not self._ensure():
-            # Loud, with a running total. An alert queue that drops silently is
-            # worse than one that is down: the operator sees an empty queue and
-            # reads it as "nothing to work on".
+            # Loud, with a running total: an empty queue reads as "nothing to work on".
             self._dropped += len(self._buf)
             log.error("ClickHouse down, DISCARDED %d cases (%d total this run)",
                       len(self._buf), self._dropped)
@@ -150,25 +124,18 @@ class CaseStore:
                       len(rows), self._dropped, exc)
             self._client = None
 
-    # --- reading ------------------------------------------------------------
-
     def open_cases(self, limit=20):
-        """The work queue: unresolved cases, most urgent first.
-
-        FINAL is required, not optional. ReplacingMergeTree collapses duplicate
-        keys only when parts merge, which is background work on no schedule; a
-        plain SELECT can return both the open row and its resolution and show a
-        closed case as open.
-        """
+        """The work queue: unresolved cases, most urgent first. FINAL is required,
+        not optional: ReplacingMergeTree collapses duplicate keys only when parts
+        merge, which is background work on no schedule, so a plain SELECT can return
+        both the open row and its resolution and show a closed case as open."""
         if not self._ensure():
             return []
         q = (f"SELECT {', '.join(CASE.CASE_COLUMNS)} "
              f"FROM {self._db}.{_TABLE} FINAL "
              f"WHERE disposition = 'NEW' "
-             # Exposure, not score. The model's probability is near-constant
-             # across the alert set (89.1% round to 1.000), so ordering by it
-             # is ordering by nothing; amount spans four orders of magnitude.
-             # Score stays as a later tiebreaker for the minority that differ.
+             # Exposure, not score: 89.1% of probabilities round to 1.000, so ordering
+             # by score orders nothing, while amount spans four orders of magnitude.
              f"ORDER BY priority ASC, amount_uzs DESC, final_score DESC, "
              f"opened_at ASC "
              f"LIMIT {int(limit)}")
@@ -195,13 +162,9 @@ class CaseStore:
         return True
 
     def stats(self):
-        """Counts per disposition, and the precision they imply.
-
-        This is the only place in the system where precision is computed from
-        something other than generated ground truth. It is reported over
-        RESOLVED cases only: open cases are not "not fraud", and folding them in
-        would make the number drift upward as the queue grows.
-        """
+        """Counts per disposition, and the precision they imply - the only place
+        precision comes from something other than generated ground truth. Over RESOLVED
+        cases only: open cases are not "not fraud" and would drift the number upward."""
         if not self._ensure():
             return {}
         q = (f"SELECT disposition, count() FROM {self._db}.{_TABLE} FINAL "
@@ -213,9 +176,8 @@ class CaseStore:
         counts["_resolved"] = resolved
         counts["_precision"] = (confirmed / resolved) if resolved else None
 
-        # Three problems look identical in the queue: a build predating the
-        # column (empty status), a scoring job not publishing features
-        # (NO_FEATURES), and nothing consumed at all (stale max(opened_at)).
+        # Three problems look identical in the queue: a build predating the column
+        # (empty status), features not published (NO_FEATURES), nothing consumed at all.
         q = (f"SELECT explanation_status, count() FROM {self._db}.{_TABLE} FINAL "
              f"GROUP BY explanation_status")
         counts["_explanation"] = {(d or "(written before the column existed)"): n

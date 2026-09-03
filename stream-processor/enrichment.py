@@ -1,8 +1,5 @@
-"""The receiver account-age lookup: Neo4j, cached in Redis, keyed by whatever
-identity the deployment can pin the payee to.
-
-Fails open - an unreachable backend means "age unknown", not a stalled pipeline.
-"""
+"""Receiver account-age lookup: Neo4j, cached in Redis, keyed by payee identity.
+Fails open - an unreachable backend means "age unknown", not a stalled pipeline."""
 
 import logging
 
@@ -10,13 +7,9 @@ import capabilities as CAP
 
 log = logging.getLogger("enrichment")
 
-#: The account lookup, one query per payee identity. Which one runs is decided
-#: by the payee_identity capability, because the age lookup has to be keyed on
-#: the same identity the rest of the receiver-side state is: a bank holding the
-#: destination PAN looks the account up BY that PAN in its own core system.
-#: Written as two literals rather than one f-string with the property name
-#: interpolated - a Cypher query assembled from a variable is a query nobody can
-#: grep for, and the property name is not a parameter Neo4j can bind.
+#: One query per payee identity, chosen by the payee_identity capability: the
+#: age lookup must key on the same identity as the rest of the receiver-side
+#: state. Two literals, not an f-string - Neo4j cannot bind a property name.
 _AGE_QUERY_BY_FIELD = {
     "card": """
 MATCH (r:Person {card: $payee})
@@ -37,8 +30,7 @@ class EnrichmentClient:
                          redis_port=redis_port, cache_ttl_s=cache_ttl_s)
         self._driver = None
         self._redis = None
-        # Resolved once: the mode is read from the environment at import and
-        # does not change while the job runs.
+        # Resolved once: the mode is read from the environment at import.
         self._payee_field = CAP.mode("payee_identity")
         self._query = _AGE_QUERY_BY_FIELD[self._payee_field]
 
@@ -64,15 +56,11 @@ class EnrichmentClient:
             self._redis = None
 
     def lookup(self, payee):
-        """Return receiver_age_days (int | None) for a resolved payee key.
-
-        The caller passes features.payee_key(event), not a raw field: what the
-        payee IS depends on the deployment, and this module must not hold a
-        second opinion about it.
+        """Return receiver_age_days (int | None) for a resolved payee key; the
+        caller passes features.payee_key(event), not a raw field.
         """
-        # The identity is part of the cache key. Without it, flipping the mode
-        # against a warm Redis would read a card's age out of an entry written
-        # for a PINFL - and the two spaces overlap by nothing except luck.
+        # Identity is part of the cache key: without it, flipping the mode against a
+        # warm Redis would read a card's age out of an entry written for a PINFL.
         key = f"age:{self._payee_field}:{payee}"
         if self._redis is not None:
             try:

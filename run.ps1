@@ -61,7 +61,18 @@ param(
     [ValidateSet("", "CONFIRMED_FRAUD", "FALSE_POSITIVE")]
     [string]$Verdict = "",
     [string]$By = "",
-    [switch]$Stats
+    [switch]$Stats,
+
+    # Throughput sweep. -Rate is one arm's offered events/s; -Rates overrides
+    # the swept list.
+    #   .\run.ps1 measure-throughput 3000
+    #   .\run.ps1 measure-throughput 3000 -Rates 100,1000,10000
+    [double]$Rate = 0,
+    [int[]]$Rates,
+
+    # One dependency for kill-dependency; omit to run all four.
+    [ValidateSet("", "redis", "neo4j", "clickhouse", "kafka")]
+    [string]$Service = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -255,6 +266,153 @@ function Wait-Drained {
     return $false
 }
 
+function Reset-FeatureState {
+    <#
+        Clear the Redis state that accumulates ACROSS passes, so every pass of
+        the dependency matrix scores the same slice from the same start.
+
+        THREE namespaces, and leaving any one of them makes the arms
+        incomparable. `age:*` is the enrichment cache. `rcv:*` are the payee
+        inbound windows MULE_FAN_IN reads - scored on WALL CLOCK, so replaying
+        the same rows a second time finds the first run still inside the
+        window. `mule:fanin:hist` is the population histogram the RELATIVE
+        threshold is derived from, so an unflushed pass does not merely see
+        warmer state, it scores against a different threshold.
+
+        This is what produced 43 -> 45 -> 47 MULE alerts across three arms that
+        should have been identical. Note which counts did NOT drift: the CEP
+        windows key on event_time from the CSV, so replaying the same rows
+        lands them in the same simulated windows - STRUCTURING and ATO came out
+        4 and 1 on every arm. Only the wall-clock state drifted, and only the
+        wall-clock state lives in Redis. Flushing it is therefore sufficient,
+        and no job restart is needed between passes.
+    #>
+    $del = {
+        param($pattern)
+        docker compose exec -T redis sh -c "redis-cli --scan --pattern '$pattern' | xargs -r redis-cli DEL" | Out-Null
+    }
+    & $del "age:*"
+    & $del "rcv:*"
+    docker compose exec -T redis sh -c "redis-cli DEL mule:fanin:hist" | Out-Null
+}
+
+function Invoke-DependencyOutage {
+    <#
+        Produce $Count transactions with $Service down. Returns how many the
+        producer reported DELIVERING, or -1 if it printed no count.
+
+        Two shapes, because the transport is not like the others. Redis, Neo4j
+        and ClickHouse sit downstream of the topic: stop them first and every
+        message is offered to a pipeline that is already degraded. Kafka IS the
+        topic - stopping it first means the producer cannot bootstrap, nothing
+        is offered, and an arm that offers nothing cannot lose anything. The
+        first version of this ran all four the same way and the kafka row said
+        only that nothing arrived. A transport outage has to land in the MIDDLE
+        of a stream, which is also the only way it happens in production.
+    #>
+    param([string]$Service, [int]$Count)
+
+    $genPath = (Resolve-Path "data-generator").Path
+    $produce = {
+        param($gen, $count)
+        docker run --rm -i --network fraud-detection_fraudnet `
+            -v "${gen}:/gen" -w /gen fraud-sink-writer:latest `
+            python kafka_producer.py --file out/transactions.csv --realtime --speed 200 `
+                --bootstrap kafka:9092 --topic transactions.raw --limit $count
+    }
+
+    # A background job turns native stderr into error records, and under
+    # ErrorActionPreference Stop one DeprecationWarning would end the matrix.
+    $prevEA = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $out = ""
+    try {
+        if ($Service -eq "kafka") {
+            $job = Start-Job -ScriptBlock $produce -ArgumentList $genPath, $Count
+            Write-Host "==> producing; kafka goes down in 20 s, mid-stream" -ForegroundColor Cyan
+            Start-Sleep -Seconds 20
+            Write-Host "==> stop kafka" -ForegroundColor Red
+            docker compose stop kafka | Out-Null
+            Start-Sleep -Seconds 20
+            # Back up WHILE the producer is still running - that is the whole
+            # experiment. A restart deferred to the finally below would land
+            # after the producer had already given up.
+            Write-Host "==> start kafka (20 s outage)" -ForegroundColor Cyan
+            docker compose start kafka | Out-Null
+            Wait-Job $job | Out-Null
+            $out = (Receive-Job $job 2>&1 | Out-String)
+            Remove-Job $job
+            Write-Host $out
+            # The broker is already back - it had to be, for the producer to
+            # finish - so this drain is the ordinary one, not a degraded one.
+            # The transport arm cannot be drained WHILE it is down, which is
+            # exactly why it reads as the control for the transport rather
+            # than as a treatment.
+            [void](Wait-Drained "arm kafka")
+        } elseif ($Service -eq "control") {
+            # Nothing is stopped. This pass exists to produce the reference
+            # alert mix on the same transactions every other arm will score.
+            & $produce $genPath $Count 2>&1 | Tee-Object -Variable lines | Out-Host
+            $out = ($lines | Out-String)
+            $sw = [Diagnostics.Stopwatch]::StartNew()
+            [void](Wait-Drained "control pass")
+            $sw.Stop()
+            # The number every degraded arm is compared against on the clock.
+            Write-Host "    drained in $([int]$sw.Elapsed.TotalSeconds) s, everything healthy" -ForegroundColor DarkGray
+        } else {
+            docker compose stop $Service | Out-Null
+            # Tee, not capture: four minutes of silence looks like a hang.
+            & $produce $genPath $Count 2>&1 | Tee-Object -Variable lines | Out-Host
+            $out = ($lines | Out-String)
+            # DRAIN WHILE IT IS STILL DOWN. Restarting first and draining after
+            # lets the tail of the queue be scored with the dependency healthy,
+            # so the arm mixes degraded and healthy records in a ratio nobody
+            # measured. The finally below is what brings the service back.
+            #
+            # TIME IT. The first run of this shape treated a drain that did not
+            # finish as a warning and moved on - and that warning was the whole
+            # result: the healthy pass drained in seconds, redis and neo4j did
+            # not drain in five minutes. Failing OPEN is not the same as failing
+            # FAST, and the difference only shows on the clock.
+            Write-Host "==> draining with $Service still down" -ForegroundColor Cyan
+            $sw = [Diagnostics.Stopwatch]::StartNew()
+            $drained = Wait-Drained "arm $Service (degraded)"
+            $sw.Stop()
+            $secs = [int]$sw.Elapsed.TotalSeconds
+            if ($drained) {
+                Write-Host "    drained in $secs s with $Service down" -ForegroundColor DarkGray
+            } else {
+                Write-Host "    DID NOT DRAIN in $secs s with $Service down." -ForegroundColor Yellow
+                Write-Host "    Compare against the control pass. A pipeline that keeps" -ForegroundColor Yellow
+                Write-Host "    deciding but no longer keeps up is a degradation the row" -ForegroundColor Yellow
+                Write-Host "    count cannot see, and the tail was scored after restart." -ForegroundColor Yellow
+            }
+        }
+    } finally {
+        # THE RESTART BELONGS HERE. It used to sit in the happy path, so a
+        # producer that died - or a Ctrl+C - left the service stopped, and the
+        # NEXT run could not read its baseline from a warehouse that was still
+        # down. A harness that leaves the cluster broken costs more than the
+        # measurement it was taking.
+        # "control" is an arm, not a container - nothing was stopped for it.
+        $running = if ($Service -eq "control") { @($Service) }
+                   else { @(docker compose ps --status running --services 2>$null) }
+        if ($running -notcontains $Service) {
+            Write-Host "==> restarting $Service" -ForegroundColor Cyan
+            docker compose start $Service | Out-Null
+        }
+        $ErrorActionPreference = $prevEA
+    }
+
+    if ($out -match "produced ([\d,]+) messages") {
+        $delivered = [int](($Matches[1]) -replace ',', '')
+        Write-Host "    producer delivered $delivered" -ForegroundColor DarkGray
+        return $delivered
+    }
+    Write-Host "    producer printed no send count - it could not reach the broker" -ForegroundColor Yellow
+    return -1
+}
+
 function Invoke-Measurement {
     <#
     One arm of the security-overhead comparison, end to end.
@@ -446,6 +604,7 @@ switch ($Target.ToLower()) {
             "measure-plain"         = "full measurement arm: baseline      (.\run.ps1 measure-plain 400)"
             "measure-tls"           = "full measurement arm: mutual TLS    (needs the job resubmitted with SSL)"
             "measure-crypto"        = "full measurement arm: encrypted payload"
+            "measure-throughput"    = "latency vs offered load (.\run.ps1 measure-throughput 3000)"
             "load-graph"     = "load the account population into Neo4j"
             "serve-prep"     = "copy the ONNX model next to the Flink job"
             "submit-job"     = "submit the PyFlink CEP+ML job (empty state)"
@@ -457,6 +616,7 @@ switch ($Target.ToLower()) {
             "verify-audit"   = "recompute the audit hash chain, report tampering"
             "status"         = "diagnose the whole path: containers, job, rows, offsets"
             "kill-worker"    = "kill and restart the taskmanager (fault injection)"
+            "kill-dependency" = "stop Redis/Neo4j/ClickHouse/Kafka in turn and report what degrades"
             "query-scored"   = "decision counts in ClickHouse"
             "pipeline"       = "clean -> up -> load-graph -> produce -> submit-job"
             "latency-setup"  = "same as pipeline but no batch dump (for latency runs)"
@@ -520,6 +680,126 @@ switch ($Target.ToLower()) {
             fraud-sink-writer:latest `
             python kafka_producer.py --file out/transactions.csv --realtime --speed 200 `
                 --bootstrap kafka:9092 --topic transactions.raw @limit @rc
+    }
+
+    # Same container and clock as produce-stream-docker, paced at a fixed rate
+    # instead of to the original inter-event gaps. -Rate is events/s.
+    "produce-at-rate" {
+        if (-not (Assert-JobRunning)) { break }
+        $genPath = (Resolve-Path "data-generator").Path
+        $limit = if ($Count -gt 0) { @("--limit", "$Count") } else { @() }
+        docker run --rm -i `
+            --network fraud-detection_fraudnet `
+            -v "${genPath}:/gen" -w /gen `
+            fraud-sink-writer:latest `
+            python kafka_producer.py --file out/transactions.csv --rate $Rate `
+                --bootstrap kafka:9092 --topic transactions.raw @limit
+    }
+
+    # Latency against offered load. One arm per rate, each with its own ingest
+    # window, so the arms can run back to back without the 90 s settle the
+    # transport comparison needs - those arms are separated by WRITE time, these
+    # by INGEST time, which is exact.
+    "measure-throughput" {
+        if (-not (Assert-JobRunning)) { break }
+        # The knee is BELOW 100. Measured at 3 ev/s the decision path sits at
+        # 88 ms; at 100 ev/s it is already 1286 ms. Sweeping 100..5000 samples
+        # nothing but the saturated regime - every arm reads the same because
+        # they are all past the limit.
+        $rates = if ($Rates) { $Rates } else { @(5, 10, 25, 50, 100, 250) }
+        $n = if ($Count -gt 0) { $Count } else { 3000 }
+
+        Write-Host ""
+        Write-Host "=== THROUGHPUT SWEEP: $($rates -join ', ') ev/s, $n messages each ===" -ForegroundColor Cyan
+
+        # One warm-up, discarded. A cold JVM and unwarmed JIT would be charged
+        # to whichever rate happens to run first, and the sweep would report a
+        # knee that is really the deployment's age.
+        # Flush BEFORE the warm-up, not after. Flushing after threw the warm-up
+        # away and charged every cold Neo4j lookup to whichever arm ran first -
+        # which made the 100 ev/s arm look worse than the 1000 ev/s one. All
+        # arms have to meet the cache in the same state, and the state worth
+        # reporting is the warm one, because that is steady operation.
+        docker compose exec -T redis sh -c "redis-cli --scan --pattern 'age:*' | xargs -r redis-cli DEL" | Out-Null
+        Write-Host "==> warm-up: 500 messages, discarded (also warms the cache)" -ForegroundColor Cyan
+        & $PSCommandPath produce-at-rate 500 -Rate 200
+        if (-not (Wait-Drained "the warm-up")) { break }
+
+        $windows = @()
+        foreach ($r in $rates) {
+            Write-Host ""
+            Write-Host "--- offering $r ev/s ---" -ForegroundColor Cyan
+            $from = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000.0
+            & $PSCommandPath produce-at-rate $n -Rate $r
+            $to = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() / 1000.0 + 1
+            if (-not (Wait-Drained "arm $r")) {
+                Write-Host "  arm $r did not drain - recorded anyway, it is the finding" -ForegroundColor Yellow
+            }
+            $windows += @{ rate = $r; from = $from; to = $to }
+        }
+
+        Write-Host "==> letting the sink flush" -ForegroundColor Cyan
+        Start-Sleep -Seconds 20
+        # WriteAllText with an explicit no-BOM encoding: `Set-Content -Encoding
+        # utf8` writes a BOM on Windows PowerShell 5.1, and json.load rejects it.
+        $json = $windows | ConvertTo-Json
+        $out = Join-Path (Get-Location) "stream-processor/throughput_windows.json"
+        [System.IO.File]::WriteAllText($out, $json, (New-Object System.Text.UTF8Encoding($false)))
+        python stream-processor/throughput_report.py
+    }
+
+    # One dependency at a time: take it out, produce the SAME slice through the
+    # outage, bring it back, and report what the pipeline silently stopped
+    # doing. -Service picks one; with none, all four run in sequence.
+    #
+    # A healthy CONTROL pass always runs first and is not optional. Every arm
+    # replays the same transactions, so the alert mix an arm produces means
+    # something only against the mix those same transactions produce with
+    # nothing stopped. Measured against the whole table instead, all four arms
+    # report the same "degradation" - including the arm that predicts none -
+    # because what is really being reported is the contents of the slice.
+    "kill-dependency" {
+        if (-not (Assert-JobRunning)) { break }
+        $svcs = if ($Service) { @($Service) } else { @("redis", "neo4j", "clickhouse", "kafka") }
+        # Prepended, never skipped: a stale reference from an earlier run is
+        # the same error this control exists to remove.
+        $svcs = @("control") + $svcs
+        $n = if ($Count -gt 0) { $Count } else { 1000 }
+        # Every arm reads its baseline FROM ClickHouse, the clickhouse arm
+        # included, so the warehouse has to be up before the matrix starts.
+        # Without this the before-phase exits 1, PowerShell ignores a native
+        # exit code, and the arm spends five minutes producing traffic it has
+        # nothing to compare against.
+        docker compose start clickhouse | Out-Null
+        Wait-Ready "clickhouse" {
+            $r = docker compose exec -T clickhouse clickhouse-client -u $ChUser --password $ChPassword -q "SELECT 1" 2>&1
+            $LASTEXITCODE -eq 0
+        }
+        foreach ($svc in $svcs) {
+            Write-Host ""
+            $what = if ($svc -eq "control") { "healthy reference pass" } else { "out of service" }
+            Write-Host "=== $svc : $what, $n messages ===" -ForegroundColor Cyan
+            Reset-FeatureState
+            python stream-processor/dependency_failure.py --service $svc --phase before
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "no baseline for $svc - skipping the arm rather than measuring against nothing" -ForegroundColor Red
+                continue
+            }
+            # -Last 1: a PowerShell function returns everything it emitted, not
+            # just the value after `return`. An array here would become several
+            # --sent arguments and argparse would reject the call.
+            $sent = [int]((Invoke-DependencyOutage -Service $svc -Count $n) | Select-Object -Last 1)
+            # The topic drained inside the call, while the service was still
+            # down. What is left is the sink batch - 500 rows or 5 s - plus
+            # room for the restarted service to accept connections again.
+            Write-Host "==> letting the sink flush" -ForegroundColor Cyan
+            Start-Sleep -Seconds 30
+            python stream-processor/dependency_failure.py --service $svc --phase after --expect $n --sent $sent
+        }
+        Write-Host ""
+        Write-Host "Logs worth reading beside these numbers:" -ForegroundColor Cyan
+        Write-Host "  docker compose logs sink-writer | Select-String DISCARDED"
+        Write-Host "  docker compose logs taskmanager | Select-String -Pattern 'failing open|unavailable'"
     }
 
     "measure-plain"  { Invoke-Measurement -Arm plain  -Messages $Count -Reconnect $Reconnect }

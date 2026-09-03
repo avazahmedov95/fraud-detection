@@ -1,0 +1,64 @@
+{
+  "exported_at": "2026-09-01T16:01:10+00:00",
+  "commit": "ff261639592ba50fcecbd9f6301f951a06171818",
+  "artefacts": {
+    "model.onnx": "9114d3044125d1e6808a95b723f7b49507e68cab9baf9b94e42ea54b95e42d2d",
+    "model.txt": "6c39d0e3dbf4edd11d2433c9863ced3b5ec3fff9bcc829932fa51d119ab70dbd",
+    "model.joblib": "f0552554df86cc327e53ef99f0baa0fa2d55f578d78ca905427f476f03ca81d2",
+    "feature_names.json": "95826e0bfba56612afbbeb7456a7318c40bdb5f9a0c264e22a7242729f878a76"
+  },
+  "dataset": {
+    "transactions.csv": {
+      "sha256": "b767f38489ab65628028b91638ca6cbfa7e0377128c0f86e844dffb35e0db596",
+      "path": "data-generator/out/transactions.csv"
+    },
+    "persons.csv": {
+      "sha256": "010cddd6a60f30ee322dfd8c57643db87636f0ba1c3358e02d66711fcd9e463f",
+      "path": "data-generator/out/persons.csv"
+    }
+  },
+  "contract": {
+    "features": [
+      "log_amount",
+      "amount_to_mean",
+      "amount_z",
+      "is_new_payee",
+      "vel_10m",
+      "vel_1h",
+      "distinct_payees_10m",
+      "sub_threshold_1h",
+      "secs_since_last",
+      "daily_sum_ratio",
+      "hour",
+      "cross_network",
+      "receiver_age",
+      "receiver_is_fresh",
+      "rcv_distinct_senders_1h",
+      "rcv_inflow_1h",
+      "device_is_new",
+      "geo_is_anomaly",
+      "active_call",
+      "secs_login_z",
+      "ch_mobile_app",
+      "ch_ussd",
+      "ch_web",
+      "ch_atm"
+    ],
+    "features_sha256": "5b98978b1b92bd992dd04ece03752dd46d200ad8aef5f75955f25f54660b2b13",
+    "capability_profile": {
+      "core_history": "on",
+      "receiver_age": "always",
+      "myid_kinship": "off",
+      "receiver_velocity": "on",
+      "device_telemetry": "on",
+      "geo_telemetry": "on",
+      "session_telemetry": "on",
+      "payee_identity": "card",
+      "channel": "on"
+    }
+  },
+  "metrics": {
+    "roc_auc": 0.9992418948184623,
+    "pr_auc": 0.9591493652769673
+  }
+}

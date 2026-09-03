@@ -988,7 +988,249 @@ produced on desktop Docker needs to say so.
   to work around, and §7.5a shows it working around it imperfectly - a
   sign-consistent result with the wrong sign.
 
+### 7.6 Throughput: where the 300 ms target stops holding
+
+Every latency figure above was taken at one arrival rate. That answers "how fast
+is a decision" and not "how fast can decisions arrive", which is the question a
+capacity plan asks. The sweep drives the producer at a fixed offered rate and
+reports the DECISION path — `ingested_at` to `scored_at_job` — separately from
+the warehouse path, which carries up to five seconds of sink batching and would
+otherwise dominate the headline by two orders of magnitude.
+
+Pacing is deadline-based (`due = t0 + n / rate`) rather than `sleep(1 / rate)`:
+the naive form adds the send cost to every interval, so the achieved rate drifts
+below the requested one and the arm silently measures a slower stream than it
+claims. The producer prints the achieved rate on every run and says SATURATED
+when it falls below 95% of the request, because a client that cannot keep up
+produces latency figures that describe the CLIENT.
+
+3,000 messages per arm, milliseconds, `work` = in-operator processing time:
+
+| offered/s | achieved | p50 | p95 | p99 | over 300ms | work | e2e | state |
+|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 5 | 5 | 87 | 101 | 116 | 1 | 5.5 | 49,913 | ok |
+| 10 | 10 | 87 | 139 | 156 | 0 | 1.9 | 25,045 | ok |
+| 25 | 25 | 124 | 218 | 340 | 49 | 1.6 | 10,185 | p99 over target |
+| 50 | 50 | 156 | 282 | 382 | 110 | 1.2 | 5,211 | p99 over target |
+| 100 | 100 | 240 | 805 | 1,162 | 1,039 | 0.9 | 2,931 | p99 over target |
+| 250 | 250 | 5,671 | 9,263 | 9,515 | 2,961 | 1.0 | 7,823 | SATURATED |
+
+**The pipeline stops meeting the 300 ms target somewhere at or below 25
+events/s** — a figure that has to be stated plainly, because it is two orders of
+magnitude below what a national switch carries.
+
+The shape of the failure says where it comes from. `work` stays at roughly one
+millisecond across the whole sweep while decision time climbs by a factor of
+sixty: the operator is not getting slower, records are waiting. That is pure
+queueing, and `enrichment.py` names the cause in its own comment — the Redis and
+Neo4j lookups are SYNCHRONOUS, so the operator blocks per record and one slot
+processes one transaction at a time. Flink's async I/O is the documented fix and
+is not implemented here; the sweep is what turns that known shortcut into a
+number. `work` FALLING as load rises (5.5 ms to 0.9 ms) is the cache warming:
+at 250/s the same accounts recur inside the TTL.
+
+Two things this does not measure: a single machine with one TaskManager slot, so
+it is a per-slot figure and not a ceiling for the design; and the sweep tops out
+where the PRODUCER saturates, not where the pipeline does.
+
+### 7.7 Dependency matrix: what each outage silently removes
+
+`fault_injection.py` kills the scorer. This kills what the scorer leans on, and
+asks the question that matters for a fail-open design: not "did it crash" but
+"what did it stop doing without saying so". Each expectation was written down
+BEFORE the run, in `EXPECTED` in `dependency_failure.py`, so the result is a test
+of a prediction rather than a description of whatever happened.
+
+Loss is counted as **offered minus stored** — what the producer reported
+delivering, against the row delta in the warehouse. Neither half of that was
+obvious: §7.7b lists three ways this harness computed a confident wrong number
+before it computed a right one.
+
+1,000 transactions per arm, each arm stopping one service, producing through the
+outage, restarting it and letting the topic drain.
+
+| stopped | offered | stored | lost | prediction |
+|---|---:|---:|---:|---|
+| redis | 1,000 | 1,000 | 0 | held |
+| neo4j | 1,000 | 1,000 | 0 | held |
+| clickhouse | 1,000 | **0** | **1,000 (100%)** | held |
+| kafka (mid-stream, 20 s) | 1,000 | 1,000 | 0 | held |
+
+**All four predictions held. None of these arms is a discovery, and the
+ClickHouse row least of all** — stopping a database and observing that nothing
+was written to it is a tautology, and the mechanism behind the 100% was already
+stated in the sink's own code: `consumer.py` sets `enable_auto_commit=True`, so
+offsets advance on a timer regardless of whether the insert succeeded, and
+`ch_writer._discard` logs in as many words that "Kafka offsets have already
+advanced, so these events will not be re-delivered." The measurement confirms a
+documented design property; it did not find one.
+
+What the run adds beyond the code is narrower and worth stating at its real
+size: the reconnect path (`_reconnect_due`) rescues **nothing** — not a partial
+batch, not the tail — so the loss is the whole slice rather than some fraction
+of it; and the failure is silent across component boundaries, which no single
+file shows. Scoring was unaffected, alerts were published, and the analyst queue
+filled normally while the warehouse took a 1,000-row hole.
+
+That makes the ClickHouse arm useful for one thing, and it is not a defect
+report. It puts a number on a **trade the design makes deliberately**: the
+pipeline keeps deciding on live payments while the warehouse is gone, and pays
+for that with the completeness of the audit trail. Blocking instead would stop
+detection on real transactions, which is the worse outage. For a system that
+offers its audit trail as a defensibility argument (§8, §9.4), the qualification
+this earns is that **the record is the part that yields first**, by choice, and
+that a routine warehouse restart is enough to exercise it. Corroborated by
+`docker compose logs sink-writer | Select-String DISCARDED`.
+
+The Kafka arm is the one that had to be redesigned to say anything. Stopping the
+transport before producing means the producer cannot bootstrap: nothing is
+offered, and an arm that offered nothing cannot lose anything — the experiment
+tested nothing while appearing to run. Taken out MID-STREAM for twenty seconds,
+the result is that the producer still reported `produced 1,000 messages` and all
+1,000 reached the warehouse. Client-side buffering and retry absorbed the outage
+completely, and the job resumed from its committed offsets. AT_LEAST_ONCE held
+in both directions.
+
+**On the loss column the matrix validated four predictions and discovered
+nothing** — which is what engineering validation looks like when the design is
+understood, and is worth reporting as such rather than dressed up. The discovery
+is in the other column, and it took two attempts to reach: the alert-mix
+measurement was first reporting the contents of the test slice rather than the
+effect of the outage, exposed by the arm that predicted no degradation. Rebuilt
+as a paired design, it produced the one result here that was not predicted in
+advance — **the pipeline fails open without failing fast**, and a 1,000-event
+slice that drains in six seconds healthy had not drained in five minutes with
+Redis or Neo4j gone (§7.7a).
+
+### 7.7a Fail-open is not fail-fast: what the paired run actually found
+
+The matrix reports a second quantity beside loss: which alert types stop
+appearing while a dependency is down. The first attempt at it was an artefact —
+every arm replayed the same slice and was compared against the whole table, so
+all three arms reported the same "degradation", **including the arm that
+predicted none**. An effect visible in the control is not an effect.
+
+The rerun fixed the design: a healthy CONTROL pass over the same 1,000
+transactions supplies the reference mix, Redis state is flushed before every
+pass (all three namespaces — `age:*`, `rcv:*` and `mule:fanin:hist`), and the
+dependency stays down **through the drain** so no record is scored healthy.
+Results, alerts by `predicted_type`:
+
+| arm | MULE | STRUCTURING | ATO | drain time |
+|---|---:|---:|---:|---|
+| control (healthy) | 23 | 4 | 1 | ~6 s |
+| redis down | 22 | 4 | 1 | **did not drain in 300 s** |
+| neo4j down | 31 | 4 | 1 | **did not drain in 300 s** |
+| clickhouse down | — | — | — | ~6 s |
+| kafka mid-stream | 25 | 4 | 1 | ~6 s |
+
+Three things fall out, and the third is the finding.
+
+**The alert-type column cannot test its own prediction, and no experimental
+design fixes that.** The prediction for the Redis arm is that `MULE_FAN_IN`
+stops firing. The column reports `predicted_type`, and `fusion._TYPE_PRIORITY`
+maps the MULE label to `DISTINCT_PAYEE_BURST` and `VELOCITY` — `MULE_FAN_IN` is
+**not in the table at all**. Both mapped rules are sender-side, served from
+Flink keyed state, and touch neither Redis nor Neo4j. So a Redis outage was
+never going to move this number, and 22-against-23 says nothing about the
+prediction. This is a category error in the metric, not a confound in the
+experiment: the prediction is about a *rule*, the column reports a *pattern
+label* derived from different rules. Testing it needs `rule_hits`, which the
+warehouse stores and this query does not read.
+
+**The Kafka arm supplies the noise floor.** It predicts no degradation and is
+the closest thing to a second control: +2 MULE against the reference with no
+treatment applied. Redis at −1 is inside that; Neo4j at +8 is outside it.
+
+**Failing open is not the same as failing fast, and only the clock shows it.**
+The healthy pass drained 1,000 events in about six seconds. With Redis down, and
+again with Neo4j down, the same 1,000 events **had not drained after five
+minutes** — a slowdown of at least fifty times. The ClickHouse arm drained
+normally, which localises it: ClickHouse is downstream of the decision, while
+Redis and Neo4j sit on the synchronous per-event lookup path (§7.6).
+
+The mechanism is in `enrichment.py` and is not subtle once looked for. Neither
+client is constructed with a timeout — no `socket_timeout` or
+`socket_connect_timeout` on the Redis handle, no `connection_timeout` on the
+Neo4j driver. And the handle is only set to `None` inside `open()`, which runs
+once per worker at job start: a dependency that dies *later* leaves a live
+client object behind, so **every subsequent event pays a failed round trip** —
+for Redis a failed read and a failed cache write, for Neo4j a session open that
+cannot connect. The pipeline keeps deciding, exactly as designed, and stops
+keeping up.
+
+For a system whose entire claim is a 300 ms budget, that distinction is the
+whole point: **a decision that arrives after the payment has settled is not a
+degraded decision, it is no decision.** The row count cannot see this, the alert
+mix cannot see this, and the containers stay `Up` throughout — it belongs with
+the silent failures of §8 rather than with the loss column above.
+
+It also compounds with §7.6 rather than duplicating it. There, the synchronous
+lookup caps healthy throughput at 25 events/s. Here the same synchronous lookup,
+against an *absent* dependency and with no timeout to bound it, drives that cap
+toward zero. One design decision, two measured costs. The fix is small and
+declared rather than made: bound both clients with timeouts, and mark a client
+dead after N consecutive failures so the fail-open path stops paying for a
+connection that is not coming back.
+
+**A second result, weaker and stated as such.** Losing Neo4j did not remove
+alerts, it added them: +8 MULE, above the ±2 noise floor the Kafka arm
+establishes. A mechanism exists in the code and matches the direction. In the
+default `receiver_age` mode an unknown age is encoded as `-1.0`, which sorts
+*below every real account age* — so to a model trained on "younger is riskier",
+an unreachable Neo4j does not read as "unknown", it reads as "newer than the
+newest account that exists". The argument against exactly this is already
+written in `features.py`, in the comment explaining why the `on_us` branch uses
+NaN instead ("a sentinel such as -1 would be ordered against real ages"); it was
+simply never applied to the default branch. One arm is not enough to establish
+this, and it does not need the cluster to settle: replaying the slice offline
+with the age forced to unknown would separate the mechanism from the noise.
+
+
+### 7.7b Four ways this harness computed a confident wrong number
+
+Recorded because all four produced output that looked like a result, and because
+three of them were caught only by a value that could not have been true:
+
+1. **`uniqExact(transaction_id)` as the loss denominator.** The producer replays
+   the same CSV, so distinct ids do not grow. The tool reported "1000 LOST" for
+   four services including two it had never touched. Distinct count is a
+   duplication indicator, not a loss measurement.
+2. **`--expect` as the loss denominator.** What the producer was asked to send is
+   not what reached the topic, and the two differ for exactly one arm. The first
+   version printed the same caution — "check whether the producer could send at
+   all" — for both the Kafka case, where it is correct, and the ClickHouse case,
+   where it is wrong. That single conflation reported the matrix's one
+   data-loss result as an inconclusive arm.
+3. **The whole table as the alert-mix denominator**, with no control pass and no
+   state reset — §7.7a.
+4. **The service restart in the success path.** A producer that died left the
+   dependency stopped, so the next run took no baseline — and because PowerShell
+   ignores a native command's exit code, the arm then produced traffic for five
+   minutes before reporting that it had nothing to compare against. The restart
+   is now in a `finally` and the baseline's exit code is checked.
+
+The pattern across all four is worth naming, because it is the same one §8
+catalogues for the pipeline: **none of these failed. Each returned a plausible
+number.** A measurement harness is a piece of production software with no user
+to notice when it is wrong, and the only defences that worked here were a
+predicted value written down before the run, and an arm that was supposed to
+show nothing.
+
+For chapter 7 this section reduces to one sentence of method: *loss is measured
+as delivered minus stored rather than requested minus stored, and the alert mix
+against a healthy control pass over the same transactions, because the producer
+replays a fixed slice and stopping the transport also stops the offer.*
+
 ## 8. Silent failure modes
+
+**Fourteenth, found by the dependency matrix and belonging here rather than in
+§7:** with Redis or Neo4j gone the pipeline keeps deciding and stops keeping up
+— a 1,000-event slice that drains in six seconds healthy had not drained in five
+minutes. Neither client carries a timeout, and the handle is only nulled at
+`open()`, so a dependency that dies later leaves a live client that every
+subsequent event pays for. Containers `Up`, no exception, alerts still
+published, offsets still advancing. See §7.7a.
 
 Thirteen distinct failures were found across two working sessions — eight while
 building the pipeline, five more while building the alert consumer that closes

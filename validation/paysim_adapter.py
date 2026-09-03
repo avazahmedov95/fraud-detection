@@ -1,7 +1,5 @@
-"""Replays the deployed rules over PaySim, mapping its schema onto the event
-shape features.py expects.
-
-What transfers and what does not: validation/README.md 2.
+"""Replays the deployed rules over PaySim, mapping its schema onto the event shape
+features.py expects. What transfers and what does not: validation/README.md 2.
 """
 
 import argparse
@@ -20,11 +18,9 @@ import config as C             # noqa: E402
 from rules import SenderState, ReceiverState, evaluate   # noqa: E402
 
 
-# PaySim's currency is unspecified and its amounts are ~1000x smaller than UZS.
-# Rules with absolute thresholds (NEW_PAYEE_ABS_FLOOR, STRUCTURING_THRESHOLD,
-# LIMIT_DAILY) would never fire without rescaling, so amounts are scaled to put
-# PaySim's median transfer at the same place as ours. This is a unit conversion,
-# not tuning: one factor, derived from the medians, applied to every row.
+# PaySim's amounts are ~1000x smaller than UZS, so rules with absolute thresholds
+# (NEW_PAYEE_ABS_FLOOR, STRUCTURING_THRESHOLD, LIMIT_DAILY) would never fire without
+# rescaling. A unit conversion, not tuning: one factor from the medians, every row.
 def scale_factor(amounts, our_median_uzs=138_740.0):
     med = float(amounts.median())
     return our_median_uzs / med if med > 0 else 1.0
@@ -32,22 +28,18 @@ def scale_factor(amounts, our_median_uzs=138_740.0):
 
 def to_events(df, scale):
     """PaySim rows -> the event dict this project's extractor expects.
-
-    Only fields PaySim actually has are populated. Everything else is left
-    absent, and the corresponding capabilities are switched off (see main), so
-    the run exercises exactly the relational machinery and nothing else.
+    Only fields PaySim actually has are populated; the rest are left absent and their
+    capabilities switched off (see main), so nothing fires on a fabricated value.
     """
     for r in df.itertuples(index=False):
         yield {
             "amount_uzs": float(r.amount) * scale,
             "sender_pinfl": r.nameOrig,
             "receiver_pinfl": r.nameDest,
-            # `step` is PaySim's hour index (1..744 over 30 days). Hourly
-            # granularity is the sharpest limitation of this cross-check: every
-            # transaction inside one step shares a timestamp, so the 10-minute
-            # velocity window and the 1-hour window see nearly the same set, and
-            # secs_since_last is 0 for same-step events. Sub-hour patterns are
-            # therefore invisible here — a property of PaySim, not of the rules.
+            # `step` is PaySim's hour index (1..744 over 30 days) and the sharpest limitation
+            # of this cross-check: same-step events share a timestamp, so the 10-minute and
+            # 1-hour windows see nearly the same set and secs_since_last is 0. Sub-hour
+            # patterns are invisible here - a property of PaySim, not of the rules.
             "_ts": int(r.step) * 3600,
             "_label": int(r.isFraud),
             "_type": r.type,
@@ -122,9 +114,8 @@ def report(res, hits):
     print(f"  cep_score, legit : max {scores[res.label==0].max():.2f}   "
           f"mean {scores[res.label==0].mean():.3f}")
 
-    # The threshold actually applied, which under capability scaling is not the
-    # configured constant. Printing the constant here hid exactly the mechanism
-    # this run exists to exercise.
+    # The threshold actually applied - under capability scaling not the configured
+    # constant. Printing the constant here hid the mechanism this run exercises.
     import rules as _R
     review_at, block_at = _R._thresholds()
     if abs(review_at - C.REVIEW_THRESHOLD) > 1e-9:
@@ -151,7 +142,6 @@ def report(res, hits):
         print(f"  the classes. A deployment with fewer integrations does not get a")
         print(f"  slightly worse rule layer — it gets a silent one.")
 
-    # What cutoff the same scores would need to be useful here.
     if n_fraud and n_legit:
         best = None
         for t in sorted(set(round(v, 2) for v in scores if v > 0)):
@@ -181,9 +171,8 @@ def main():
     if not os.path.exists(args.file):
         raise SystemExit(f"{args.file} not found")
 
-    # PaySim has account ids, amounts and a clock, and nothing else this project
-    # uses. Everything not backed by real data is switched off rather than
-    # defaulted, so no rule fires on a fabricated zero.
+    # PaySim has account ids, amounts and a clock, nothing else this project uses. What
+    # is not backed by real data is switched off, not defaulted: nothing fires on a zero.
     for key in ("receiver_age", "myid_kinship", "device_telemetry",
                 "geo_telemetry", "session_telemetry", "channel"):
         CAP.MODES[key] = "off"

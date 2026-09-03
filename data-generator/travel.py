@@ -1,6 +1,5 @@
-"""Moves people between regions over time, so IMPOSSIBLE_TRAVEL has something
-real to contradict rather than flagging any inter-region transfer.
-"""
+"""Moves people between regions over time, so IMPOSSIBLE_TRAVEL has something real
+to contradict rather than flagging any inter-region transfer."""
 
 import importlib.util
 import os
@@ -16,21 +15,13 @@ _SP = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 def _load_from_detector(module_name):
     """Load a stream-processor module by explicit path, under a private name.
 
-    Deliberately NOT `sys.path.insert(_SP)` + plain import. Both packages have a
-    module called `config`, so putting the detector's directory on the path
-    shadows this package's own config for every later import — and whether it
-    breaks depends on import order, which is the worst kind of dependency.
-    (It did break: importing travel before config made persons.py read the
-    detector's config and fail on a missing constant.)
-
-    Loading by path keeps the detector's modules addressable without touching
-    how anything else resolves.
+    NOT `sys.path.insert(_SP)`: both packages have a `config`, so the detector's dir on the
+    path shadows ours depending on import order. It did break - importing travel before
+    config made persons.py read the detector's config and fail on a missing constant.
     """
     spec = importlib.util.spec_from_file_location(
         f"_detector_{module_name}", os.path.join(_SP, f"{module_name}.py"))
     module = importlib.util.module_from_spec(spec)
-    # Registered so the module is importable by its private name if something
-    # holds a reference; the public name `config` is left untouched.
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
@@ -41,9 +32,8 @@ _DC = _load_from_detector("config")
 MAX_PLAUSIBLE_KMH = _DC.MAX_PLAUSIBLE_KMH
 MIN_TRAVEL_DISTANCE_KM = _DC.MIN_TRAVEL_DISTANCE_KM
 
-# Ground travel between Uzbek regional centres. Deliberately conservative: a
-# slower assumed speed means longer journeys, which makes the negative control
-# HARDER (more chance of looking impossible), not easier.
+# Ground travel between Uzbek regional centres. Deliberately slow: longer journeys
+# make the negative control HARDER (more chance of looking impossible), not easier.
 TRAVEL_SPEED_KMH = 70.0
 
 TRIP_SHARE = 0.18          # share of people who travel at all in the period
@@ -59,11 +49,8 @@ def travel_hours(region_a, region_b):
 
 
 def plan_trips(persons, rng, start_dt, days):
-    """Give a share of people one or two real journeys.
-
-    Returns {pinfl: [(depart, arrive, region, back_depart, back_arrive)]}, times
-    as datetimes. A person is at home outside these windows.
-    """
+    """Give a share of people one or two real journeys, as
+    {pinfl: [(depart, arrive, region, back_depart, back_arrive)]}; home otherwise."""
     regions = list(G.REGION_COORDS)
     span = days * 24 * 3600
     trips = {}
@@ -92,10 +79,8 @@ def plan_trips(persons, rng, start_dt, days):
 def locate(person, trips, ts):
     """Where the person is at `ts`, and whether they are mid-journey.
 
-    Returns (region, in_transit). Transactions in transit are re-timed by the
-    caller rather than placed: putting one at the origin and the next at the
-    destination minutes later would manufacture an impossible journey inside
-    legitimate traffic — the exact artefact this module exists to avoid.
+    Returns (region, in_transit). In-transit events are re-timed by the caller: origin then
+    destination minutes later would manufacture an impossible journey in legitimate traffic.
     """
     for depart, arrive, dest, back_depart, back_arrive in trips.get(person.pinfl, ()):
         if depart <= ts < arrive or back_depart <= ts < back_arrive:
@@ -118,23 +103,12 @@ def settle_after_transit(person, trips, ts, rng):
 def hijack_origin(home_region, minutes_available, rng):
     """A region the account holder could not be in, by any means of transport.
 
-    Reachability is judged with the DETECTOR's constants (`MAX_PLAUSIBLE_KMH`,
-    `MIN_TRAVEL_DISTANCE_KM`), not the ground-travel speed used for real trips.
-    Those two answer different questions: `TRAVEL_SPEED_KMH` is how fast people
-    actually go by road, while the detector's ceiling is jet cruise speed — the
-    line past which no journey is possible at all. A hijack generated against
-    the slower figure would sit in the gap between them, unreachable by car yet
-    perfectly reachable by plane, and the rule would rightly ignore it.
-
-    This does make the injected pattern detectable by construction, which is why
-    the detection rate on it is NOT the result to quote. The meaningful
-    measurement is the false-positive rate on the legitimate journeys generated
-    alongside it: those are built from independent physics and the rule has to
-    leave them alone.
-
-    Returns None when no region is far enough — the caller then leaves the
-    session where it is rather than inventing a journey the geography cannot
-    support.
+    Judged with the DETECTOR's `MAX_PLAUSIBLE_KMH` / `MIN_TRAVEL_DISTANCE_KM` (jet cruise),
+    not road speed `TRAVEL_SPEED_KMH`: a hijack built against the slower figure would be
+    unreachable by car yet reachable by plane, and the rule would rightly ignore it. That
+    makes it detectable by construction, so its detection rate is NOT the result to quote -
+    the meaningful measurement is the false-positive rate on the legitimate journeys
+    generated alongside it. Returns None when no region is far enough.
     """
     hours = max(minutes_available, 1) / 60.0
     candidates = []

@@ -1,18 +1,12 @@
 """Turns two scores into one decision: ALLOW / REVIEW / BLOCK, plus reason codes.
-
-Fusion happens at the DECISION layer, not by blending the scores - every blend
-tried degraded ranking. Pure: no Flink, onnx or numpy here.
-Rationale and the measured comparison: docs/irp-framing.md 7.
-"""
+Fusion is at the DECISION layer, never a blend - every blend tried degraded ranking
+(measured comparison: docs/irp-framing.md 7)."""
 
 import config as C
 
 
 def final_score(cep_score, ml_score) -> float:
-    """Graded risk = model probability when present; CEP score as fallback.
-
-    Deliberately NOT an average of the two — blending was shown to hurt ranking.
-    """
+    """Graded risk = model probability when present; CEP score as fallback."""
     raw = cep_score if ml_score is None else ml_score
     return min(1.0, max(0.0, float(raw)))
 

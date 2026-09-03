@@ -1,7 +1,6 @@
 """The analyst surface: look at the queue, resolve a case, see what it implies.
 
-  queue_cli.py list | show ID | resolve ID VERDICT --by WHO | stats
-"""
+  queue_cli.py list | show ID | resolve ID VERDICT --by WHO | stats"""
 
 import argparse
 import logging
@@ -19,9 +18,8 @@ def _store():
     return s
 
 
-#: Case ids are transaction ids, which in live data are 36-character UUIDs. The
-#: first column was 16 wide and every row overflowed it, pushing the whole table
-#: out of alignment - the analyst's main screen, unreadable.
+#: Case ids are transaction ids - 36-character UUIDs in live data. The first column
+#: was 16 wide and every row overflowed it, pushing the whole table out of alignment.
 _ID_W = 38
 
 
@@ -36,10 +34,7 @@ def cmd_list(args):
     for r in rows:
         reasons = ", ".join(r["rule_hits"])
         if not reasons:
-            # No rule fired. The model still has reasons - exact tree
-            # contributions, computed by the case-manager - so show the first
-            # one here and the rest in `show`. Only when even that is missing is
-            # the case genuinely unexplained, and then it says so.
+            # No rule fired, but the model has exact tree contributions; show the first.
             model_reasons = r.get("explanation") or []
             if model_reasons:
                 reasons = "model: " + model_reasons[0]
@@ -62,10 +57,8 @@ def cmd_show(args):
         raise SystemExit(f"no case {args.case_id!r}")
     width = max(len(k) for k in c)
     for k, v in c.items():
-        # An unresolved case stores the epoch in resolved_at, which is the right
-        # sentinel in the column (a plausible-looking `now` would hide that
-        # nothing was measured) and the wrong thing to show a person: "1970-01-01"
-        # reads as a bug rather than as "not yet".
+        # An unresolved case stores the epoch in resolved_at: the right sentinel in
+        # the column, but "1970-01-01" reads to a person as a bug, not as "not yet".
         if k in ("resolved_at", "resolved_by") and c["disposition"] == "NEW":
             v = "-"
         print(f"{k:<{width}}  {v}")

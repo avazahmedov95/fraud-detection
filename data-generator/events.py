@@ -1,12 +1,9 @@
 """Normal transaction behaviour: salary, rent, transfers to relatives, payments.
-
-What each pattern is meant to look like: docs/generator-spec.md 3.
-"""
+Spec for what each pattern should look like: docs/generator-spec.md 3."""
 
 import uuid
 
 EVENT_FIELDS = [
-    # raw + per-party reference (identity/bank)
     "transaction_id", "event_time",
     "sender_pinfl", "sender_card", "sender_network",
     "sender_name", "sender_bank_code", "sender_bank_name",
@@ -17,7 +14,6 @@ EVENT_FIELDS = [
     "active_call", "secs_login_to_confirm",
     # enriched (Flink-side in production)
     "is_new_payee", "receiver_account_age_days", "is_family_transfer",
-    # labels
     "label_is_fraud", "label_fraud_type",
 ]
 
@@ -71,8 +67,7 @@ def make_event(sender, receiver, amount, ts, channel, device_id,
         "secs_login_to_confirm": float(secs_login),
         "is_new_payee": bool(is_new_payee),
         "receiver_account_age_days": int(receiver.account_age_days),
-        # Household membership stands in for MyID-verified kinship. Fraud
-        # accounts live in their own households, so this is False for them
+        # Fraud accounts live in their own households, so this is False for them
         # unless a pattern deliberately routes through a real relative.
         "is_family_transfer": bool(
             sender.household_id == receiver.household_id),

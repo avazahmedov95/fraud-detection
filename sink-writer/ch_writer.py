@@ -1,8 +1,5 @@
-"""Batched ClickHouse writer for the scored rows and the audit log.
-
-Fails open, but retries and logs every discarded row with a running total: silent
-loss in an audit path is worse than loud failure.
-"""
+"""Batched ClickHouse writer for the scored rows and the audit log. Fails open,
+but every discarded row is logged with a running total, never silently."""
 
 import logging
 import time
@@ -12,10 +9,7 @@ import integrity
 
 log = logging.getLogger("ch_writer")
 
-# How often to retry a dead connection. Every flush would hammer a server that
-# is down; the flush interval is seconds, so this costs at most one retry per
-# interval and recovers within a few seconds of ClickHouse coming back.
-RECONNECT_INTERVAL_S = 10.0
+RECONNECT_INTERVAL_S = 10.0  # retry throttle; every flush would hammer a down server
 
 
 
@@ -28,12 +22,10 @@ class ClickHouseWriter:
         self._client = None
         self._scored = []
         self._audit = []
-        # Audit chain state. Advanced as records are appended, so the chain
-        # follows arrival order rather than ClickHouse storage order.
+        # Chain follows arrival order, not ClickHouse storage order.
         self._seq = 0
         self._prev_hash = integrity.GENESIS
-        # Loss accounting. Non-zero at shutdown means the run is not a valid
-        # basis for any stored-row measurement.
+        # Non-zero at shutdown invalidates any stored-row measurement.
         self._dropped_scored = 0
         self._dropped_audit = 0
         self._last_attempt = 0.0
@@ -56,13 +48,9 @@ class ClickHouseWriter:
         return (time.time() - self._last_attempt) >= RECONNECT_INTERVAL_S
 
     def _resume_chain(self):
-        """Continue the chain across restarts.
-
-        Reads the highest seq already stored and picks up from it, so the chain
-        is one continuous line across job restarts rather than a fresh chain each
-        boot (which would look like tampering to the verifier). Requires a single
-        writer; a scaled-out sink would need a per-writer chain id.
-        """
+        """Continue the audit chain across restarts: a fresh chain each boot
+        would look like tampering to the verifier. Requires a single writer; a
+        scaled-out sink would need a per-writer chain id."""
         try:
             res = self._client.query(
                 f"SELECT seq, record_hash FROM {self._db}.audit_log "
@@ -100,10 +88,8 @@ class ClickHouseWriter:
 
     def flush(self):
         if self._client is None:
-            # Retry rather than stay disabled for the life of the process. The
-            # usual cause is ClickHouse not being ready at boot, which is
-            # transient — and buffered rows written after a successful reconnect
-            # are rows that used to be lost outright.
+            # ClickHouse not being ready at boot is transient; rows written after a
+            # successful reconnect used to be lost outright.
             if not self._reconnect_due():
                 if self._scored or self._audit:
                     self._discard("waiting to retry")
@@ -126,9 +112,8 @@ class ClickHouseWriter:
                       "total lost this run: %d / %d): %s",
                       len(self._scored), len(self._audit),
                       self._dropped_scored, self._dropped_audit, exc)
-            # An insert that fails against a live connection is usually a schema
-            # or serialisation problem rather than a dead server; drop the
-            # client so the next flush revalidates it.
+            # A failure on a live connection is usually schema or serialisation, not a
+            # dead server; drop the client so the next flush revalidates it.
             self._client = None
         finally:
             self._scored.clear(); self._audit.clear()

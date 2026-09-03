@@ -1,4 +1,4 @@
-"""Unit tests for fusion.py. Run: python test_fusion.py"""
+"""Unit tests for fusion.py."""
 
 from fusion import final_score, decide, classify_type
 
@@ -9,7 +9,6 @@ def test_final_score_is_model_with_cep_fallback():
     assert final_score(0.0, 0.7) == 0.7
     # model down -> fall back to the CEP score
     assert final_score(0.55, None) == 0.55
-    # clamped to [0, 1]
     assert final_score(0.0, 1.4) == 1.0
     assert final_score(-0.3, None) == 0.0
 

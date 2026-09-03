@@ -1,9 +1,8 @@
 """Store behaviour, against a fake ClickHouse.
 
-The cluster is not reachable from the test runner, and the parts most likely to
-go wrong here are not ClickHouse's - they are ours: the schema that never gets
-applied, the read that forgets FINAL, and the resolution that has to find its
-case first. All three are checkable without a server.
+The cluster is unreachable from the test runner, and what is most likely to go
+wrong is ours: the schema that never gets applied, the read that forgets FINAL,
+the resolution that has to find its case first.
 """
 
 import pytest
@@ -26,8 +25,7 @@ class FakeResult:
 
 
 class FakeClient:
-    """Records what it was asked to do. Stores rows; last write wins per key,
-    which is what ReplacingMergeTree converges to."""
+    """Records calls; last write per key wins, as ReplacingMergeTree converges."""
 
     def __init__(self):
         self.commands = []
@@ -98,16 +96,14 @@ def store(monkeypatch):
 # --- the schema that would otherwise never be applied ------------------------
 
 def test_the_shipped_ddl_parses_into_whole_statements():
-    """_statements() strips line comments by hand. The first version split on
-    ";" without doing so and tore the CREATE TABLE apart at a semicolon inside
-    a comment. This pins the assumption against the real file."""
+    """_statements() strips line comments by hand: the first version split on ";"
+    without doing so and tore the CREATE TABLE apart at a semicolon in a comment."""
     with open(S._ddl_file(), encoding="utf-8") as fh:
         stmts = list(S._statements(fh.read()))
     creates = [s for s in stmts if s.startswith("CREATE TABLE")]
     assert len(creates) == 1
     assert "ReplacingMergeTree(version)" in creates[0]
-    # Every other statement must be an idempotent migration, never a bare ALTER
-    # that fails the second time the file is applied.
+    # Every other statement must be idempotent: a bare ALTER fails on re-apply.
     for s in stmts:
         if s.startswith("ALTER TABLE"):
             assert "IF NOT EXISTS" in s, s
@@ -116,8 +112,7 @@ def test_the_shipped_ddl_parses_into_whole_statements():
 
 
 def test_schema_is_applied_on_connect(store):
-    """ClickHouse runs init scripts only on an empty data directory, so on any
-    cluster that has been up before the table must be created by the service."""
+    """ClickHouse runs init scripts only on an empty data dir; the service must."""
     assert any("CREATE TABLE IF NOT EXISTS fraud.cases" in c
                for c in store._fake.commands)
 
@@ -149,9 +144,8 @@ def test_alert_becomes_an_open_case(store):
 
 
 def test_queue_orders_by_exposure_when_scores_tie(store):
-    """The failure the live queue exposed. With the model saturated at 1.000
-    across the alert set, score orders nothing; the largest amount must come
-    first so the queue is triaged by what it costs to be wrong about."""
+    """The failure the live queue exposed: with the model saturated at 1.000 score
+    orders nothing, so the largest amount must come first."""
     assert "amount_uzs DESC" in _order_clause(store)
     for i, amt in enumerate([1_000_000, 9_000_000, 4_000_000]):
         store.add(dict(ALERT, transaction_id=f"t_{i}", amount_uzs=amt,
@@ -186,8 +180,7 @@ def test_resolved_case_leaves_the_queue(store):
 
 
 def test_a_replayed_alert_does_not_reopen_a_resolved_case(store):
-    """End to end, through the version rule: the alert comes back after the
-    verdict and the case must stay closed."""
+    """End to end: an alert redelivered after the verdict must not reopen the case."""
     store.add(ALERT)
     store.flush()
     store.resolve("t_1", "FALSE_POSITIVE", "analyst.k")
@@ -204,8 +197,7 @@ def test_resolving_an_unknown_case_reports_it(store):
 # --- failure is loud, not silent ---------------------------------------------
 
 def test_cases_are_not_discarded_quietly(store, caplog):
-    """An alert queue that drops silently is worse than one that is down: the
-    operator sees an empty queue and reads it as 'nothing to work on'."""
+    """A queue that drops silently reads to the operator as 'nothing to work on'."""
     store._client = None
     store._last_attempt = 1e18            # block the reconnect attempt
     store.add(ALERT)
@@ -218,8 +210,7 @@ def test_cases_are_not_discarded_quietly(store, caplog):
 # --- what the queue is for ---------------------------------------------------
 
 def test_precision_is_computed_over_resolved_cases_only(store):
-    """Open cases are not 'not fraud'. Folding them in would make the number
-    drift upward as the queue grows."""
+    """Open cases are not 'not fraud'; folding them in drifts precision upward."""
     for i, (d, by) in enumerate([("CONFIRMED_FRAUD", "a"), ("CONFIRMED_FRAUD", "a"),
                                  ("FALSE_POSITIVE", "a")]):
         alert = dict(ALERT, transaction_id=f"t_{i}")
@@ -241,10 +232,8 @@ def test_precision_is_undefined_before_anyone_resolves_anything(store):
 
 
 def test_stats_report_why_explanations_are_missing(store):
-    """A queue full of unexplained cases has three different causes that look
-    identical from the queue itself: a build predating the column, a scoring job
-    not publishing features, or nothing consumed at all. The operator has to be
-    able to read which."""
+    """Unexplained cases have three causes identical from the queue: a build
+    predating the column, a job not publishing features, or nothing consumed."""
     store.add(ALERT)                       # no "features" key -> NO_FEATURES
     store.flush()
     s = store.stats()

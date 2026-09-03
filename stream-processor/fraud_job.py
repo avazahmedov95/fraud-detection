@@ -2,8 +2,7 @@
 
     transactions.raw --(key by sender)--> transactions.scored + fraud.alerts
 
-Degrades to CEP-only if the model is absent, and stamps the record with what
-actually ran rather than with what was configured.
+Degrades to CEP-only if the model is absent, stamping what actually ran.
 """
 
 import json
@@ -46,18 +45,12 @@ def _event_epoch(event: dict) -> float:
 def _warn_cep_only(reason: str) -> None:
     """Announce a degraded run loudly enough to be noticed in the logs.
 
-    Falling back to CEP-only is a designed behaviour — the rule layer is the
-    model-down fallback — but it changes what every downstream number means, and
-    a single INFO line among thousands of Kafka config dumps is not enough to
-    stop someone reporting a rules-only run as a fused one. Records from such a
-    run are additionally stamped with MODEL_VERSION_CEP_ONLY, so the warehouse
-    can tell them apart even if nobody read the log.
+    One INFO line among thousands of Kafka config dumps once let a rules-only
+    run be reported as a fused one; such records also carry a distinct version.
     """
-    # NOTE: no `flush=True` on any print in this file. PyFlink replaces
-    # sys.stdout inside the Beam worker with a logging shim that does not accept
-    # the keyword, and the resulting TypeError is raised from open() - which
-    # fails the whole job with a Beam "Failed to close remote bundle" stack that
-    # names none of this. Plain print() is the working pattern here.
+    # No `flush=True` on any print here: PyFlink's stdout shim rejects the
+    # keyword, and the TypeError fails the job with a Beam stack that names
+    # none of this.
     bar = "!" * 72
     print(f"\n{bar}\n[fraud_job] RUNNING CEP-ONLY, NO ML SCORE - {reason}\n"
           f"[fraud_job] Rule scores only. Run `serve-prep` to place model.onnx\n"
@@ -87,24 +80,19 @@ class FraudDetector(KeyedProcessFunction):
         self._enrich = EnrichmentClient(
             C.NEO4J_URI, C.NEO4J_USER, C.NEO4J_PASSWORD,
             C.REDIS_HOST, C.REDIS_PORT, C.ENRICH_CACHE_TTL_S)
-        # Receiver-side window lives outside Flink state: this stream is keyed
-        # by sender, so one payee's inbound transfers are spread across every
-        # partition. See receiver_store.py.
+        # Outside Flink state: keyed by sender, so a payee's inbound transfers
+        # are spread across every partition (receiver_store.py).
         self._receivers = ReceiverStore(C.REDIS_HOST, C.REDIS_PORT)
-        # The threshold MULE_FAN_IN compares against is a property of the whole
-        # population, so it cannot be derived inside a partition either. Opened
-        # unconditionally: it is inert while MULE_FAN_IN_MODE is "absolute", and
-        # constructing it only in relative mode would mean the mode could be
-        # switched on against a job that has nothing to switch on.
+        # Population property, so also underivable inside a partition. Opened
+        # unconditionally - inert in "absolute" mode, and building it lazily
+        # would let the mode be switched on against nothing.
         self._population = PopulationStore(C.REDIS_HOST, C.REDIS_PORT)
         self._enrich.open()
         self._receivers.open()
         self._population.open()
 
-        # Payload decryption key. Absent is legitimate - it is the plaintext arm
-        # of the experiment, and the deserialiser decides per record - but a key
-        # that is present and unusable is not, so that fails loudly here rather
-        # than as a stream of undecodable records later.
+        # Absent is legitimate (the plaintext arm); present-and-unusable is not,
+        # so it fails here rather than as undecodable records later.
         self._undecodable = 0
         self._crypto_key = None
         if os.getenv("PAYLOAD_KEY_HEX"):
@@ -136,16 +124,12 @@ class FraudDetector(KeyedProcessFunction):
     def process_element(self, value, ctx):
         scoring_started = time.time()
         try:
-            # Handles both arms of the security-overhead experiment: plaintext
-            # JSON and the AES-256-GCM envelope, discriminated by prefix without
-            # needing the key. Decryption is INSIDE the scoring_ms bracket on
-            # purpose - its cost is exactly what reviewer point 3 asks for.
+            # Both arms, discriminated by prefix. Decryption sits INSIDE the
+            # scoring_ms bracket on purpose - its cost is what is measured.
             event = payload_crypto.loads_maybe_encrypted(value, self._crypto_key)
         except Exception as exc:                          # noqa: BLE001
-            # Undecodable records used to vanish here with `return`. With
-            # encryption in play that is a whole-stream outage rendered as
-            # silence: a missing or wrong key makes every record undecodable and
-            # the job goes on reporting itself healthy while scoring nothing.
+            # These used to vanish with `return`. A wrong key makes every record
+            # undecodable, so that was a whole-stream outage rendered as silence.
             self._undecodable += 1
             if self._undecodable in (1, 10, 100) or self._undecodable % 1000 == 0:
                 print(f"[fraud_job] UNDECODABLE RECORD "
@@ -157,10 +141,8 @@ class FraudDetector(KeyedProcessFunction):
         # to - the destination PAN by default. See features.payee_key.
         receiver_age = self._enrich.lookup(F.payee_key(event))
 
-        # The fan-in window is read on the SIMULATED clock, because the windows
-        # it is compared against (velocity, structuring) are simulated too. The
-        # wall-clock stamps below exist only to measure the pipeline itself and
-        # never enter a feature.
+        # SIMULATED clock, like the windows it is compared against. The
+        # wall-clock stamps below measure the pipeline and never enter a feature.
         event_epoch = _event_epoch(event)
         receiver_state = self._receivers.load(F.payee_key(event), event_epoch)
 
@@ -181,13 +163,11 @@ class FraudDetector(KeyedProcessFunction):
             "sender_card": event.get("sender_card"),
             "receiver_card": event.get("receiver_card"),
             "sender_pinfl": event.get("sender_pinfl"),
-            # No receiver_pinfl: it is not on the wire, because a sending bank
-            # cannot resolve the destination PAN to a person. Everything
-            # downstream keys the payee by card.
+            # No receiver_pinfl: a sending bank cannot resolve the destination PAN to
+            # a person, so the payee is keyed by card.
             "amount_uzs": event.get("amount_uzs"),
             "channel": event.get("channel"),
             "sender_region": event.get("sender_region"),
-            "receiver_region": event.get("receiver_region"),
             "is_new_payee": result["is_new_payee"],
             "receiver_account_age_days": result["receiver_account_age_days"],
             "cep_score": cep_score,
@@ -196,55 +176,34 @@ class FraudDetector(KeyedProcessFunction):
             "decision": decision,
             "predicted_type": predicted_type,
             "rule_hits": result["rule_hits"],
-            # Session telemetry, carried into the record.
-            #
-            # `evaluate` has always RETURNED these two - it computes them for
-            # exactly this purpose - and this dict never forwarded them. The
-            # ClickHouse schema declares all three columns and record.py reads
-            # them, so every row ever written carried a constant zero for the
-            # capability measured as the second most valuable one. Nothing
-            # failed: the columns exist, the writes succeed, and the warehouse
-            # answers questions about session telemetry with zeros.
+            # `evaluate` always returned these; this dict never forwarded them, so
+            # every row written carried a constant zero for the second most valuable
+            # capability. Nothing failed - the columns exist, the writes succeed.
             "active_call": result["active_call"],
             "secs_login_z": result["secs_login_z"],
             # Raw, from the event: the job does not recompute what the app sent.
             "secs_login_to_confirm": event.get("secs_login_to_confirm"),
-            # Stamped from what actually ran, not from configuration. A run
-            # that degraded to CEP-only used to be recorded as a fused run,
-            # which made the two indistinguishable in the warehouse afterwards.
+            # From what ran, not from configuration: a degraded run used to be stored
+            # as a fused one, indistinguishable afterwards.
             "model_version": (C.MODEL_VERSION if self._sess is not None
                               else C.MODEL_VERSION_CEP_ONLY),
-            # --- latency instrumentation (wall clock, never a feature) -------
-            # t0 from the producer, t1 here. The sink adds t2. Splitting them
-            # this way separates transport and queueing from the scoring work
-            # itself, so a breach of the target points at a stage.
+            # Latency instrumentation (wall clock, never a feature). t0 from the
+            # producer, t1 here, t2 at the sink - so a breach points at a stage.
             "ingested_at": event.get("ingested_at"),
             "scored_at_job": time.time(),
             "scoring_ms": round((time.time() - scoring_started) * 1000.0, 3),
-            # Carried through untouched from ingress. The job does not recompute
-            # it - recomputing would defeat the point, since the job could then
-            # mint a hash for a substituted event. It only forwards what the
-            # producer sealed.
+            # Forwarded untouched. Recomputing here would let the job mint a hash for
+            # a substituted event.
             "ingress_hash": event.get("ingress_hash"),
         }
-        # The vector the decision was made on, republished on ALERTS ONLY.
+        # The vector the decision was made on, republished on ALERTS ONLY. The
+        # case-manager cannot recompute it - these come from sender state that
+        # exists only in this operator - and on scored it would be ~24 numbers
+        # riding 98.5% of traffic that nothing reads.
         #
-        # Why publish it at all: the case-manager explains the model's verdict
-        # with exact tree contributions, and it cannot recompute these features
-        # - they come from the sender's streaming state, which exists only in
-        # this operator. Recomputing downstream would explain a different event
-        # than the one that alerted.
-        #
-        # Why alerts only: this rides in every record on transactions.scored
-        # otherwise, which is ~24 numbers on 98.5% of traffic that nothing reads
-        # - and it would grow the audit payload and the warehouse write for
-        # every measured run. The rows an auditor or an analyst reopens are the
-        # ones that alerted.
-        #
-        # NaN -> None: a NaN receiver_age is meaningful (see features.extract),
-        # but json.dumps writes a bare `NaN`, which is not valid JSON. Both ends
-        # here are Python and would round-trip it, which is exactly why it would
-        # go unnoticed until something else consumed the topic.
+        # NaN -> None: a NaN receiver_age is meaningful (features.extract) but
+        # json.dumps writes a bare `NaN`, which is not valid JSON. Both ends here
+        # are Python and would round-trip it unnoticed.
         if decision != "ALLOW":
             out["features"] = [None if v != v else round(float(v), 6)
                                for v in result["features"]]
@@ -265,9 +224,7 @@ class FraudDetector(KeyedProcessFunction):
 def _apply_security(builder):
     """Add the transport-security properties, if any, to a Kafka builder.
 
-    Shared by the source and both sinks so an arm cannot be half-applied - a job
-    reading over TLS and writing in clear would produce a figure belonging to
-    neither arm.
+    Shared by source and sinks so an arm cannot be half-applied.
     """
     props = C.kafka_security_properties()
     for k, v in props.items():
@@ -283,25 +240,17 @@ def _kafka_source():
             .set_bootstrap_servers(C.KAFKA_BOOTSTRAP)
             .set_topics(C.TOPIC_RAW)
             .set_group_id(C.CONSUMER_GROUP)
-            # Resume from the group's committed offsets, falling back to the
-            # start of the topic only the first time it runs.
-            #
-            # `earliest()` was wrong in both directions. Operationally, every
-            # restart without a savepoint replayed the entire topic and re-scored
-            # months of history, raising duplicate alerts on transactions long
-            # since settled. For measurement, it silently poisoned the numbers:
-            # replayed events carry their original ingest stamps, so a restarted
-            # job reports latencies in the hundreds of seconds that are really
-            # the age of the data.
+            # Committed offsets, falling back to the topic start only on the first
+            # run. `earliest()` replayed the whole topic on every restart - duplicate
+            # alerts on settled transfers, and latencies in the hundreds of seconds
+            # that were really the age of the data.
             .set_starting_offsets(KafkaOffsetsInitializer.committed_offsets(
                 KafkaOffsetResetStrategy.EARLIEST))
             .set_property("commit.offsets.on.checkpoint", "true")
             .set_value_only_deserializer(SimpleStringSchema())
-            # A consumer whose fetch finds an empty topic parks the request for
-            # up to fetch.max.wait.ms before returning. At the default 500 ms and
-            # a P2P arrival rate, a transaction that lands just after one fetch
-            # returns waits out the whole interval before the next one sees it -
-            # which is what put p95 at 622 ms while the median was 81 ms.
+            # A fetch on an empty topic parks for up to fetch.max.wait.ms. At the
+            # 500 ms default a transaction landing just after one waits it out:
+            # p95 622 ms against a median of 81 ms.
             .set_property("fetch.max.wait.ms", str(C.KAFKA_FETCH_MAX_WAIT_MS))
             .set_property("fetch.min.bytes", "1")
             .build())
@@ -322,34 +271,20 @@ def _kafka_sink(topic):
 def _tune_for_latency(env):
     """Trade throughput for latency, which is what a pre-settlement decision needs.
 
-    PyFlink does not call the Python function per record. It accumulates records
-    into a bundle and ships the bundle across the Java-Python boundary, flushing
-    when the bundle is full OR when its timer expires. The defaults — 100000
-    records, 1000 ms — are throughput settings: below ~100k events/s the bundle
-    never fills, so every record waits out the full second regardless of how
-    fast the scoring itself is.
-
-    Measured here: with the defaults, scoring took 7.6 ms while reaching the
-    scorer took 1923 ms. The work was never the constraint; the batching in
-    front of it was.
-
-    The same reasoning applies to the network buffer timeout, which batches
-    records between operators.
-
-    These are the knobs a real-time deployment turns down. The cost is more,
-    smaller round trips to the Python process — throughput falls, which is
-    acceptable when the requirement is to answer before a transfer settles.
+    PyFlink ships records to Python in bundles, flushed when full OR on a timer.
+    The defaults (100000 records, 1000 ms) are throughput settings: below ~100k
+    events/s the bundle never fills and every record waits out the full second.
+    Measured with them: 7.6 ms of scoring behind 1923 ms of reaching the scorer.
+    The same applies to the buffer timeout between operators.
     """
-    # These are job-level Flink options, so they go through Configuration and
-    # env.configure(). `env.get_config()` returns an ExecutionConfig, which
-    # holds a different set of knobs and has no string interface at all.
+    # Job-level options go through Configuration and env.configure();
+    # env.get_config() is an ExecutionConfig with no string interface.
     conf = Configuration()
     conf.set_string("python.fn-execution.bundle.time", str(C.PY_BUNDLE_TIME_MS))
     conf.set_string("python.fn-execution.bundle.size", str(C.PY_BUNDLE_SIZE))
 
-    # Explicit restart strategy. Fault injection showed the job did not come
-    # back after a single taskmanager kill, which for a continuously-running
-    # detector is a worse failure than a crash: nothing alerts on silence.
+    # Fault injection showed the job did not come back after one taskmanager
+    # kill - worse than a crash, because nothing alerts on silence.
     conf.set_string("restart-strategy.type", "failure-rate")
     conf.set_string("restart-strategy.failure-rate.max-failures-per-interval",
                     str(C.RESTART_ATTEMPTS))
@@ -367,10 +302,9 @@ def main():
     env = StreamExecutionEnvironment.get_execution_environment()
     env.enable_checkpointing(C.CHECKPOINT_INTERVAL_MS)
 
-    # Retain checkpoints beyond the job's lifetime, and store them somewhere
-    # that survives the container. Without this a resubmitted job has nothing to
-    # restore from and re-reads the topic from the beginning — measured as every
-    # transaction being scored four times over four submissions.
+    # Retained beyond the job and outside the container. Without this a
+    # resubmission re-reads the topic from the start - measured as every
+    # transaction scored four times over four submissions.
     chk = env.get_checkpoint_config()
     chk.set_checkpoint_storage_dir(C.CHECKPOINT_DIR)
     try:
@@ -389,14 +323,10 @@ def main():
         _kafka_source(), WatermarkStrategy.no_watermarks(), "transactions.raw")
 
     scored = (raw
-              # Partitioning reads the record BEFORE scoring does, so this is
-              # the second place a raw event is parsed. It must not decrypt:
-              # doing so would run AES twice per event and inflate the very
-              # figure the security-overhead measurement reports. The routing
-              # field travels in clear inside the envelope - authenticated as
-              # GCM associated data, so it cannot be re-pointed at another
-              # sender - and this extracts it with a string split. On plaintext
-              # records it parses JSON exactly as before.
+              # Partitioning parses the record before scoring does, and must NOT
+              # decrypt: that would run AES twice per event and inflate the figure
+              # being measured. The routing field travels in clear inside the envelope,
+              # authenticated as GCM associated data.
               .key_by(lambda v: payload_crypto.routing_key(v), key_type=Types.STRING())
               .process(FraudDetector(), output_type=Types.STRING()))
 

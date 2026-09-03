@@ -21,7 +21,8 @@ SELECT
     (toUnixTimestamp64Milli(scored_at_job) - toUnixTimestamp64Milli(ingested_at))    AS to_scored_ms,
     (toUnixTimestamp64Milli(scored_at)     - toUnixTimestamp64Milli(scored_at_job))  AS sink_ms,
     scoring_ms,
-    toUnixTimestamp64Milli(scored_at)                                                AS scored_at_ms
+    toUnixTimestamp64Milli(scored_at)                                                AS scored_at_ms,
+    toUnixTimestamp64Milli(ingested_at)                                              AS ingested_at_ms
 FROM fraud.transactions_scored
 WHERE toUnixTimestamp64Milli(ingested_at) > 0
   {since}
@@ -29,11 +30,18 @@ FORMAT TabSeparated
 """
 
 
-def fetch(since_minutes=None):
+def fetch(since_minutes=None, epoch_from=None, epoch_to=None):
+    """Rows for a window. `since_minutes` filters on WRITE time; the epoch pair
+    filters on INGEST time, which is what a back-to-back sweep needs - arms are
+    seconds apart and the write time of one overlaps the ingest of the next."""
     import urllib.parse
     import urllib.request
-    clause = ("AND scored_at > now() - INTERVAL %d MINUTE" % since_minutes
-              if since_minutes else "")
+    if epoch_from is not None:
+        clause = (f"AND toUnixTimestamp64Milli(ingested_at) >= {int(epoch_from * 1000)} "
+                  f"AND toUnixTimestamp64Milli(ingested_at) <  {int(epoch_to * 1000)}")
+    else:
+        clause = ("AND scored_at > now() - INTERVAL %d MINUTE" % since_minutes
+                  if since_minutes else "")
     url = (f"http://{CH_HOST}:{CH_PORT}/?"
            + urllib.parse.urlencode({"query": QUERY.format(since=clause),
                                      "user": CH_USER, "password": CH_PASSWORD}))
@@ -48,7 +56,7 @@ def fetch(since_minutes=None):
     rows = []
     for line in body.strip().splitlines():
         parts = line.split("\t")
-        if len(parts) == 5:
+        if len(parts) == 6:
             try:
                 rows.append(tuple(float(p) for p in parts))
             except ValueError:

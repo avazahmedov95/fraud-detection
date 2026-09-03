@@ -1,5 +1,4 @@
-"""Evaluates score-fusion strategies against the model alone.
-"""
+"""Evaluates score-fusion strategies against the model alone."""
 
 import os
 import sys

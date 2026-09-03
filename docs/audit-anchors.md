@@ -54,6 +54,21 @@ Recompute with `.\run.ps1 verify-audit` against the same warehouse. The head is
 derived from the stored records, so a match means that nothing between this
 commit and that query altered, removed or reordered a decision.
 
+## Change of hashed field list — 03.09.2026
+
+`receiver_region` was removed from `integrity.INGRESS_FIELDS`, for the same
+reason and by the same test: a sending bank holds the destination PAN and
+nothing else, so it cannot know where the receiver is, and the field was never
+read by any feature or rule - it travelled the wire, entered the hash and was
+stored, unused. Removed from the wire format, the ingress hash, the job's output
+record, `transactions_scored` and its schema (an `ALTER TABLE ... DROP COLUMN`
+ships with the DDL, since init scripts run only on an empty data dir).
+
+Second **breaking change to the ingress hash**: records after this date are
+hashed over eight fields. The known-answer vector in both `test_integrity.py`
+copies moved from `80f4245868803adc…` to `1e3525aea867ee63…`; those tests failed
+on the change, which is what they are for, and were re-anchored deliberately.
+
 ## Change of hashed field list — 01.09.2026
 
 `receiver_pinfl` was removed from `integrity.INGRESS_FIELDS` when it was removed

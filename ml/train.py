@@ -1,7 +1,6 @@
-"""Trains the LightGBM model on a time-ordered split and writes metrics.json.
-
-Reports calibration beside the AUCs: a rank statistic cannot see a score that
-ranks well and cannot order a queue - docs/irp-framing.md 9.1.
+"""Trains LightGBM on a time-ordered split and writes metrics.json.
+Calibration is reported beside the AUCs because a rank statistic cannot see a
+score that ranks well yet cannot order a queue - docs/irp-framing.md 9.1.
 """
 
 import json
@@ -15,8 +14,7 @@ from sklearn.metrics import (roc_auc_score, average_precision_score,
 
 import dataset as D
 
-# Both overridable so a sweep can train against another dataset and write its
-# artefacts elsewhere, instead of clobbering the deployed model.
+# Overridable so a sweep writes elsewhere instead of clobbering the deployed model.
 MODELS_DIR = os.getenv(
     "MODELS_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "models"))
 CSV = os.getenv(
@@ -35,29 +33,9 @@ def _metrics(y, proba, thr):
 
 def _calibration(y, proba, review_thr=REVIEW_THRESHOLD, block_thr=0.80):
     """How usable the probabilities are AS MAGNITUDES, not just as a ranking.
-
-    ROC-AUC and PR-AUC are rank statistics: a model can score every alert at
-    0.99999 and still post a near-perfect AUC, because ranking is all they see.
-    That is what happened here and nothing in the reported metrics showed it -
-    it surfaced only when a human work queue tried to order by score and found
-    89% of alerts tied at 1.000, leaving arrival order as the only tiebreak.
-
-    So these are reported beside the AUCs:
-
-      brier            mean squared error of the probabilities. Sensitive to
-                       calibration, unlike anything above.
-      saturated_share  share of ALERTS whose probability rounds to 1.000 at
-                       three decimals - the queue's view of the problem.
-      distinct_scores  distinct rounded alert probabilities. A handful means
-                       the score cannot order the work whatever the AUC says.
-      review_band      how many alerts land between the review and block
-                       cutoffs. A near-empty band means the two-tier decision
-                       is nominal: everything that alerts is blocked.
-
-    None of this is a defect of the METHOD. Synthetic fraud is close to
-    separable, so the trees drive the log-odds to the extremes; real traffic
-    with label noise and overlapping classes does not behave this way. It is a
-    property of the data that has to be reported rather than discovered.
+    The AUCs are rank statistics and hid this: 89% of alerts tied at 1.000, leaving
+    arrival order as the only tiebreak when a work queue tried to order by score.
+    Not a defect of the method: synthetic fraud is close to separable.
     """
     alert = proba >= review_thr
     n_alert = int(alert.sum())
@@ -103,13 +81,11 @@ def main():
     print(f"@0.50  precision={m05['precision']:.3f}  recall={m05['recall']:.3f}  "
           f"f1={m05['f1']:.3f}  (tp={m05['tp']} fp={m05['fp']} fn={m05['fn']})")
 
-    # An operating point tuned for high recall (useful for a REVIEW queue).
     best = max((_metrics(yte, proba, t) for t in np.linspace(0.05, 0.95, 19)),
                key=lambda mm: mm["recall"] if mm["precision"] >= 0.90 else -1)
     print(f"@{best['threshold']:.2f}  precision={best['precision']:.3f}  "
           f"recall={best['recall']:.3f}  f1={best['f1']:.3f}  (>=0.90 precision target)")
 
-    # Head-to-head: CEP rules alone vs ML, on the SAME test slice.
     cep_flag = (test["cep_score"].values >= REVIEW_THRESHOLD).astype(int)
     cep = _metrics(yte, cep_flag.astype(float), 0.5)
     print("\n=== CEP-only vs ML (same test slice) ===")
@@ -138,9 +114,8 @@ def main():
         by_type[ftype] = {"recall": float(grp["pred"].mean()),
                           "caught": int(grp["pred"].sum()), "n": int(len(grp))}
         print(f"  {ftype:<12} {grp['pred'].mean():.1%}  (n={len(grp)})")
-    # Counts are stored alongside the rate: a per-type recall on a few dozen
-    # events carries a wide binomial interval, and quoting the rate alone
-    # invites reading sampling noise as a weakness of the detector.
+    # Counts beside the rate: a per-type recall on a few dozen events has a wide
+    # binomial interval.
 
     joblib.dump(model, os.path.join(MODELS_DIR, "model.joblib"))
     with open(os.path.join(MODELS_DIR, "feature_names.json"), "w") as fh:

@@ -1,15 +1,10 @@
-"""
-Tests for the Redis-backed population baseline.
+"""Tests for the Redis-backed population baseline.
 
-The behaviour that matters is not "does it talk to Redis" but the three
-decisions around that: writes are batched so the 300 ms path pays no round trip
+Three decisions matter: writes are batched so the 300 ms path pays no round trip
 per event, reads are cached for the same reason, and the absence of Redis falls
-back to the ABSOLUTE constant rather than to this worker's own slice - which
-would be a partition baseline masquerading as a population one.
-
-A fake client is used rather than a live server so these run in CI and so the
-call COUNTS can be asserted; a real Redis would test the library, not the
-design.
+back to the ABSOLUTE constant rather than to this worker's own slice - a
+partition baseline masquerading as a population one. A fake client is used so
+these run in CI and so the call COUNTS can be asserted.
 """
 
 import os
@@ -76,8 +71,7 @@ def _wired():
 
 
 def test_no_redis_falls_back_to_the_constant_not_to_a_local_histogram():
-    """The dangerous alternative is using this worker's own slice: a confident
-    number computed from the wrong population."""
+    """The dangerous alternative is this worker's own slice: the wrong population."""
     ps = PopulationStore("h", 1)          # never opened -> _redis is None
     for _ in range(C.MULE_FAN_IN_MIN_OBS * 2):
         ps.observe(40)
@@ -113,8 +107,7 @@ def test_below_min_obs_returns_the_fallback():
 
 
 def test_threshold_reflects_the_whole_population_not_one_worker():
-    """Another worker's observations arrive through the shared hash and must
-    move this worker's threshold. This is the entire point of the class."""
+    """Another worker's observations must move this worker's threshold."""
     ps, r = _wired()
     r.hash = {"1": C.MULE_FAN_IN_MIN_OBS, "30": C.MULE_FAN_IN_MIN_OBS}
     ps.observe(1)
@@ -122,8 +115,7 @@ def test_threshold_reflects_the_whole_population_not_one_worker():
 
 
 def test_a_redis_blip_keeps_pending_observations():
-    """A transient failure should cost the accuracy of one refresh, not the
-    counts themselves."""
+    """A transient failure costs one refresh's accuracy, not the counts."""
     ps, r = _wired()
     for _ in range(50):
         ps.observe(4)

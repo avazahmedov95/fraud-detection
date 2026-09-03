@@ -18,14 +18,9 @@ CSV = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                    "..", "data-generator", "out", "transactions.csv")
 ONNX_PATH = os.path.join(MODELS_DIR, "model.onnx")
 
-#: The booster as a plain text model, for case-manager/explain.py.
-#:
-#: Not model.joblib: unpickling an LGBMClassifier drags in scikit-learn, which
-#: would put ~30 MB of training dependency into a service that only reads trees.
-#: `Booster(model_file=...)` needs lightgbm alone. It is written from the SAME
-#: object that is converted to ONNX two lines below, so the explanation and the
-#: decision cannot come from different trees - and explain.py re-checks that at
-#: runtime anyway by recomputing the probability.
+#: Plain-text booster for case-manager/explain.py. Not model.joblib: unpickling an
+#: LGBMClassifier drags in scikit-learn, ~30 MB of training dependency in a service
+#: that only reads trees. Written from the SAME object converted to ONNX below.
 BOOSTER_PATH = os.path.join(MODELS_DIR, "model.txt")
 
 
@@ -63,7 +58,6 @@ def main():
           f"({os.path.getsize(BOOSTER_PATH) / 1024:.0f} KB, "
           f"{booster.num_trees()} trees)")
 
-    # --- parity check on a sample of the test slice ---
     df = D.build_matrix(CSV)
     sample = df.iloc[int(len(df) * 0.80):][feats].astype("float32").values[:2000]
 
@@ -77,6 +71,10 @@ def main():
     print("ONNX model matches the native model — ready for in-Flink serving (phase 6).")
 
     json.dump(feats, open(os.path.join(MODELS_DIR, "feature_names.json"), "w"), indent=2)
+
+    # Last, so it records the artefacts as they finally are.
+    import manifest
+    manifest.write()
 
 
 if __name__ == "__main__":

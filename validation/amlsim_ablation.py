@@ -1,7 +1,5 @@
-"""Ablation over the AMLSim features, plus two screens the run produced:
-leakage_screen() and drift_screen().
-
-Why the result is negative and structural: validation/README.md 3.
+"""Ablation over the AMLSim features, plus the two screens the run produced:
+leakage_screen() and drift_screen(). Negative and structural: validation/README.md 3.
 """
 
 import argparse
@@ -13,10 +11,9 @@ from collections import defaultdict, deque
 import numpy as np
 import pandas as pd
 
-# Windows in DAYS. The deployed rule uses one hour; the adapter run established
-# that the pattern spans a median 363 days, so a single horizon would decide the
-# answer by assumption. Several are offered and the model picks - which is the
-# whole difference between this and a threshold.
+# Windows in DAYS. The deployed rule uses one hour, but the adapter run put the
+# pattern at a median 363 days, so a single horizon would decide the answer by
+# assumption.
 WINDOWS_D = (1, 7, 30, 90)
 
 RECEIVER_COLS = ([f"rcv_senders_{w}d" for w in WINDOWS_D]
@@ -29,13 +26,9 @@ def _truthy(s):
 
 
 def build_features(dirpath):
-    """One row per transaction, in time order, with sender-side and
-    receiver-side blocks computed by a single pass over the stream.
-
-    Deliberately mirrors the SHAPE of stream-processor/features.py rather than
-    importing it: that extractor expects this project's event contract and its
-    one-hour window constant, and the point here is to vary the horizon.
-    """
+    """One row per transaction in time order, both blocks from a single stream pass.
+    Mirrors the SHAPE of stream-processor/features.py rather than importing it: that
+    extractor is fixed to this project's contract and its one-hour window."""
     tx = pd.read_csv(os.path.join(dirpath, "transactions.csv"))
     acct = pd.read_csv(os.path.join(dirpath, "accounts.csv"))
     alert_path = os.path.join(dirpath, "alert_transactions.csv")
@@ -72,7 +65,6 @@ def build_features(dirpath):
             sh.popleft()
 
         feat = {}
-        # --- receiver-side block: the treatment ---------------------------
         for w in WINDOWS_D:
             cut = t - w * 86400
             senders, inflow, n = set(), 0.0, 0
@@ -84,7 +76,6 @@ def build_features(dirpath):
             feat[f"rcv_inflow_{w}d"] = inflow
             feat[f"rcv_txcount_{w}d"] = n
 
-        # --- sender-side and per-transaction: the baseline arm ------------
         feat["log_amount"] = math.log1p(amt)
         feat["snd_tx_30d"] = sum(1 for (ts_i, _, _) in reversed(sh)
                                  if ts_i >= t - 30 * 86400)
@@ -115,9 +106,7 @@ def build_features(dirpath):
 
 
 def univariate_auc(X, y, col):
-    """Rank-based AUC of one feature against the label. Cheap, and it answers
-    the question that matters before any model is fitted: does a single column
-    nearly determine the class?"""
+    """Rank AUC of one feature against the label: does one column nearly determine it?"""
     r = X[col].rank().values
     n1, n0 = int(y.sum()), int((1 - y).sum())
     if n1 == 0 or n0 == 0:
@@ -129,22 +118,15 @@ LEAK_AT = 0.85          # |AUC| beyond this is a near-deterministic separator
 
 
 def leakage_screen(X, y, cols):
-    """Print per-feature separation and flag anything that looks like a
-    construction artefact rather than a behaviour.
+    """Print per-feature separation and flag construction artefacts.
 
-    This exists because the first run of this script reported PR-AUC 0.88 for
-    the arm WITHOUT receiver features, at a 0.339% positive rate. The cause was
-    `is_new_payee` at AUC 0.906: AMLSim injects each alert as fresh graph edges
-    while ordinary traffic reuses established ones, so 97% of SAR rows are to a
-    never-before-paid payee against 16% of legitimate ones. That is a property
-    of how the alerts were planted, not of laundering.
-
-    ml/README.md records the same failure in this project's OWN generator -
-    `is_family` ranked #1 by SHAP and turned out to be an artefact of a
-    generator that sent no fraud to relatives. The rule stated there applies
-    unchanged to foreign data: a feature that nearly determines the label on
-    synthetic data is suspect until the generator is shown to model both sides
-    of its behaviour.
+    The first run of this script reported PR-AUC 0.88 for the arm WITHOUT receiver
+    features at a 0.339% positive rate; the cause was `is_new_payee` at AUC 0.906.
+    AMLSim injects each alert as fresh graph edges while ordinary traffic reuses
+    established ones, so 97% of SAR rows are to a never-before-paid payee against 16% of
+    legitimate ones - planted, not behavioural. ml/README.md records the same failure in
+    this project's OWN generator: `is_family` ranked #1 by SHAP, an artefact of a
+    generator that sent no fraud to relatives.
     """
     scored = sorted(((c, univariate_auc(X, y, c)) for c in cols),
                     key=lambda t: -abs(t[1] - 0.5))
@@ -168,13 +150,11 @@ def leakage_screen(X, y, cols):
 def drift_screen(X, y, cols, deciles=10):
     """Are the features - and the label - stationary across the run?
 
-    A time-ordered split is the right protocol, and it is exactly what turns
-    non-stationarity into a measurement error: the model trains on one regime
-    and is scored on another. Found the expensive way. On the AMLSim 10K
-    profile `rcv_txcount_90d` runs 67 -> 199 -> 102 across time deciles while
-    the SAR rate runs 0.54% -> 0.28%, and the ablation delta consequently swung
-    from +0.069 to -0.336 on a change of bagging parameters alone. Neither
-    number was about receiver-side aggregation; both were about drift.
+    A time-ordered split is the right protocol and is exactly what turns non-stationarity
+    into a measurement error: the model trains on one regime and is scored on another.
+    Found the expensive way. On the AMLSim 10K profile `rcv_txcount_90d` runs
+    67 -> 199 -> 102 across time deciles while the SAR rate runs 0.54% -> 0.28%, and the
+    ablation delta swung from +0.069 to -0.336 on a change of bagging parameters alone.
     """
     d = pd.qcut(X["_ts"], deciles, labels=False, duplicates="drop")
     rate = pd.Series(y).groupby(d).mean()
@@ -212,13 +192,10 @@ def fit_once(X, y, cols, seed):
     if ytr.sum() == 0 or yte.sum() == 0:
         return float("nan")
     pos_w = float((len(ytr) - ytr.sum()) / max(ytr.sum(), 1))
-    # subsample/colsample are ON so that `seed` perturbs something. Without
-    # them LightGBM is deterministic given the data, every seed returns the
-    # identical model, and the "95% CI" over seeds comes out with ZERO width -
-    # which reads as a very tight interval and is in fact no measurement at
-    # all. Observed on the first run of this script; recorded rather than
-    # quietly fixed, because a degenerate interval is more dangerous than a
-    # wide one.
+    # subsample/colsample are ON so that `seed` perturbs something. Without them LightGBM
+    # is deterministic given the data, every seed returns the identical model, and the
+    # "95% CI" over seeds comes out with ZERO width - which reads as a very tight interval
+    # and is in fact no measurement at all. Observed on the first run of this script.
     m = LGBMClassifier(n_estimators=300, learning_rate=0.05, num_leaves=31,
                        subsample=0.8, subsample_freq=1, colsample_bytree=0.8,
                        scale_pos_weight=pos_w, random_state=seed,
@@ -239,10 +216,9 @@ def run_dataset(dirpath, seeds, drop=()):
           f"{len(X):>8,} tx  {int(y.sum()):>5,} SAR ({y.mean():.3%})  "
           f"{len(all_cols)} features, {len(RECEIVER_COLS)} of them receiver-side")
 
-    # Direction, printed on every run because it is the thing most easily
-    # assumed. The deployed rule can only read this feature one way - MORE
-    # senders is MORE suspicious. A model is under no such constraint, and on
-    # this dataset the relationship runs the other way at every horizon.
+    # Direction, printed on every run because it is most easily assumed. The deployed rule
+    # can only read this feature one way - MORE senders is MORE suspicious - and on this
+    # dataset the relationship runs the other way at every horizon.
     print(f"    {'window':<10}{'mean, SAR':>12}{'mean, legit':>14}   direction")
     for w in WINDOWS_D:
         c = f"rcv_senders_{w}d"

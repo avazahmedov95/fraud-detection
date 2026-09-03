@@ -1,6 +1,5 @@
 """Sink-writer service: transactions.scored -> ClickHouse (analytics + audit)
-and Neo4j (the alert graph). Batched by size and time.
-"""
+and Neo4j (the alert graph). Batched by size and time."""
 
 import json
 import logging

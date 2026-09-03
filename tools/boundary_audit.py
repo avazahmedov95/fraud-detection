@@ -1,8 +1,6 @@
 """Checks every place one component hands something to another.
-
-Reading a file says a component is right; it does not say that what it PRODUCES
-is what the next one EXPECTS. Run before a walkthrough, and after touching any
-record, schema or wire format.
+Reading a file says a component is right, not that what it PRODUCES is what the
+next one EXPECTS. Run before a walkthrough and after touching any wire format.
 """
 
 import argparse
@@ -15,13 +13,12 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# The packages deploy as separate units and three module names occur twice
-# (config.py, integrity.py, payload_crypto.py). A flat sys.path therefore
-# resolves `import config` to whichever directory happens to come first, and the
-# audit would quietly measure the wrong module - which is how its first run
-# reported three false failures. Each package is imported in isolation instead.
-# (The same collision is why pytest cannot collect all five packages in one
-# invocation; run them one directory at a time.)
+# Three module names occur twice across the deploying packages (config.py,
+# integrity.py, payload_crypto.py), so a flat sys.path resolves `import config` to
+# whichever directory comes first - which is how this audit's first run reported
+# three false failures. Each package is imported in isolation instead. (The same
+# collision is why pytest cannot collect all five packages in one invocation; run
+# them one directory at a time.)
 _PKG_CACHE = {}
 
 
@@ -79,8 +76,6 @@ def _sample_row():
         return next(csv.DictReader(fh))
 
 
-# --- 1. generator CSV -> producer message ----------------------------------
-
 def b_producer_types():
     P = pkg("data-generator", "kafka_producer")
     row = _sample_row()
@@ -94,8 +89,6 @@ def b_producer_types():
                 f"consumer testing them for truthiness reads them as TRUE")
     return None
 
-
-# --- 2. producer message -> the feature extractor ---------------------------
 
 def b_wire_extracts_like_typed():
     P = pkg("data-generator", "kafka_producer")
@@ -132,8 +125,6 @@ def b_extractor_needs_nothing_absent():
     return None
 
 
-# --- 3. producer message -> the integrity hash ------------------------------
-
 def b_hash_covers_only_sent_fields():
     P = pkg("data-generator", "kafka_producer")
     integrity = pkg("data-generator", "integrity")
@@ -148,15 +139,10 @@ def b_hash_covers_only_sent_fields():
 def b_duplicated_modules_are_identical():
     """Modules that DECLARE themselves duplicates must be byte-identical.
 
-    integrity.py and payload_crypto.py are duplicated because the packages
-    deploy as separate units with no shared library. Drift is silent in the
-    worst way: the producer writes records the consumer cannot read, or an audit
-    chain neither side can verify.
-
-    The set is not hard-coded here - it is whatever says "byte-identical" in its
-    own docstring. A hard-coded pair went stale once: the check covered
-    integrity.py, payload_crypto.py drifted, and nothing complained. A file that
-    states its own invariant cannot fall out of the list it belongs to.
+    Duplicated because the packages deploy as separate units with no shared library,
+    and drift is silent. The set is not hard-coded - it is whatever says
+    "byte-identical" in its own docstring, because a hard-coded pair went stale once:
+    the check covered integrity.py, payload_crypto.py drifted, nothing complained.
     """
     declared = {}
     for pkg in ("stream-processor", "data-generator", "sink-writer",
@@ -183,8 +169,6 @@ def b_duplicated_modules_are_identical():
     return "; ".join(problems) or None
 
 
-# --- 4. the partitioning key is readable without decrypting -----------------
-
 def b_routing_key_survives_the_wire():
     P = pkg("data-generator", "kafka_producer")
     PC = pkg("data-generator", "payload_crypto")
@@ -206,10 +190,7 @@ def b_routing_key_survives_the_wire():
     return None
 
 
-# --- 5. the job's output -> its three consumers -----------------------------
-
 def _job_output_keys():
-    """Keys the job puts in its emitted record, read from the source."""
     src = _read("stream-processor", "fraud_job.py")
     block = src.split("out = {", 1)[1].split("\n        }", 1)[0]
     keys = set(re.findall(r'^\s*"([a-z_]+)":', block, re.M))
@@ -250,8 +231,6 @@ def b_neo4j_params_match_the_cypher():
     return None
 
 
-# --- 6. row builders -> the ClickHouse schemas ------------------------------
-
 def _ddl_columns(sql, table):
     body = sql.split(f"CREATE TABLE IF NOT EXISTS {table}", 1)[1].split("ENGINE", 1)[0]
     cols = []
@@ -285,8 +264,6 @@ def b_case_row_matches_the_schema():
     return None
 
 
-# --- 7. deployment: what ships with the job ---------------------------------
-
 def b_job_modules_cover_every_import():
     ps1 = _read("run.ps1")
     listed = set(re.findall(r'"([a-z_]+\.py)"', ps1.split("$JobModules = @(", 1)[1]
@@ -303,7 +280,6 @@ def b_job_modules_cover_every_import():
         for n in names:
             if os.path.exists(os.path.join(here, n.split(".")[0] + ".py")):
                 local.add(n.split(".")[0] + ".py")
-    # modules those modules import, one level down
     for mod in list(local):
         for node in ast.walk(ast.parse(_read("stream-processor", mod))):
             names = []
@@ -353,7 +329,18 @@ def b_no_artefact_path_derived_from_file():
     return None
 
 
-# --- 8. Redis: what is written is what is read ------------------------------
+def b_manifest_matches_the_deployment():
+    """The served artefacts, dataset and feature contract must be the manifest's.
+
+    Nothing else notices when they drift: each leaves a system that runs, reports
+    itself healthy, and describes something other than what it is doing.
+    """
+    m = pkg("ml", "manifest")
+    if not os.path.exists(m.PATH):
+        return "SKIP: no manifest - run ml/export_onnx.py"
+    problems = m.check()
+    return "; ".join(problems) or None
+
 
 def b_receiver_store_round_trips():
     F = pkg("stream-processor", "features")
@@ -385,7 +372,35 @@ def b_receiver_store_round_trips():
     return None
 
 
-# --- 9. training matrix -> the generated CSV --------------------------------
+def b_latency_query_matches_its_parser():
+    """The SELECT list and the row parser must agree on the column count, and every
+    index the report reads must exist.
+
+    Silent: add a column, forget the parser, and `fetch()` drops every row on a length
+    check - the report says "no instrumented rows found" and looks like a data problem
+    rather than a code one. Get the ORDER wrong and it prints scoring time as end-to-end.
+    """
+    L = pkg("stream-processor", "latency_report")
+    body = L.QUERY.split("SELECT", 1)[1].split("FROM", 1)[0]
+    depth, cols = 0, 1
+    for ch in body:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            cols += 1
+    src = _read("stream-processor", "latency_report.py")
+    want = int(re.search(r"len\(parts\) == (\d+)", src).group(1))
+    if cols != want:
+        return (f"the query selects {cols} columns and the parser accepts rows "
+                f"of {want} - every row would be discarded and the report would "
+                f"claim there is no instrumented data")
+    used = {int(m) for m in re.findall(r"r\[(\d)\]", src)}
+    if used and max(used) >= cols:
+        return f"the report reads r[{max(used)}] but the query selects {cols} columns"
+    return None
+
 
 def b_dataset_keys_exist_in_the_csv():
     D = pkg("ml", "dataset")
@@ -397,8 +412,6 @@ def b_dataset_keys_exist_in_the_csv():
         return f"ml/dataset expects CSV columns that do not exist: {missing}"
     return None
 
-
-# --- 10. compose environment -> config defaults -----------------------------
 
 def b_compose_env_names_are_read():
     compose = _read("docker-compose.yml")
@@ -430,6 +443,8 @@ CHECKS = [
     ("no data path derived from __file__", b_no_artefact_path_derived_from_file),
     ("ReceiverStore write -> read (Redis member)", b_receiver_store_round_trips),
     ("ml/dataset -> generated CSV columns", b_dataset_keys_exist_in_the_csv),
+    ("model manifest -> deployed artefacts", b_manifest_matches_the_deployment),
+    ("latency query -> its row parser", b_latency_query_matches_its_parser),
     ("docker-compose env -> case-manager config", b_compose_env_names_are_read),
 ]
 

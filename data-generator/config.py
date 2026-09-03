@@ -1,11 +1,5 @@
-"""
-Uzbekistan-calibrated configuration for the synthetic P2P transaction generator.
-
-Every value here is configurable. Where a parameter reflects a real-world figure
-(card BIN ranges, Central Bank transfer limits), the default is a *reasonable
-placeholder*. These should be confirmed against the authoritative source — the
-UzCard / HUMO network specifications and Central Bank Regulation No. 3759.
-"""
+"""Configuration for the synthetic P2P generator. Real-world figures here are
+chosen placeholders, not sourced values."""
 
 from dataclasses import dataclass
 from collections import Counter
@@ -13,126 +7,55 @@ import csv
 import os
 import sys
 
-# --- Card networks (BIN prefixes) -------------------------------------------
-# UzCard cards historically begin with 8600, HUMO with 9860.
-# CONFIRM against current network specifications.
+# --- Behavioural session signals --------------------------------------------
+DECISION_TIME_MEDIAN_SEC = 40.0       # population median, login -> confirm
+DECISION_TIME_SIGMA = 0.55            # lognormal sigma: spread within one client
+DECISION_TIME_CLIENT_SPREAD = 0.35    # how far client medians sit from each other
+ACTIVE_CALL_BASE_RATE = 0.03          # ordinary transactions
+ACTIVE_CALL_APP_RATE = 0.70           # an APP victim is on the phone
+APP_TIME_STRETCH = (2.5, 5.0)         # victim listening to instructions: slower
+ATO_TIME_COMPRESS = (0.4, 0.7)        # attacker in a hurry: faster
+SECS_LOGIN_FLOOR = 3.0                # physical minimum
 
-# --- Behavioural session signals (#7) ---
-DECISION_TIME_MEDIAN_SEC = 40.0       # популяционная медиана: логин → подтверждение
-DECISION_TIME_SIGMA = 0.55            # lognormal sigma — разброс внутри клиента
-DECISION_TIME_CLIENT_SPREAD = 0.35    # насколько медианы клиентов расходятся между собой
+# --- Kinship (households stand in for MyID-verified relatives) ---------------
+# Both shares must stay non-zero: with no fraud going to relatives, `is_family`
+# separated the classes perfectly and topped SHAP - an artefact, not a finding.
+FAMILY_PAYEE_SHARE = 0.35     # frequent payees who are relatives
+FAMILY_FRAUD_SHARE = 0.10     # eligible fraud legs routed to a relative
+MULE_RECRUITED_SHARE = 0.30   # mules who are recruited people, not made accounts
 
-ACTIVE_CALL_BASE_RATE = 0.03          # обычные транзакции
-ACTIVE_CALL_APP_RATE = 0.70           # жертва APP под звонком
-
-APP_TIME_STRETCH = (2.5, 5.0)         # жертва слушает инструкции → медленнее
-ATO_TIME_COMPRESS = (0.4, 0.7)        # злоумышленник спешит → быстрее
-SECS_LOGIN_FLOOR  = 3.0                  # физический минимум
-
-# --- Kinship (MyID-style verified family relationships) ----------------------
-# Persons are generated in households; members of one household are treated as
-# verified relatives, which is what a MyID lookup would return.
-#
-# These two constants exist because of a methodological failure worth recording.
-# An earlier revision had *no* fraud going to relatives, so `is_family` separated
-# fraud perfectly and ranked #1 in SHAP — an artefact of the generator, not a
-# property of fraud. The feature was removed as unsound. It is back only because
-# the data now models both sides of the relationship:
-#
-#   - a substantial share of LEGITIMATE transfers goes to relatives (people
-#     genuinely send money to family more than to anyone else), and
-#   - a realistic minority of FRAUD does too: mule networks recruit through
-#     families, and relatives' accounts get used as drops.
-#
-# Kinship is therefore informative but not decisive — which is the honest shape
-# of the signal. If either constant is set to 0 the feature becomes separating
-# again by construction, and any SHAP importance it shows is meaningless.
-FAMILY_PAYEE_SHARE = 0.35     # share of a person's frequent payees who are relatives
-FAMILY_FRAUD_SHARE = 0.10     # share of eligible fraud legs routed to a relative
-MULE_RECRUITED_SHARE = 0.30   # share of mules who are ordinary recruited people
-                              # (the rest are purpose-made fraud accounts)
-
-# Share of APP/ATO episodes preceded by a SMALL transfer to the same payee,
-# days earlier, so that by the time the real transfer happens the payee is no
-# longer new to the stream.
-#
-# This is not invented. docs/threat-model.md 4 already rates NEW_PAYEE_HIGH_AMOUNT
-# as "low cost to evade - a prior small transfer establishes the payee", and the
-# generator did not produce that evasion: measured on the frozen dataset, 99.20%
-# of fraud went to a stream-new payee against 36.93% of legitimate traffic. A
-# control whose stated weakness is absent from the data cannot have its value
-# measured, only its ceiling.
-#
-# DEFAULT 0.0, deliberately. Turning this on changes every figure quoted in
-# irp-framing, ml/README and the ablation tables, and the dataset of record is
-# pinned by SHA-256. The point of the switch is to MEASURE what the evasion
-# costs before deciding whether to re-baseline on it - the same order of
-# operations that removing `is_family` followed.
-#
-# Applied to APP only, and the exclusions are reasoned rather than lazy:
-#
-#   ATO - threat-model.md 3 constrains A2 to a SHORT window ("credentials get
-#         revoked; the victim notices"). Seeding a payee one to three weeks
-#         ahead contradicts that adversary, so modelling it here would put an
-#         evasion in the data that the threat model says A2 cannot perform.
-#   MULE - the fan-in legs are already many small transfers from many senders;
-#         seeding each is a different and far more expensive evasion.
-#   STRUCTURING - the sub-threshold legs already establish the payee.
-#
-# APP is where the evasion is cheap and documented: one victim, one large
-# transfer, one payee to establish, and a fraudster already speaking to the
-# victim who can ask for a small transfer first. Since only 35% of fraud is APP,
-# the measured cost at share S is the cost of seeding 0.35*S of all fraud - a
-# LOWER bound on what full evasion would cost.
+# Seeds the payee before an APP transfer - the documented cheap evasion of
+# NEW_PAYEE_HIGH_AMOUNT (threat-model.md 4), which the generator does not
+# otherwise produce: 99.20% of fraud goes to a stream-new payee against 36.93%
+# of legitimate traffic, making the feature's measured value a ceiling.
+# Default 0.0 - it moves every figure in irp-framing and the ablation tables,
+# and the dataset of record is hash-pinned. APP only, so at share S it seeds
+# 0.35*S of all fraud: a lower bound on what full evasion costs.
 SEEDED_PAYEE_SHARE = float(os.getenv("SEEDED_PAYEE_SHARE", "0.0"))
 
+# --- Card networks (BIN prefixes) -------------------------------------------
+# CONFIRM against current UzCard / HUMO network specifications.
 CARD_NETWORKS = {
     "UZCARD": "8600",
     "HUMO": "9860",
 }
 CARD_LENGTH = 16  # 16-digit PAN with a valid Luhn check digit
 
-
-
 # --- Currency & amounts (UZS) -----------------------------------------------
-# Each person also gets a personal "typical_amount" spend baseline.
-# These global bounds clip extreme values.
+# Global clips; each person also gets a personal typical_amount baseline.
 AMOUNT_MIN = 1_000
 AMOUNT_MAX = 50_000_000
 
 # --- Transfer thresholds (UZS) ----------------------------------------------
-# CORRECTION, 2026-08-31. This block used to cite Regulation No. 3759 as the
-# source of these figures. That citation was wrong, and checking it is what
-# found the error. CBU Board resolution 3759 of 21 January 2026 sets minimum
-# information-security and cybersecurity requirements for remote financial
-# services and fraud prevention - two-factor authentication, biometric
-# enrolment, OTP format, restricting the app during calls and remote-control
-# sessions. It sets NO sum thresholds at all, so nothing here was ever derived
-# from it.
-#
-# A traceability threshold does exist, and it is expressed in BRV (basic
-# accounting units) rather than in sums, so it is indexed and moves. In March
-# 2026 the CBU consulted on lowering it from 30 BRV to 25 BRV - about 10.3M UZS
-# at the time - above which a bank must collect full sender and receiver
-# details and guarantee traceability, following FATF recommendations.
-#
-# The value below is therefore a CHOSEN round figure: about 3% under the
-# proposed 25 BRV and about 19% under the 30 BRV then in force. A hardcoded sum
-# cannot track BRV indexation either, so it goes stale on its own. Before any
-# claim rests on this number it should become a BRV multiple with a dated BRV
-# value beside it.
-#
-# It is also load-bearing in a way worth stating: fraud_patterns.py places
-# STRUCTURING amounts at 0.85-0.99 of this threshold and rules.py watches the
-# same constant, so recall on that pattern is partly true by construction.
+# NOT from Regulation 3759 - an earlier revision cited it and was wrong; 3759
+# sets no sum thresholds. The real traceability threshold is in BRV, so it moves
+# (25 BRV was ~10.3M UZS in March 2026); this is a chosen round figure and
+# should become a BRV multiple with a dated BRV beside it.
+# Load-bearing: fraud_patterns.py places STRUCTURING at 0.85-0.99 of it and
+# rules.py watches the same constant, so that recall is partly by construction.
 STRUCTURING_THRESHOLD = 10_000_000
 
-# Operating limits, set by banks and the card networks rather than by a single
-# regulation - no CBU-wide per-transfer or daily limit on P2P card transfers
-# was found. LIMIT_DAILY is read by the DAILY_LIMIT_BREACH rule (and mirrored
-# in stream-processor/config.py). The other two are NOT read anywhere; they are
-# kept so the shape of a bank's limit set is visible, and marked so nobody
-# mistakes them for something the pipeline enforces.
+# Bank limits, not regulatory. Only LIMIT_DAILY is read (DAILY_LIMIT_BREACH).
 LIMIT_DAILY = 100_000_000
 LIMIT_PER_TRANSACTION = 30_000_000   # UNUSED
 LIMIT_MONTHLY = 500_000_000          # UNUSED
@@ -157,35 +80,18 @@ class GeneratorConfig:
     n_persons: int = 5_000
     n_transactions: int = 50_000
     fraud_rate: float = 0.015          # ~1.5% positive class (realistic imbalance)
-    days: int = 30                     # time span covered by the dataset
+    days: int = 30
     seed: int = 42
-    # --- realism / class-overlap knobs (so the benchmark isn't trivially separable) ---
-    new_account_share: float = 0.12    # share of legit accounts opened recently (fresh)
-    hard_negative_share: float = 0.03  # share of legit transfers that look suspicious
+    # Class overlap, so the benchmark is not trivially separable.
+    new_account_share: float = 0.12    # legit accounts opened recently
+    hard_negative_share: float = 0.03  # legit transfers that look suspicious
     start_date: str = "2025-01-01"
 
 
-# --- Issuing banks (BIN -> bank -> MFO reference table) ----------------------
-# BANKS_SOURCE names the registry, which must sit next to this module and carry
-# the header `bin,code,name,cards_mln`: the 6-digit issuing BIN (8600.. UzCard,
-# 9860.. HUMO), the 5-digit MFO, the bank, and that bank's cards in circulation
-# in millions. A bank with several BINs gets one row per BIN and repeats
-# cards_mln on each, since it is a per-bank figure.
-#
-# There is deliberately NO fallback table. An earlier revision carried a
-# synthetic one and it was removed, because a fallback here can only ever fire
-# silently: twelve invented banks assigned uniformly put the on-us rate at 8.3%
-# against the 6.9% the real registry gives. On-us transfers are the only ones
-# where the sending bank can know the receiver's account age at all, so the
-# substitution moved the coverage of `receiver_age` - a capability the ablation
-# measures as one of the three that pay - by a fifth of its value, with nothing
-# in the output to say why. The path was not hypothetical: until the .gitignore
-# was corrected a blanket `*.csv` rule kept banks.csv out of the repository, so
-# a clone took that path without anyone choosing it.
-#
-# Failing at import is deliberate, and follows the rule the payload key already
-# follows: a missing input aborts at startup rather than part-way through a run
-# whose figures would then be quietly wrong.
+# --- Issuing banks ------------------------------------------------------------
+# Header `bin,code,name,cards_mln`; one row per BIN, cards_mln repeated. No
+# fallback table on purpose - a synthetic one put on-us at 8.3% against the
+# registry's 6.9%, moving receiver_age coverage by a fifth, silently.
 BANKS_SOURCE = "banks.csv"
 
 
@@ -194,12 +100,11 @@ def _load_banks():
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), BANKS_SOURCE)
     if not os.path.exists(path):
         raise FileNotFoundError(
-            f"bank registry '{BANKS_SOURCE}' not found at {path}. The generator "
-            f"substitutes nothing for it: the market structure decides the on-us "
-            f"rate, and the on-us rate decides how much traffic the receiver_age "
-            f"feature can cover at all. Supply the UzCard/HUMO BIN registry as "
-            f"CSV with the header bin,code,name,cards_mln."
-        )
+            f"bank registry '{BANKS_SOURCE}' not found at {path}. Nothing is "
+            f"substituted for it: market structure decides the on-us rate, and "
+            f"the on-us rate decides how much traffic receiver_age can cover. "
+            f"Supply the UzCard/HUMO BIN registry as CSV with the header "
+            f"bin,code,name,cards_mln.")
     with open(path, newline="", encoding="utf-8") as fh:
         rows = [{"bin": r["bin"].strip(), "code": r["code"].strip(),
                  "name": r["name"].strip(),
@@ -207,46 +112,23 @@ def _load_banks():
                 for r in csv.DictReader(fh) if r.get("bin", "").strip()]
     if not rows:
         raise ValueError(
-            f"bank registry '{BANKS_SOURCE}' at {path} carries no row with a "
-            f"BIN. An empty table is the silent substitution this file exists "
-            f"to prevent."
-        )
+            f"bank registry '{BANKS_SOURCE}' at {path} carries no BIN row. An "
+            f"empty table is the silent substitution this file exists to prevent.")
     return rows
 
 
 BANKS = _load_banks()
 
-# --- Bank market share ------------------------------------------------------
-# Which bank issued a person's card decides whether a transfer is on-us (both
-# parties at the same bank) or inter-bank. That distinction matters because the
-# receiver's account age is only knowable to the sending bank when the receiver
-# is its own client — so the on-us rate bounds how much of the traffic the
-# `receiver_age` feature can cover at all.
-#
-# Assigning banks uniformly makes on-us ~1/n_banks (~3%), which is an artefact of
-# the generator, not of the market. Weighting by cards in circulation reproduces
-# the real concentration instead: Xalq banki alone holds ~16% of the country's
-# cards.
-#
-# Set to False to fall back to uniform assignment (useful as a control, or to
-# sweep the on-us rate independently of real market structure).
+# The on-us rate bounds receiver_age coverage, so assignment is not cosmetic:
+# uniform gives ~1/n_banks (~3%), a property of the list, while card-share
+# weighting reproduces the real concentration (Xalq ~16%). False = uniform, a
+# legitimate control. Cards in circulation proxies volume - hence the toggle.
 WEIGHT_BANKS_BY_CARD_SHARE = True
-
-# CAVEAT for interpretation: cards in circulation is a proxy for transfer
-# volume, not a measurement of it. Xalq banki leads largely on state social
-# payments, whose cards are low-activity, while digital banks such as Uzum see
-# far more transactions per card. Card share therefore overstates the former and
-# understates the latter for P2P specifically. No per-bank P2P volume statistics
-# are published, so this is the closest available proxy — hence the toggle.
 
 
 def _bank_weights():
-    """Per-BIN sampling weights, proportional to each bank's cards in circulation.
-
-    A bank's card base is split evenly across its BINs (most banks issue on both
-    UzCard and HUMO, and the national split is close to even). Falls back to
-    uniform weights when the registry carries no card figures at all.
-    """
+    """Per-BIN weights from each bank's cards in circulation, split evenly across
+    its BINs."""
     n = len(BANKS)
     if not WEIGHT_BANKS_BY_CARD_SHARE:
         return [1.0 / n] * n
@@ -255,27 +137,18 @@ def _bank_weights():
     raw = [float(b.get("cards_mln") or 0.0) / bins_per_bank[b["name"]] for b in BANKS]
     total = sum(raw)
     if total <= 0:
-        # The registry is present but carries no cards_mln figures. Uniform is
-        # a legitimate CONTROL - that is what WEIGHT_BANKS_BY_CARD_SHARE = False
-        # selects - so this is not an error. It is only dangerous when nobody
-        # chose it: uniform weights drop the on-us rate from 6.9% to 3.0%, and
-        # on-us transfers are the only ones where the sending bank can know the
-        # receiver's account age. Silence here would be the same failure the
-        # removed synthetic bank table was removed for.
+        # Uniform is a legitimate control; it is only dangerous unchosen.
         print(f"WARNING: {BANKS_SOURCE} carries no cards_mln figures; bank "
               f"assignment falls back to UNIFORM weights. The on-us rate drops "
-              f"to about 1/n_banks, which is a property of the list rather than "
-              f"of the market, and receiver_age coverage moves with it.",
-              file=sys.stderr)
+              f"to about 1/n_banks, a property of the list rather than of the "
+              f"market, and receiver_age coverage moves with it.", file=sys.stderr)
         return [1.0 / n] * n
     return [w / total for w in raw]
 
 
 BANK_WEIGHTS = _bank_weights()
 
-# --- Name components (SYNTHETIC Uzbek full names: "Surname First Patronymic") --
-# The male/female split exists only to build grammatically correct names
-# (surname -ov/-ova, patronymic o'g'li/qizi); no gender is stored.
+# --- Name components (synthetic) - split is for grammar only, no gender stored
 MALE_FIRST = ["Sardor", "Jasur", "Bekzod", "Aziz", "Otabek", "Sherzod", "Akmal",
               "Bobur", "Doniyor", "Ulugbek", "Farrux", "Javohir", "Sanjar",
               "Rustam", "Timur"]

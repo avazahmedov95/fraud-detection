@@ -2,11 +2,10 @@
 
 Wire format:  "FDE1:" + routing_key + ":" + base64(nonce(12) || ct || tag(16))
 
-Two invariants a change here must not break: hash the plaintext BEFORE
-encrypting (see integrity.py), and keep the two copies of this file - in
-data-generator/ and stream-processor/ - byte-identical, since each package
-deploys separately and test_payload_crypto.py in each pins the same vector.
-Rationale and the measured cost: docs/irp-framing.md 7.4.
+Two invariants: hash the plaintext BEFORE encrypting (integrity.py), and keep
+the copies in data-generator/ and stream-processor/ byte-identical - each
+package deploys separately and pins the same test vector. Measured cost:
+docs/irp-framing.md 7.4.
 """
 import base64
 import json
@@ -19,12 +18,9 @@ NONCE_BYTES = 12          # GCM standard; 96-bit nonces avoid an internal rehash
 KEY_BYTES = 32            # AES-256
 ROUTING_FIELD = "sender_card"   # what the Flink job keys the stream by
 
-# Key given to records whose routing field cannot be read at all. They are
-# dropped downstream; what matters is that they are dropped rather than raised,
-# because key_by has no error handling and an exception there stops the job on
-# that record permanently - a poison pill. One malformed event must not be able
-# to halt a payment pipeline, and "malformed" includes the entirely mundane case
-# of an envelope format changing while records are still in the topic.
+# For records whose routing field cannot be read. They are dropped rather than
+# raised: key_by has no error handling, so an exception there halts the job on
+# that record forever. One malformed event must not stop a payment pipeline.
 POISON_KEY = "__undecodable__"
 
 
@@ -51,9 +47,8 @@ def key_from_env(var="PAYLOAD_KEY_HEX"):
 
 
 def _aesgcm(key):
-    # Imported lazily so the module can be loaded (and its constants used) on a
-    # host without `cryptography` installed - the plaintext arm of the
-    # experiment must not require the crypto dependency.
+    # Lazy, so the plaintext arm of the experiment can run on a host without
+    # `cryptography` installed.
     try:
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     except ImportError as exc:                          # pragma: no cover
@@ -63,11 +58,8 @@ def _aesgcm(key):
 
 
 def _aad(routing) -> bytes:
-    """Associated data: the magic plus the clear routing key.
-
-    Binding the routing key means a record cannot be re-pointed at another
-    sender's key group without invalidating its own authentication tag.
-    """
+    """Magic plus the clear routing key: binding it means a record cannot be
+    re-pointed at another sender's key group without breaking its own tag."""
     return MAGIC + b"|" + routing.encode("utf-8")
 
 
@@ -87,11 +79,8 @@ def _split(text):
 
 
 def is_encrypted(blob) -> bool:
-    """True if this record carries the encrypted envelope.
-
-    Decidable without the key, which is what lets one consumer read a topic
-    holding both arms of the experiment.
-    """
+    """True if this record carries the encrypted envelope. Decidable without the
+    key, so one consumer can read a topic holding both arms."""
     try:
         return _as_text(blob).startswith(PREFIX)
     except (UnicodeDecodeError, AttributeError):
@@ -99,19 +88,13 @@ def is_encrypted(blob) -> bool:
 
 
 def routing_key(blob, field=ROUTING_FIELD) -> str:
-    """The partitioning field, WITHOUT decrypting.
+    """The partitioning field, WITHOUT decrypting. Used by the job's key_by.
 
-    Used by the job's key_by. On an encrypted record this is a string split; on
-    a plaintext one it parses the JSON, exactly as the job did before encryption
-    existed.
-
-    NEVER RAISES. key_by runs before any of the job's own error handling, and an
-    exception raised there fails the task, restarts it, and meets the same
-    record again - the job crash-loops for as long as that record is in the
-    topic, which is forever. So an unreadable record is routed to POISON_KEY and
-    dropped by the scorer, which counts and logs it. Returning a value here is
-    not leniency about bad data; it is the difference between losing one event
-    and losing the stream.
+    NEVER RAISES. key_by runs before the job's own error handling, so an
+    exception there fails the task, restarts it and meets the same record again
+    - a crash loop lasting as long as the record is in the topic. Unreadable
+    records go to POISON_KEY and are dropped by the scorer, which counts them.
+    This is the difference between losing one event and losing the stream.
     """
     try:
         text = _as_text(blob)
@@ -126,9 +109,8 @@ def encrypt(event: dict, key: bytes, field=ROUTING_FIELD) -> str:
     """Serialise and encrypt one event into the wire envelope."""
     routing = str(event.get(field, ""))
     if SEP in routing:
-        # Would make the envelope ambiguous to parse. Card numbers are digits,
-        # so this is a guard against a future field choice rather than a case
-        # that occurs today.
+        # Would make the envelope ambiguous. Card numbers are digits, so this
+        # guards a future field choice rather than a case that occurs today.
         raise PayloadCryptoError(
             f"routing field {field!r} contains the separator {SEP!r}: {routing!r}")
     plaintext = json.dumps(event, separators=(",", ":")).encode("utf-8")
@@ -157,9 +139,8 @@ def decrypt(blob, key: bytes) -> dict:
 def loads_maybe_encrypted(blob, key=None) -> dict:
     """Decode a record that may or may not be encrypted.
 
-    This is what the consuming side calls. It keeps the two arms of the
-    measurement on one code path, so any difference between them is the cost of
-    the cryptography rather than the cost of a different deserialiser.
+    Keeps both arms of the measurement on one code path, so the difference
+    between them is the cost of the cryptography, not of a deserialiser.
     """
     if is_encrypted(blob):
         if key is None:
