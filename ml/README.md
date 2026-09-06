@@ -100,11 +100,23 @@ and after the retrain that reproduced metrics.json exactly - differ by about
 decimals at most.
 
 An earlier revision of this file reported `is_family` as the #1 feature (1.29)
-and framed it as the core research contribution. That feature has since been
-removed: its dominance was an artefact of how the synthetic population was
-constructed, not evidence of a real kinship signal. Removing it cost little
-(PR-AUC 0.953 → 0.938 at the time), and the feature that replaced it at the top,
-`receiver_age`, is an industry-recognised drop/mule-account signal.
+and framed it as the core research contribution. Its dominance was an artefact of
+how the synthetic population was constructed, not evidence of a real kinship
+signal: the generator routed no fraud to relatives, so the feature separated the
+classes by construction. Dropping it cost little (PR-AUC 0.953 → 0.938 at the
+time), and the feature that took the top slot, `receiver_age`, is an
+industry-recognised drop/mule-account signal.
+
+**It was not deleted, and the story did not end there** - which matters, because
+this paragraph used to say "removed" and stop. `is_family` is the
+`myid_kinship` capability, which simply **defaults to off**, so it is absent from
+the deployed 24-column vector. The generator was then fixed to model both
+directions (25% of legitimate transfers go to relatives, and a realistic minority
+of fraud does too), and under those conditions switching the capability on is
+worth **+0.004 PR-AUC [+0.001, +0.007]** over 5 seeds - real, and negligible.
+That is the finding, not the removal: a feature that dominated SHAP on synthetic
+data was worth almost nothing once the generator modelled both classes of its
+behaviour. See `docs/irp-framing.md` §4.
 
 The ONNX model reproduces native LightGBM probabilities to < 1e-6, so phase-6
 in-Flink serving is faithful. Score fusion (CEP + ML -> final_score) is phase 6.

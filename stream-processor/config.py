@@ -48,8 +48,7 @@ SECS_LOGIN_MIN_HISTORY = 5          # cold start: z = 0 below this many observat
 W_COACHED_SESSION = 0.35            # deliberately level with W_NEW_PAYEE_HIGH
 COACHED_SESSION_Z = 2.0
 
-# Which features and rules are active lives in capabilities.py, set by CAP_*.
-# Changing one changes the feature contract: retrain and re-export after.
+# Which features and rules are active is not here: capabilities.py, set by CAP_*.
 
 # --- Mirrored from the generator (must match it) -----------------------------
 # Chosen figures, not regulatory ones - data-generator/config.py says why.
@@ -105,7 +104,12 @@ W_STRUCTURING = 0.40
 W_DISTINCT_BURST = 0.25
 W_DEVICE_CHANGE = 0.20
 W_GEO_ANOMALY = 0.20
-W_IMPOSSIBLE_TRAVEL = 0.45   # alone must reach REVIEW: a physical contradiction
+# Alone reaches REVIEW at the CEP layer (0.45 > 0.40): a physical contradiction
+# should not need corroboration. This does NOT carry to the fused decision, which
+# reads the model score and overrides the rule layer's verdict unless the rule is
+# in MANDATORY_REVIEW_RULES - so impossible travel with a low ml_score is ALLOW.
+# Whether it belongs in that set is a detection-policy question, not a weight one.
+W_IMPOSSIBLE_TRAVEL = 0.45
 W_MULE_FAN_IN = 0.35
 W_AMOUNT_DEVIATION = 0.25
 W_DAILY_LIMIT = 0.30
@@ -115,10 +119,8 @@ W_DAILY_LIMIT = 0.30
 REVIEW_THRESHOLD = 0.40
 BLOCK_THRESHOLD = 0.70
 
-# The CEP score is additive, so a fixed threshold implicitly says how many rules
-# must agree. Held fixed as rules disappear, the layer goes silent rather than
-# degrading: on PaySim with two rules the best fraud scored 0.35 against a 0.40
-# cutoff, so nothing was flagged - while those rules separated the classes 4:1.
+# Off restores the pre-2026 fixed cutoffs, kept so the two can be compared.
+# Why they are scaled at all: capabilities.scaled_threshold.
 SCALE_THRESHOLDS_BY_CAPABILITY = (
     os.getenv("SCALE_THRESHOLDS_BY_CAPABILITY", "1").lower()
     not in ("0", "false", "no"))

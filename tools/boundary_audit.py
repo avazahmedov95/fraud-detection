@@ -264,23 +264,16 @@ def b_case_row_matches_the_schema():
     return None
 
 
-def b_job_modules_cover_every_import():
-    ps1 = _read("run.ps1")
-    listed = set(re.findall(r'"([a-z_]+\.py)"', ps1.split("$JobModules = @(", 1)[1]
-                            .split(")", 1)[0]))
-    tree = ast.parse(_read("stream-processor", "fraud_job.py"))
-    local = set()
+def _job_import_closure():
+    """Every stream-processor module `fraud_job.py` reaches, transitively.
+
+    Fixed-point rather than two passes: a module added three hops down is exactly
+    the one nobody remembers to list.
+    """
     here = os.path.join(ROOT, "stream-processor")
-    for node in ast.walk(tree):
-        names = []
-        if isinstance(node, ast.Import):
-            names = [a.name for a in node.names]
-        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-            names = [node.module]
-        for n in names:
-            if os.path.exists(os.path.join(here, n.split(".")[0] + ".py")):
-                local.add(n.split(".")[0] + ".py")
-    for mod in list(local):
+
+    def local_imports(mod):
+        found = set()
         for node in ast.walk(ast.parse(_read("stream-processor", mod))):
             names = []
             if isinstance(node, ast.Import):
@@ -290,11 +283,47 @@ def b_job_modules_cover_every_import():
             for n in names:
                 f = n.split(".")[0] + ".py"
                 if os.path.exists(os.path.join(here, f)):
-                    local.add(f)
-    missing = sorted(local - listed - {"fraud_job.py"})
-    if missing:
-        return (f"$JobModules in run.ps1 does not ship {missing} - the job fails "
-                f"at submission with an ImportError inside the cluster")
+                    found.add(f)
+        return found
+
+    closure, frontier = set(), {"fraud_job.py"}
+    while frontier:
+        mod = frontier.pop()
+        for dep in local_imports(mod):
+            if dep not in closure:
+                closure.add(dep)
+                frontier.add(dep)
+    return closure - {"fraud_job.py"}
+
+
+def b_job_modules_cover_every_import():
+    """Both submitters must ship the whole closure.
+
+    This check once read run.ps1 only, and the Makefile silently fell a module
+    behind it: bins.py was in $JobModules and not in PYFILES, and the job kept
+    working because ./stream-processor is ALSO mounted at /opt/flink/usrjobs, so
+    sys.path found it without --pyFiles. One submitter was correct, the other was
+    relying on the mount, and nothing could tell them apart.
+    """
+    needed = _job_import_closure()
+
+    ps1 = _read("run.ps1")
+    listed_ps1 = set(re.findall(r'"([a-z_]+\.py)"',
+                                ps1.split("$JobModules = @(", 1)[1].split(")", 1)[0]))
+
+    mk = _read("Makefile")
+    pyfiles_line = [l for l in mk.splitlines() if l.startswith("PYFILES")][0]
+    listed_mk = set(re.findall(r'([a-z_]+\.py)', pyfiles_line))
+
+    problems = []
+    for where, listed in (("run.ps1 $JobModules", listed_ps1),
+                          ("Makefile PYFILES", listed_mk)):
+        missing = sorted(needed - listed)
+        if missing:
+            problems.append(f"{where} does not ship {missing}")
+    if problems:
+        return ("; ".join(problems) + " - the job then depends on the usrjobs "
+                "mount rather than on what it declares")
     return None
 
 
@@ -438,7 +467,7 @@ CHECKS = [
     ("alert_params -> Neo4j Cypher", b_neo4j_params_match_the_cypher),
     ("scored_row -> ClickHouse 01-schema", b_scored_row_matches_the_schema),
     ("case_row -> ClickHouse 02-cases", b_case_row_matches_the_schema),
-    ("fraud_job imports -> run.ps1 $JobModules", b_job_modules_cover_every_import),
+    ("fraud_job imports -> run.ps1 AND Makefile", b_job_modules_cover_every_import),
     ("config artefacts -> run.ps1 serve-prep", b_serve_prep_ships_every_artefact),
     ("no data path derived from __file__", b_no_artefact_path_derived_from_file),
     ("ReceiverStore write -> read (Redis member)", b_receiver_store_round_trips),

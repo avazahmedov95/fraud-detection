@@ -338,13 +338,25 @@ assumption explicit.
 
 **Where this runs, stated before the numbers.** The measurement below is taken
 through `replay_eval.py`, which drives the deployed `rules.evaluate` unchanged -
-so it is the real rule layer, not a reimplementation. It is **not** yet reachable
-in the Flink job: the baseline is population-wide state, and this stream is keyed
-by sender, so it belongs in Redis beside `ReceiverStore` for the same reason the
-receiver window does. Until it is wired there, setting the mode on the deployed
-job falls back to the constant. That fallback now logs a warning once per process
-rather than happening silently, which is the minimum this project's own catalogue
-of silent failures demands of it.
+so it is the real rule layer, not a reimplementation, and the baseline it passes
+is the in-process `rules.PopulationBaseline`.
+
+It is **also** reachable in the Flink job, which was not true when this section
+was first written. The baseline is population-wide state and the stream is keyed
+by sender, so it went to Redis beside `ReceiverStore` for the same reason the
+receiver window did: `receiver_store.PopulationStore`, opened and passed
+unconditionally by `fraud_job.py` (inert in `absolute` mode). A per-worker
+histogram was rejected rather than merely avoided - it would hold a *partition*
+baseline, so two workers would judge identical transactions differently. Writes
+are batched and reads cached, because a `HINCRBY` or `HGETALL` per event is a
+Redis round trip on the 300 ms path.
+
+Two fallbacks to the absolute constant remain, and both announce themselves once
+per process rather than happening silently: Redis unreachable
+(`PopulationStore.threshold`), and `relative` set with no baseline object passed
+at all (`rules._warn_relative_without_baseline`). A third is deliberate and
+quiet - fewer than `MULE_FAN_IN_MIN_OBS` observations - because a quantile of
+5,000 receivers is not yet a population property.
 
 Two things follow from the measurement, and the first matters more.
 
@@ -504,7 +516,24 @@ Fixed by resolving deploy-time artefacts against the mounted job directory
 first, by stamping `MODEL_VERSION_CEP_ONLY` when the session is absent, and by
 making the fallback announce itself in a banner. Every figure below was taken
 after confirming in ClickHouse that the run was fused:
-`model_version = cep+ml-fusion-v1`, `countIf(ml_score IS NULL) = 0`.
+**`model_version = cep+ml-fusion-v1`**.
+
+**The second half of that check used to be `countIf(ml_score IS NULL) = 0`, and
+it was vacuous.** `ml_score` is `Float32` in `01-schema.sql`, not `Nullable`, and
+`record.py` coerces a missing score to `0.0` on the way in - its own comment says
+so (`None -> 0.0 (model-down)`). The count is therefore zero on every run that
+has ever been written, including a rules-only one, so the clause could not fail.
+Nor does `ml_score = 0` substitute for it: on a five-record fused run taken while
+checking this, three of the five scored an honest 0.0000, which is
+indistinguishable from the model-down value.
+
+Verified directly rather than reasoned: the job was submitted with `model.onnx`
+removed, five records were fed through it, and the rows landed stamped
+`cep-only-fallback` with `ml_score = 0` and `ml_score IS NULL` counting zero.
+`model_version` is the whole check, and it works - it is the one field written
+from what actually ran. The lesson is the section's own: **a verification
+criterion that cannot fail is not a weaker check, it is the absence of one**, and
+this one sat in the sentence claiming the figures were sound.
 
 ### 7.1 Re-measured, with the model verifiably loaded
 
@@ -1224,6 +1253,125 @@ replays a fixed slice and stopping the transport also stops the offer.*
 
 ## 8. Silent failure modes
 
+**Seventeenth: the clause that certified the latency figures could not fail.**
+§7.0 states that every figure in §7 was taken after confirming the run was fused,
+by `model_version = cep+ml-fusion-v1` **and** `countIf(ml_score IS NULL) = 0`.
+The second clause is vacuous: `ml_score` is a plain `Float32`, and `record.py`
+coerces a missing score to `0.0` before the insert - with a comment saying it
+does. No row in the table's history can satisfy `ml_score IS NULL`, so the count
+is zero whether the model ran or not.
+
+It sat inside the sentence that repaired failure 3, which is what makes it worth
+recording: the paragraph explaining how a rules-only run had been mistaken for a
+fused one certified the repair with a test that a rules-only run also passes. The
+surviving clause, `model_version`, is the one that works, and it works because it
+is written from what actually ran rather than from what was configured - the
+lesson failure 3 already produced. **A criterion that cannot fail is not a weak
+check; it is the absence of one wearing the shape of a check.**
+
+**Sixteenth: `make submit-job` was broken, and submitting it said otherwise.**
+`fraud_job.py` is submitted with `--pyFiles <list>`, and the list is written out
+twice - `$JobModules` in `run.ps1`, `PYFILES` in the `Makefile`. `bins.py` was in
+the first and missing from the second, and `features.py` imports it at module
+level.
+
+What that cost is worse than a missing module, because of *when* it surfaces.
+`flink run` returned `Job has been submitted with JobID ...`, the REST API
+reported `state: RUNNING`, and both vertices reported `RUNNING` - because PyFlink
+starts its Python process lazily, on the first bundle. Against an idle topic the
+job sits in that state indefinitely, green in the UI and green in the API, having
+never executed a line of Python. It dies on the first record that arrives, with
+`ModuleNotFoundError: No module named 'bins'`, then crash-loops until the restart
+strategy gives up. **A submitter that is completely broken and a submitter that
+works are indistinguishable until traffic arrives.**
+
+This was measured, not reasoned: submitted on the live stack with the old list,
+observed RUNNING, fed five records, and read the failure out of the taskmanager
+log. An earlier draft of this entry asserted the opposite - that the job survived
+because `./stream-processor` is also bind-mounted at `/opt/flink/usrjobs` and
+`fraud_job.py` prepends its own directory to `sys.path`. That is wrong, and the
+same run says why: with the model removed, `config._resolve_artefact` reported
+its last-resort path as
+`/tmp/python-dist-.../python-files/blob_.../model.onnx`. **`__file__` is the Beam
+temp directory, so the mount is not on `sys.path` at all** - it is reachable only
+because `config.MOUNTED_JOB_DIR` names it as a literal, and that constant covers
+artefacts, not imports. The mount could never have rescued a module.
+
+Two things follow. It is failure 11 from the other side - there a path resolved
+against `__file__` and broke loudly; here the same property broke an import while
+submission reported success. And the check that should have caught it existed:
+`boundary_audit.py` already derived `fraud_job`'s import closure and compared it
+to `run.ps1`. It simply never knew about the second submitter. **A check that
+covers one of two call sites reports green for the half it can see** - it now
+derives the closure to a fixed point and holds both lists to it, and removing
+`bins.py` from either fails the audit.
+
+**Fifteenth, and the first one where nothing was broken except the reach of a
+fix.** The capability-scaled threshold of §6's second RQ3 result was reached only
+through `rules._thresholds()` - and `fraud_job` discards the rule layer's
+verdict, taking `fusion.decide` against the unscaled `FINAL_*` constants instead.
+So the fix ran in `validation/paysim_adapter.py` and `amlsim_adapter.py`, the
+harnesses where it was measured, and nowhere in the deployed job. The measurement
+was sound; the thing measured was not on the path.
+
+What makes it belong here rather than in an errata list is *where* it hides. At
+full capability `scaled_threshold` is the identity function, so the reference
+configuration - the one that gets run, demonstrated and tested - behaves
+identically whether the fix is wired or not. The defect is unobservable in
+precisely the profile anyone would check it in, and live only in the combination
+nobody demonstrates: a reduced capability profile with no model loaded, where
+`final_score` falls back to the additive CEP score and the layer goes mute
+against a cutoff calibrated for a richer deployment. That is the PaySim failure
+the fix exists to prevent, reproduced inside our own system.
+
+It was found by reading the call graph, not by any instrument here.
+`boundary_audit.py` checks that what one component produces is what the next
+expects; this is a value a component computes on every event and then discards
+*within itself*, which no boundary check can see. The repair puts the choice in
+one place - `fusion.cutoffs(cep_only=...)` - and states the asymmetry that makes
+it a choice: a model probability is recalibrated by retraining when the feature
+contract changes, an additive rule sum is not.
+
+**The by-product is a stronger result than the fix.** Asking whether the fused
+path should honour the rule layer's verdict at all is now a measurement rather
+than an assertion. Letting the CEP verdict act as a *floor* on the fused decision
+- it can only raise a decision, never lower one, so unlike the blends already
+rejected it cannot degrade ranking - costs, on the held-out slice: precision
+**0.847 -> 0.457**, F1 0.874 -> 0.611, buying 2 additional true positives for 114
+additional false ones, an increment precision of 1.7%. The layers stay decoupled
+because that number says so, which is a better reason than the one `fusion.py`
+gave before. The same measurement prices the narrower version: adding
+`IMPOSSIBLE_TRAVEL` to `MANDATORY_REVIEW_RULES` changes **nothing** on this slice
+- the rule fired 3 times, all 3 fraud, all 3 already caught by the model, none
+muted - so the weight comment that claimed the rule "alone must reach REVIEW" was
+describing the CEP layer only, and now says so.
+
+**The repair had a hole in it, found by review rather than by running it.**
+The first version left `fraud_job` computing `final_score(...)` and then
+`decide(..., cep_only=ml_score is None)` - re-deriving at the call site a fact
+`final_score` had just decided. `decide`'s `cep_only` defaults to `False`, which
+is the right default for every other caller, and that is exactly what makes the
+re-derivation dangerous: drop the keyword and the pre-fix behaviour returns with
+nothing failing, in a profile where old and new behave identically. The fix would
+have been true only of the library, not of the deployment.
+
+Now the derivation lives in `fusion.score_and_decide`, which does both steps and
+is the only form the job uses, so a caller cannot get it wrong by omission. The
+call site is pinned by two tests that parse `fraud_job.py`'s AST - it cannot be
+imported, PyFlink is not installed on the host - one asserting it goes through
+the combined form, one asserting it has not gone back to the split one. Both were
+confirmed to fail against an injected regression before being kept, which this
+document's seventeenth entry is the argument for.
+
+**What of the repair has actually run, and what has not.** The fallback branch
+was exercised on the live stack: the job was submitted with `model.onnx` removed,
+five records went through it, the CEP-only banner fired and the rows landed
+stamped `cep-only-fallback`. So `cep_only=True` reaches `fusion.cutoffs` in the
+runtime, not only in tests. But that run was at **full capability**, where
+`scaled_threshold` is the identity - so the rescaled cutoff itself has still
+never been exercised inside Flink, only in unit tests. The combination this
+entry is about, reduced capability with no model, remains verified offline.
+
 **Fourteenth, found by the dependency matrix and belonging here rather than in
 §7:** with Redis or Neo4j gone the pipeline keeps deciding and stops keeping up
 — a 1,000-event slice that drains in six seconds healthy had not drained in five
@@ -1232,11 +1380,14 @@ minutes. Neither client carries a timeout, and the handle is only nulled at
 subsequent event pays for. Containers `Up`, no exception, alerts still
 published, offsets still advancing. See §7.7a.
 
-Thirteen distinct failures were found across two working sessions — eight while
-building the pipeline, five more while building the alert consumer that closes
-it. Ten of them left the system looking healthy: containers `Up`, no exception
-anywhere, Kafka offsets advancing, the producer reporting success. They are
-collected here because the pattern is the result, not the individual bugs.
+Seventeen distinct failures are recorded here: eight found while building the
+pipeline, five more while building the alert consumer that closes it, and the
+four above — one from the dependency matrix, three from an audit of the code
+against its own documentation. **Fourteen left the system looking healthy**: containers `Up`, no exception anywhere, Kafka
+offsets advancing, the producer reporting success. The thirteen in the table are
+numbered; the two most recent are stated above it because they were found after
+it was written. They are collected here because the pattern is the result, not
+the individual bugs.
 
 | # | failure | what an operator saw | what it actually did |
 |---|---|---|---|

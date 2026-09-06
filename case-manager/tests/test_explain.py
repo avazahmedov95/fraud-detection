@@ -5,7 +5,6 @@ contribution labelled with the wrong feature, or from a model other than the one
 that decided. Most of these tests refuse to speak.
 """
 
-import pytest
 
 import explain as E
 

@@ -1,8 +1,16 @@
 """Turns two scores into one decision: ALLOW / REVIEW / BLOCK, plus reason codes.
+
 Fusion is at the DECISION layer, never a blend - every blend tried degraded ranking
-(measured comparison: docs/irp-framing.md 7)."""
+(measured comparison: docs/irp-framing.md 7). The rule layer's own verdict is
+discarded here, and that too is measured rather than assumed: honouring it as a
+FLOOR - which can only raise a decision, so unlike a blend it cannot degrade
+ranking at all - still costs precision 0.847 -> 0.457 for two additional true
+positives (docs/irp-framing.md 8, fifteenth). The rules reach the decision only
+through MANDATORY_REVIEW_RULES, and the fallback cutoffs in `cutoffs()`.
+"""
 
 import config as C
+import capabilities as CAP
 
 
 def final_score(cep_score, ml_score) -> float:
@@ -11,11 +19,64 @@ def final_score(cep_score, ml_score) -> float:
     return min(1.0, max(0.0, float(raw)))
 
 
-def decide(score: float, rule_hits) -> str:
-    if score >= C.FINAL_BLOCK_THRESHOLD:
+_CUTOFF_CACHE = {}
+
+
+def cutoffs(cep_only: bool):
+    """REVIEW / BLOCK cutoffs for the score actually being decided on.
+
+    Only the FALLBACK path scales with capability, and the asymmetry is the point:
+
+    - A model probability needs no scaling. Switching a capability off changes the
+      feature contract (capabilities.feature_names), so the model is retrained and
+      its output recalibrated by construction.
+    - An additive CEP score does: it states how many rules must agree, so held
+      fixed as the rules shrink the layer goes silent rather than degrading.
+      capabilities.scaled_threshold has the measurement.
+
+    At full capability both branches return the constants unchanged, so the
+    validated operating point does not move.
+    """
+    if not cep_only or not C.SCALE_THRESHOLDS_BY_CAPABILITY:
+        return C.FINAL_REVIEW_THRESHOLD, C.FINAL_BLOCK_THRESHOLD
+    key = tuple(sorted(CAP.MODES.items()))
+    if key not in _CUTOFF_CACHE:
+        _CUTOFF_CACHE[key] = (CAP.scaled_threshold(C.FINAL_REVIEW_THRESHOLD),
+                              CAP.scaled_threshold(C.FINAL_BLOCK_THRESHOLD))
+    return _CUTOFF_CACHE[key]
+
+
+def score_and_decide(cep_score, ml_score, rule_hits):
+    """Both steps at once, and the only form the job should use.
+
+    `decide` needs to know whether the score it was handed is a probability or an
+    additive CEP score, and `final_score` is where that is decided - so a caller
+    doing the two steps separately has to RE-DERIVE a fact this module already
+    knows. That re-derivation is a `cep_only=` keyword with a safe default, which
+    means dropping it restores the old behaviour silently, and at full capability
+    the old and new behaviour are identical. A regression there would be invisible
+    in exactly the profile anyone would check it in - which is the defect this
+    whole path exists to fix (docs/irp-framing.md 8, fifteenth).
+
+    So the derivation lives here, once, and cannot be got wrong by a caller.
+    """
+    final = final_score(cep_score, ml_score)
+    return final, decide(final, rule_hits, cep_only=ml_score is None)
+
+
+def decide(score: float, rule_hits, cep_only: bool = False) -> str:
+    """ALLOW / REVIEW / BLOCK.
+
+    `cep_only` says the score came from the rule layer because no model was
+    loaded. It defaults False because the fused path is the normal one, and
+    because a caller that forgets it gets today's behaviour rather than a
+    silently rescaled cutoff.
+    """
+    review_at, block_at = cutoffs(cep_only)
+    if score >= block_at:
         return "BLOCK"
     mandatory = any(r in C.MANDATORY_REVIEW_RULES for r in rule_hits)
-    if score >= C.FINAL_REVIEW_THRESHOLD or mandatory:
+    if score >= review_at or mandatory:
         return "REVIEW"
     return "ALLOW"
 

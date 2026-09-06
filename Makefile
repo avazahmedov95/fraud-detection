@@ -68,7 +68,14 @@ load-graph: ## load the account population into Neo4j
 serve-prep: ## copy the trained ONNX model + feature spec next to the Flink job
 	cp ml/models/model.onnx ml/models/feature_names.json stream-processor/
 
-PYFILES = /opt/flink/usrjobs/config.py,/opt/flink/usrjobs/capabilities.py,/opt/flink/usrjobs/features.py,/opt/flink/usrjobs/geo.py,/opt/flink/usrjobs/rules.py,/opt/flink/usrjobs/enrichment.py,/opt/flink/usrjobs/receiver_store.py,/opt/flink/usrjobs/fusion.py,/opt/flink/usrjobs/payload_crypto.py
+# Every module fraud_job.py imports, transitively. bins.py was missing here while
+# present in run.ps1's $JobModules, and this target was simply BROKEN: the job
+# submits, reports RUNNING, and dies on the first record with ModuleNotFoundError,
+# because PyFlink starts its Python process lazily. The mount does not save it -
+# --pyFiles unpacks to a Beam temp dir and that, not /opt/flink/usrjobs, is what
+# lands on sys.path. boundary_audit.py now derives this closure from fraud_job.py
+# and fails if either submitter drifts from it.
+PYFILES = /opt/flink/usrjobs/config.py,/opt/flink/usrjobs/capabilities.py,/opt/flink/usrjobs/features.py,/opt/flink/usrjobs/geo.py,/opt/flink/usrjobs/bins.py,/opt/flink/usrjobs/rules.py,/opt/flink/usrjobs/enrichment.py,/opt/flink/usrjobs/receiver_store.py,/opt/flink/usrjobs/fusion.py,/opt/flink/usrjobs/payload_crypto.py
 
 submit-job: serve-prep ## submit the PyFlink CEP+ML job (EMPTY keyed state)
 	$(COMPOSE) exec jobmanager flink run -d -py /opt/flink/usrjobs/fraud_job.py \

@@ -19,7 +19,9 @@ ch_writer.py     batched ClickHouse writer (transactions_scored + audit_log)
 neo4j_writer.py  batched Neo4j alert-graph writer
 consumer.py      Kafka consumer loop: batch by size/time, clean shutdown
 config.py        connections + batch settings (env-driven)
-test_record.py   unit tests (mapping + batching with fake clients)
+integrity.py     the audit hash chain; byte-identical to data-generator's copy
+verify_audit.py  recompute the chain over the warehouse and find any break
+tests/           run with `python -m pytest sink-writer -q`
 ```
 
 ## Design
@@ -62,5 +64,5 @@ ORDER BY incoming_alerts DESC LIMIT 10;
 
 ```bash
 pip install -r requirements.txt
-python test_record.py     # mapping + batching unit tests (no DB needed)
+python -m pytest ../sink-writer -q    # mapping, batching and the hash chain
 ```

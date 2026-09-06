@@ -79,52 +79,46 @@ def _row_to_message(row, include_labels):
 def main():
     ap = argparse.ArgumentParser(description="Replay transactions.csv into Kafka")
     ap.add_argument("--file", required=True)
-    ap.add_argument("--bootstrap", default="localhost:29092")  # matches docker-compose EXTERNAL listener
+    ap.add_argument("--bootstrap", default="localhost:29092")  # compose EXTERNAL listener
     ap.add_argument("--topic", default="transactions.raw")
+
+    # Pacing. Unpaced, the whole file lands in the topic at once and every
+    # latency figure measured afterwards is queue depth, not decision time.
     ap.add_argument("--realtime", action="store_true",
-                    help="pace messages to original inter-event gaps")
+                    help="pace to the original inter-event gaps")
     ap.add_argument("--speed", type=float, default=200.0,
-                    help="time-compression factor when --realtime")
+                    help="time-compression factor for --realtime")
     ap.add_argument("--rate", type=float, default=0.0, metavar="TPS",
-                    help="pace at a fixed events/s. 0 (default) sends as fast "
-                         "as the client can. Mutually exclusive with --realtime, "
-                         "which paces to the original inter-event gaps instead.")
-    ap.add_argument("--include-labels", action="store_true")
-    ap.add_argument("--dry-run", action="store_true",
-                    help="print messages instead of producing to Kafka")
+                    help="pace at a fixed events/s; 0 sends as fast as the "
+                         "client can. Excludes --realtime")
+
+    # Slicing. Arms must be equal length (unequal cache warming moves the
+    # figures more than the effect) and DISJOINT: replaying the same ids makes
+    # every later row look like a duplicate, which is what fault_injection.py
+    # measures. Skipped rows are dropped before the pacing clock starts.
+    ap.add_argument("--limit", type=int, default=None,
+                    help="stop after N messages")
+    ap.add_argument("--skip", type=int, default=0,
+                    help="drop the first N rows before sending")
+
+    # Security arms, docs/irp-framing.md 7.4-7.5a.
     ap.add_argument("--encrypt", action="store_true",
-                    help="AES-256-GCM the payload (needs PAYLOAD_KEY_HEX); "
-                         "the security-overhead arm of reviewer point 3")
+                    help="AES-256-GCM the payload; needs PAYLOAD_KEY_HEX")
     ap.add_argument("--tls", action="store_true",
-                    help="connect over mutual TLS (broker listener :9094); "
-                         "the transport arm of reviewer point 3")
+                    help="connect over mutual TLS (broker listener :9094)")
     ap.add_argument("--ssl-ca", default="/certs/ca.crt")
     ap.add_argument("--ssl-cert", default="/certs/client.crt")
     ap.add_argument("--ssl-key", default="/certs/client.key")
-    ap.add_argument("--limit", type=int, default=None,
-                    help="stop after N messages. Use for A/B runs: stopping by "
-                         "hand gives each arm a different length and a "
-                         "different amount of cache warming, which moves the "
-                         "figures by more than the effect being measured")
+    # Each transport arm holds ONE long-lived connection, so the handshake is
+    # amortised away. This makes it recur - the only condition under which the
+    # mutual-TLS answer could change.
     ap.add_argument("--reconnect-every", type=int, default=0, metavar="N",
-                    help="close and reopen the producer every N messages. The "
-                         "transport arms in docs/irp-framing.md 7.5 each hold "
-                         "ONE long-lived connection, so the handshake is "
-                         "amortised over the whole arm and what they measure is "
-                         "mostly record framing. A payment switch does not work "
-                         "that way. This makes the handshake recur, which is "
-                         "the only condition under which the mutual-TLS answer "
-                         "could change.")
-    ap.add_argument("--skip", type=int, default=0,
-                    help="drop the first N rows before sending anything. A "
-                         "repeated experiment on one dataset needs DISJOINT "
-                         "slices: replaying the same transaction ids makes "
-                         "every row after the first pass indistinguishable "
-                         "from a duplicate, and duplication is exactly what "
-                         "fault_injection.py measures. Skipped rows are "
-                         "dropped before the pacing clock starts, so the "
-                         "slice is paced from its own first row rather than "
-                         "sleeping out the gap it was never going to send")
+                    help="reopen the producer every N messages")
+
+    ap.add_argument("--include-labels", action="store_true",
+                    help="carry label_is_fraud through, for offline scoring")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="print messages instead of producing to Kafka")
     args = ap.parse_args()
 
     # Resolved before the loop so a missing key fails at startup, not mid-run.

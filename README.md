@@ -15,6 +15,8 @@ fraud-detection/
 ├── docker-compose.yml      full local stack (phase 2)
 ├── .env                    image versions, ports, dev credentials
 ├── Makefile                make up / generate / produce / load-graph ...
+├── run.ps1                 the experiment driver: every measured run starts here
+├── run-kill-series.ps1     repeated fault injection (irp-framing.md 6)
 │
 ├── infra/                  infrastructure configuration
 │   ├── kafka/              topic creation
@@ -22,7 +24,8 @@ fraud-detection/
 │   ├── neo4j/              graph import Cypher
 │   ├── clickhouse/init/    warehouse + WORM audit schema
 │   ├── flink/              PyFlink-ready Flink image
-│   └── grafana/            datasource + dashboard provisioning
+│   ├── grafana/            datasource + dashboard provisioning
+│   └── case-manager/  sink-writer/    service images
 │
 ├── data-generator/         synthetic population + transactions   (phase 1)
 │   ├── config.py  events.py  persons.py  travel.py  fraud_patterns.py
@@ -41,6 +44,8 @@ fraud-detection/
 │   ├── amlsim_adapter.py   IBM AMLSim + amlsim.Dockerfile toolchain
 │   ├── amlsim_ablation.py  leakage and drift screens
 │   └── zenodo_provenance.py  why one published dataset was rejected
+├── tools/
+│   └── boundary_audit.py   what one component produces vs what the next expects
 └── docs/                   the evidence base — read irp-framing.md first
 ```
 
@@ -51,13 +56,15 @@ reader:
 
 | document | what it holds |
 |---|---|
-| `docs/irp-framing.md` | the research question, every measurement with its interval, a line-by-line answer to the seven review points, twelve silent failure modes, and what a real work queue exposed that no metric did |
+| `docs/irp-framing.md` | the research question, every measurement with its interval, a line-by-line answer to the seven review points, seventeen silent failure modes, and what a real work queue exposed that no metric did |
 | `docs/threat-model.md` | three adversaries, what each control assumes, and what evading it costs — one of those costs is now measured rather than argued |
 | `docs/generator-spec.md` | the generator as a specification, the dataset of record with its hashes, and why the data is generated at all |
 | `validation/README.md` | four foreign datasets, what each could and could not test, and the screens that came out of it |
 | `docs/related-work.md` | fifteen sources, each with what it does **not** support — and §9, which maps every source to the file it actually reaches |
 | `ml/README.md` | model, SHAP, and the capability ablation |
 | `case-manager/README.md` | the alert consumer: the analyst queue, the disposition as the only real label this system can produce, and why the model's reasons are computed off the scoring path |
+| `docs/audit-anchors.md` | the head hash of each audit chain, pinned to a commit — the one gap a self-verifying chain cannot close on its own |
+| `docs/Разбор антифрод-системы.html` | a Russian walkthrough of the whole system, module by module. A reader aid, subordinate to everything above it |
 
 Numbers quoted anywhere else in this repository are subordinate to those files.
 
@@ -67,7 +74,7 @@ Each package keeps its tests in its own `tests/` directory, and the packages are
 run **one at a time**:
 
 ```bash
-python -m pytest stream-processor -q     # 153
+python -m pytest stream-processor -q     # 173
 python -m pytest data-generator   -q     #  43
 python -m pytest sink-writer      -q     #  23
 python -m pytest validation       -q     #  11
@@ -85,7 +92,7 @@ copies of one module drifting, `test_bins.py` after a bank that closed. They are
 regression evidence, not coverage.
 
 ```bash
-python tools/boundary_audit.py           # 17 joins between components
+python tools/boundary_audit.py           # 19 joins between components
 ```
 
 checks what the tests cannot: that what one component *produces* is what the

@@ -7,7 +7,6 @@ typology, because the constant 6 encodes the in-degree density of this project's
 own generator. See validation/README.md 3 and MULE_FAN_IN_MODE in config.py.
 """
 
-import os
 import sys
 
 import pytest

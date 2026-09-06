@@ -37,9 +37,9 @@ the resolved set is biased towards high scores.
 | `explain.py` | exact tree contributions, in words, for alerts no rule explains |
 | `consumer.py` | the service: `fraud.alerts` → `fraud.cases` |
 | `queue_cli.py` | the analyst surface: `list` / `show` / `resolve` / `stats` |
-| `test_case.py` | 14 tests, incl. the replay-cannot-revert-a-verdict property |
-| `test_store.py` | tests against a fake ClickHouse: schema, FINAL, round trip |
-| `test_explain.py` | 14 tests, mostly about refusing to give a wrong reason |
+| `tests/test_case.py` | 16 tests, incl. the replay-cannot-revert-a-verdict property |
+| `tests/test_store.py` | 14 tests against a fake ClickHouse: schema, FINAL, round trip |
+| `tests/test_explain.py` | 15 tests, mostly about refusing to give a wrong reason |
 
 ## The schema is applied by the service, not by ClickHouse
 

@@ -153,8 +153,11 @@ class FraudDetector(KeyedProcessFunction):
 
         cep_score = result["cep_score"]
         ml_score = self._ml_score(result["features"])
-        final = fusion.final_score(cep_score, ml_score)
-        decision = fusion.decide(final, result["rule_hits"])
+        # One call, not final_score + decide: whether the score is a probability
+        # or an additive CEP score decides which cutoffs apply, and deriving that
+        # here would be deriving it twice. fusion.score_and_decide.
+        final, decision = fusion.score_and_decide(
+            cep_score, ml_score, result["rule_hits"])
         predicted_type = fusion.classify_type(result["rule_hits"]) if decision != "ALLOW" else None
 
         out = {
@@ -271,11 +274,8 @@ def _kafka_sink(topic):
 def _tune_for_latency(env):
     """Trade throughput for latency, which is what a pre-settlement decision needs.
 
-    PyFlink ships records to Python in bundles, flushed when full OR on a timer.
-    The defaults (100000 records, 1000 ms) are throughput settings: below ~100k
-    events/s the bundle never fills and every record waits out the full second.
-    Measured with them: 7.6 ms of scoring behind 1923 ms of reaching the scorer.
-    The same applies to the buffer timeout between operators.
+    Every value applied here is justified where it is defined, in config.py:
+    bundling, buffer timeout, restart strategy.
     """
     # Job-level options go through Configuration and env.configure();
     # env.get_config() is an ExecutionConfig with no string interface.
@@ -283,8 +283,6 @@ def _tune_for_latency(env):
     conf.set_string("python.fn-execution.bundle.time", str(C.PY_BUNDLE_TIME_MS))
     conf.set_string("python.fn-execution.bundle.size", str(C.PY_BUNDLE_SIZE))
 
-    # Fault injection showed the job did not come back after one taskmanager
-    # kill - worse than a crash, because nothing alerts on silence.
     conf.set_string("restart-strategy.type", "failure-rate")
     conf.set_string("restart-strategy.failure-rate.max-failures-per-interval",
                     str(C.RESTART_ATTEMPTS))
@@ -302,9 +300,7 @@ def main():
     env = StreamExecutionEnvironment.get_execution_environment()
     env.enable_checkpointing(C.CHECKPOINT_INTERVAL_MS)
 
-    # Retained beyond the job and outside the container. Without this a
-    # resubmission re-reads the topic from the start - measured as every
-    # transaction scored four times over four submissions.
+    # Retained beyond the job and outside the container - config.CHECKPOINT_DIR.
     chk = env.get_checkpoint_config()
     chk.set_checkpoint_storage_dir(C.CHECKPOINT_DIR)
     try:

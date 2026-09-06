@@ -5,7 +5,6 @@ leakage_screen() and drift_screen(). Negative and structural: validation/README.
 import argparse
 import math
 import os
-import sys
 from collections import defaultdict, deque
 
 import numpy as np

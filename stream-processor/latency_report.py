@@ -8,7 +8,6 @@ the distribution is not normal. Figures: docs/irp-framing.md 7.
 import argparse
 import math
 import os
-import sys
 
 CH_HOST = os.getenv("CLICKHOUSE_HOST", "localhost")
 CH_PORT = int(os.getenv("CLICKHOUSE_HTTP_PORT", "8123"))

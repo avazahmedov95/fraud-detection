@@ -115,8 +115,12 @@ python kafka_producer.py --file out/transactions.csv --dry-run
 
 # live, paced to original gaps, 200x compressed
 python kafka_producer.py --file out/transactions.csv --realtime --speed 200 \
-    --bootstrap localhost:9092 --topic transactions.raw
+    --bootstrap localhost:29092 --topic transactions.raw
 ```
+
+29092 is the EXTERNAL listener. `kafka:9092` is INTERNAL and resolves only
+inside the compose network; from the host it fails to connect. This example
+said 9092 for months.
 
 Load the graph into Neo4j (example Cypher):
 

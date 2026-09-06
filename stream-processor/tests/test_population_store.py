@@ -7,10 +7,8 @@ partition baseline masquerading as a population one. A fake client is used so
 these run in CI and so the call COUNTS can be asserted.
 """
 
-import os
 import sys
 
-import pytest
 
 # sys.path is set by tests/conftest.py.
 

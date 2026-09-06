@@ -30,7 +30,10 @@ def _train(mode):
     with open(os.path.join(MODELS, "feature_names.json")) as fh:
         feats = json.load(fh)
 
-    # train.py prints "  APP   83.9%  (n=62)" per fraud type.
+    # Parsed from train.py's per-type line (train.py, "recall by fraud type"):
+    # three whitespace-separated fields, the second ending "%" and the third
+    # opening "(n=". Stated as a contract rather than as a sample line, because
+    # the sample that used to stand here still showed n=62 for a slice of 38.
     by_type = {}
     for line in proc.stdout.splitlines():
         parts = line.split()

@@ -49,12 +49,13 @@ def _warn_relative_without_baseline():
     if not _warned_no_baseline:
         _warned_no_baseline = True
         logging.getLogger("rules").warning(
-            "MULE_FAN_IN_MODE=relative but no PopulationBaseline was passed to "
+            "MULE_FAN_IN_MODE=relative but no baseline was passed to "
             "evaluate(); the rule is running on the absolute threshold "
-            "(%d senders). The live Flink job does not yet wire one - the "
-            "baseline is population-wide state and belongs in Redis beside "
-            "ReceiverStore. Offline harnesses (replay_eval.py, "
-            "fan_in_mode_eval.py) do pass one.", C.MULE_FAN_IN_MIN_SENDERS)
+            "(%d senders). Every caller that should reach this mode passes one: "
+            "the Flink job a receiver_store.PopulationStore, the offline "
+            "harnesses (replay_eval.py, fan_in_mode_eval.py) a "
+            "PopulationBaseline. So this line means a CALLER is missing it, not "
+            "that the deployment cannot support it.", C.MULE_FAN_IN_MIN_SENDERS)
 
 
 @dataclass

@@ -6,7 +6,6 @@ import os
 import sys
 from datetime import timedelta
 
-import numpy as np
 
 _SP = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                    "..", "stream-processor")

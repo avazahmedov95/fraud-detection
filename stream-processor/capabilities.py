@@ -6,7 +6,7 @@ feature contract: retrain and re-export afterwards.
 """
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -181,12 +181,17 @@ def feature_names() -> list:
 RULE_CAPABILITY = {rule: cap.key for cap in REGISTRY for rule in cap.rules}
 
 
+def _rule_enabled_in(modes: dict, rule: str) -> bool:
+    """As rule_enabled, against an explicit profile."""
+    key = RULE_CAPABILITY.get(rule)
+    return True if key is None else modes[key] != "off"
+
+
 def rule_enabled(rule: str) -> bool:
     """True when the data behind a CEP rule is available. Unknown rules are enabled:
     a rule with no declared dependency runs on the core stream, and failing open
     here would silently disable detection."""
-    key = RULE_CAPABILITY.get(rule)
-    return True if key is None else enabled(key)
+    return _rule_enabled_in(MODES, rule)
 
 
 # Rules that plausibly fire TOGETHER on one episode - distinct from
@@ -221,19 +226,31 @@ def _rule_weights():
             if hasattr(C, const)}
 
 
-def reachable_score(pattern: str) -> float:
-    """Highest CEP score this fraud pattern can reach under the current profile."""
+def _full_modes() -> dict:
+    """Every capability at its richest setting - the profile the hand-calibrated
+    thresholds were set against, and the denominator every rescale divides by."""
+    return {c.key: (c.modes[0] if c.always_on
+                    else ("on" if "on" in c.modes else c.modes[0]))
+            for c in REGISTRY}
+
+
+def reachable_score(pattern: str, modes: dict = None) -> float:
+    """Highest CEP score this fraud pattern can reach. Under the active profile by
+    default; `modes` scores a hypothetical one WITHOUT installing it, because a
+    function that answers a question by mutating module state answers it for every
+    concurrent caller too."""
+    m = MODES if modes is None else modes
     weights = _rule_weights()
     fired = [weights.get(r, 0.0) for r in PATTERN_SIGNATURES.get(pattern, ())
-             if rule_enabled(r)]
+             if _rule_enabled_in(m, r)]
     return min(1.0, sum(fired))
 
 
-def weakest_reachable() -> float:
-    """The hardest-to-score pattern under this profile. Zero if none can score."""
+def weakest_reachable(modes: dict = None) -> float:
+    """The hardest-to-score pattern under a profile. Zero if none can score."""
     if not PATTERN_SIGNATURES:
         return 0.0
-    return min(reachable_score(p) for p in PATTERN_SIGNATURES)
+    return min(reachable_score(p, modes) for p in PATTERN_SIGNATURES)
 
 
 def scaled_threshold(base_threshold: float, base_weakest: float = None) -> float:
@@ -248,14 +265,7 @@ def scaled_threshold(base_threshold: float, base_weakest: float = None) -> float
     themselves separated the classes 4:1. At full capability this returns
     base_threshold unchanged; it rescales sensitivity, it does not recover it."""
     if base_weakest is None:
-        saved = dict(MODES)
-        try:
-            for cap in REGISTRY:
-                MODES[cap.key] = cap.modes[0] if cap.always_on else (
-                    "on" if "on" in cap.modes else cap.modes[0])
-            base_weakest = weakest_reachable()
-        finally:
-            MODES.clear(); MODES.update(saved)
+        base_weakest = weakest_reachable(_full_modes())
     if base_weakest <= 0:
         return base_threshold
     return round(base_threshold * (weakest_reachable() / base_weakest), 4)

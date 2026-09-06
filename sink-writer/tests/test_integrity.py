@@ -5,7 +5,6 @@ data-generator/) in step: both carry this test and must produce the same fixed
 hex, so a drifting copy fails a vector instead of leaving the chain unverifiable.
 """
 
-import pytest
 
 import integrity
 import record as R

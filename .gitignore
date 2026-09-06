@@ -48,8 +48,9 @@ stream-processor/banks.csv
 # why it must never be committed.
 infra/kafka/certs/
 
-# stray scratch file, cannot be deleted from the sandbox
-.writetest
+# Editor and shell scratch. run.ps1.tmp was tracked as an empty file for weeks:
+# a zero-byte artefact is exactly the kind of thing a diff never draws attention to.
+*.tmp
 
 # Run state, not source: fault_injection.py rewrites the baseline snapshot on
 # every round, so tracking it means a dirty tree after every experiment.

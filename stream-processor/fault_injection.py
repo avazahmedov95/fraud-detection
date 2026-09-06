@@ -7,7 +7,6 @@ Run in three phases - see --help. Findings: docs/irp-framing.md 5, point 6.
 import argparse
 import json
 import os
-import sys
 import urllib.parse
 import urllib.request
 
