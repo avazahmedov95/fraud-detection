@@ -14,6 +14,7 @@ transactions.raw --(key by sender)--> enrich (Neo4j account lookup + Redis cache
 ## Files
 
 ```
+deployed to the cluster - every one of these is in the Makefile's PYFILES
 config.py        connections, rule windows/thresholds, weights, fusion cutoffs
 capabilities.py  what the deploying bank can observe -> features + active rules
 features.py      shared train/serve feature contract (Welford baseline) — the core

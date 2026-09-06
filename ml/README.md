@@ -6,13 +6,33 @@ extractor the Flink job serves** (`stream-processor/features.py`), so there is n
 train/serve skew.
 
 ```
+the pipeline - run in order, produces what the Flink job serves
 dataset.py        replay the CSV through stream-processor features+rules -> matrix
 train.py          LightGBM, time-ordered split, metrics + CEP-vs-ML comparison
-explain.py        SHAP global (beeswarm + bar) and per-alert reason codes
 export_onnx.py    LightGBM -> ONNX + parity check vs the native model
+manifest.py       provenance: what the untracked artefacts were built from
+explain.py        SHAP global (beeswarm + bar) and per-alert reason codes
+
+harnesses - produce a NUMBER, not an artefact the system uses
+ablation.py       what each capability is worth, one dataset. Name one
+                  (`ablation.py receiver_age`) to sweep all its modes
+ablation_seeds.py the same across generator seeds, with intervals.
+                  Quote figures from this one, not from ablation.py
+fusion_eval.py    CEP-only vs ML-only vs fused on the held-out slice
+recall_by_type.py per-type recall across seeds (budgeted; resumes)
+calibration_report.py  are the probabilities usable as magnitudes, or only
+                  as a ranking? Merges its block into metrics.json
+
 models/           artifacts: model.joblib, model.onnx, feature_names.json,
                   metrics.json, shap_summary.png, shap_importance.png
+                  ablation/ holds every harness run that was kept
 ```
+
+The split matters more here than the file count suggests. The pipeline must be
+right; a harness must additionally be unable to be **wrong quietly**, because
+nothing downstream consumes its output except a sentence in the thesis. This
+directory has produced that failure twice - see the note under Capability
+ablation, and `docs/irp-framing.md` 7.7b.
 
 ## Why gradient boosting (not deep learning)
 

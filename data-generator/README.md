@@ -137,11 +137,31 @@ sink-writer from scored transactions, not generated up front.
 ## Files
 
 ```
+the generator - produces the dataset
 config.py          calibration constants (edit these)
 events.py          canonical event schema + builder
 persons.py         synthetic population (PINFL, names, Luhn-valid cards)
 travel.py          real journeys (negative control) + unreachable hijack origins
 fraud_patterns.py  APP / ATO / STRUCTURING / MULE injection
 generator.py       normal traffic + orchestration + CLI
+
+on the wire - what the producer puts on the topic, and what proves it intact
 kafka_producer.py  CSV → Kafka replay (batch or paced live stream)
+integrity.py       SHA-256 over the raw event at ingress, carried untouched
+                   through Flink and bound into the audit record. Byte-identical
+                   to sink-writer/integrity.py by design; boundary_audit.py
+                   enforces that, and both carry the same known-answer vectors
+payload_crypto.py  AES-256-GCM envelope for the security-overhead arm. Also
+                   duplicated by design, in stream-processor/
+
+harnesses - produce a NUMBER, not part of the generator
+verify_spec.py     re-checks docs/generator-spec.md against the output (16/16).
+                   The spec is a claim; this is what makes it falsifiable
+handshake_bench.py one mutual-TLS handshake against one plaintext connection,
+                   measured directly - docs/irp-framing.md 7.5a
 ```
+
+Four of these were absent from this list for months, `integrity.py` and
+`payload_crypto.py` among them - the two modules that exist because a reviewer
+asked for cryptographic guarantees. A file listing that omits the answer to a
+review point is worse than no listing.

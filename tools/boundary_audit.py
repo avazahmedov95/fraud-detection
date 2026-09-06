@@ -455,6 +455,36 @@ def b_compose_env_names_are_read():
     return None
 
 
+def b_every_module_is_documented():
+    """Each package's README must mention every .py file beside it.
+
+    A documentation boundary rather than a data one, and it earns its place the
+    way the others did - by having failed. `ml/README.md` listed four modules of
+    ten, `data-generator/README.md` omitted `integrity.py` and
+    `payload_crypto.py` - the two modules that exist as the answer to a reviewer's
+    point about cryptographic guarantees - and `stream-processor/README.md`
+    described a test layout the repository had moved away from.
+
+    None of that breaks anything, which is exactly the failure mode: a reader
+    forms a picture of the package from a list that is quietly short, and the
+    modules missing from it are not the unimportant ones. They are the ones added
+    last, which is to say the ones answering the most recent question.
+    """
+    problems = []
+    for pkg in ("stream-processor", "data-generator", "ml", "sink-writer",
+                "case-manager", "validation", "tools"):
+        d = os.path.join(ROOT, pkg)
+        readme = os.path.join(d, "README.md")
+        if not os.path.isdir(d) or not os.path.exists(readme):
+            continue
+        text = _read(pkg, "README.md")
+        missing = sorted(fn for fn in os.listdir(d)
+                         if fn.endswith(".py") and fn not in text)
+        if missing:
+            problems.append(f"{pkg}/README.md does not mention {missing}")
+    return "; ".join(problems) or None
+
+
 CHECKS = [
     ("generator CSV -> producer message (types)", b_producer_types),
     ("producer message -> feature extractor (equivalence)", b_wire_extracts_like_typed),
@@ -475,6 +505,7 @@ CHECKS = [
     ("model manifest -> deployed artefacts", b_manifest_matches_the_deployment),
     ("latency query -> its row parser", b_latency_query_matches_its_parser),
     ("docker-compose env -> case-manager config", b_compose_env_names_are_read),
+    ("modules -> their package README", b_every_module_is_documented),
 ]
 
 

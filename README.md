@@ -92,7 +92,7 @@ copies of one module drifting, `test_bins.py` after a bank that closed. They are
 regression evidence, not coverage.
 
 ```bash
-python tools/boundary_audit.py           # 19 joins between components
+python tools/boundary_audit.py           # 20 joins between components
 ```
 
 checks what the tests cannot: that what one component *produces* is what the
