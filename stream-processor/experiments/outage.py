@@ -18,13 +18,13 @@ Every dependency here fails open by design, which means every one of them
 degrades without an error. The point of the measurement is to say what each
 degradation costs, in rules that stop firing and rows that stop arriving.
 
-  python fault_injection.py --phase before
+  python outage.py --phase before
   #   ... produce traffic, kill the taskmanager, let it recover ...
-  python fault_injection.py --phase after --expect 1000
+  python outage.py --phase after --expect 1000
 
-  python fault_injection.py --service redis --phase before
+  python outage.py --service redis --phase before
   #   ... stop the container, produce traffic, start it again ...
-  python fault_injection.py --service redis --phase after --expect 1000
+  python outage.py --service redis --phase after --expect 1000
 
 Loss is what was OFFERED to the topic minus what the warehouse holds. For the
 kafka arm the outage stops the producer too, so that arm also needs --sent.
@@ -43,13 +43,15 @@ CH_USER = os.getenv("CLICKHOUSE_USER", "fraud")
 CH_PASSWORD = os.getenv("CLICKHOUSE_PASSWORD", "fraud_ch")
 CH_DB = os.getenv("CLICKHOUSE_DB", "fraud")
 
-STATE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                     "fault_injection_state.json")
+# Anchored to the package: .gitignore names both state files at
+# stream-processor/, and an experiment half-finished before this move must
+# still find the baseline it wrote.
+_PKG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+STATE = os.path.join(_PKG, "fault_injection_state.json")
 #: Where the dependency arms kept their baselines while they were a second
 #: script. Read if present, never written: a half-finished experiment must not
 #: lose its `before` pass because the two harnesses were merged underneath it.
-LEGACY_STATE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            "dependency_failure_state.json")
+LEGACY_STATE = os.path.join(_PKG, "dependency_failure_state.json")
 
 #: What each dependency is expected to take away. Written down BEFORE the run so
 #: the result is a test of a prediction rather than a description of whatever
@@ -234,13 +236,13 @@ def _report_scorer(base, snap, expect):
         print("\nNothing was written between the two phases, so there is nothing"
               "\nto measure — this says nothing about loss or duplication.\n")
         print("The sequence needs traffic flowing WHILE the worker is killed:")
-        print("\n  1. python fault_injection.py --phase before")
+        print("\n  1. python outage.py --phase before")
         print("  2. in another terminal:  .\\run.ps1 produce-stream-docker")
         print("     leave it running")
         print("  3. after ~30 s, in a third terminal:  .\\run.ps1 kill-worker")
         print("  4. let the producer run another minute, then stop it (Ctrl+C)")
         print("  5. wait ~30 s for the job to recover and drain the topic")
-        print("  6. python fault_injection.py --phase after --expect <sent>")
+        print("  6. python outage.py --phase after --expect <sent>")
         print("\n`--expect` is the number the PRODUCER sent during this window,"
               "\nnot the size of the CSV. produce-stream is paced, so a few"
               "\nminutes sends a few thousand — check with:")
@@ -532,7 +534,7 @@ def main():
         elif args.service == "kafka":
             print("\nNow:  start producing, then stop kafka MID-STREAM and "
                   "bring it back while the producer is still running")
-            print("      python fault_injection.py --service kafka "
+            print("      python outage.py --service kafka "
                   "--phase after --expect 1000 --sent N")
         else:
             print(f"\nNow:  docker compose stop {args.service}")
@@ -540,7 +542,7 @@ def main():
                   f"{args.service} is still down - restarting first means the "
                   f"tail of the queue is scored healthy")
             print(f"      docker compose start {args.service}")
-            print(f"      python fault_injection.py --service {args.service} "
+            print(f"      python outage.py --service {args.service} "
                   f"--phase after --expect 1000 --sent N")
         return 0
 

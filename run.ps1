@@ -490,7 +490,7 @@ function Invoke-Measurement {
     if (-not (Wait-Drained "the backlog")) { return }
 
     # A quiet gap so rows written by whatever ran before this fall outside the
-    # reporting window. latency_report filters on write time, not send time.
+    # reporting window. experiments/latency.py filters on write time, not send.
     Write-Host "==> settling for 90 s so earlier rows leave the window" -ForegroundColor Cyan
     Start-Sleep -Seconds 90
 
@@ -512,7 +512,7 @@ function Invoke-Measurement {
     Write-Host ""
     Write-Host "=== RESULT, arm '$Arm' (window: last $window min) ===" -ForegroundColor Green
     Push-Location "stream-processor"
-    try { python latency_report.py --since-minutes $window } finally { Pop-Location }
+    try { python experiments/latency.py --since-minutes $window } finally { Pop-Location }
 }
 
 function Get-LatestCheckpoint {
@@ -745,7 +745,7 @@ switch ($Target.ToLower()) {
         $json = $windows | ConvertTo-Json
         $out = Join-Path (Get-Location) "stream-processor/throughput_windows.json"
         [System.IO.File]::WriteAllText($out, $json, (New-Object System.Text.UTF8Encoding($false)))
-        python stream-processor/latency_report.py throughput
+        python stream-processor/experiments/latency.py throughput
     }
 
     # One dependency at a time: take it out, produce the SAME slice through the
@@ -780,7 +780,7 @@ switch ($Target.ToLower()) {
             $what = if ($svc -eq "control") { "healthy reference pass" } else { "out of service" }
             Write-Host "=== $svc : $what, $n messages ===" -ForegroundColor Cyan
             Reset-FeatureState
-            python stream-processor/fault_injection.py --service $svc --phase before
+            python stream-processor/experiments/outage.py --service $svc --phase before
             if ($LASTEXITCODE -ne 0) {
                 Write-Host "no baseline for $svc - skipping the arm rather than measuring against nothing" -ForegroundColor Red
                 continue
@@ -794,7 +794,7 @@ switch ($Target.ToLower()) {
             # room for the restarted service to accept connections again.
             Write-Host "==> letting the sink flush" -ForegroundColor Cyan
             Start-Sleep -Seconds 30
-            python stream-processor/fault_injection.py --service $svc --phase after --expect $n --sent $sent
+            python stream-processor/experiments/outage.py --service $svc --phase after --expect $n --sent $sent
         }
         Write-Host ""
         Write-Host "Logs worth reading beside these numbers:" -ForegroundColor Cyan
@@ -955,7 +955,7 @@ switch ($Target.ToLower()) {
 
     "latency" {
         Push-Location "stream-processor"
-        try { python latency_report.py } finally { Pop-Location }
+        try { python experiments/latency.py } finally { Pop-Location }
     }
 
     "verify-audit" {
@@ -1068,7 +1068,7 @@ switch ($Target.ToLower()) {
         Write-Host "Empty topic, job running. Now feed it a paced stream:" -ForegroundColor Green
         Write-Host "  .\run.ps1 produce-stream-docker 7000           # about 30 min at this pacing"
         Write-Host "  cd stream-processor"
-        Write-Host "  python latency_report.py --since-minutes 35"
+        Write-Host "  python experiments/latency.py --since-minutes 35"
         Write-Host ""
         Write-Host "  produce-stream-docker, NOT produce-stream: the plain target runs the" -ForegroundColor Yellow
         Write-Host "  producer on the host, so ingested_at and scored_at_job come from two" -ForegroundColor Yellow

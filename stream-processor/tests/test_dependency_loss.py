@@ -2,13 +2,13 @@
 minus stored. Getting it wrong hid the single real data-loss finding in the
 whole matrix - see offered_count.
 
-The dependency arms live in fault_injection.py; they were a separate
+The dependency arms live in experiments/outage.py; they were a separate
 dependency_failure.py until the two harnesses were merged.
 """
 
 import types
 
-import fault_injection as dep
+import outage as dep
 
 
 def args(service, expect=1000, sent=None):

@@ -6,14 +6,20 @@ artefact that serves - stayed put, and would move every reported figure.
 import argparse
 import json
 import os
+import sys
 
 import numpy as np
 
-import dataset as D
-import train as T
+# A harness lives one level down. _PKG is the ml package it drives - where
+# train.py and models/ are - and ROOT is the repository. Everything this
+# writes belongs to the package, not to this directory.
+_PKG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _PKG)
 
-MODELS_DIR = os.getenv(
-    "MODELS_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "models"))
+import dataset as D          # noqa: E402
+import train as T            # noqa: E402
+
+MODELS_DIR = os.getenv("MODELS_DIR", os.path.join(_PKG, "models"))
 CSV = os.getenv(
     "DATASET_CSV", os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "data-generator", "out", "transactions.csv"))

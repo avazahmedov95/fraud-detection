@@ -19,7 +19,7 @@
     draws would do once in 720 times. The offset is now drawn per round, so the
     phase is sampled instead of followed.
 
-    A CLEAN WAREHOUSE. fault_injection.py reports score divergence and decision
+    A CLEAN WAREHOUSE. experiments/outage.py reports score divergence and decision
     changes across the WHOLE table, not the round's delta. Run after the
     security-overhead arms, which deliberately replay the same rows four times,
     those figures are dominated by re-sends and say nothing about the injected
@@ -73,7 +73,7 @@ $existing = [int]($existing.Trim())
 if ($existing -gt 0 -and -not $AllowDirtyWarehouse) {
     Write-Host ""
     Write-Host "REFUSING TO START: the warehouse already holds $existing rows." -ForegroundColor Red
-    Write-Host "  fault_injection.py reports score divergence and decision changes over the"
+    Write-Host "  experiments/outage.py reports score divergence and decision changes over the"
     Write-Host "  whole table. Rows left by earlier runs - the security-overhead arms replay"
     Write-Host "  the same transactions four times - would dominate those figures, and the"
     Write-Host "  result could not be attributed to the injected fault."
@@ -102,7 +102,7 @@ for ($i = 1; $i -le $Rounds; $i++) {
     Write-Host "################ ROUND $i / $Rounds  (rows $skip..$($skip + $Messages), kill at +$offset s) ################" -ForegroundColor Yellow
 
     Push-Location "stream-processor"
-    try { python fault_injection.py --phase before } finally { Pop-Location }
+    try { python experiments/outage.py --phase before } finally { Pop-Location }
 
     $job = Start-Job -ScriptBlock {
         param($gen, $n, $s)
@@ -148,7 +148,7 @@ for ($i = 1; $i -le $Rounds; $i++) {
     $prevEA = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     Push-Location "stream-processor"
-    try { $report = (python fault_injection.py --phase after --expect $Messages 2>&1 | Out-String) } finally { Pop-Location }
+    try { $report = (python experiments/outage.py --phase after --expect $Messages 2>&1 | Out-String) } finally { Pop-Location }
     $ErrorActionPreference = $prevEA
     Write-Host $report
 

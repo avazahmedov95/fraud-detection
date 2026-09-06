@@ -27,19 +27,18 @@ geo.py           region coordinates + haversine, for the travel-speed rule
 payload_crypto.py  AES-256-GCM envelope; duplicated in data-generator/ by design
 fraud_job.py     PyFlink job: Kafka -> enrich+CEP -> ONNX -> fusion -> Kafka sinks
 
-offline harnesses (no cluster needed)
-replay_eval.py   one replay loop, three questions:
+experiments/     harnesses. Nothing here is deployed; each one produces a
+                 NUMBER, and none is imported by the modules above.
+  replay.py      one replay loop, three questions - no cluster needed:
                  (default)      what the CEP layer alone would have done
                  fan-in-mode    absolute vs population-relative MULE_FAN_IN
                  payee-seeding  seeded vs unseeded APP episodes
-
-measurement harnesses (need the stack up)
-latency_report.py     order statistics on the decision path;
-                      `throughput` sweeps it against offered load
-fault_injection.py    break one thing and measure what stops:
-                      --service scorer (default)  what is lost, what is duplicated
-                      --service redis|neo4j|clickhouse|kafka  what silently stops
-                      --service control           the healthy reference pass
+  latency.py     order statistics on the decision path (stack up);
+                 `throughput` sweeps it against offered load
+  outage.py      break one thing and measure what stops (stack up):
+                 --service scorer (default)  what is lost, what is duplicated
+                 --service redis|neo4j|clickhouse|kafka  what silently stops
+                 --service control           the healthy reference pass
 
 tests/           17 files, run with `python -m pytest stream-processor -q`
 requirements.txt host-side deps (the Flink image already bundles them)
@@ -67,7 +66,7 @@ input stream itself.
 ```
 
 `python capabilities.py` prints the active profile. Changing any of these
-changes the feature contract — retrain and re-export; `ml/ablation.py` sweeps
+changes the feature contract — retrain and re-export; `ml/experiments/ablate.py` sweeps
 configurations and measures what each integration is worth.
 
 ## How CEP and ML combine (decision-layer fusion)
@@ -116,7 +115,7 @@ place now, and this file points at it.
 To see the layers compared on the current model:
 
 ```bash
-python ../ml/fusion_eval.py     # CEP-only vs ML-only vs fused, held-out slice
+python ../ml/experiments/layers.py     # CEP-only vs ML-only vs fused, held-out slice
 ```
 
 ## Verify without the cluster
@@ -124,9 +123,9 @@ python ../ml/fusion_eval.py     # CEP-only vs ML-only vs fused, held-out slice
 ```bash
 pip install -r requirements.txt        # or just: pip install pandas pytest
 python -m pytest ../stream-processor -q   # from the repo root: pytest stream-processor
-python replay_eval.py --file ../data-generator/out/transactions.csv
+python experiments/replay.py --file ../data-generator/out/transactions.csv
 # end-to-end fusion vs cep-only vs ml-only (uses the real ONNX model):
-python ../ml/fusion_eval.py
+python ../ml/experiments/layers.py
 ```
 
 Run the packages one at a time — `config.py`, `integrity.py` and

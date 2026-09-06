@@ -94,7 +94,7 @@ def main():
 
     # Slicing. Arms must be equal length (unequal cache warming moves the
     # figures more than the effect) and DISJOINT: replaying the same ids makes
-    # every later row look like a duplicate, which is what fault_injection.py
+    # every later row look like a duplicate, which is what experiments/outage.py
     # measures. Skipped rows are dropped before the pacing clock starts.
     ap.add_argument("--limit", type=int, default=None,
                     help="stop after N messages")
@@ -227,7 +227,7 @@ def main():
         # Ctrl+C is a normal exit for a paced stream but must still reach the flush
         # below: messages buffered and never flushed would be counted in the
         # fault-injection run as transactions LOST after the kill. The count printed here
-        # is what `fault_injection.py --expect` needs, knowable only on this side.
+        # is what `experiments/outage.py --expect` needs, knowable only on this side.
         interrupted = True
 
     if producer is not None:

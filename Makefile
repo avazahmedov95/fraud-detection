@@ -99,7 +99,7 @@ sink-logs: ## tail the sink-writer (ClickHouse/Neo4j persistence) logs
 	$(COMPOSE) logs -f sink-writer
 
 latency: ## end-to-end latency percentiles vs the <300ms design target
-	cd stream-processor && python latency_report.py
+	cd stream-processor/experiments && python latency.py
 
 verify-audit: ## recompute the audit hash chain and report any tampering
 	cd sink-writer && python verify_audit.py

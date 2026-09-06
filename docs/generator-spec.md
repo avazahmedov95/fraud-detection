@@ -375,7 +375,7 @@ Output is a deterministic function of `(seed, n_persons, n_transactions,
 fraud_rate, days, start_date)` plus `banks.csv` - but only since the payee
 ordering was fixed on 2026-08-30; see "Determinism is not free" below. The
 multi-seed ablation
-(`ml/ablation_seeds.py`) regenerates across 20 seeds; between-seed variation in
+(`ml/experiments/ablate_seeds.py`) regenerates across 20 seeds; between-seed variation in
 baseline PR-AUC is ±0.008–0.035 depending on configuration, which is why no
 single-dataset figure is quoted anywhere in this project.
 
@@ -410,7 +410,7 @@ Two consequences outlast the one-line fix:
   the interpreter process. `data-generator/requirements.txt` argues that pinning
   numpy is what makes `seed = 42` mean the same dataset next year. That argument
   is correct and incomplete.
-- **The ablation's version guard cannot catch this.** `ml/ablation_seeds.py`
+- **The ablation's version guard cannot catch this.** `ml/experiments/ablate_seeds.py`
   fingerprints the feature set and the generator sources and refuses to mix
   results across versions. The guard assumes identical sources imply identical
   data. Two runs with the same fingerprint could stand on different datasets.

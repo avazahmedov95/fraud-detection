@@ -13,15 +13,16 @@ export_onnx.py    LightGBM -> ONNX + parity check vs the native model
 manifest.py       provenance: what the untracked artefacts were built from
 explain.py        SHAP global (beeswarm + bar) and per-alert reason codes
 
-harnesses - produce a NUMBER, not an artefact the system uses
-ablation.py       what each capability is worth, one dataset. Name one
-                  (`ablation.py receiver_age`) to sweep all its modes
-ablation_seeds.py the same across generator seeds, with intervals.
-                  Quote figures from this one, not from ablation.py
-fusion_eval.py    CEP-only vs ML-only vs fused on the held-out slice
-recall_by_type.py per-type recall across seeds (budgeted; resumes)
-calibration_report.py  are the probabilities usable as magnitudes, or only
-                  as a ranking? Merges its block into metrics.json
+experiments/      harnesses - each produces a NUMBER, not an artefact the
+                  system uses, and none is imported by the pipeline above
+  ablate.py       what each capability is worth, one dataset. Name one
+                  (`ablate.py receiver_age`) to sweep all its modes
+  ablate_seeds.py the same across generator seeds, with intervals.
+                  Quote figures from this one, not from ablate.py
+  layers.py       CEP-only vs ML-only vs fused on the held-out slice
+  recall.py       per-type recall across seeds (budgeted; resumes)
+  calibration.py  are the probabilities usable as magnitudes, or only as a
+                  ranking? Merges its block into metrics.json
 
 models/           artifacts: model.joblib, model.onnx, feature_names.json,
                   metrics.json, shap_summary.png, shap_importance.png
@@ -156,11 +157,11 @@ in-Flink serving is faithful. Score fusion (CEP + ML -> final_score) is phase 6.
 What each integration is worth, measured rather than assumed. See
 `stream-processor/capabilities.py` for the switches.
 
-- `ablation.py` — one sweep on the current dataset. Fast, but a single dataset
+- `experiments/ablate.py` — one sweep on the current dataset. Fast, but a single dataset
   cannot separate a small effect from sampling noise. With a capability named
-  (`python ablation.py receiver_age`) it sweeps that one across **all** its
+  (`python experiments/ablate.py receiver_age`) it sweeps that one across **all** its
   declared modes rather than on/off.
-- `ablation_seeds.py` — the same sweep across several generator seeds, reporting
+- `experiments/ablate_seeds.py` — the same sweep across several generator seeds, reporting
   each delta as mean +/- sd with a verdict. **Quote figures from this one.**
 
 There used to be a third, `ablation_receiver_age.py`, and it is worth knowing why
@@ -169,7 +170,7 @@ this project used before `capabilities.py` existed — and nothing has read that
 name from the environment since. Run today it would have trained the default
 configuration three times and reported the differences between three training
 runs as the cost of an integration, without failing. Its function is now
-`ablation.py receiver_age`, driving `CAP_RECEIVER_AGE`, which works. The
+`experiments/ablate.py receiver_age`, driving `CAP_RECEIVER_AGE`, which works. The
 `always/on_us/off.json` files under `models/ablation/` are its output from before
 the migration: valid when taken, and against a 22-feature vector that has since
 grown to 24, so they are history rather than current figures.
@@ -189,7 +190,7 @@ baseline PR-AUC **0.966 ± 0.008**:
 | geo_telemetry=off | −0.001 [−0.004, +0.003] | 3/5 | no effect |
 | device_telemetry=off | +0.000 [+0.000, +0.000] | 5/5 | no effect |
 
-`ablation_seeds.py` fingerprints both the feature set and the generator sources,
+`experiments/ablate_seeds.py` fingerprints both the feature set and the generator sources,
 and refuses to mix results across versions — adding a feature or changing the
 data moves the baseline, which silently invalidates every stored delta. Earlier
 measurements are kept in `models/ablation/seeds_pre_*.json` and must not be read
@@ -206,7 +207,7 @@ zero false positives across 775 legitimate journeys. Switching geo off reads as
 
 The ablation therefore answers "what does this integration give the model", not
 "what does it give the system". Rule-side value has to be read from
-`replay_eval.py` and the fused decision layer.
+`stream-processor/experiments/replay.py` and the fused decision layer.
 
 `myid_kinship` at +0.004 is consistently positive but below any actionable
 threshold — a fifth of the smallest effect worth acting on, and still nothing
@@ -272,7 +273,7 @@ findings:
 - The first single-seed sweep put `receiver_age=off` at −0.043 and
   `session_telemetry=off` at −0.022. The first figure was a property of one
   dataset; the honest value is −0.025, and it took 20 seeds to establish.
-- An earlier revision of `ablation_seeds.py` compared the mean delta against the
+- An earlier revision of `experiments/ablate_seeds.py` compared the mean delta against the
   *standard deviation* of the individual deltas rather than the standard error
   of the mean. That test is far too strict — it reported `receiver_age` as
   unresolved at 20 seeds when the CI clearly excluded zero. Effect sizes are now
@@ -304,12 +305,12 @@ to sort by score; see `docs/irp-framing.md` §9.1.
 This is a property of near-separable synthetic data, not of gradient boosting.
 
 **Two ways to produce it.** `train.py` computes it as part of a training run.
-`calibration_report.py` computes it for a model that is already trained and
+`experiments/calibration.py` computes it for a model that is already trained and
 merges it into `metrics.json` without touching any other key - which is what to
 run when the aim is to measure the deployed model rather than to replace it:
 
 ```bash
-python calibration_report.py            # score through model.onnx (what serves)
-python calibration_report.py --native   # score through model.joblib
-python calibration_report.py --dry-run  # print only
+python experiments/calibration.py            # score through model.onnx (what serves)
+python experiments/calibration.py --native   # score through model.joblib
+python experiments/calibration.py --dry-run  # print only
 ```

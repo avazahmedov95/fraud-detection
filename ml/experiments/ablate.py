@@ -1,7 +1,7 @@
 """Sweeps capability profiles, retraining for each, and reports what each is worth.
 
-    python ablation.py                 every capability, against its poorest mode
-    python ablation.py receiver_age    one capability across all its modes
+    python ablate.py                 every capability, against its poorest mode
+    python ablate.py receiver_age    one capability across all its modes
 
 The receiver_age sweep used to be a second file, and it had gone stale in a way
 that does not announce itself: it set `RECEIVER_AGE_MODE`, the switch this
@@ -21,9 +21,12 @@ import shutil
 import subprocess
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
-MODELS = os.path.join(HERE, "models")
+# A harness lives one level down. _PKG is the ml package it drives - where
+# train.py and models/ are - and ROOT is the repository. Everything this
+# writes belongs to the package, not to this directory.
+_PKG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(_PKG)
+MODELS = os.path.join(_PKG, "models")
 OUT_DIR = os.path.join(MODELS, "ablation")
 ARTEFACTS = ("model.joblib", "model.onnx", "feature_names.json", "metrics.json")
 
@@ -34,8 +37,8 @@ import capabilities as CAP  # noqa: E402
 def _train(label, env_overrides):
     """Train one configuration in a fresh interpreter (contracts are import-time)."""
     env = dict(os.environ, **env_overrides)
-    proc = subprocess.run([sys.executable, os.path.join(HERE, "train.py")],
-                          cwd=HERE, env=env, capture_output=True, text=True)
+    proc = subprocess.run([sys.executable, os.path.join(_PKG, "train.py")],
+                          cwd=_PKG, env=env, capture_output=True, text=True)
     if proc.returncode != 0:
         sys.stderr.write(proc.stdout[-2000:] + proc.stderr[-2000:])
         raise SystemExit(f"training failed for {label}")
@@ -66,7 +69,7 @@ def _alternative(cap):
 
     Not the literal string "off". Two capabilities do not have one - receiver_age
     is (always, on_us, off) and payee_identity is (card, pinfl) - and assuming it
-    made `ablation.py` with no argument die on the payee_identity arm, because
+    made `ablate.py` with no argument die on the payee_identity arm, because
     capabilities._configured rejects a mode outside the declared set. It died
     loudly, which is why this is a bug rather than an entry in the silent-failure
     catalogue.

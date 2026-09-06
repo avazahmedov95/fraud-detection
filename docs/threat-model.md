@@ -254,7 +254,7 @@ weeks earlier, labelled **not fraud** because no loss occurs on it. Default 0.0,
 so nothing quoted elsewhere moves.
 
 Five generator seeds at share 0.5, APP episodes only, restricted to those late
-enough in the window for a seed to land (`stream-processor/replay_eval.py
+enough in the window for a seed to land (`stream-processor/experiments/replay.py
 payee-seeding`):
 
 | payee at the time of the fraud | episodes | detected |

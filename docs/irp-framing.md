@@ -141,7 +141,7 @@ model both classes of its behaviour.
 | 3 | Security-overhead benchmarking (mTLS, payload encryption) | **Done — both halves plus the churn arm.** Payload encryption, see §7.4: AES-256-GCM on the event payload, decrypted inside the scored path: on matched 400-record arms the decision path is unchanged (p99 183 ms both, median CIs overlapping). A microbenchmark supplies the figure the pipeline cannot resolve — ~6.8 µs to decrypt, ~0.15% of the scoring budget. The measurable cost is **size**, about +50% per message, roughly half of it an artefact of the string deserialiser rather than of the cryptography. **Transport half now measured too, see 7.5:** four counterbalanced arms show no transport effect that survives the ordering - the cost sits below a per-arm drift of about 4 ms - while the 300 ms target is met at p99 in every arm. **Churn arm done, see 7.5a:** a microbenchmark puts one mutual-TLS handshake at +11.2 ms over plaintext, and four further arms with 60 reconnects each still show no cost on the decision path - the handshake is paid by the client before the measured clock starts, so it lands on the switch's latency budget and not on the bank's. |
 | 4 | Integrity audit — cryptographic hashing at ingress and sink | **Done.** Ingress SHA-256 over the raw event at the producer, carried through Flink untouched and bound into the audit record; a hash chain over audit records makes any alteration, deletion or reorder evident; `verify_audit.py` recomputes it. Residual (a full-table rewrite) now closed in practice: the head hash of the reference run is published in `docs/audit-anchors.md` and pushed to the remote, which separates custody of the value from custody of the database. Not a cryptographic timestamp, and recorded as the weaker option it is. |
 | 5 | Distinguish organic concept drift from adversarial evasion | **Accepted, sharpened, and settled in `docs/threat-model.md`.** The two are separated by *where* the shift appears: organic drift moves both classes, evasion moves the fraud class only, and only on features the adversary controls. Session timing is attacker-controllable; receiver account age is not. The document commits to a falsifiable prediction — if `COACHED_SESSION` is deployed and announced, `P(active_call = 1 | APP fraud)` should decay toward the ~3% population base rate while the legitimate rate holds. A control whose evasion is predictable in advance is a stronger claim than one whose robustness is merely asserted. |
-| 6 | Non-parametric statistics for tail latency; validate exactly-once by fault injection | **Done, with the exactly-once half reframed — see §6.6 and §7.** Non-parametric tail statistics are built into `latency_report.py` (nearest-rank order statistics, distribution-free CI for the median). On exactly-once the honest answer is that **the system does not provide it and should not**: the sink is `AT_LEAST_ONCE`, ClickHouse is plain MergeTree with no deduplication, and the Redis fan-in store sits outside the checkpoint. Fault injection measured what that costs: **nothing lost (500/500), duplication 0.20%, and — the finding — the duplicate copies carry different scores**, because the fan-in store's reads do not roll back with the checkpoint. Duplicate alerts are cheap; the checkpoint-interval latency that transactional writes would add is not, against a 300 ms budget. Repeated kills now done: six jittered kills on a clean warehouse give a median duplication of 0.89% [0.40%, 1.38%], nothing lost in any of twelve kills across two series, and a divergence magnitude - 3 of 26 duplicates, at most 0.0003, no decision changed - that the original single observation could not supply. |
+| 6 | Non-parametric statistics for tail latency; validate exactly-once by fault injection | **Done, with the exactly-once half reframed — see §6.6 and §7.** Non-parametric tail statistics are built into `experiments/latency.py` (nearest-rank order statistics, distribution-free CI for the median). On exactly-once the honest answer is that **the system does not provide it and should not**: the sink is `AT_LEAST_ONCE`, ClickHouse is plain MergeTree with no deduplication, and the Redis fan-in store sits outside the checkpoint. Fault injection measured what that costs: **nothing lost (500/500), duplication 0.20%, and — the finding — the duplicate copies carry different scores**, because the fan-in store's reads do not roll back with the checkpoint. Duplicate alerts are cheap; the checkpoint-interval latency that transactional writes would add is not, against a 300 ms budget. Repeated kills now done: six jittered kills on a clean warehouse give a median duplication of 0.89% [0.40%, 1.38%], nothing lost in any of twelve kills across two series, and a divergence magnitude - 3 of 26 duplicates, at most 0.0003, no decision changed - that the original single observation could not supply. |
 | 7 | Spark micro-batching may miss rapid velocity attacks | **Scope changed — see §3.** The engine comparison is declined. The underlying concern is retained as a *design constraint on this system*: the detection window for the velocity and structuring rules is stated explicitly, and end-to-end latency is measured against it. If Flink's own latency exceeds the window the objection applies to this system too, and that is the version worth testing. |
 
 Point 7 is the one requiring care in the written response. It should read as
@@ -184,7 +184,7 @@ Ordered by what blocks what.
    path — because the handshake is paid before the measured clock starts, it is
    the switch's latency budget it comes out of, not the bank's.
 6. ~~**Fault injection for exactly-once**~~ (point 6). **Done — `stream-processor/
-   fault_injection.py`.** The system does not provide exactly-once and does not
+   experiments/outage.py`.** The system does not provide exactly-once and does not
    claim to: `AT_LEAST_ONCE` on the Kafka sink, a `MergeTree` with no
    deduplication, and a Redis fan-in store outside the checkpoint. So the
    questions asked were the two that matter for money — is anything lost, and
@@ -337,7 +337,7 @@ Replacing it with a quantile of the population's own live distribution
 assumption explicit.
 
 **Where this runs, stated before the numbers.** The measurement below is taken
-through `replay_eval.py`, which drives the deployed `rules.evaluate` unchanged -
+through `experiments/replay.py`, which drives the deployed `rules.evaluate` unchanged -
 so it is the real rule layer, not a reimplementation, and the baseline it passes
 is the in-process `rules.PopulationBaseline`.
 
@@ -368,7 +368,7 @@ what changes is that the quantity is now named.
 
 **And it is measurably better at home, at no cost in alerts.** Five generator
 seeds, each replayed under both modes, deltas paired within seed
-(`stream-processor/replay_eval.py fan-in-mode`, q=0.999):
+(`stream-processor/experiments/replay.py fan-in-mode`, q=0.999):
 
 | | delta | 95% CI | sign |
 |---|---|---|---|
@@ -960,7 +960,7 @@ from 644 ms to 159 ms at p95 with no configuration change at all.
 Worth stating in the methodology section: measuring sub-second latency across
 two unsynchronised clocks produces a systematic error of the same order as the
 measurement, and the desktop-Docker setup where most prototypes are evaluated is
-exactly the configuration that has this problem. `latency_report.py` now probes
+exactly the configuration that has this problem. `experiments/latency.py` now probes
 the offset and reports it. Offsets observed since: **+219 ms** and **−270 ms** on
 consecutive runs.
 
@@ -1064,11 +1064,11 @@ where the PRODUCER saturates, not where the pipeline does.
 
 ### 7.7 Dependency matrix: what each outage silently removes
 
-`fault_injection.py --service scorer` kills the scorer. Its other arms kill what
+`experiments/outage.py --service scorer` kills the scorer. Its other arms kill what
 the scorer leans on, and
 asks the question that matters for a fail-open design: not "did it crash" but
 "what did it stop doing without saying so". Each expectation was written down
-BEFORE the run, in `EXPECTED` in `fault_injection.py`, so the result is a test
+BEFORE the run, in `EXPECTED` in `experiments/outage.py`, so the result is a test
 of a prediction rather than a description of whatever happened.
 
 Loss is counted as **offered minus stored** — what the producer reported

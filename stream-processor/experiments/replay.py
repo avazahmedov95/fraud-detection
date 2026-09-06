@@ -9,9 +9,9 @@ fourth copy in ml/dataset.py, on the path to the deployed model, so it now lives
 in `features.event_from` beside `truthy` - one mapping, for the same reason there
 is one coercion.
 
-    python replay_eval.py                                  what the CEP layer alone does
-    python replay_eval.py fan-in-mode --files 'out_seed*/transactions.csv'
-    python replay_eval.py payee-seeding --files 'out_seed*/transactions.csv'
+    python replay.py                                  what the CEP layer alone does
+    python replay.py fan-in-mode --files 'out_seed*/transactions.csv'
+    python replay.py payee-seeding --files 'out_seed*/transactions.csv'
 
 Results: fan-in-mode is docs/irp-framing.md 6, third RQ3 result; payee-seeding
 bounds how much is_new_payee owes to the generator rather than to behaviour.
@@ -22,9 +22,17 @@ import glob
 import math
 import os
 import statistics as st
+import sys
 from collections import defaultdict, Counter
 
 import pandas as pd
+
+# A harness lives one level down and reaches back into the package it measures.
+# Anything it PERSISTS is anchored to the package directory too, not to this one:
+# the state files are named in .gitignore at stream-processor/, and a run's
+# scratch belongs to the component, not to the script that happened to write it.
+_PKG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _PKG)
 
 import config as C
 import features as F

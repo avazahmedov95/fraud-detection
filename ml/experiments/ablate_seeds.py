@@ -12,10 +12,13 @@ import subprocess
 import sys
 import time
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
+# A harness lives one level down. _PKG is the ml package it drives - where
+# train.py and models/ are - and ROOT is the repository. Everything this
+# writes belongs to the package, not to this directory.
+_PKG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(_PKG)
 GEN_DIR = os.path.join(ROOT, "data-generator")
-STATE = os.path.join(HERE, "models", "ablation", "seeds.json")
+STATE = os.path.join(_PKG, "models", "ablation", "seeds.json")
 SCRATCH = "/tmp/ablation_seeds"
 
 sys.path.insert(0, os.path.join(ROOT, "stream-processor"))
@@ -30,7 +33,7 @@ def _alternative(cap):
 
     Not the literal string "off". Two capabilities do not have one - receiver_age
     is (always, on_us, off) and payee_identity is (card, pinfl) - and assuming it
-    made `ablation.py` with no argument die on the payee_identity arm, because
+    made `ablate.py` with no argument die on the payee_identity arm, because
     capabilities._configured rejects a mode outside the declared set. It died
     loudly, which is why this is a bug rather than an entry in the silent-failure
     catalogue.
@@ -73,8 +76,8 @@ def _train(csv, env_overrides):
     models = os.path.join(SCRATCH, "models")
     os.makedirs(models, exist_ok=True)
     env = dict(os.environ, DATASET_CSV=csv, MODELS_DIR=models, **env_overrides)
-    proc = subprocess.run([sys.executable, os.path.join(HERE, "train.py")],
-                          cwd=HERE, env=env, capture_output=True, text=True)
+    proc = subprocess.run([sys.executable, os.path.join(_PKG, "train.py")],
+                          cwd=_PKG, env=env, capture_output=True, text=True)
     if proc.returncode != 0:
         sys.stderr.write(proc.stdout[-1500:] + proc.stderr[-1500:])
         raise SystemExit("training failed")

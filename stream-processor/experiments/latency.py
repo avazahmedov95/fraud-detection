@@ -4,8 +4,8 @@ stamps a scored record carries.
 Nearest-rank order statistics and a distribution-free CI for the median, because
 the distribution is not normal. Figures: docs/irp-framing.md 7.
 
-    python latency_report.py [--since-minutes N]   one run
-    python latency_report.py throughput            one row per rate in a sweep
+    python latency.py [--since-minutes N]   one run
+    python latency.py throughput            one row per rate in a sweep
 
 The sweep was a second file that imported this one for `fetch`, `quantile` and
 `is_saturated` - every part of it except the per-arm table. Two files sharing one
@@ -240,7 +240,7 @@ def cmd_single_run(args):
         print("\nStart clean and never run `produce`:")
         print("\n    .\\run.ps1 latency-setup         (clean, up, graph, job - no batch dump)")
         print("    .\\run.ps1 produce-stream        (Ctrl+C after a few minutes)")
-        print("    python latency_report.py --since-minutes 5")
+        print("    python latency.py --since-minutes 5")
     else:
         decision = sorted(r[1] for r in rows)
         scoring = sorted(r[3] for r in rows)
@@ -285,7 +285,9 @@ def cmd_single_run(args):
 # Latency against offered load - one row per rate in a throughput sweep
 # --------------------------------------------------------------------------
 
-WINDOWS = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+# Anchored to the package, not to this directory: .gitignore names it at
+# stream-processor/throughput_windows.json, and run.ps1 writes it from there.
+WINDOWS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                        "throughput_windows.json")
 
 
@@ -297,7 +299,7 @@ def arm(w, target_ms):
     # r[1], ingest -> DECISION, is the headline. r[0] is end-to-end and includes
     # the sink's batching - SINK_BATCH_SIZE=500 / FLUSH_INTERVAL_S=5, so up to
     # five seconds of a row's life is a warehouse write that has no real-time
-    # requirement at all. latency_report.py splits these for exactly this reason
+    # requirement at all. latency.py splits these for exactly this reason
     # and the first version of this report headlined the wrong one, which is why
     # every arm read as 4-10 SECONDS.
     decision = sorted(r[1] for r in rows)

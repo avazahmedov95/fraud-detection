@@ -2,7 +2,7 @@
 dozen events carries a wide interval.
 
 Results accumulate across invocations, so they are guarded by the same contract
-fingerprint `ablation_seeds.py` uses: adding a feature or changing the generator
+fingerprint `ablate_seeds.py` uses: adding a feature or changing the generator
 makes earlier rows describe a different experiment. This harness lacked that
 guard while its twin had it, and the evidence that it mattered is sitting beside
 the state file - `recall_by_type_pre_receiver_velocity.json` is a set of results
@@ -17,12 +17,15 @@ import subprocess
 import sys
 import time
 
-from ablation_seeds import _contract_fingerprint
+from ablate_seeds import _contract_fingerprint
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
+# A harness lives one level down. _PKG is the ml package it drives - where
+# train.py and models/ are - and ROOT is the repository. Everything this
+# writes belongs to the package, not to this directory.
+_PKG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(_PKG)
 GEN_DIR = os.path.join(ROOT, "data-generator")
-STATE = os.path.join(HERE, "models", "ablation", "recall_by_type.json")
+STATE = os.path.join(_PKG, "models", "ablation", "recall_by_type.json")
 SCRATCH = "/tmp/ablation_seeds"
 
 DEFAULT_SEEDS = (42, 7, 13, 99, 2026, 1, 2, 3, 5, 8,
@@ -30,7 +33,7 @@ DEFAULT_SEEDS = (42, 7, 13, 99, 2026, 1, 2, 3, 5, 8,
 
 
 def _dataset(seed):
-    # Keyed by the generator fingerprint, as in ablation_seeds: an unversioned
+    # Keyed by the generator fingerprint, as in ablate_seeds: an unversioned
     # scratch path silently reuses a dataset built by a superseded generator.
     tag = _contract_fingerprint().split("gen-")[-1]
     out = os.path.join(SCRATCH, f"gen{tag}", f"seed{seed}")
@@ -51,8 +54,8 @@ def _train(csv):
     models = os.path.join(SCRATCH, "models_recall")
     os.makedirs(models, exist_ok=True)
     env = dict(os.environ, DATASET_CSV=csv, MODELS_DIR=models)
-    proc = subprocess.run([sys.executable, os.path.join(HERE, "train.py")],
-                          cwd=HERE, env=env, capture_output=True, text=True)
+    proc = subprocess.run([sys.executable, os.path.join(_PKG, "train.py")],
+                          cwd=_PKG, env=env, capture_output=True, text=True)
     if proc.returncode != 0:
         sys.stderr.write(proc.stdout[-1500:] + proc.stderr[-1500:])
         raise SystemExit("training failed")

@@ -9,7 +9,7 @@ from kafka import KafkaProducer
 
 
 def _quantile(sorted_vals, q):
-    """Nearest-rank order statistic, same convention as latency_report.py."""
+    """Nearest-rank order statistic, same convention as experiments/latency.py."""
     if not sorted_vals:
         return float("nan")
     k = max(1, min(len(sorted_vals), int(-(-q * len(sorted_vals) // 1))))

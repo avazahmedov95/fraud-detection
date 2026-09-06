@@ -8,13 +8,18 @@ import onnxruntime as ort
 from sklearn.metrics import (precision_recall_fscore_support, roc_auc_score,
                              average_precision_score, confusion_matrix)
 
+# A harness lives one level down. _PKG is the ml package it drives - where
+# train.py and models/ are - and ROOT is the repository. Everything this
+# writes belongs to the package, not to this directory.
+_PKG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _PKG)
+
 import dataset as D            # noqa: E402  (also inserts stream-processor on sys.path)
 import config as C            # noqa: E402  (resolved from stream-processor)
 import fusion as FU           # noqa: E402  (resolved from stream-processor)
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-MODELS = os.path.join(HERE, "models")
-CSV = os.path.join(HERE, "..", "data-generator", "out", "transactions.csv")
+MODELS = os.path.join(_PKG, "models")
+CSV = os.path.join(_PKG, "..", "data-generator", "out", "transactions.csv")
 
 
 def _onnx_proba(outputs):

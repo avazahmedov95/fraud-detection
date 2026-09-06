@@ -409,7 +409,7 @@ def b_latency_query_matches_its_parser():
     check - the report says "no instrumented rows found" and looks like a data problem
     rather than a code one. Get the ORDER wrong and it prints scoring time as end-to-end.
     """
-    L = pkg("stream-processor", "latency_report")
+    L = pkg(os.path.join("stream-processor", "experiments"), "latency")
     body = L.QUERY.split("SELECT", 1)[1].split("FROM", 1)[0]
     depth, cols = 0, 1
     for ch in body:
@@ -419,7 +419,7 @@ def b_latency_query_matches_its_parser():
             depth -= 1
         elif ch == "," and depth == 0:
             cols += 1
-    src = _read("stream-processor", "latency_report.py")
+    src = _read("stream-processor", "experiments", "latency.py")
     want = int(re.search(r"len\(parts\) == (\d+)", src).group(1))
     if cols != want:
         return (f"the query selects {cols} columns and the parser accepts rows "
@@ -494,21 +494,42 @@ def b_every_module_is_documented():
         if not os.path.isdir(d) or not os.path.exists(readme):
             continue
         text = _read(pkg, "README.md")
-        missing = sorted(fn for fn in os.listdir(d)
-                         if fn.endswith(".py") and fn not in text)
+        # One level down as well: the harnesses moved into experiments/ and would
+        # otherwise have fallen out of this check by being moved, which is the
+        # opposite of what a completeness check is for.
+        names = [fn for fn in os.listdir(d) if fn.endswith(".py")]
+        for sub in sorted(os.listdir(d)):
+            subdir = os.path.join(d, sub)
+            if os.path.isdir(subdir) and sub not in ("tests", "__pycache__"):
+                names += [fn for fn in os.listdir(subdir) if fn.endswith(".py")]
+        missing = sorted(fn for fn in names if fn not in text)
         if missing:
             problems.append(f"{pkg}/README.md does not mention {missing}")
     return "; ".join(problems) or None
 
 
 #: Columns that are constant in the dataset of record and known to be so.
-#: `bank_code` has been "00000" - persons.bank_from_card's unknown-BIN sentinel -
-#: since before banks.csv gained a `code` column. The function resolves it
-#: correctly today; the committed CSV predates that. Regenerating would move the
-#: SHA-256 pins in generator-spec.md for a column nothing reads: the producer
-#: does not put it on the wire and the pipeline resolves the issuer from the BIN
-#: (bins.issuer_of). Named rather than ignored, the way bins.RETIRED_BINS is, so
-#: that a NEW constant column still fails.
+#:
+#: `bank_code` is "00000" everywhere because banks.csv shipped that column as a
+#: placeholder - every row the same - and the dataset of record was generated
+#: (2026-07-19) while it was. Commit 538dc22 filled in the real codes and added
+#: bins.py the same day, so no measurement ever ran against the placeholder: the
+#: pipeline reads banks.csv directly, and bins._bank_identity REFUSES to load a
+#: `code` column with fewer than two distinct values, precisely because that
+#: would make is_on_us() true for every transfer.
+#:
+#: It is not fixed by regenerating, and the reason is not the SHA-256 pins - it
+#: is that the dataset cannot be regenerated at all. The determinism fix in
+#: generator._assign_payees changed the RNG stream: same seed, same versions,
+#: 36,072 of 50,000 transaction rows different (generator-spec.md, and the
+#: comment at the fix). Every measurement in the thesis was taken on THIS file.
+#: So the column is stale because the dataset is deliberately frozen, which is
+#: the right decision, and this is its cost. Nothing reads it - the producer
+#: does not put it on the wire, the pipeline resolves the issuer from the BIN,
+#: and no Cypher query reads the property it lands in on (:Person).
+#:
+#: Named rather than ignored, the way bins.RETIRED_BINS is, so a NEW constant
+#: column still fails.
 KNOWN_CONSTANT = {
     "transactions.csv": {"sender_bank_code", "receiver_bank_code"},
     "persons.csv": {"bank_code"},
