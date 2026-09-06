@@ -1,5 +1,13 @@
 """Recall per fraud type, with counts beside the rates: a per-type figure on a few
-dozen events carries a wide interval."""
+dozen events carries a wide interval.
+
+Results accumulate across invocations, so they are guarded by the same contract
+fingerprint `ablation_seeds.py` uses: adding a feature or changing the generator
+makes earlier rows describe a different experiment. This harness lacked that
+guard while its twin had it, and the evidence that it mattered is sitting beside
+the state file - `recall_by_type_pre_receiver_velocity.json` is a set of results
+rescued by hand when exactly this happened.
+"""
 
 import argparse
 import json
@@ -8,6 +16,8 @@ import os
 import subprocess
 import sys
 import time
+
+from ablation_seeds import _contract_fingerprint
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -20,7 +30,10 @@ DEFAULT_SEEDS = (42, 7, 13, 99, 2026, 1, 2, 3, 5, 8,
 
 
 def _dataset(seed):
-    out = os.path.join(SCRATCH, f"seed{seed}")
+    # Keyed by the generator fingerprint, as in ablation_seeds: an unversioned
+    # scratch path silently reuses a dataset built by a superseded generator.
+    tag = _contract_fingerprint().split("gen-")[-1]
+    out = os.path.join(SCRATCH, f"gen{tag}", f"seed{seed}")
     csv = os.path.join(out, "transactions.csv")
     if os.path.exists(csv):
         return csv
@@ -47,17 +60,41 @@ def _train(csv):
         return json.load(fh)["by_fraud_type"]
 
 
-def _load():
-    if os.path.exists(STATE):
-        with open(STATE) as fh:
-            return json.load(fh)
-    return {}
+def _load(extending=True):
+    """Stored results, refusing to be EXTENDED across a contract change.
+
+    `extending=False` reads them anyway, with a warning, because reporting what
+    was recorded is legitimate - the file predates this check and its rows are
+    still what they were. Adding rows to it is the unsafe half: two contracts in
+    one file, with nothing saying which row came from which.
+    """
+    if not os.path.exists(STATE):
+        return {}
+    with open(STATE) as fh:
+        blob = json.load(fh)
+    stored = blob.get("_contract")
+    rows = {k: v for k, v in blob.items() if not k.startswith("_")}
+    if stored == _contract_fingerprint():
+        return rows
+    why = ("carry no contract fingerprint, so which feature set and generator "
+           "produced them is not recorded" if stored is None else
+           "were produced with a different feature set or generator, so they "
+           "describe another experiment")
+    if not extending:
+        print(f"WARNING: stored results {why}.\n"
+              f"         Reported as history, not as current figures.\n")
+        return rows
+    raise SystemExit(
+        f"stored results {why}.\nRe-run with --reset to discard them, or move "
+        f"models/ablation/recall_by_type.json aside to keep them.")
 
 
 def _save(state):
     os.makedirs(os.path.dirname(STATE), exist_ok=True)
     with open(STATE, "w") as fh:
-        json.dump(state, fh, indent=2)
+        json.dump({"_contract": _contract_fingerprint(),
+                   **{k: v for k, v in state.items() if not k.startswith("_")}},
+                  fh, indent=2)
 
 
 def wilson(caught, n, z=1.96):
@@ -130,10 +167,16 @@ def main():
     ap.add_argument("--seeds", default=",".join(str(s) for s in DEFAULT_SEEDS))
     ap.add_argument("--budget", type=float, default=35.0)
     ap.add_argument("--report", action="store_true")
+    ap.add_argument("--reset", action="store_true",
+                    help="discard stored results whose contract no longer matches")
     args = ap.parse_args()
 
+    if args.reset and os.path.exists(STATE):
+        os.remove(STATE)
+        print(f"discarded {STATE}")
+
     if args.report:
-        report(_load())
+        report(_load(extending=False))
         return
     state, done = run([int(s) for s in args.seeds.split(",")], args.budget)
     if done:

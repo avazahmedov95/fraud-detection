@@ -14,13 +14,8 @@ from config import (GeneratorConfig, AMOUNT_MIN, AMOUNT_MAX,
 from events import EVENT_FIELDS, make_event
 import persons as P
 import travel as T
-from persons import build_population, build_fraud_accounts
+from persons import build_population, build_fraud_accounts, _normalise
 from fraud_patterns import inject_fraud
-
-
-def _normalise(weights):
-    a = np.asarray(weights, dtype=float)
-    return a / a.sum()
 
 
 def _assign_payees(persons, rng):

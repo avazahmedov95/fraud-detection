@@ -485,6 +485,53 @@ def b_every_module_is_documented():
     return "; ".join(problems) or None
 
 
+#: Columns that are constant in the dataset of record and known to be so.
+#: `bank_code` has been "00000" - persons.bank_from_card's unknown-BIN sentinel -
+#: since before banks.csv gained a `code` column. The function resolves it
+#: correctly today; the committed CSV predates that. Regenerating would move the
+#: SHA-256 pins in generator-spec.md for a column nothing reads: the producer
+#: does not put it on the wire and the pipeline resolves the issuer from the BIN
+#: (bins.issuer_of). Named rather than ignored, the way bins.RETIRED_BINS is, so
+#: that a NEW constant column still fails.
+KNOWN_CONSTANT = {
+    "transactions.csv": {"sender_bank_code", "receiver_bank_code"},
+    "persons.csv": {"bank_code"},
+}
+
+
+def b_no_new_constant_columns():
+    """A column with one value everywhere is a feature that was never wired.
+
+    This is how three warehouse columns were found writing constant zero, and the
+    same shape exists on the generator's side. Cheap to check and invisible
+    otherwise: nothing fails, the column is simply always the same.
+    """
+    out = os.path.join(ROOT, "data-generator", "out")
+    if not os.path.isdir(out):
+        return "SKIP: dataset not generated"
+    problems = []
+    for name in ("transactions.csv", "persons.csv"):
+        path = os.path.join(out, name)
+        if not os.path.exists(path):
+            continue
+        with open(path, newline="", encoding="utf-8") as fh:
+            reader = csv.DictReader(fh)
+            seen = {c: set() for c in (reader.fieldnames or [])}
+            for row in reader:
+                for c, acc in seen.items():
+                    if len(acc) < 2:
+                        acc.add(row.get(c))
+        constant = {c for c, acc in seen.items() if len(acc) <= 1}
+        unexpected = sorted(constant - KNOWN_CONSTANT.get(name, set()))
+        vanished = sorted(KNOWN_CONSTANT.get(name, set()) - constant)
+        if unexpected:
+            problems.append(f"{name}: {unexpected} carry one value for every row")
+        if vanished:
+            problems.append(f"{name}: {vanished} are no longer constant - drop "
+                            f"them from KNOWN_CONSTANT")
+    return "; ".join(problems) or None
+
+
 CHECKS = [
     ("generator CSV -> producer message (types)", b_producer_types),
     ("producer message -> feature extractor (equivalence)", b_wire_extracts_like_typed),
@@ -506,6 +553,7 @@ CHECKS = [
     ("latency query -> its row parser", b_latency_query_matches_its_parser),
     ("docker-compose env -> case-manager config", b_compose_env_names_are_read),
     ("modules -> their package README", b_every_module_is_documented),
+    ("generated CSV -> no new constant columns", b_no_new_constant_columns),
 ]
 
 
