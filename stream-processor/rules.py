@@ -53,7 +53,7 @@ def _warn_relative_without_baseline():
             "evaluate(); the rule is running on the absolute threshold "
             "(%d senders). Every caller that should reach this mode passes one: "
             "the Flink job a receiver_store.PopulationStore, the offline "
-            "harnesses (replay_eval.py, fan_in_mode_eval.py) a "
+            "harnesses (replay_eval.py and its subcommands) a "
             "PopulationBaseline. So this line means a CALLER is missing it, not "
             "that the deployment cannot support it.", C.MULE_FAN_IN_MIN_SENDERS)
 

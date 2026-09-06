@@ -86,7 +86,8 @@ def payee_key(event: dict) -> str:
 
 
 def visible_receiver_age(event: dict, receiver_age_days):
-    """Apply RECEIVER_AGE_MODE; None means "not obtainable", never a value."""
+    """Apply the receiver_age capability mode (CAP_RECEIVER_AGE); None means
+    "not obtainable", never a value."""
     mode = CAP.mode("receiver_age")
     if mode == "off":
         return None

@@ -745,7 +745,7 @@ switch ($Target.ToLower()) {
         $json = $windows | ConvertTo-Json
         $out = Join-Path (Get-Location) "stream-processor/throughput_windows.json"
         [System.IO.File]::WriteAllText($out, $json, (New-Object System.Text.UTF8Encoding($false)))
-        python stream-processor/throughput_report.py
+        python stream-processor/latency_report.py throughput
     }
 
     # One dependency at a time: take it out, produce the SAME slice through the

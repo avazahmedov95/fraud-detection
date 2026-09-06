@@ -161,7 +161,7 @@ the rules, and it makes this a **conservative** test.
 
 ## 2. Zenodo 20030065 — examined and NOT used as claimed
 
-`zenodo_calibration.py`, `zenodo_provenance.py`
+`zenodo.py` - `--only provenance` and `--only profile`, or both
 
 DOI [10.5281/zenodo.20030065](https://doi.org/10.5281/zenodo.20030065),
 published as *"A Production-Collected Online Banking Fraud Detection Dataset
@@ -234,7 +234,7 @@ mean, and ~0.17–0.19% is a real figure from real card traffic. So the finding 
 kept and **cited to the ULB dataset directly** rather than through this record.
 
 ```bash
-python zenodo_provenance.py --file fraud_tests_export_20260501_080333.csv
+python zenodo.py --file fraud_tests_export_20260501_080333.csv
 ```
 
 Kept in the repository because the investigation is itself a result — see

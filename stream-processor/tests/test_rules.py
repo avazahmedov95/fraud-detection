@@ -22,7 +22,7 @@ needs_device = pytest.mark.skipif(
 def _ev(amount, payee="rcv", device="dev-1", region="Tashkent City",
         sender_bank="BankA", receiver_bank="BankA"):
     # Both sides default to the SAME issuer so these behave identically under
-    # every RECEIVER_AGE_MODE: on-us means the age is always visible. The mode
+    # every receiver_age mode: on-us means the age is always visible. The mode
     # switch itself is covered in test_receiver_age_modes.py.
     return {"amount_uzs": amount, "receiver_pinfl": payee,
             "device_id": device, "sender_region": region,

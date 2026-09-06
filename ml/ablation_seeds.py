@@ -24,6 +24,21 @@ import capabilities as CAP  # noqa: E402
 DEFAULT_SEEDS = (42, 7, 13, 99, 2026)
 
 
+def _alternative(cap):
+    """The mode to compare the active one against: the POOREST the capability
+    declares, since the question is what losing it costs.
+
+    Not the literal string "off". Two capabilities do not have one - receiver_age
+    is (always, on_us, off) and payee_identity is (card, pinfl) - and assuming it
+    made `ablation.py` with no argument die on the payee_identity arm, because
+    capabilities._configured rejects a mode outside the declared set. It died
+    loudly, which is why this is a bug rather than an entry in the silent-failure
+    catalogue.
+    """
+    poorest = cap.modes[-1]
+    return poorest if poorest != CAP.MODES[cap.key] else cap.modes[0]
+
+
 def _configurations(only=None):
     """Baseline plus each capability flipped away from its default, one at a time.
     `only` restricts the sweep - resolving one borderline delta needs many seeds."""
@@ -31,7 +46,7 @@ def _configurations(only=None):
     for cap in CAP.REGISTRY:
         if cap.always_on or (only and cap.key not in only):
             continue
-        other = "on" if CAP.MODES[cap.key] == "off" else "off"
+        other = _alternative(cap)
         plan.append((f"{cap.key}={other}", {f"CAP_{cap.key.upper()}": other}))
     return plan
 

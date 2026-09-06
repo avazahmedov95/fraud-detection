@@ -43,7 +43,7 @@ fraud-detection/
 │   ├── paysim_adapter.py   PaySim, and what transfers from it
 │   ├── amlsim_adapter.py   IBM AMLSim + amlsim.Dockerfile toolchain
 │   ├── amlsim_ablation.py  leakage and drift screens
-│   └── zenodo_provenance.py  why one published dataset was rejected
+│   └── zenodo.py           why one published dataset was rejected
 ├── tools/
 │   └── boundary_audit.py   what one component produces vs what the next expects
 └── docs/                   the evidence base — read irp-framing.md first

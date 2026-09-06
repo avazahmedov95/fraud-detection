@@ -1,8 +1,14 @@
-"""Unit tests for the RECEIVER_AGE_MODE ablation switch.
+"""Unit tests for the receiver_age ablation switch.
+
+The switch is `CAP_RECEIVER_AGE`, read through `capabilities.mode`. It was once a
+standalone `RECEIVER_AGE_MODE`, and that name outlived the thing: an ablation
+harness went on setting it for months after nothing read it, training one
+configuration three times (ml/ablation.py says what that cost). These tests set
+`CAP.MODES` directly, which is what the code actually consults.
 
 FEATURE_NAMES is fixed at import time, so the contract is tested through
-`_age_block`; per-event gating by flipping `C.RECEIVER_AGE_MODE`, which
-`visible_receiver_age` reads on every call.
+`_age_block`; per-event gating through `visible_receiver_age`, which reads the
+mode on every call.
 """
 
 import math

@@ -127,9 +127,22 @@ What each integration is worth, measured rather than assumed. See
 `stream-processor/capabilities.py` for the switches.
 
 - `ablation.py` — one sweep on the current dataset. Fast, but a single dataset
-  cannot separate a small effect from sampling noise.
+  cannot separate a small effect from sampling noise. With a capability named
+  (`python ablation.py receiver_age`) it sweeps that one across **all** its
+  declared modes rather than on/off.
 - `ablation_seeds.py` — the same sweep across several generator seeds, reporting
   each delta as mean +/- sd with a verdict. **Quote figures from this one.**
+
+There used to be a third, `ablation_receiver_age.py`, and it is worth knowing why
+it is gone rather than merely that it is. It set `RECEIVER_AGE_MODE` — the switch
+this project used before `capabilities.py` existed — and nothing has read that
+name from the environment since. Run today it would have trained the default
+configuration three times and reported the differences between three training
+runs as the cost of an integration, without failing. Its function is now
+`ablation.py receiver_age`, driving `CAP_RECEIVER_AGE`, which works. The
+`always/on_us/off.json` files under `models/ablation/` are its output from before
+the migration: valid when taken, and against a 22-feature vector that has since
+grown to 24, so they are history rather than current figures.
 
 Deltas are paired within each seed; the interval is a 95% CI for the mean delta.
 

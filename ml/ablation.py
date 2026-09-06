@@ -1,4 +1,19 @@
-"""Sweeps capability profiles, retraining for each, and reports what each is worth."""
+"""Sweeps capability profiles, retraining for each, and reports what each is worth.
+
+    python ablation.py                 every capability, against its poorest mode
+    python ablation.py receiver_age    one capability across all its modes
+
+The receiver_age sweep used to be a second file, and it had gone stale in a way
+that does not announce itself: it set `RECEIVER_AGE_MODE`, the switch this
+project used before capabilities.py existed. Nothing reads that name from the
+environment now - `capabilities._configured` reads `CAP_RECEIVER_AGE` - so the
+harness trained the DEFAULT configuration three times and printed the
+differences between three training runs as the cost of losing an integration.
+It ran to completion, wrote three files, and raised nothing. The JSONs already
+in models/ablation/ predate the migration and were valid when taken; the harness
+was not repaired but replaced by this one, which drives the same three modes
+through the switch that works.
+"""
 
 import json
 import os
@@ -45,6 +60,21 @@ def _train(label, env_overrides):
     return metrics, feats, by_type
 
 
+def _alternative(cap):
+    """The mode to compare the active one against: the POOREST the capability
+    declares, since the question is what losing it costs.
+
+    Not the literal string "off". Two capabilities do not have one - receiver_age
+    is (always, on_us, off) and payee_identity is (card, pinfl) - and assuming it
+    made `ablation.py` with no argument die on the payee_identity arm, because
+    capabilities._configured rejects a mode outside the declared set. It died
+    loudly, which is why this is a bug rather than an entry in the silent-failure
+    catalogue.
+    """
+    poorest = cap.modes[-1]
+    return poorest if poorest != CAP.MODES[cap.key] else cap.modes[0]
+
+
 def _plan(target):
     baseline = ("baseline", {})
     if target:
@@ -61,9 +91,26 @@ def _plan(target):
     for cap in CAP.REGISTRY:
         if cap.always_on:
             continue
-        other = "on" if CAP.MODES[cap.key] == "off" else "off"
+        other = _alternative(cap)
         plan.append((f"{cap.key}={other}", {f"CAP_{cap.key.upper()}": other}))
     return plan
+
+
+def _on_us_share():
+    """Share of transfers the sending bank could resolve in-house - the ceiling
+    on receiver_age coverage in 'on_us' mode.
+
+    From the PANs via bins.py, not the CSV's bank-name columns: the issuer the
+    PIPELINE sees comes from the BIN table, so a number taken from those columns
+    would describe something other than what ran.
+    """
+    import pandas as pd
+    import bins as B
+    csv = os.path.join(ROOT, "data-generator", "out", "transactions.csv")
+    d = pd.read_csv(csv, usecols=["sender_card", "receiver_card"], dtype=str)
+    s = d.sender_card.map(B.issuer_of)
+    r = d.receiver_card.map(B.issuer_of)
+    return ((s != "") & (r != "") & (s == r)).mean()
 
 
 def _report(results):
@@ -104,6 +151,9 @@ def main():
 
     try:
         print(CAP.describe())
+        if target == "receiver_age":
+            print(f"\non-us share in the dataset: {_on_us_share():.1%}   <- the "
+                  f"ceiling on receiver_age coverage in 'on_us' mode")
         print()
         results = []
         for label, env in plan:
@@ -114,6 +164,10 @@ def main():
         print("\nNote: each row is a separately trained model on synthetic data; "
               "figures are design targets, not validated findings. A delta is "
               "the cost of a missing integration, not a flaw in the model.")
+        if target == "receiver_age":
+            print("The gap between 'always' and 'on_us' is the cost of the "
+                  "missing inter-bank data exchange, not a deficiency of the "
+                  "model.")
     finally:
         for name in ARTEFACTS:
             src = os.path.join(backup, name)

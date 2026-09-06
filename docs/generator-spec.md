@@ -35,7 +35,7 @@ cells zero and `v2 == amount` throughout — and nothing in the file marks the
 change, because a column named `v14` asserts nothing that could be violated.
 Anonymised features do not only cost explainability, which is the objection
 above; they remove the reader's ability to notice that the wrong quantity is in
-the column. `validation/zenodo_provenance.py` makes the split visible.
+the column. `validation/zenodo.py` makes the split visible.
 
 So the generator produces a **design fixture**: a dataset whose statistical
 structure is stated up front, used to develop and instrument the pipeline. Every

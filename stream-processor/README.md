@@ -27,13 +27,14 @@ payload_crypto.py  AES-256-GCM envelope; duplicated in data-generator/ by design
 fraud_job.py     PyFlink job: Kafka -> enrich+CEP -> ONNX -> fusion -> Kafka sinks
 
 offline harnesses (no cluster needed)
-replay_eval.py       CEP replay through the deployed rules.evaluate
-fan_in_mode_eval.py  absolute vs population-relative MULE_FAN_IN, paired by seed
-seeded_payee_eval.py the payee-identity ablation
+replay_eval.py   one replay loop, three questions:
+                 (default)      what the CEP layer alone would have done
+                 fan-in-mode    absolute vs population-relative MULE_FAN_IN
+                 payee-seeding  seeded vs unseeded APP episodes
 
 measurement harnesses (need the stack up)
-latency_report.py     order statistics on the decision path
-throughput_report.py  where the 300 ms target stops holding
+latency_report.py     order statistics on the decision path;
+                      `throughput` sweeps it against offered load
 fault_injection.py    kill the scorer: what is lost, what is duplicated
 dependency_failure.py kill what the scorer leans on: what silently stops
 

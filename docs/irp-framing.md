@@ -368,7 +368,7 @@ what changes is that the quantity is now named.
 
 **And it is measurably better at home, at no cost in alerts.** Five generator
 seeds, each replayed under both modes, deltas paired within seed
-(`stream-processor/fan_in_mode_eval.py`, q=0.999):
+(`stream-processor/replay_eval.py fan-in-mode`, q=0.999):
 
 | | delta | 95% CI | sign |
 |---|---|---|---|
@@ -424,7 +424,7 @@ cannot and should not repair a sign flip between two different phenomena.
    Reported not to accuse anyone but because **the checks are cheap and the
    failure mode is severe**: a thesis citing this as real-world validation would
    be asked, correctly, how it differs from the PCA-anonymised dataset rejected
-   two pages earlier. `validation/zenodo_provenance.py` runs the check.
+   two pages earlier. `validation/zenodo.py` runs the check.
 
 ---
 
