@@ -56,6 +56,9 @@ infra/kafka/certs/
 # every round, so tracking it means a dirty tree after every experiment.
 stream-processor/fault_injection_state.json
 stream-processor/fault_injection_duplicates.txt
+# Written by dependency_failure.py before it was merged into fault_injection.py.
+# Still READ, never written, so a half-finished experiment does not lose its
+# `before` pass to the merge.
 stream-processor/dependency_failure_state.json
 stream-processor/throughput_windows.json
 

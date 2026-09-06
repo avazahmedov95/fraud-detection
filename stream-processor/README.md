@@ -36,8 +36,10 @@ replay_eval.py   one replay loop, three questions:
 measurement harnesses (need the stack up)
 latency_report.py     order statistics on the decision path;
                       `throughput` sweeps it against offered load
-fault_injection.py    kill the scorer: what is lost, what is duplicated
-dependency_failure.py kill what the scorer leans on: what silently stops
+fault_injection.py    break one thing and measure what stops:
+                      --service scorer (default)  what is lost, what is duplicated
+                      --service redis|neo4j|clickhouse|kafka  what silently stops
+                      --service control           the healthy reference pass
 
 tests/           17 files, run with `python -m pytest stream-processor -q`
 requirements.txt host-side deps (the Flink image already bundles them)

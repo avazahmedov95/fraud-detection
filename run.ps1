@@ -780,7 +780,7 @@ switch ($Target.ToLower()) {
             $what = if ($svc -eq "control") { "healthy reference pass" } else { "out of service" }
             Write-Host "=== $svc : $what, $n messages ===" -ForegroundColor Cyan
             Reset-FeatureState
-            python stream-processor/dependency_failure.py --service $svc --phase before
+            python stream-processor/fault_injection.py --service $svc --phase before
             if ($LASTEXITCODE -ne 0) {
                 Write-Host "no baseline for $svc - skipping the arm rather than measuring against nothing" -ForegroundColor Red
                 continue
@@ -794,7 +794,7 @@ switch ($Target.ToLower()) {
             # room for the restarted service to accept connections again.
             Write-Host "==> letting the sink flush" -ForegroundColor Cyan
             Start-Sleep -Seconds 30
-            python stream-processor/dependency_failure.py --service $svc --phase after --expect $n --sent $sent
+            python stream-processor/fault_injection.py --service $svc --phase after --expect $n --sent $sent
         }
         Write-Host ""
         Write-Host "Logs worth reading beside these numbers:" -ForegroundColor Cyan

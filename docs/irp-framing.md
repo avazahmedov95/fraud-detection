@@ -1064,10 +1064,11 @@ where the PRODUCER saturates, not where the pipeline does.
 
 ### 7.7 Dependency matrix: what each outage silently removes
 
-`fault_injection.py` kills the scorer. This kills what the scorer leans on, and
+`fault_injection.py --service scorer` kills the scorer. Its other arms kill what
+the scorer leans on, and
 asks the question that matters for a fail-open design: not "did it crash" but
 "what did it stop doing without saying so". Each expectation was written down
-BEFORE the run, in `EXPECTED` in `dependency_failure.py`, so the result is a test
+BEFORE the run, in `EXPECTED` in `fault_injection.py`, so the result is a test
 of a prediction rather than a description of whatever happened.
 
 Loss is counted as **offered minus stored** — what the producer reported
