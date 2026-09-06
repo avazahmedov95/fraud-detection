@@ -548,6 +548,66 @@ def b_no_new_constant_columns():
     return "; ".join(problems) or None
 
 
+#: Every figure ml/README.md quotes from metrics.json, with the pattern that
+#: finds it and how metrics.json's raw value is rendered to match. A missing
+#: pattern fails as loudly as a wrong number: a check that quietly stops finding
+#: what it verifies is the seventeenth entry in irp-framing.md 8.
+_README_FIGURES = [
+    (r"^\| ROC-AUC\s+\|\s+([\d.]+)", ("roc_auc",), lambda v: f"{v:.3f}"),
+    (r"^\| PR-AUC\s+\|\s+([\d.]+)", ("pr_auc",), lambda v: f"{v:.3f}"),
+    (r"^\| precision @0\.50\s+\|\s+([\d.]+)", ("at_0_50", "precision"), lambda v: f"{v:.3f}"),
+    (r"^\| precision @0\.50\s+\|\s+[\d.]+\s+\|\s+([\d.]+)", ("cep_only", "precision"), lambda v: f"{v:.3f}"),
+    (r"^\| recall @0\.50\s+\|\s+([\d.]+)", ("at_0_50", "recall"), lambda v: f"{v:.3f}"),
+    (r"^\| recall @0\.50\s+\|\s+[\d.]+\s+\|\s+([\d.]+)", ("cep_only", "recall"), lambda v: f"{v:.3f}"),
+    (r"STRUCTURING ([\d.]+)%", ("by_fraud_type", "STRUCTURING", "recall"), lambda v: f"{v*100:.1f}"),
+    (r"fraud type \(ML @0\.50\):.*?APP ([\d.]+)%", ("by_fraud_type", "APP", "recall"), lambda v: f"{v*100:.1f}"),
+    (r"fraud type \(ML @0\.50\):.*?ATO ([\d.]+)%", ("by_fraud_type", "ATO", "recall"), lambda v: f"{v*100:.1f}"),
+    (r"fraud type \(ML @0\.50\):.*?MULE ([\d.]+)%", ("by_fraud_type", "MULE", "recall"), lambda v: f"{v*100:.1f}"),
+    (r"^brier\s+([\d.]+)", ("calibration", "brier"), lambda v: f"{v:.5f}"),
+    (r"^n_alerts\s+(\d+)", ("calibration", "n_alerts"), str),
+    (r"^saturated_share\s+([\d.]+)%", ("calibration", "saturated_share"), lambda v: f"{v*100:.1f}"),
+    (r"^distinct_scores\s+(\d+)", ("calibration", "distinct_scores"), str),
+    (r"^review_band\s+(\d+)", ("calibration", "review_band"), str),
+    (r"^median_alert_score\s+([\d.]+)", ("calibration", "median_alert_score"), lambda v: f"{v:.6f}"),
+]
+
+
+def b_readme_figures_match_metrics_json():
+    """ml/README.md quotes metrics.json; the quotes must still be true.
+
+    The identical construction in stream-processor/README.md was removed rather
+    than checked, because that file is not about the model. This one is - a ml
+    README with no figures in it is worse than one that can drift - so the table
+    stays and drifting is what fails. It has drifted once already, reporting MULE
+    recall at 68% while the pipeline achieved 85.7%, across a whole capability,
+    under a note saying metrics.json was authoritative. A disclaimer is not a
+    refresh; this is.
+    """
+    path = os.path.join(ROOT, "ml", "models", "metrics.json")
+    if not os.path.exists(path):
+        return "SKIP: metrics.json not present"
+    with open(path) as fh:
+        metrics = json.load(fh)
+    text = _read("ml", "README.md")
+
+    problems = []
+    for pattern, keys, render in _README_FIGURES:
+        m = re.search(pattern, text, re.M | re.S)
+        label = ".".join(keys)
+        if not m:
+            problems.append(f"{label}: ml/README.md no longer states it where "
+                            f"this check looks")
+            continue
+        value = metrics
+        for k in keys:
+            value = value[k]
+        expected = render(value)
+        if m.group(1) != expected:
+            problems.append(f"{label}: README says {m.group(1)}, "
+                            f"metrics.json gives {expected}")
+    return "; ".join(problems) or None
+
+
 CHECKS = [
     ("generator CSV -> producer message (types)", b_producer_types),
     ("producer message -> feature extractor (equivalence)", b_wire_extracts_like_typed),
@@ -570,6 +630,7 @@ CHECKS = [
     ("docker-compose env -> case-manager config", b_compose_env_names_are_read),
     ("modules -> their package README", b_every_module_is_documented),
     ("generated CSV -> no new constant columns", b_no_new_constant_columns),
+    ("metrics.json -> ml/README figures", b_readme_figures_match_metrics_json),
 ]
 
 
