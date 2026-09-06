@@ -51,6 +51,53 @@ def truthy(v) -> int:
     return 1 if v else 0
 
 
+def age_or_none(v):
+    """Receiver account age as an int, or None when the CSV has no usable value.
+
+    None is not zero here: `visible_receiver_age` treats None as "not obtainable"
+    and zero as "opened today", which is the most suspicious value there is.
+    """
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return None
+
+
+def event_from(row: dict) -> dict:
+    """One generated-CSV row as the event `rules.evaluate` expects.
+
+    OFFLINE ONLY - the Flink job builds its events from the Kafka payload and
+    never calls this. It lives here rather than beside a caller because it is the
+    inverse of the generator's event schema, and it had been written out four
+    times: in ml/dataset.py and in three stream-processor harnesses. A field
+    added to that mapping had to be added in every copy, and a field forgotten
+    does not fail - it reads as absent, which is a different measurement rather
+    than an error. The same reasoning put `truthy` here: one coercion, so no
+    caller's typing can break it.
+    """
+    return {
+        "amount_uzs": row["amount_uzs"],
+        "sender_pinfl": row["sender_pinfl"],
+        "receiver_pinfl": row["receiver_pinfl"],
+        "device_id": row["device_id"],
+        "sender_region": row["sender_region"],
+        "channel": row.get("channel", "MOBILE_APP"),
+        "sender_network": row.get("sender_network", ""),
+        "receiver_network": row.get("receiver_network", ""),
+        # Behavioural session signals - COACHED_SESSION and the secs_login_z
+        # baseline train as constant zeros without them.
+        "active_call": truthy(row.get("active_call")),
+        "secs_login_to_confirm": row.get("secs_login_to_confirm", 0.0),
+        # The cards, from which the issuer is resolved via the BIN table - the
+        # on-us test behind receiver_age. Forwarded rather than the bank-name
+        # columns so the replay resolves the issuer through the path the live
+        # job uses.
+        "sender_card": row.get("sender_card", ""),
+        "receiver_card": row.get("receiver_card", ""),
+        "is_family_transfer": truthy(row.get("is_family_transfer")),
+    }
+
+
 def _issuer(event: dict, side: str) -> str:
     """Card issuer for one side of the transfer, resolved from the PAN's BIN. Used to
     be faked: the two `*_bank_name` fields travelled in the Kafka message, making the

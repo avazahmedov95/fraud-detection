@@ -1,5 +1,10 @@
 """Builds the training matrix by replaying the CSV through the SAME feature
 extractor the Flink job uses, so the model trains on what it will be served.
+
+The row-to-event mapping is `features.event_from`, not a local copy. It was a
+local copy - a fourth one, beside three in stream-processor - and a mapping
+written out four times is four places to forget a column, where forgetting one
+reads as absent rather than failing.
 """
 
 import os
@@ -13,24 +18,6 @@ import features as F          # noqa: E402
 import rules as R             # noqa: E402
 
 FEATURE_NAMES = F.FEATURE_NAMES
-_EVENT_KEYS = ("amount_uzs", "sender_pinfl", "receiver_pinfl", "device_id", "sender_region",
-               "channel", "sender_network", "receiver_network",
-               # behavioural session signals (backlog #7) - must be forwarded, otherwise
-               # active_call / secs_login_z train as constant zeros.
-               "active_call", "secs_login_to_confirm",
-               # features.py derives the issuer from the BIN: same path as the live job.
-               "sender_card", "receiver_card", "is_family_transfer")
-
-
-def _as_bool(v):
-    return str(v).strip().lower() in ("true", "1")
-
-
-def _as_age(v):
-    try:
-        return int(float(v))
-    except (TypeError, ValueError):
-        return None
 
 
 def build_matrix(csv_path: str) -> pd.DataFrame:
@@ -47,10 +34,10 @@ def build_matrix(csv_path: str) -> pd.DataFrame:
     rows = []
     for rec in df.itertuples(index=False):
         d = rec._asdict()
-        event = {k: d[k] for k in _EVENT_KEYS}
+        event = F.event_from(d)
         now = pd.Timestamp(d["event_time"]).timestamp()
         res = R.evaluate(event,
-                         _as_age(d.get("receiver_account_age_days")),
+                         F.age_or_none(d.get("receiver_account_age_days")),
                          states[d["sender_card"]], now,
                          receiver_states[F.payee_key(event)],
                          population=population)

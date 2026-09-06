@@ -7,9 +7,15 @@ active_call = 1 on 100% of events while the model had been trained on 3.5%.
 Measured cost, scoring the dataset both ways through the deployed model: false
 positives 20 -> 459, a 23x increase, for five additional true positives. It was
 invisible offline because every offline caller converted the flag itself -
-replay_eval via _as_bool, ml/dataset.py via pandas' bool dtype - so the one path
-without a private conversion was the live one. The coercion now lives in
+replay_eval via a local `_as_bool`, ml/dataset.py via pandas' bool dtype - so the
+one path without a private conversion was the live one. The coercion now lives in
 features.py, which every caller reaches the model through.
+
+Those private conversions are since gone, which closes the loop: `_as_bool` was
+a second implementation of `truthy` that disagreed with it on inputs the
+generator happens not to produce ("yes" is true to one and false to the other),
+and both offline callers now build their events with `features.event_from`. One
+coercion, one mapping, and this file is what pins the property they exist for.
 """
 
 import pytest

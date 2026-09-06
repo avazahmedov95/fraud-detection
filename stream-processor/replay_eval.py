@@ -1,10 +1,13 @@
 """Replays a generated CSV through the deployed rule engine, offline.
 
-Three questions, one replay loop. They were three files, and the loop - together
-with the thirteen-key event dict that feeds `rules.evaluate` - was written out
-once per file. A field added to that dict had to be added in three places, and
-the copies had already drifted: two of them extracted a dataset name with
-different and one of them broken path handling.
+Three questions, one replay loop. They were three files, and the loop was
+written out once per file; the copies had already drifted, two of them extracting
+a dataset name with different and one of them broken path handling.
+
+The event dict that feeds `rules.evaluate` is no longer here at all. It had a
+fourth copy in ml/dataset.py, on the path to the deployed model, so it now lives
+in `features.event_from` beside `truthy` - one mapping, for the same reason there
+is one coercion.
 
     python replay_eval.py                                  what the CEP layer alone does
     python replay_eval.py fan-in-mode --files 'out_seed*/transactions.csv'
@@ -25,49 +28,8 @@ import pandas as pd
 
 import config as C
 import features as F
+from features import event_from, age_or_none
 from rules import SenderState, ReceiverState, PopulationBaseline, evaluate
-
-
-def _as_bool(v):
-    return str(v).strip().lower() in ("true", "1")
-
-
-def _as_age(v):
-    try:
-        return int(float(v))
-    except (TypeError, ValueError):
-        return None
-
-
-def event_from(r):
-    """The event `rules.evaluate` expects, from one CSV row.
-
-    One definition, because it is the contract between the generator's columns
-    and the rule engine. Three copies of it is three places to forget a field,
-    and a forgotten field does not fail - it reads as absent, which is a
-    different measurement rather than an error.
-    """
-    return {
-        "amount_uzs": r["amount_uzs"],
-        "sender_pinfl": r["sender_pinfl"],
-        "receiver_pinfl": r["receiver_pinfl"],
-        "device_id": r["device_id"],
-        "sender_region": r["sender_region"],
-        "channel": r.get("channel", "MOBILE_APP"),
-        "sender_network": r.get("sender_network", ""),
-        "receiver_network": r.get("receiver_network", ""),
-        # Behavioural session signals - required for COACHED_SESSION and the
-        # secs_login_z baseline.
-        "active_call": _as_bool(r.get("active_call")),
-        "secs_login_to_confirm": r.get("secs_login_to_confirm", 0.0),
-        # The cards, from which features.py resolves the issuer via the BIN
-        # table - the on-us test behind receiver_age. Forwarded rather than the
-        # bank names so the replay resolves the issuer through exactly the path
-        # the live job uses.
-        "sender_card": r.get("sender_card", ""),
-        "receiver_card": r.get("receiver_card", ""),
-        "is_family_transfer": _as_bool(r.get("is_family_transfer")),
-    }
 
 
 def replay(path, population=None, count_hits=False):
@@ -88,7 +50,7 @@ def replay(path, population=None, count_hits=False):
         r = row._asdict()
         ev = event_from(r)
         res = evaluate(ev,
-                       receiver_age_days=_as_age(r.get("receiver_account_age_days")),
+                       receiver_age_days=age_or_none(r.get("receiver_account_age_days")),
                        state=states[r["sender_card"]],
                        now=pd.Timestamp(r["event_time"]).timestamp(),
                        receiver_state=rstates[F.payee_key(ev)],

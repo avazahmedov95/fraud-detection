@@ -431,14 +431,30 @@ def b_latency_query_matches_its_parser():
     return None
 
 
-def b_dataset_keys_exist_in_the_csv():
-    D = pkg("ml", "dataset")
+def b_event_mapping_matches_the_csv():
+    """`features.event_from` must be satisfiable by a real generated row.
+
+    Exercised rather than name-matched: the mapping subscripts the columns it
+    requires and `.get`s the ones it can default, so calling it on an actual row
+    tests the real contract instead of a list that has to be kept in step with it.
+    This check used to read `ml/dataset._EVENT_KEYS`, a fourth copy of that
+    mapping, and it broke the moment the copy was removed - which is the check
+    working, not the removal failing.
+    """
+    F = pkg("stream-processor", "features")
     row = _sample_row()
     if row is None:
         return "SKIP: dataset not generated"
-    missing = sorted(k for k in D._EVENT_KEYS if k not in row)
-    if missing:
-        return f"ml/dataset expects CSV columns that do not exist: {missing}"
+    try:
+        event = F.event_from(row)
+    except KeyError as exc:
+        return (f"features.event_from requires CSV column {exc} and the "
+                f"generator does not produce it")
+    empty = sorted(k for k, v in event.items()
+                   if v == "" and k not in ("sender_network", "receiver_network"))
+    if empty:
+        return (f"features.event_from defaulted {empty} to empty on a real row - "
+                f"the column was renamed or dropped, and the default hid it")
     return None
 
 
@@ -548,7 +564,7 @@ CHECKS = [
     ("config artefacts -> run.ps1 serve-prep", b_serve_prep_ships_every_artefact),
     ("no data path derived from __file__", b_no_artefact_path_derived_from_file),
     ("ReceiverStore write -> read (Redis member)", b_receiver_store_round_trips),
-    ("ml/dataset -> generated CSV columns", b_dataset_keys_exist_in_the_csv),
+    ("features.event_from -> generated CSV columns", b_event_mapping_matches_the_csv),
     ("model manifest -> deployed artefacts", b_manifest_matches_the_deployment),
     ("latency query -> its row parser", b_latency_query_matches_its_parser),
     ("docker-compose env -> case-manager config", b_compose_env_names_are_read),
