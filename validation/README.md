@@ -86,6 +86,21 @@ python paysim_adapter.py --file PS_20174392719_1491204439457_log.csv --limit 500
 `TRANSFER` is the P2P analogue and the default. Start with `--limit` — the full
 file is 6.3M rows.
 
+**A second mode, answering a different question.** `--baseline` ignores the rules
+and retrains the published PaySim model instead, on the full file and on the
+split its authors used:
+
+```bash
+python paysim_adapter.py --file PS_20174392719_1491204439457_log.csv --baseline
+```
+
+The run above asks *do this project's rules carry signal on foreign data*. This
+one asks *is the number this project calibrates itself against real* — the AUPRC
+0.380 that `docs/related-work.md` §6 quotes from `ris3abh/aml-p2p-fraud-detection`.
+It is: reproduced at 0.397, with their other three figures landing too. It also
+found the two things §6 had wrong about that number, the prevalence it was
+measured at being the one that mattered. Takes a few minutes on 6.36M rows.
+
 ### Result (500,000 TRANSFER rows, 2,520 fraud)
 
 **Per-rule lift — threshold-free, and the measure that answers the question:**

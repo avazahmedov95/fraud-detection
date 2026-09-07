@@ -333,8 +333,11 @@ more useful than calling the number an artefact and moving on.
 
 **On the ROC-AUC ≈ 0.999 this data produces.** It is an artefact of a generator
 whose classes are separable by construction along several axes at once. PR-AUC
-(0.966 ± 0.008 across seeds) is the figure to read at a 1.5% positive rate, and
-even that is a design target.
+(0.966 ± 0.008 across seeds) is the figure to read, and even that is a design
+target. Its floor is the **held-out slice's** 1.23% positive rate, not the
+dataset's overall 1.5% - AUPRC is scored where it is measured, and quoting it
+against the wrong rate is the error `related-work.md` §6 had to correct in the
+other direction about PaySim.
 
 ---
 

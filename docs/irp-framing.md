@@ -1274,6 +1274,44 @@ replays a fixed slice and stopping the transport also stops the offer.*
 
 ## 8. Silent failure modes
 
+**Eighteenth: the external number that anchored this project's headline claim was
+quoted against the wrong prevalence, and nothing in the repository could tell.**
+§6 of `related-work.md` calibrated this project's PR-AUC against a published
+PaySim baseline at AUPRC 0.380, and described that figure as measured "at a
+0.129% fraud rate". 0.129% is PaySim's rate over all 6.36M rows; the AUPRC
+belongs to a 161,426-row holdout at **1.142%**. AUPRC's random-classifier floor
+*is* the prevalence, so the number had been placed on a floor nine times too low
+for a year.
+
+Three things make it worth cataloguing rather than just fixing.
+
+*It was checkable the whole time.* The full PaySim log has sat in `validation/`
+since the beginning, and the section carried the line "not independently
+reproduced here". Reproducing it took one function: `paysim_adapter.py
+--baseline` returns 0.397 against their 0.380, 0.878 against 0.908, 46.8%
+against 49.4% and 7.25× against 7.0×. The disclaimer was accurate and therefore
+never itched — **a truthful admission of not having checked is not a check**, and
+it reads enough like one to stop the question being asked.
+
+*The error pointed away from the project's interest, which is why it survived.*
+Correcting the prevalence **strengthens** the comparison: 1.142% there against
+1.23% on this project's own held-out slice is matched, so the ratio of the two
+AUPRCs is a like-for-like reading, which under 0.129% it would not have been. An
+error that made the claim look better would have drawn scrutiny. This one made a
+defensible claim rest on an indefensible justification, and nobody audits a
+number that is already conceding ground.
+
+*The same slip was being made about this project's own data.* `generator-spec.md`
+§7 quoted PR-AUC 0.966 "at a 1.5% positive rate" — the dataset rate, where the
+held-out slice it is measured on runs at 1.23%. Smaller, same shape, and found
+only by looking for it after the external one turned up.
+
+Fixed by a twenty-third boundary check: `paysim_adapter.BASELINE` holds the
+reported figures as data, and the audit fails if `related-work.md` §6 disagrees
+with it or stops stating them. That does not make an external citation true — it
+makes the two copies of it agree, which is the failure that actually happened.
+The reproduction is what makes it true, and it is now a command.
+
 **Seventeenth: the clause that certified the latency figures could not fail.**
 §7.0 states that every figure in §7 was taken after confirming the run was fused,
 by `model_version = cep+ml-fusion-v1` **and** `countIf(ml_score IS NULL) = 0`.

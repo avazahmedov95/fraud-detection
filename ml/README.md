@@ -88,18 +88,31 @@ meaningful figure at a 1.5% positive rate. PaySim has a documented equivalent
 (balance-column leakage); the honest move is to disclose it rather than quote it
 as a headline result.
 
-**How much easier is this data? About 2.5x, measured.** The claim that a
-generated fixture is easier than real traffic is usually left qualitative. An
-external anchor makes it a number: a public CatBoost baseline on PaySim
-(`ris3abh/aml-p2p-fraud-detection`, MIT) reports **AUPRC 0.380** with ROC-AUC
-0.908 and 49.4% recall, on 6.36M transactions at a 0.129% fraud rate, after
-removing the balance-derived leakage. Against a baseline PR-AUC of 0.966 here,
-that is a factor of 2.5 — and the ROC-AUC comparison (0.908 against ~0.999)
-understates the gap, which is the point of preferring PR-AUC. Those are the
-author's self-reported figures, not reproduced here, and the two settings differ
-in dataset, rail and task, so this is a difficulty anchor for the **data** and
-not a comparison of systems. It is quoted so the separability of this generator
-has a size rather than an adjective. See `docs/related-work.md` §6.
+**How much easier is this data? About 2x, and half of that is not the data.**
+The claim that a generated fixture is easier than real traffic is usually left
+qualitative. A public CatBoost baseline on PaySim
+(`ris3abh/aml-p2p-fraud-detection`, MIT) reports **AUPRC 0.380**, reproduced here
+at 0.397 on their own split (`paysim_adapter.py --baseline`). Their figure is
+measured on a 7-day holdout at **1.142%** fraud - not PaySim's 0.129% dataset
+rate, which an earlier revision of this paragraph quoted instead. That matters
+because AUPRC's floor is the prevalence, and it happens to help: 1.142% against
+the 1.23% of this project's held-out slice is a matched comparison.
+
+At their operating point - a 2% alert budget - this project catches 98.4% of
+fraud against their 49.4%, and tops the decile at 10.0x against their 7.0x. Two
+prevalence-robust measures agreeing on about 2x is what makes the AUPRC ratio
+believable.
+
+But **feature availability is about half of it**: stripped to amount and hour,
+the columns a public dataset can carry, this model scores 0.678 on this data
+(`validation/README.md`). So 0.959 -> 0.678 is what publishing costs, and
+0.678 -> 0.380 is the generator being separable. The first half is a property of
+the field, not of this project.
+
+**And the number that should be read next to 0.966 is 0.988** - their AUPRC
+*before* they removed the balance leakage, reproduced here at 1.000. A PR-AUC in
+the high nineties is the range a known-broken model reaches on public data, which
+is the honest frame for this one. See `docs/related-work.md` §6.
 
 **SHAP global importance (mean |SHAP|)**, regenerated 2026-08-30 on the pinned
 environment: `is_new_payee` (0.770), `log_amount` (0.694), `receiver_age` (0.603),

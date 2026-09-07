@@ -157,6 +157,80 @@ def report(res, hits):
             print(f"  the validation set is what this exercise exists to avoid.")
 
 
+#: The published baseline this project calibrates its own PR-AUC against, and the
+#: split it was measured on. 24 days train / 7 days test is a cut at PaySim's
+#: hourly step 576; that reproduces their stated rates (train 0.103%, test
+#: 1.142%, 1,854 holdout frauds) closely enough to confirm it is the split.
+BASELINE = dict(source="ris3abh/aml-p2p-fraud-detection (MIT)", cut_step=576,
+                pr_auc=0.380, roc_auc=0.908, recall_at_2pct=0.494,
+                lift_at_decile=7.0, pr_auc_with_leakage=0.988)
+
+
+def baseline(path):
+    """Retrain the published PaySim baseline, because the file to do it with is
+    already here.
+
+    related-work.md 6 quoted AUPRC 0.380 for a year with "not independently
+    reproduced here" attached, while the full 6.36M-row log sat in this
+    directory. Two things come out of actually running it: the figure is real,
+    and the prevalence it was quoted against was not - 0.380 belongs to a holdout
+    slice at 1.142%, not to PaySim's 0.129% overall, and AUPRC's floor IS the
+    prevalence.
+
+    The balance columns are excluded, which is what their leakage removal did.
+    Left in they do not merely help, they ARE the label: same split, same model,
+    PR-AUC 1.000.
+    """
+    import numpy as np
+    import lightgbm as lgb
+    from sklearn.metrics import roc_auc_score, average_precision_score
+
+    df = pd.read_csv(path).sort_values("step", kind="stable").reset_index(drop=True)
+    X = pd.DataFrame(index=df.index)
+    X["amount"] = df.amount.values
+    X["log_amount"] = np.log1p(df.amount.values)
+    X["hour"] = df.step.values % 24
+    for t in ["CASH_IN", "CASH_OUT", "DEBIT", "PAYMENT", "TRANSFER"]:
+        X[f"type_{t}"] = (df.type.values == t).astype("int8")
+    X["dest_is_merchant"] = df.nameDest.str.startswith("M").astype("int8")
+    # `step` itself is deliberately not a feature: across a temporal split the
+    # test steps are all unseen, and across a random one it encodes the fraud
+    # concentration in PaySim's tail.
+
+    y = df.isFraud.values
+    tr = df.step.values <= BASELINE["cut_step"]
+    te = ~tr
+    print(f"train {int(tr.sum()):,} rows {y[tr].mean():.4%} fraud")
+    print(f"test  {int(te.sum()):,} rows {y[te].mean():.4%} fraud "
+          f"({int(y[te].sum()):,}) - reported 1.142%, 1,854\n")
+
+    m = lgb.LGBMClassifier(n_estimators=400, learning_rate=0.05, num_leaves=63,
+                           subsample=0.8, colsample_bytree=0.8,
+                           min_child_samples=20, random_state=42, n_jobs=-1,
+                           verbose=-1)
+    m.fit(X[tr].values.astype("float32"), y[tr])
+    p = m.predict_proba(X[te].values.astype("float32"))[:, 1]
+    yte = y[te]
+    order = np.argsort(-p)
+    k = int(0.02 * len(yte))
+    rec2 = yte[order[:k]].sum() / max(1, yte.sum())
+    lift = yte[order[:len(yte) // 10]].mean() / yte.mean()
+
+    print(f"{'':<26}{'reported':>10}{'here':>10}")
+    for label, key, got in (
+            ("PR-AUC", "pr_auc", average_precision_score(yte, p)),
+            ("ROC-AUC", "roc_auc", roc_auc_score(yte, p)),
+            ("recall @2% budget", "recall_at_2pct", rec2),
+            ("lift @top decile", "lift_at_decile", lift)):
+        print(f"  {label:<24}{BASELINE[key]:>10.3f}{got:>10.3f}")
+    print(f"\n  source: {BASELINE['source']}")
+    print("\n  Their 0.380 is measured at 1.142% prevalence, against this")
+    print("  project's 1.23% on its own held-out slice - a matched comparison,")
+    print("  which the 0.129% dataset rate this was once quoted against was not.")
+    print("  Read 0.966 next to their PRE-leak-removal 0.988, not their 0.380:")
+    print("  a PR-AUC in the high nineties is what a broken model scores.")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--file", required=True, help="PaySim CSV")
@@ -166,10 +240,17 @@ def main():
                          "withdrawal, not a transfer between two customers.")
     ap.add_argument("--limit", type=int, default=None,
                     help="first N rows (the full file is 6.3M)")
+    ap.add_argument("--baseline", action="store_true",
+                    help="retrain the published PaySim baseline instead of "
+                         "replaying the rules - verifies the AUPRC 0.380 that "
+                         "related-work.md 6 calibrates against")
     args = ap.parse_args()
 
     if not os.path.exists(args.file):
         raise SystemExit(f"{args.file} not found")
+
+    if args.baseline:
+        return baseline(args.file)
 
     # PaySim has account ids, amounts and a clock, nothing else this project uses. What
     # is not backed by real data is switched off, not defaulted: nothing fires on a zero.

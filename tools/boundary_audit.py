@@ -629,6 +629,45 @@ def b_readme_figures_match_metrics_json():
     return "; ".join(problems) or None
 
 
+def b_external_baseline_matches_the_docs():
+    """related-work.md 6 calibrates this project against a published PaySim
+    baseline; paysim_adapter.BASELINE holds the same figures for the code that
+    reproduces them. Two copies of an external number drift the way ml/README
+    drifted from metrics.json.
+
+    Only the REPORTED column is pinned. The reproduced column moves with the
+    library versions and belongs to whoever last ran `--baseline`, whereas what
+    the source says it measured is fixed and citable.
+    """
+    sys.path.insert(0, os.path.join(ROOT, "validation"))
+    try:
+        import paysim_adapter as PA
+    except Exception as exc:                       # pragma: no cover
+        return f"SKIP: cannot import paysim_adapter ({exc})"
+    text = _read("docs", "related-work.md")
+
+    problems = []
+    for label, key, pattern in (
+            ("PR-AUC", "pr_auc", r"\| AUPRC \(= PR-AUC\) \| \*\*([\d.]+)\*\*"),
+            ("ROC-AUC", "roc_auc", r"\| AUC-ROC \| ([\d.]+) \|"),
+            ("recall @2%", "recall_at_2pct", r"\| recall \| ([\d.]+)% \(916 of"),
+            ("top-decile lift", "lift_at_decile", r"\| top-decile lift \| ([\d.]+)"),
+            ("PR-AUC with leakage", "pr_auc_with_leakage",
+             r"before\* removing balance leakage \| ([\d.]+) \|")):
+        m = re.search(pattern, text)
+        if not m:
+            problems.append(f"{label}: related-work.md 6 no longer states it "
+                            f"where this check looks")
+            continue
+        want = PA.BASELINE[key]
+        if key == "recall_at_2pct":
+            want *= 100
+        if abs(float(m.group(1)) - want) > 1e-9:
+            problems.append(f"{label}: doc says {m.group(1)}, "
+                            f"paysim_adapter.BASELINE says {want}")
+    return "; ".join(problems) or None
+
+
 CHECKS = [
     ("generator CSV -> producer message (types)", b_producer_types),
     ("producer message -> feature extractor (equivalence)", b_wire_extracts_like_typed),
@@ -652,6 +691,7 @@ CHECKS = [
     ("modules -> their package README", b_every_module_is_documented),
     ("generated CSV -> no new constant columns", b_no_new_constant_columns),
     ("metrics.json -> ml/README figures", b_readme_figures_match_metrics_json),
+    ("paysim_adapter.BASELINE -> related-work 6", b_external_baseline_matches_the_docs),
 ]
 
 

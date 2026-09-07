@@ -153,37 +153,93 @@ use is as the example in §1 above.
 
 ## 6. `ris3abh/aml-p2p-fraud-detection` (MIT) — the calibration point
 
-PaySim, 6.36M mobile-money transactions, 0.129% fraud, CatBoost with
-`scale_pos_weight=974`, isotonic calibration. Self-reported by the repository:
+PaySim, 6.36M mobile-money transactions, CatBoost with `scale_pos_weight=974`,
+isotonic calibration. Reported by the repository, and **reproduced here on
+2026-09-07** — the full PaySim log had been sitting in `validation/` the whole
+time, so an earlier revision's "not independently reproduced here" was a choice
+rather than a limitation. `paysim_adapter.py --baseline` is the reproduction.
 
-| metric | value |
+| metric | reported | reproduced | measured on |
+|---|---|---|---|
+| AUPRC (= PR-AUC) | **0.380** | **0.397** | the 7-day holdout, **1.142% fraud** |
+| AUC-ROC | 0.908 | 0.878 | " |
+| recall | 49.4% (916 of 1,854) | 46.8% | at a **2% alert budget**, threshold 0.987 |
+| top-decile lift | 7.0× | 7.25× | " |
+| AUPRC *before* removing balance leakage | 0.988 | **1.000** | same split |
+
+Their split is 24 days train / 7 days test, which on PaySim's hourly `step` is a
+cut at 576. That reproduces their stated rates closely enough to confirm it is
+the split: train 0.1028% against their 0.103%, test 1.1398% against their
+1.142%, 1,840 holdout frauds against their 1,854.
+
+**Two corrections to the earlier version of this section.**
+
+*The prevalence was wrong, and it is the number that matters most.* This section
+used to say the 0.380 was measured "at a 0.129% fraud rate". 0.129% is PaySim's
+rate over all 6.36M rows; the AUPRC belongs to a holdout slice at **1.142%**.
+AUPRC's random-classifier floor *is* the prevalence, so the two are not
+interchangeable — the old wording placed the number on a floor nine times too
+low. The correction happens to **strengthen** the comparison rather than weaken
+it: 1.142% there against 1.23% on this project's own held-out slice is a matched
+prevalence, so the ratio of the two AUPRCs is a like-for-like reading. Under the
+0.129% this section used to quote, it would not have been.
+
+*The recall had no operating point.* 49.4% is measured at a **2% alert budget**
+(threshold 0.987), which their README states and this section omitted. Recall
+without a budget is not comparable to anything.
+
+**The comparison, at the budget rather than by AUPRC.** Alert-budget recall and
+top-decile lift are evaluated at a fixed fraction of the population, so they
+survive the prevalence question that AUPRC raises:
+
+| | this project | ris3abh / PaySim |
+|---|---|---|
+| test prevalence | 1.23% | 1.142% |
+| recall @ 2% alert budget | **98.4%** | 49.4% |
+| lift @ top decile | 10.0× (capped) | 7.0× |
+| PR-AUC | 0.959 (0.966 ± 0.008 across seeds) | 0.380 |
+
+Two independent prevalence-robust measures both say **about 2×**, which
+corroborates the 2.5× the AUPRC ratio gives. So the headline claim survives
+verification; only its justification was unsound.
+
+**How much of the gap is the data, and how much is the feature set.** Not all of
+it is separability. `validation/README.md` measures what this project's own model
+does when stripped to what a public dataset can carry:
+
+| features available | PR-AUC on THIS data |
 |---|---|
-| AUPRC (= PR-AUC) | **0.380** |
-| AUC-ROC | 0.908 |
-| recall | 49.4% (916 of 1,854) |
-| top-decile lift | 7.0× |
-| Brier (calibrated) | 0.0086 |
+| all 24 | 0.959 |
+| amount + hour only | 0.678 |
+| — PaySim, leak-free, 6 raw columns | 0.380 |
 
-These are the author's own figures, not independently reproduced here.
+Feature poverty costs 0.959 → 0.678; the data itself accounts for 0.678 → 0.380.
+**Roughly half the gap is features public data cannot publish, and half is a
+generator whose classes are separable by construction.** That is a sharper answer
+than "2.5× easier" and a more defensible one, because the first half is a
+property of the field rather than of this generator.
 
-**This is the most uncomfortable and therefore the most valuable item in the
-batch.** PR-AUC 0.380 on a public dataset against **0.966 ± 0.008** here is a
-factor of 2.5, and the commission will ask about it. The answer is already the
-project's position — the generator produces a *design fixture* whose classes are
-separable by construction (`generator-spec.md` §0, §7) — but the position is
-currently argued qualitatively. This supplies the number that makes it
-quantitative: not "our data is probably easier", but "our data is 2.5× easier
-than the standard public benchmark, measured".
+**The most uncomfortable number is the one that was missing.** Their *pre*-leak-
+removal AUPRC was 0.988 — reproduced here at 1.000, so PaySim's balance columns
+are not merely leaky, they are the label. That figure sits **above** this
+project's 0.966. A PR-AUC in the high nineties is therefore not evidence of a
+working system: it is the range a known-broken model reaches on public data. The
+honest reading of 0.966 is not "better than the benchmark" but "the same class of
+number the benchmark produces when it is wrong", which is why
+`generator-spec.md` §7 calls it a design target rather than a result.
 
-Two further points from the same repository, both independently confirming
-things this project already asserts:
+**One caveat on their configuration.** `scale_pos_weight=974` and AUPRC 0.380 do
+not sit together comfortably. In reproduction that weighting costs almost
+everything — 0.397 → 0.022 on the same features — because heavy positive
+weighting flattens the top of the ranking, which is exactly what AUPRC reads.
+Either CatBoost's handling differs from LightGBM's here, or the weighting did not
+apply to the scored model. It does not affect the verification, since the
+unweighted leak-free run reproduces all four of their figures.
 
-- They found and removed **balance-derived leakage** in PaySim. `generator-spec.md`
-  §7 already cites PaySim's balance leakage as the cautionary precedent; here is
-  a 2025-era project rediscovering it in practice.
-- They report an **11× increase in fraud rate from train to test** and treat it
-  as temporal drift. That is an empirical instance of the drift the review in §2
-  says is under-tested.
+**A PaySim artefact worth knowing, found while pinning the split.** Legitimate
+traffic stops at step 718, but fraud continues to 743: the last 296 rows are
+100% fraud, 3.6% of every positive in the dataset. Any temporal split reaching
+the tail inherits a region with no negatives in it at all.
 
 **What it does not support.** Batch, notebook-based, no streaming; mobile money,
 not card P2P. It is a comparison of *model difficulty on a dataset*, nothing else.
@@ -585,7 +641,7 @@ answers to it, not one.
 | Source | What was taken | Where it lands |
 |---|---|---|
 | **PaySim** (§6) | The rule layer went **mute** on foreign data: with two rules available the highest score any fraud reached was 0.35 against a 0.40 cutoff, while the rules separated the classes 4:1. | `capabilities.scaled_threshold` exists because of this, reached on the deployed fallback path through `fusion.cutoffs` and switchable at `config.SCALE_THRESHOLDS_BY_CAPABILITY`. Adapter: `validation/paysim_adapter.py`. Balance leakage as precedent: `generator-spec.md` §7. |
-| **PaySim, via `ris3abh`** (§6) | PR-AUC **0.380** on the standard public benchmark against 0.966 here. | Turns "our data is probably easier" into "2.5x easier, measured" — `generator-spec.md` §0, §7. |
+| **PaySim, via `ris3abh`** (§6) | PR-AUC **0.380** on the standard public benchmark against 0.966 here — reproduced at 0.397, and their *pre*-leak-removal 0.988 reproduced at 1.000. | Turns "our data is probably easier" into a decomposition: half the gap is features public data cannot carry, half is separability — `generator-spec.md` §0, §7. The 0.988 is the sharper point: a PR-AUC in the high nineties is what a *broken* model scores. |
 | **IBM AMLSim** (§7) | `MULE_FAN_IN` at six senders fired on **3.12%** of legitimate traffic and caught **0.0%** of the fan-in typology: in a scale-free graph 2.69% of receivers exceed six as ordinary hub behaviour. The constant encoded the density of the population it was tuned on. | `rules.PopulationBaseline`, `MULE_FAN_IN_MODE=relative`, measured +6.9 pp — `irp-framing.md` §6, third RQ3 result. Screens: `validation/amlsim_ablation.py`. |
 | **CBU Regulation No. 3759** | The BRV-denominated threshold, and the fact that **the project's earlier citation of it was wrong**. | `data-generator/config.STRUCTURING_THRESHOLD`, mirrored at `stream-processor/config.STRUCTURING_THRESHOLD` and enforced through `config.MANDATORY_REVIEW_RULES`. The correction is left in the code as a comment: a citation that was checked and refuted. |
 | **Cybersecurity Centre of Uzbekistan, 2025** (§6d) | **54 of 157** high-severity mobile findings are transport security. | The motivation for measuring transport overhead at all — `irp-framing.md` §7.5, `threat-model.md` §3a. Not "interesting to measure" but "the national authority says this is the dominant defect class". |
