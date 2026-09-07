@@ -119,6 +119,27 @@ def main():
     ok.append(splittable)
     ok.append(not_a_proxy)
 
+    print("\npayee identity (the two keys must be able to disagree - spec section 2)")
+    # Keying receiver state by PAN and by PINFL is the payee_identity capability.
+    # If every person receives on one card the two keys partition the stream
+    # identically, the ablation compares a configuration against itself, and the
+    # exactly-zero delta it reports says nothing about the capability.
+    by_pinfl = d.groupby("receiver_pinfl").receiver_card.nunique()
+    multi = int((by_pinfl > 1).sum())
+    rows_to_multi = int(d.receiver_pinfl.isin(by_pinfl[by_pinfl > 1].index).sum())
+    print(f"       receivers reachable on >1 card: {multi:,} of {len(by_pinfl):,}"
+          f"  ({rows_to_multi:,} rows land on them)")
+    # A handful would leave the ablation measuring almost nothing; the point is
+    # that a meaningful share of receiver-side state actually splits.
+    splits = multi >= 100 and rows_to_multi >= 1000
+    print(f"  [{'ok ' if splits else 'OFF'}] the PAN and PINFL keys partition "
+          f"differently")
+    if not splits:
+        print("       ^ with one card per person the two modes are the same "
+              "configuration,\n         and ablate_seeds.py reports NOT MEASURED "
+              "rather than 'no effect'.")
+    ok.append(splits)
+
     print("\nkinship (must be non-zero on BOTH sides - see spec section 3)")
     fam_legit = legit_ev.is_family_transfer.mean()
     fam_fraud = d[d.label_is_fraud == 1].is_family_transfer.mean()

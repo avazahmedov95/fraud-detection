@@ -97,6 +97,31 @@ assignment would make the on-us rate an artefact of the number of banks in the
 list. PAN = 6-digit BIN + 9 uniform digits + Luhn check digit. PINFL = 14 uniform
 digits. Both synthetic.
 
+**Second card.** A person holds a card at a *second* bank w.p. $\kappa = 0.20$,
+and transfers to them arrive on it w.p. $0.40$. The second issuer is redrawn
+until it differs from the first: two PANs at one bank would still be one on-us
+relationship.
+
+> **Added 2026-09-07, and it is what makes `payee_identity` measurable at all.**
+> That capability chooses whether receiver-side state is keyed by PAN or by the
+> person behind it. With one card each, the two keys partition the stream
+> identically — so the ablation compared a configuration against itself and
+> returned a delta of exactly zero on all five seeds, printed as "no effect".
+> The honest reading was *not measured*. 901 of 5,071 receivers are now reachable
+> on two cards, 9,796 rows land on them, and the two modes train genuinely
+> different models.
+>
+> **Receiving only, deliberately.** A sender drawing from two cards would
+> fragment the per-sender history every other feature is built on — the stream is
+> keyed by sender — and would confound this question with that one. What is
+> modelled is the payee's card choice, because the payee key is what is under
+> test.
+>
+> It also makes the data harder, which is the point: splitting fan-in across two
+> cards is a blind spot every card-keyed bank really has. Baseline PR-AUC falls
+> from 0.981 to 0.967, and `receiver_velocity` becomes the largest effect in the
+> ablation at −0.040.
+
 **Fraud accounts.** $N_f = \max(50, N_p/25) = 200$, each its own household (so
 mules are not "relatives" of each other). Age:
 
@@ -368,7 +393,7 @@ more useful than calling the number an artefact and moving on.
 
 **On the ROC-AUC ≈ 0.999 this data produces.** It is an artefact of a generator
 whose classes are separable by construction along several axes at once. PR-AUC
-(0.981 ± 0.009 across seeds) is the figure to read, and even that is a design
+(0.967 ± 0.018 across seeds) is the figure to read, and even that is a design
 target. Its floor is the **held-out slice's** 1.23% positive rate, not the
 dataset's overall 1.5% - AUPRC is scored where it is measured, and quoting it
 against the wrong rate is the error `related-work.md` §6 had to correct in the
@@ -460,14 +485,14 @@ and every comparison above was taken with it removed.
 ### The dataset of record
 
 `data-generator/out/` is gitignored, so the files every reported figure was
-computed on are pinned here instead. **Regenerated 2026-09-07** on seed 42 with
-defaults, to fix the device defect in §4.
+computed on are pinned here instead. **Regenerated 2026-09-07** on seed 42 with defaults,
+to fix the device defect in §4 and the single-card defect in §2.
 
 ```
-transactions.csv   50,000 rows   16,181,796 bytes
-  sha256  c4e0be22dcaa77a7a4d8f9c1beccb11bc6133d3ce92ce5dadd764eca7e9b0496
-persons.csv         5,200 rows      546,356 bytes
-  sha256  4cac78575b574bf662ce8de98d9fb67bdf4efa532c1760780ce399fa0d2f3ed4
+transactions.csv   50,000 rows   16,180,834 bytes
+  sha256  aa1e2f1c7a23e45eac6cd53e37f45eb6f74b59ee3fd2e0d17fb429ec0fbe2add
+persons.csv         5,200 rows      578,549 bytes
+  sha256  dbe01edd7626def3c8ce50a343915d80fe309c97895342476d9c22a01be37cb6
 ```
 
 **These hashes now hold on any host, which the previous pair did not.**
@@ -507,15 +532,16 @@ output is a wish list, so these are the numbers a reader can reproduce.
 |---|---|---|
 | transactions | 50,000 | 50,000 |
 | fraud rate | 1.5% | 1.500% |
-| fresh legitimate accounts | 12% | 11.5% |
-| aged fraud accounts | 30% | 30.0% |
-| channel mix (MOBILE_APP / USSD / WEB / ATM) | 0.70 / 0.12 / 0.13 / 0.05 | 0.701 / 0.119 / 0.130 / 0.049 |
-| median legitimate amount | ≈133k (baseline median) | 135,340 UZS |
+| fresh legitimate accounts | 12% | 12.2% |
+| aged fraud accounts | 30% | 28.0% |
+| channel mix (MOBILE_APP / USSD / WEB / ATM) | 0.70 / 0.12 / 0.13 / 0.05 | 0.700 / 0.120 / 0.129 / 0.051 |
+| median legitimate amount | ≈133k (baseline median) | 136,869 UZS |
 | `active_call` legitimate | 0.03 | 0.030 |
-| `active_call` APP | 0.70 | 0.721 |
+| `active_call` APP | 0.70 | 0.751 |
 | STRUCTURING as fraction of threshold | 0.85–0.99 | 0.851–0.990 |
 | ATO events per episode | 2–4 | {2, 3, 4} |
 | travellers | $\tau$ = 0.18 selection | 18.0% realised (see §6) |
-| `device_is_new` fires | both classes, ≥ 30 rows (§4) | 631 legit / 16 fraud, 2.5% precision |
+| `device_is_new` fires | both classes, ≥ 30 rows (§4) | 598 legit / 26 fraud, 4.2% precision |
+| receivers on >1 card | $\kappa$ = 0.20 hold one (§2) | 901 of 5,071, 9,796 rows |
 
 `verify_spec.py` regenerates these comparisons.

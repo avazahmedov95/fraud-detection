@@ -72,7 +72,7 @@ velocity attacks — is addressed in §5 rather than dismissed.
 ## 4. Evidence already in hand
 
 All figures: PR-AUC on held-out time slices, paired within generator seed, 95%
-CI for the mean delta, 5 seeds unless stated. Baseline 0.981 ± 0.009. Synthetic
+CI for the mean delta, 5 seeds unless stated. Baseline 0.967 ± 0.018. Synthetic
 data — design targets, not validated findings.
 
 | Data source removed | Δ PR-AUC (95% CI) | sign | verdict |
@@ -292,7 +292,7 @@ Ordered by what blocks what.
    **Relational fraud detection cannot be validated end-to-end on public real
    data, because the account identifiers that make it relational are exactly
    what cannot be published.** 14 of 24 features here are relational; removing
-   them costs 0.968 → 0.801 PR-AUC and 0.930 → 0.591 precision. Every public
+   them costs 0.947 → 0.709 PR-AUC and 0.910 → 0.630 precision. Every public
    real dataset examined is identifier-free.
 
    The response is to split the question:

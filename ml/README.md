@@ -60,12 +60,12 @@ quietly stop being true.
 
 | metric            | ML model | CEP rules only |
 |-------------------|----------|----------------|
-| ROC-AUC           | 0.999    | —              |
-| PR-AUC            | 0.968    | —              |
-| precision @0.50   | 0.930    | 0.337          |
-| recall @0.50      | 0.892    | 0.508          |
+| ROC-AUC           | 0.998    | —              |
+| PR-AUC            | 0.947    | —              |
+| precision @0.50   | 0.910    | 0.335          |
+| recall @0.50      | 0.865    | 0.461          |
 
-Recall by fraud type (ML @0.50): STRUCTURING 100.0%, APP 87.0%, ATO 92.6%, MULE 77.8%.
+Recall by fraud type (ML @0.50): STRUCTURING 90.0%, APP 87.5%, ATO 90.9%, MULE 82.4%.
 
 The table this replaced was measured BEFORE the receiver-side aggregation
 capability and was never refreshed: it showed MULE recall at 54%, against 85.7%
@@ -104,12 +104,12 @@ prevalence-robust measures agreeing on about 2x is what makes the AUPRC ratio
 believable.
 
 But **feature availability is about half of it**: stripped to amount and hour,
-the columns a public dataset can carry, this model scores 0.648 on this data
-(`validation/README.md`). So 0.968 -> 0.648 is what publishing costs, and
-0.648 -> 0.380 is the generator being separable. The first half is a property of
+the columns a public dataset can carry, this model scores 0.581 on this data
+(`validation/README.md`). So 0.947 -> 0.581 is what publishing costs, and
+0.581 -> 0.380 is the generator being separable. The first half is a property of
 the field, not of this project.
 
-**And the number that should be read next to 0.981 is 0.988** - their AUPRC
+**And the number that should be read next to 0.967 is 0.988** - their AUPRC
 *before* they removed the balance leakage, reproduced here at 1.000. A PR-AUC in
 the high nineties is the range a known-broken model reaches on public data, which
 is the honest frame for this one. See `docs/related-work.md` §6.
@@ -194,38 +194,44 @@ grown to 24, so they are history rather than current figures.
 Deltas are paired within each seed; the interval is a 95% CI for the mean delta.
 
 All rows measured on one feature set and one generator version, 5 seeds,
-baseline PR-AUC **0.981 ± 0.009**:
+baseline PR-AUC **0.967 ± 0.018**:
 
 | configuration | delta (95% CI) | sign | verdict |
 |---|---|---|---|
-| receiver_velocity=off | −0.029 [−0.045, −0.012] | 5/5 | **real** |
-| session_telemetry=off | −0.028 [−0.046, −0.009] | 5/5 | **real** |
-| receiver_age=off | −0.022 [−0.035, −0.010] | 5/5 | **real** |
-| channel=off | −0.002 [−0.007, +0.002] | 4/5 | no effect |
-| myid_kinship=on | +0.001 [−0.001, +0.003] | 3/5 | no effect |
-| geo_telemetry=off | −0.000 [−0.003, +0.002] | 4/5 | no effect |
-| device_telemetry=off | −0.000 [−0.003, +0.002] | 3/5 | no effect |
-| payee_identity=pinfl | +0.000 [+0.000, +0.000] | 5/5 | **NOT MEASURED** |
+| receiver_velocity=off | −0.040 [−0.065, −0.015] | 5/5 | **real** |
+| session_telemetry=off | −0.016 [−0.025, −0.007] | 5/5 | **real** |
+| receiver_age=off | −0.009 [−0.023, +0.005] | 4/5 | unresolved |
+| payee_identity=pinfl | +0.004 [−0.002, +0.010] | 4/5 | no effect |
+| myid_kinship=on | +0.003 [−0.001, +0.007] | 3/5 | no effect |
+| channel=off | −0.002 [−0.006, +0.002] | 3/5 | no effect |
+| device_telemetry=off | +0.001 [−0.002, +0.004] | 3/5 | no effect |
+| geo_telemetry=off | +0.001 [−0.001, +0.003] | 4/5 | no effect |
 
-**The last two rows are the reason this table gained a fourth verdict.** Both
-used to read `+0.000 [+0.000, +0.000] | 5/5 | no effect`, and only one of them
-meant it.
+**Two rows in this table used to read `+0.000 [+0.000, +0.000] | 5/5 | no
+effect`, and neither meant it.** Both were configurations compared against
+themselves, and the fix in each case was to the generator rather than to the
+reading.
 
-`device_telemetry` was a defect. The generator produced 25 device changes in
-50,000 rows and every one was fraud, which is below LightGBM's
-`min_child_samples = 30`: no split could be formed, both arms trained an
-identical model, and the delta was bit-identical on every seed. The row said
-"device telemetry buys nothing" when it should have said "this dataset never
-tested it". Fixed in the generator (`generator-spec.md` §4); the deltas now vary
-by seed, and the capability really is worth about nothing on this data - which is
-now a measurement rather than an artefact.
+`device_telemetry`: the generator produced 25 device changes in 50,000 rows and
+every one was fraud, below LightGBM's `min_child_samples = 30`, so no split could
+form and both arms trained an identical model. `payee_identity`: every person
+held exactly one card, so keying receiver state by PAN or by PINFL induced the
+same partition. Both are fixed in `generator-spec.md` §2 and §4 - people now hold
+a second card at another bank, and change device at an ordinary rate - and both
+now train genuinely different models.
 
-`payee_identity` is not a defect and is still unmeasurable. Keying the receiver
-store by card or by PINFL can only differ when someone holds more than one card,
-and this generator gives every person exactly one - so the two modes induce the
-same partition and no ablation on this data can separate them. Reporting "no
-effect" would be a claim the data cannot support. `ablate_seeds.py` now detects
-an exactly-zero delta on every seed and prints **NOT MEASURED** instead.
+**The answers, once they could be measured, are small.** `device_telemetry` is
++0.001 and `payee_identity` +0.004, each with an interval crossing zero. That is
+a real result and not a disappointing one: it says the capability is worth little
+*on this data*, where before the table said the same words about a measurement
+that had never happened. `ablate_seeds.py` prints **NOT MEASURED** for an
+exactly-zero delta on every seed so the two can never again be confused.
+
+**One caution the multi-seed design earned.** On seed 42 alone `payee_identity`
+reads +0.011, which looks like a clear win. Across five seeds it is +0.004 with
+the interval crossing zero: seeds 7, 13 and 99 show essentially nothing, and 42
+and 2026 carry the whole effect. A single-seed reading of this row would have
+been wrong by a factor of three, which is what the seed sweep exists to catch.
 
 `experiments/ablate_seeds.py` fingerprints both the feature set and the generator sources,
 and refuses to mix results across versions — adding a feature or changing the
@@ -320,15 +326,15 @@ findings:
 
 `metrics.json` carries a `calibration` block beside the AUCs. It answers a
 different question from everything else there: not *does the model rank fraud
-above legitimate traffic* (it does, ROC-AUC 0.999 / PR-AUC 0.968) but *are its
+above legitimate traffic* (it does, ROC-AUC 0.998 / PR-AUC 0.947) but *are its
 probabilities usable as magnitudes*.
 
 ```
-brier               0.00171
-n_alerts            116          (>= 0.40 on the held-out slice)
-saturated_share     70.7%        rounding to 1.000
-distinct_scores     26
-review_band         9           alerts in [0.40, 0.80)
+brier               0.00265
+n_alerts            135          (>= 0.40 on the held-out slice)
+saturated_share     64.4%        rounding to 1.000
+distinct_scores     33
+review_band         10           alerts in [0.40, 0.80)
 median_alert_score  0.999951
 scored_with         model.onnx
 ```

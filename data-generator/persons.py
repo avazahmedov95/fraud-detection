@@ -8,7 +8,7 @@ from config import (CARD_LENGTH, CARD_NETWORKS, BANKS_SOURCE, REGIONS,
                     REGION_WEIGHTS, BANKS, BANK_WEIGHTS,
                     MALE_FIRST, FEMALE_FIRST, SURNAME_STEMS,
                     DECISION_TIME_MEDIAN_SEC, DECISION_TIME_CLIENT_SPREAD,
-                    SECOND_DEVICE_SHARE)
+                    SECOND_DEVICE_SHARE, SECOND_CARD_SHARE)
 
 BANK_BY_BIN = {b["bin"]: b for b in BANKS}
 
@@ -29,6 +29,12 @@ class Person:
     # than per event so a sender's device history is stable - see the
     # SECOND_DEVICE_* note in config.py for why it exists at all.
     has_second_device: bool = False
+    # A card at a second bank, used only when RECEIVING - see SECOND_CARD_* in
+    # config.py. Empty string means the person holds one card, which most do.
+    card2: str = ""
+    network2: str = ""
+    bank_code2: str = ""
+    bank_name2: str = ""
     full_name: str = ""
     bank_code: str = ""
     bank_name: str = ""
@@ -104,6 +110,17 @@ def _make_person(rng, region, age, household_id, is_fraud=False,
                  typical_amount=0.0, active_start=0, active_end=23):
     network, card = gen_card(rng)
     bank_code, bank_name = bank_from_card(card)
+    # A second card only counts if it is at a DIFFERENT bank: two PANs from one
+    # issuer would still be one on-us relationship, and the point of the second
+    # card is that the payee key can disagree with the person.
+    card2 = network2 = code2 = name2 = ""
+    if rng.random() < SECOND_CARD_SHARE:
+        for _ in range(8):
+            n2, c2 = gen_card(rng)
+            cd2, nm2 = bank_from_card(c2)
+            if cd2 != bank_code:
+                card2, network2, code2, name2 = c2, n2, cd2, nm2
+                break
     return Person(
         pinfl=gen_pinfl(rng), card=card, network=network, region=region,
         account_age_days=age, typical_amount=typical_amount,
@@ -117,6 +134,7 @@ def _make_person(rng, region, age, household_id, is_fraud=False,
         full_name=gen_full_name(rng),
         bank_code=bank_code, bank_name=bank_name, is_fraud_account=is_fraud,
         has_second_device=bool(rng.random() < SECOND_DEVICE_SHARE),
+        card2=card2, network2=network2, bank_code2=code2, bank_name2=name2,
     )
 
 

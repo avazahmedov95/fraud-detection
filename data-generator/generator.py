@@ -151,6 +151,10 @@ def build_dataset(config):
 
     persons_df = pd.DataFrame([{
         "pinfl": p.pinfl, "card": p.card, "network": p.network,
+        # Empty for the ~80% who hold one card. Written out because a
+        # reader checking payee_identity needs to see which people can
+        # receive under two keys - see config.SECOND_CARD_SHARE.
+        "card2": p.card2, "bank_code2": p.bank_code2,
         "full_name": p.full_name,
         "bank_code": p.bank_code, "bank_name": p.bank_name,
         "region": p.region, "account_age_days": p.account_age_days,

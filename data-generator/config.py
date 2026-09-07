@@ -32,6 +32,22 @@ SECS_LOGIN_FLOOR = 3.0                # physical minimum
 SECOND_DEVICE_SHARE = 0.25    # people who use a second device at all
 SECOND_DEVICE_USE_RATE = 0.15 # share of THEIR transactions sent from it
 
+# --- Second card ------------------------------------------------------------
+# The `payee_identity` capability chooses whether receiver-side state is keyed by
+# PAN or by the person behind it. With one card per person the two keys induce
+# the SAME partition, so the ablation compared a configuration against itself and
+# reported a delta of exactly zero on every seed - "no effect" where the truth was
+# "this dataset cannot tell". Holding cards at two banks is ordinary here (UzCard
+# and HUMO), and it is what makes the two keys differ: fan-in to a person is one
+# stream by PINFL and two smaller ones by PAN.
+#
+# RECEIVING ONLY, deliberately. A sender using two cards would fragment the
+# per-sender history every other feature is built on - the stream is keyed by
+# sender - and that is a different question. Confounding it with this one would
+# make neither answerable.
+SECOND_CARD_SHARE = 0.20      # people who hold a second card
+SECOND_CARD_USE_RATE = 0.40   # share of transfers TO them that arrive on it
+
 # --- Kinship (households stand in for MyID-verified relatives) ---------------
 # Both shares must stay non-zero: with no fraud going to relatives, `is_family`
 # separated the classes perfectly and topped SHAP - an artefact, not a finding.

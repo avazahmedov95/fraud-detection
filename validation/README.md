@@ -13,9 +13,9 @@ Measured cost of losing them (seed 42, held-out slice, 2026-09-07 dataset):
 
 | available | PR-AUC | precision | recall |
 |---|---|---|---|
-| full system | 0.968 | 0.930 | 0.892 |
-| no account identifiers | 0.801 | 0.591 | 0.733 |
-| amount + hour only | 0.648 | 0.219 | 0.875 |
+| full system | 0.947 | 0.910 | 0.865 |
+| no account identifiers | 0.709 | 0.630 | 0.688 |
+| amount + hour only | 0.581 | 0.254 | 0.759 |
 
 Public transaction datasets do not carry account identifiers, because those are
 precisely what cannot be published. So:

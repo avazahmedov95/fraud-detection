@@ -3,6 +3,8 @@ Spec for what each pattern should look like: docs/generator-spec.md 3."""
 
 import uuid
 
+from config import SECOND_CARD_USE_RATE
+
 EVENT_FIELDS = [
     "transaction_id", "event_time",
     "sender_pinfl", "sender_card", "sender_network",
@@ -37,6 +39,32 @@ def gen_session_signals(sender, fraud_type, rng):
     secs = median * stretch * float(np.exp(rng.normal(0, C.DECISION_TIME_SIGMA)))
     return call, round(max(C.SECS_LOGIN_FLOOR, secs), 1)
 
+def _payee_card(receiver, rng):
+    """Which of the payee's cards this transfer lands on.
+
+    The reason the `payee_identity` capability can be measured at all. With one
+    card per person, keying receiver-side state by PAN and by PINFL produce the
+    same partition, and the ablation compared a configuration against itself -
+    an exactly-zero delta on every seed, reported as "no effect". See the
+    SECOND_CARD_* note in config.py.
+
+    rng is optional because some callers build events outside the seeded stream;
+    without it the payee's primary card is used, which is the old behaviour.
+    """
+    second = getattr(receiver, "card2", "")
+    if second and rng is not None and rng.random() < SECOND_CARD_USE_RATE:
+        return {"receiver_card": second,
+                "receiver_network": receiver.network2,
+                "receiver_name": receiver.full_name,
+                "receiver_bank_code": receiver.bank_code2,
+                "receiver_bank_name": receiver.bank_name2}
+    return {"receiver_card": receiver.card,
+            "receiver_network": receiver.network,
+            "receiver_name": receiver.full_name,
+            "receiver_bank_code": receiver.bank_code,
+            "receiver_bank_name": receiver.bank_name}
+
+
 def make_event(sender, receiver, amount, ts, channel, device_id,
                is_new_payee, balance_before,
                is_fraud=0, fraud_type="NONE", rng=None):
@@ -52,11 +80,7 @@ def make_event(sender, receiver, amount, ts, channel, device_id,
         "sender_bank_code": sender.bank_code,
         "sender_bank_name": sender.bank_name,
         "receiver_pinfl": receiver.pinfl,
-        "receiver_card": receiver.card,
-        "receiver_network": receiver.network,
-        "receiver_name": receiver.full_name,
-        "receiver_bank_code": receiver.bank_code,
-        "receiver_bank_name": receiver.bank_name,
+        **_payee_card(receiver, rng),
         "amount_uzs": int(amount),
         "channel": channel,
         "device_id": device_id,
