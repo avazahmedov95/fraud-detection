@@ -87,7 +87,7 @@ Value is as **contrast**, not support.
 
 Also note the knowledge graph they describe — phone logs, ID cards, addresses,
 kinship edges — is the same shape as the MyID kinship integration this project
-**measured and found worthless** (+0.004 PR-AUC). A source that asserts the value
+**measured and found worthless** (+0.001 PR-AUC, CI straddling zero). A source that asserts the value
 of graph identity data, next to a measurement that it adds nothing here, is a
 better citation than one that agrees.
 
@@ -197,7 +197,7 @@ survive the prevalence question that AUPRC raises:
 | test prevalence | 1.23% | 1.142% |
 | recall @ 2% alert budget | **98.4%** | 49.4% |
 | lift @ top decile | 10.0× (capped) | 7.0× |
-| PR-AUC | 0.959 (0.966 ± 0.008 across seeds) | 0.380 |
+| PR-AUC | 0.968 (0.981 ± 0.009 across seeds) | 0.380 |
 
 Two independent prevalence-robust measures both say **about 2×**, which
 corroborates the 2.5× the AUPRC ratio gives. So the headline claim survives
@@ -209,11 +209,11 @@ does when stripped to what a public dataset can carry:
 
 | features available | PR-AUC on THIS data |
 |---|---|
-| all 24 | 0.959 |
-| amount + hour only | 0.678 |
+| all 24 | 0.968 |
+| amount + hour only | 0.648 |
 | — PaySim, leak-free, 6 raw columns | 0.380 |
 
-Feature poverty costs 0.959 → 0.678; the data itself accounts for 0.678 → 0.380.
+Feature poverty costs 0.968 → 0.648; the data itself accounts for 0.648 → 0.380.
 **Roughly half the gap is features public data cannot publish, and half is a
 generator whose classes are separable by construction.** That is a sharper answer
 than "2.5× easier" and a more defensible one, because the first half is a
@@ -222,9 +222,9 @@ property of the field rather than of this generator.
 **The most uncomfortable number is the one that was missing.** Their *pre*-leak-
 removal AUPRC was 0.988 — reproduced here at 1.000, so PaySim's balance columns
 are not merely leaky, they are the label. That figure sits **above** this
-project's 0.966. A PR-AUC in the high nineties is therefore not evidence of a
+project's 0.981. A PR-AUC in the high nineties is therefore not evidence of a
 working system: it is the range a known-broken model reaches on public data. The
-honest reading of 0.966 is not "better than the benchmark" but "the same class of
+honest reading of 0.981 is not "better than the benchmark" but "the same class of
 number the benchmark produces when it is wrong", which is why
 `generator-spec.md` §7 calls it a design target rather than a result.
 
@@ -641,7 +641,7 @@ answers to it, not one.
 | Source | What was taken | Where it lands |
 |---|---|---|
 | **PaySim** (§6) | The rule layer went **mute** on foreign data: with two rules available the highest score any fraud reached was 0.35 against a 0.40 cutoff, while the rules separated the classes 4:1. | `capabilities.scaled_threshold` exists because of this, reached on the deployed fallback path through `fusion.cutoffs` and switchable at `config.SCALE_THRESHOLDS_BY_CAPABILITY`. Adapter: `validation/paysim_adapter.py`. Balance leakage as precedent: `generator-spec.md` §7. |
-| **PaySim, via `ris3abh`** (§6) | PR-AUC **0.380** on the standard public benchmark against 0.966 here — reproduced at 0.397, and their *pre*-leak-removal 0.988 reproduced at 1.000. | Turns "our data is probably easier" into a decomposition: half the gap is features public data cannot carry, half is separability — `generator-spec.md` §0, §7. The 0.988 is the sharper point: a PR-AUC in the high nineties is what a *broken* model scores. |
+| **PaySim, via `ris3abh`** (§6) | PR-AUC **0.380** on the standard public benchmark against 0.981 here — reproduced at 0.397, and their *pre*-leak-removal 0.988 reproduced at 1.000. | Turns "our data is probably easier" into a decomposition: half the gap is features public data cannot carry, half is separability — `generator-spec.md` §0, §7. The 0.988 is the sharper point: a PR-AUC in the high nineties is what a *broken* model scores. |
 | **IBM AMLSim** (§7) | `MULE_FAN_IN` at six senders fired on **3.12%** of legitimate traffic and caught **0.0%** of the fan-in typology: in a scale-free graph 2.69% of receivers exceed six as ordinary hub behaviour. The constant encoded the density of the population it was tuned on. | `rules.PopulationBaseline`, `MULE_FAN_IN_MODE=relative`, measured +6.9 pp — `irp-framing.md` §6, third RQ3 result. Screens: `validation/amlsim_ablation.py`. |
 | **CBU Regulation No. 3759** | The BRV-denominated threshold, and the fact that **the project's earlier citation of it was wrong**. | `data-generator/config.STRUCTURING_THRESHOLD`, mirrored at `stream-processor/config.STRUCTURING_THRESHOLD` and enforced through `config.MANDATORY_REVIEW_RULES`. The correction is left in the code as a comment: a citation that was checked and refuted. |
 | **Cybersecurity Centre of Uzbekistan, 2025** (§6d) | **54 of 157** high-severity mobile findings are transport security. | The motivation for measuring transport overhead at all — `irp-framing.md` §7.5, `threat-model.md` §3a. Not "interesting to measure" but "the national authority says this is the dominant defect class". |
@@ -655,7 +655,7 @@ answers to it, not one.
 | **Afriyie et al. 2023** (§6a) | The same failure in one peer-reviewed instance, recomputable from their own tables: precision **0.092**, F1 **0.167**, 10.9 alerts per catch, headline accuracy 0.958 against a 0.996 trivial baseline. | The strongest single argument for this project's reporting discipline. |
 | **Hemel et al. 2026** (§4) | XGBoost on tabular features: 0.98 on the majority class, **exactly 0.00** on both financial-fraud classes; the graph model is the only one that finds them. | Independent arrival at the fan-in argument — a per-record view cannot express a pattern defined over the relation between records. |
 | **Wang, Liu, He & Du 2020** (§6c) | Relational structure beats demographic attributes on *real* data (FDNE F1 0.820), with a per-decision explanation. Plus their label caveat: overdue borrowers counted as fraud. | Supports receiver-side aggregation + SHAP as a pair. The label caveat is the contrast: here the label's definition is written down. |
-| **Wang 2018** (§3) | AUC 0.780 at a >10% fraud rate, justified as "insensitive to class balance" — the reasoning this project argues against. Their identity graph is the shape of the MyID integration measured here as worthless (+0.004 PR-AUC). | Cited as contrast. A source asserting the value of graph identity data, beside a measurement that it adds nothing, is a better citation than one that agrees. |
+| **Wang 2018** (§3) | AUC 0.780 at a >10% fraud rate, justified as "insensitive to class balance" — the reasoning this project argues against. Their identity graph is the shape of the MyID integration measured here as worthless (+0.001 PR-AUC, CI straddling zero). | Cited as contrast. A source asserting the value of graph identity data, beside a measurement that it adds nothing, is a better citation than one that agrees. |
 
 ### Sources that supply nothing, recorded so the search is not repeated
 

@@ -146,7 +146,7 @@ def run(seeds, budget, only=None):
         if time.time() >= deadline:
             left = sum(1 for s, l, _ in todo
                        if l not in results.get(str(s), {}))
-            print(f"\nbudget reached — {left} run(s) left; "
+            print(f"\nbudget reached - {left} run(s) left; "
                   f"invoke again to continue.")
             return results, False
         csv = _dataset(seed)
@@ -213,9 +213,29 @@ def report(results, only=None):
         half = ci95(pairs)
         agree = sum(1 for p in pairs if (p < 0) == (dm < 0))
 
-        # Three outcomes, not two: "cannot tell yet" is not "no effect".
+        # Four outcomes. "nothing was measured" is the one that has to come first,
+        # because it is indistinguishable from "no effect" in the summary columns
+        # and means the opposite thing: not that the capability is worthless, but
+        # that this run never tested it.
+        #
+        # A delta of EXACTLY zero on every seed is not a small effect. Floating
+        # point does not land on 0.000000 five times by chance, so the two
+        # configurations trained the same model on the same input, and the number
+        # in the delta column is about the harness rather than the capability.
+        # Both ways this has happened were real: device_telemetry, where the
+        # generator produced only 25 device changes and all of them fraud
+        # (generator-spec.md 4); and payee_identity, where each person carries
+        # exactly one card, so keying the receiver store by card or by PINFL
+        # induces the same partition and no ablation on this data can separate
+        # them. The first was a defect and is fixed. The second is a limit of the
+        # dataset, and saying "no effect" about it would be a claim the data
+        # cannot support.
+        untested = all(p == 0.0 for p in pairs) and len(pairs) > 1
+
         excludes_zero = abs(dm) > half
-        if excludes_zero and abs(dm) >= 0.005:
+        if untested:
+            verdict = "NOT MEASURED"
+        elif excludes_zero and abs(dm) >= 0.005:
             verdict = "real"
         elif excludes_zero or abs(dm) < 0.005:
             verdict = "no effect"
@@ -229,13 +249,16 @@ def report(results, only=None):
 
     print("\nDeltas are paired within each seed, so between-seed variation "
           "cancels out.\nThe interval is a 95% CI for the MEAN delta (t-based), "
-          "not the spread of\nindividual deltas — the question is whether the "
+          "not the spread of\nindividual deltas - the question is whether the "
           "mean differs from zero.\n'sign' counts seeds agreeing with the "
           "mean's direction.\n")
-    print("  real        CI excludes zero and |mean| >= 0.005 PR-AUC")
-    print("  no effect   CI excludes zero but the effect is too small to act on,")
-    print("              or the mean is under 0.005 either way")
-    print("  unresolved  CI straddles zero — add seeds before quoting it")
+    print("  real          CI excludes zero and |mean| >= 0.005 PR-AUC")
+    print("  no effect     CI excludes zero but the effect is too small to act on,")
+    print("                or the mean is under 0.005 either way")
+    print("  unresolved    CI straddles zero - add seeds before quoting it")
+    print("  NOT MEASURED  every seed gave a delta of exactly zero, so both arms")
+    print("                trained the same model. Nothing about the capability")
+    print("                follows from this row - fix the data, not the reading.")
 
 
 def main():

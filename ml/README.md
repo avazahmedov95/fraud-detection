@@ -61,11 +61,11 @@ quietly stop being true.
 | metric            | ML model | CEP rules only |
 |-------------------|----------|----------------|
 | ROC-AUC           | 0.999    | —              |
-| PR-AUC            | 0.959    | —              |
-| precision @0.50   | 0.860    | 0.344          |
-| recall @0.50      | 0.902    | 0.528          |
+| PR-AUC            | 0.968    | —              |
+| precision @0.50   | 0.930    | 0.337          |
+| recall @0.50      | 0.892    | 0.508          |
 
-Recall by fraud type (ML @0.50): STRUCTURING 97.1%, APP 89.5%, ATO 86.4%, MULE 85.7%.
+Recall by fraud type (ML @0.50): STRUCTURING 100.0%, APP 87.0%, ATO 92.6%, MULE 77.8%.
 
 The table this replaced was measured BEFORE the receiver-side aggregation
 capability and was never refreshed: it showed MULE recall at 54%, against 85.7%
@@ -104,12 +104,12 @@ prevalence-robust measures agreeing on about 2x is what makes the AUPRC ratio
 believable.
 
 But **feature availability is about half of it**: stripped to amount and hour,
-the columns a public dataset can carry, this model scores 0.678 on this data
-(`validation/README.md`). So 0.959 -> 0.678 is what publishing costs, and
-0.678 -> 0.380 is the generator being separable. The first half is a property of
+the columns a public dataset can carry, this model scores 0.648 on this data
+(`validation/README.md`). So 0.968 -> 0.648 is what publishing costs, and
+0.648 -> 0.380 is the generator being separable. The first half is a property of
 the field, not of this project.
 
-**And the number that should be read next to 0.966 is 0.988** - their AUPRC
+**And the number that should be read next to 0.981 is 0.988** - their AUPRC
 *before* they removed the balance leakage, reproduced here at 1.000. A PR-AUC in
 the high nineties is the range a known-broken model reaches on public data, which
 is the honest frame for this one. See `docs/related-work.md` §6.
@@ -157,9 +157,12 @@ this paragraph used to say "removed" and stop. `is_family` is the
 the deployed 24-column vector. The generator was then fixed to model both
 directions (25% of legitimate transfers go to relatives, and a realistic minority
 of fraud does too), and under those conditions switching the capability on is
-worth **+0.004 PR-AUC [+0.001, +0.007]** over 5 seeds - real, and negligible.
-That is the finding, not the removal: a feature that dominated SHAP on synthetic
-data was worth almost nothing once the generator modelled both classes of its
+worth **+0.001 PR-AUC [-0.001, +0.003]** over 5 seeds - an interval that now
+straddles zero, so the honest verdict is **no effect**, not a small one. On the
+2026-07-19 dataset the same measurement read +0.004 [+0.001, +0.007], real but
+negligible; the regeneration moved it the rest of the way. That is the finding,
+not the removal: a feature that dominated SHAP on synthetic data turned out to
+be worth nothing measurable once the generator modelled both classes of its
 behaviour. See `docs/irp-framing.md` §4.
 
 The ONNX model reproduces native LightGBM probabilities to < 1e-6, so phase-6
@@ -191,17 +194,38 @@ grown to 24, so they are history rather than current figures.
 Deltas are paired within each seed; the interval is a 95% CI for the mean delta.
 
 All rows measured on one feature set and one generator version, 5 seeds,
-baseline PR-AUC **0.966 ± 0.008**:
+baseline PR-AUC **0.981 ± 0.009**:
 
 | configuration | delta (95% CI) | sign | verdict |
 |---|---|---|---|
-| receiver_velocity=off | −0.032 [−0.055, −0.009] | 5/5 | **real** |
-| session_telemetry=off | −0.019 [−0.025, −0.014] | 5/5 | **real** |
-| receiver_age=off | −0.011 [−0.020, −0.001] | 5/5 | **real** |
-| myid_kinship=on | +0.004 [+0.001, +0.007] | 5/5 | no effect |
-| channel=off | −0.002 [−0.004, +0.001] | 5/5 | no effect |
-| geo_telemetry=off | −0.001 [−0.004, +0.003] | 3/5 | no effect |
-| device_telemetry=off | +0.000 [+0.000, +0.000] | 5/5 | no effect |
+| receiver_velocity=off | −0.029 [−0.045, −0.012] | 5/5 | **real** |
+| session_telemetry=off | −0.028 [−0.046, −0.009] | 5/5 | **real** |
+| receiver_age=off | −0.022 [−0.035, −0.010] | 5/5 | **real** |
+| channel=off | −0.002 [−0.007, +0.002] | 4/5 | no effect |
+| myid_kinship=on | +0.001 [−0.001, +0.003] | 3/5 | no effect |
+| geo_telemetry=off | −0.000 [−0.003, +0.002] | 4/5 | no effect |
+| device_telemetry=off | −0.000 [−0.003, +0.002] | 3/5 | no effect |
+| payee_identity=pinfl | +0.000 [+0.000, +0.000] | 5/5 | **NOT MEASURED** |
+
+**The last two rows are the reason this table gained a fourth verdict.** Both
+used to read `+0.000 [+0.000, +0.000] | 5/5 | no effect`, and only one of them
+meant it.
+
+`device_telemetry` was a defect. The generator produced 25 device changes in
+50,000 rows and every one was fraud, which is below LightGBM's
+`min_child_samples = 30`: no split could be formed, both arms trained an
+identical model, and the delta was bit-identical on every seed. The row said
+"device telemetry buys nothing" when it should have said "this dataset never
+tested it". Fixed in the generator (`generator-spec.md` §4); the deltas now vary
+by seed, and the capability really is worth about nothing on this data - which is
+now a measurement rather than an artefact.
+
+`payee_identity` is not a defect and is still unmeasurable. Keying the receiver
+store by card or by PINFL can only differ when someone holds more than one card,
+and this generator gives every person exactly one - so the two modes induce the
+same partition and no ablation on this data can separate them. Reporting "no
+effect" would be a claim the data cannot support. `ablate_seeds.py` now detects
+an exactly-zero delta on every seed and prints **NOT MEASURED** instead.
 
 `experiments/ablate_seeds.py` fingerprints both the feature set and the generator sources,
 and refuses to mix results across versions — adding a feature or changing the
@@ -296,16 +320,16 @@ findings:
 
 `metrics.json` carries a `calibration` block beside the AUCs. It answers a
 different question from everything else there: not *does the model rank fraud
-above legitimate traffic* (it does, ROC-AUC 0.999 / PR-AUC 0.959) but *are its
+above legitimate traffic* (it does, ROC-AUC 0.999 / PR-AUC 0.968) but *are its
 probabilities usable as magnitudes*.
 
 ```
-brier               0.00244
-n_alerts            131          (>= 0.40 on the held-out slice)
-saturated_share     70.2%        rounding to 1.000
-distinct_scores     35
-review_band         14           alerts in [0.40, 0.80)
-median_alert_score  0.999975
+brier               0.00171
+n_alerts            116          (>= 0.40 on the held-out slice)
+saturated_share     70.7%        rounding to 1.000
+distinct_scores     26
+review_band         9           alerts in [0.40, 0.80)
+median_alert_score  0.999951
 scored_with         model.onnx
 ```
 

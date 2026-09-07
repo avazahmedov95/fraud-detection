@@ -9,13 +9,13 @@ distinction is the point.
 of a named sender and a named receiver: velocity, new-payee, amount deviation
 against a personal baseline, fan-in concentration.
 
-Measured cost of losing them (seed 42, held-out slice):
+Measured cost of losing them (seed 42, held-out slice, 2026-09-07 dataset):
 
 | available | PR-AUC | precision | recall |
 |---|---|---|---|
-| full system | 0.959 | 0.860 | 0.902 |
-| no account identifiers | 0.812 | 0.624 | 0.797 |
-| amount + hour only | 0.678 | 0.218 | 0.886 |
+| full system | 0.968 | 0.930 | 0.892 |
+| no account identifiers | 0.801 | 0.591 | 0.733 |
+| amount + hour only | 0.648 | 0.219 | 0.875 |
 
 Public transaction datasets do not carry account identifiers, because those are
 precisely what cannot be published. So:

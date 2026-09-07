@@ -85,7 +85,7 @@ def report(res, hits):
     lg = flagged[res.label == 0].mean() if n_legit else 0.0
 
     print("=" * 70)
-    print("A. PER-RULE LIFT — does each rule carry signal on foreign data?")
+    print("A. PER-RULE LIFT - does each rule carry signal on foreign data?")
     print("=" * 70)
     print("Threshold-free, and therefore the measure that actually answers the")
     print("question. A rule that fires more often on fraud than on legitimate")
@@ -103,7 +103,7 @@ def report(res, hits):
         print(f"{rule:<24}{f:>11.2%}{l:>12.2%}{shown:>9}")
 
     print("\n" + "=" * 70)
-    print("B. DECISION LAYER — does the deployed threshold still work?")
+    print("B. DECISION LAYER - does the deployed threshold still work?")
     print("=" * 70)
     print(f"  fraud flagged : {int(flagged[res.label==1].sum()):>7,} / {n_fraud:<7,} ({fr:.1%})")
     print(f"  legit flagged : {int(flagged[res.label==0].sum()):>7,} / {n_legit:<7,} ({lg:.2%})")
@@ -140,7 +140,7 @@ def report(res, hits):
         print(f"\n  This is a finding about threshold calibration, not about the")
         print(f"  features: see the lift table above, where the rules do separate")
         print(f"  the classes. A deployment with fewer integrations does not get a")
-        print(f"  slightly worse rule layer — it gets a silent one.")
+        print(f"  slightly worse rule layer - it gets a silent one.")
 
     if n_fraud and n_legit:
         best = None
@@ -153,7 +153,7 @@ def report(res, hits):
             t, f_at, l_at, lift = best
             print(f"\n  Best cutoff on this data: {t:.2f} -> flags {f_at:.1%} of "
                   f"fraud, {l_at:.2%} of legit ({lift:.1f}x lift).")
-            print(f"  Reported to size the gap, NOT adopted — tuning a threshold on")
+            print(f"  Reported to size the gap, NOT adopted - tuning a threshold on")
             print(f"  the validation set is what this exercise exists to avoid.")
 
 

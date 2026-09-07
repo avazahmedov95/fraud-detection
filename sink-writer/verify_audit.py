@@ -30,7 +30,7 @@ def _fetch(limit):
         with urllib.request.urlopen(url, timeout=60) as resp:
             body = resp.read().decode()
     except Exception as exc:                           # noqa: BLE001
-        raise SystemExit(f"could not query ClickHouse at {CH_HOST}:{CH_PORT} — {exc}")
+        raise SystemExit(f"could not query ClickHouse at {CH_HOST}:{CH_PORT} - {exc}")
     return [json.loads(line) for line in body.strip().splitlines() if line]
 
 
@@ -52,12 +52,12 @@ def verify(records):
 
         if r["prev_hash"] != prev_hash:
             findings.append(f"seq {seq}: prev_hash does not match the previous "
-                            f"record_hash — records reordered or one deleted")
+                            f"record_hash - records reordered or one deleted")
         recomputed = integrity.record_hash(
             r["prev_hash"], seq, [r["ingress_hash"], r["payload"]])
         if recomputed != r["record_hash"]:
             findings.append(f"seq {seq} (txn {r['transaction_id']}): record_hash "
-                            f"does not recompute — content was altered")
+                            f"does not recompute - content was altered")
 
         try:
             payload = json.loads(r["payload"])
@@ -84,7 +84,7 @@ def main():
 
     records = _fetch(args.limit)
     if not records:
-        print("audit log is empty — nothing to verify.")
+        print("audit log is empty - nothing to verify.")
         return
 
     findings = verify(records)
@@ -93,15 +93,15 @@ def main():
           f"(seq {records[0]['seq']}..{records[-1]['seq']})\n")
 
     if not findings:
-        print(f"INTACT — chain continuous, no gaps, projections consistent.")
+        print(f"INTACT - chain continuous, no gaps, projections consistent.")
         print(f"head record_hash: {records[-1]['record_hash']}")
         print("\nPublish the head hash somewhere outside the database (a commit, "
               "a timestamping\nservice) to anchor the chain: it closes the one "
-              "gap a chain alone leaves —\nan attacker who rewrites every record "
+              "gap a chain alone leaves -\nan attacker who rewrites every record "
               "from a point onward.")
         return
 
-    print(f"TAMPERING DETECTED — {len(findings)} finding(s):\n")
+    print(f"TAMPERING DETECTED - {len(findings)} finding(s):\n")
     for f in findings:
         print(f"  - {f}")
     sys.exit(1)

@@ -75,7 +75,7 @@ def main():
     auc = roc_auc_score(yte, proba)
     ap = average_precision_score(yte, proba)
 
-    print("\n=== ML model on held-out (later) test slice — DESIGN TARGETS ===")
+    print("\n=== ML model on held-out (later) test slice - DESIGN TARGETS ===")
     print(f"ROC-AUC: {auc:.3f}   PR-AUC (avg precision): {ap:.3f}")
     m05 = _metrics(yte, proba, 0.50)
     print(f"@0.50  precision={m05['precision']:.3f}  recall={m05['recall']:.3f}  "

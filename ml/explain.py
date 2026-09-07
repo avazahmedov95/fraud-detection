@@ -59,7 +59,7 @@ def main():
         j = max(fraud_idx, key=lambda i: proba[i])
         contrib = sorted(zip(feats, shap_values[j], X.iloc[j].values),
                          key=lambda t: abs(t[1]), reverse=True)
-        print(f"\nper-alert explanation (fraud, model p={proba[j]:.3f}) — top reason codes:")
+        print(f"\nper-alert explanation (fraud, model p={proba[j]:.3f}) - top reason codes:")
         for name, sv, val in contrib[:6]:
             direction = "+risk" if sv > 0 else "-risk"
             print(f"  {name:<20} value={val:<10.3f} SHAP={sv:+.3f}  ({direction})")

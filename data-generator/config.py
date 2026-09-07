@@ -17,6 +17,21 @@ APP_TIME_STRETCH = (2.5, 5.0)         # victim listening to instructions: slower
 ATO_TIME_COMPRESS = (0.4, 0.7)        # attacker in a hurry: faster
 SECS_LOGIN_FLOOR = 3.0                # physical minimum
 
+# --- Devices ----------------------------------------------------------------
+# The same failure as the kinship shares below, found the same way and fixed the
+# same way. Every legitimate event used to carry the sender's ONE device, so
+# `device_is_new` fired on 25 of 50,000 rows and all 25 were fraud: a perfect
+# predictor, and useless - 25 is under LightGBM's min_child_samples=30, so the
+# model could not split on it at all and `device_telemetry=off` measured a delta
+# of exactly 0.0000 across five seeds. A signal only fraud can produce is not a
+# signal, it is the label wearing a feature's name.
+#
+# Real people carry a phone and sign in from a laptop, and replace the phone. Two
+# parameters rather than one per-event probability, because "who owns a second
+# device" is a property of a person and belongs in persons.py with the rest of them.
+SECOND_DEVICE_SHARE = 0.25    # people who use a second device at all
+SECOND_DEVICE_USE_RATE = 0.15 # share of THEIR transactions sent from it
+
 # --- Kinship (households stand in for MyID-verified relatives) ---------------
 # Both shares must stay non-zero: with no fraud going to relatives, `is_family`
 # separated the classes perfectly and topped SHAP - an artefact, not a finding.

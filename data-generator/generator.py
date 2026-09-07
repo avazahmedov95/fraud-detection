@@ -10,7 +10,8 @@ import numpy as np
 import pandas as pd
 
 from config import (GeneratorConfig, AMOUNT_MIN, AMOUNT_MAX,
-                    CHANNELS, CHANNEL_WEIGHTS, FAMILY_PAYEE_SHARE)
+                    CHANNELS, CHANNEL_WEIGHTS, FAMILY_PAYEE_SHARE,
+                    SECOND_DEVICE_USE_RATE)
 from events import EVENT_FIELDS, make_event
 import persons as P
 import travel as T
@@ -102,10 +103,18 @@ def generate_normal(config, persons, by_pinfl, n_normal, rng, start_dt, trips):
         ts = T.settle_after_transit(sender, trips, ts, rng)
         region, _ = T.locate(sender, trips, ts)
 
+        # Most events come from the sender's usual device; those who own a second
+        # one use it sometimes. Without this every legitimate event carried one
+        # device forever and device_is_new became a fraud-only signal - see the
+        # SECOND_DEVICE_* note in config.py.
+        device_id = f"dev-{sender.pinfl[-8:]}"
+        if sender.has_second_device and rng.random() < SECOND_DEVICE_USE_RATE:
+            device_id = f"dev-{sender.pinfl[-8:]}-b"
+
         ev = make_event(
             sender, receiver, amount, ts,
             channel=str(rng.choice(CHANNELS, p=channel_p)),
-            device_id=f"dev-{sender.pinfl[-8:]}",        # the sender's usual device
+            device_id=device_id,
             is_new_payee=is_new,
             balance_before=amount * float(rng.uniform(1.2, 8.0)), rng=rng)
         ev["sender_region"] = region
@@ -214,8 +223,15 @@ def main():
     df, persons_df = build_dataset(config)
 
     os.makedirs(args.out, exist_ok=True)
-    df.to_csv(os.path.join(args.out, "transactions.csv"), index=False)
-    persons_df.to_csv(os.path.join(args.out, "persons.csv"), index=False)
+    # LF explicitly, not os.linesep. pandas takes its terminator from the host, so
+    # the same seed on Windows and Linux produced files that differed in every
+    # line ending and therefore in SHA-256 - generator-spec.md 9 records the
+    # dataset of record as "not produced on the Windows host" for exactly this
+    # reason. A hash pin that only holds on one operating system is not a pin.
+    df.to_csv(os.path.join(args.out, "transactions.csv"), index=False,
+              lineterminator="\n")
+    persons_df.to_csv(os.path.join(args.out, "persons.csv"), index=False,
+                      lineterminator="\n")
 
     _summary(df)
     print(f"\nwritten to {os.path.abspath(args.out)}/  "

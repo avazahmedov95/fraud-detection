@@ -54,6 +54,22 @@ Recompute with `.\run.ps1 verify-audit` against the same warehouse. The head is
 derived from the stored records, so a match means that nothing between this
 commit and that query altered, removed or reordered a decision.
 
+> **The warehouse this anchor was recomputable against was truncated on
+> 2026-09-07**, to clear the way for runs on the regenerated dataset
+> (`generator-spec.md`, "The dataset of record"). The rows were exported first,
+> to `_warehouse_backup_2026-09-07/` — gitignored, `audit_log.native` plus the
+> scored and case tables in ClickHouse `Native` format. The export was verified
+> by restoring it into a scratch table and confirming both the row count (87,470)
+> and the presence of the head hash above **before** the truncation ran.
+>
+> Recorded because the sentence above promises something an empty table cannot
+> deliver. To check the anchor now: restore the export
+> (`cat _warehouse_backup_2026-09-07/audit_log.native | clickhouse-client -q
+> "INSERT INTO fraud.audit_log FORMAT Native"`) into an empty warehouse, then run
+> `verify-audit`. If that file is ever lost, this anchor becomes a claim about a
+> database nobody can produce — which is the honest status to record rather than
+> to leave implied.
+
 ## Change of hashed field list — 03.09.2026
 
 `receiver_region` was removed from `integrity.INGRESS_FIELDS`, for the same

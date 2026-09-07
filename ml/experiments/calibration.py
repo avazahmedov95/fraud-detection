@@ -21,8 +21,8 @@ import train as T            # noqa: E402
 
 MODELS_DIR = os.getenv("MODELS_DIR", os.path.join(_PKG, "models"))
 CSV = os.getenv(
-    "DATASET_CSV", os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "..", "data-generator", "out", "transactions.csv"))
+    "DATASET_CSV", os.path.join(_PKG, "..", "data-generator", "out",
+                                "transactions.csv"))
 METRICS = os.path.join(MODELS_DIR, "metrics.json")
 
 

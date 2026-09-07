@@ -66,9 +66,9 @@ def main():
     onnx_proba = _onnx_positive_proba(sess.run(None, {sess.get_inputs()[0].name: sample}))
 
     max_diff = float(np.max(np.abs(native - onnx_proba)))
-    print(f"parity vs native LightGBM:  max |Δ probability| = {max_diff:.2e}  over {len(sample)} rows")
+    print(f"parity vs native LightGBM:  max |delta probability| = {max_diff:.2e}  over {len(sample)} rows")
     assert max_diff < 1e-3, "ONNX/native mismatch too large"
-    print("ONNX model matches the native model — ready for in-Flink serving (phase 6).")
+    print("ONNX model matches the native model - ready for in-Flink serving (phase 6).")
 
     json.dump(feats, open(os.path.join(MODELS_DIR, "feature_names.json"), "w"), indent=2)
 

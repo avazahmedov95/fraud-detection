@@ -154,6 +154,30 @@ $\mathcal{U}\{H_{\text{start}}, H_{\text{end}}\}$ and minute/second uniform.
 **Channel.** $\text{Cat}(0.70, 0.12, 0.13, 0.05)$ over
 MOBILE_APP / USSD / WEB / ATM.
 
+**Device.** A person owns a second device w.p. $\sigma = 0.25$, drawn once in
+`persons.py`, and each of their events comes from it w.p. $\rho = 0.15$;
+everyone else transacts from one device forever. Device identity is
+`dev-<pinfl tail>` and `dev-<pinfl tail>-b`.
+
+> **Added 2026-09-07, fixing the same defect §3 records for kinship.** Every
+> legitimate event used to carry the sender's single device, so `device_is_new`
+> — which `features.py` computes as *first event from a device this sender has
+> not used before* — fired on **25 of 50,000 rows and all 25 were fraud.** Both
+> halves of that are wrong. It was a perfect predictor, which is the label under
+> another name; and 25 rows is below `min_child_samples = 30` in `ml/train.py`,
+> so no split could be formed on it and the model never used the feature at all.
+> That is why `device_telemetry=off` measured a delta of exactly $0.0000$ across
+> five seeds — not a small effect, no effect, and the ablation table read as a
+> statement about the model when it was a statement about this generator.
+>
+> With $\sigma, \rho$ as above it fires on 647 rows, 631 of them legitimate:
+> precision 2.5% against a 1.5% base rate. A device change is now mostly an
+> ordinary event, which is what it is in life and what makes it usable as one
+> signal among several rather than a giveaway.
+>
+> `verify_spec.py` checks both halves separately, because they fail
+> independently: enough rows to split on, and both classes producing it.
+
 **Region.** The sender's home region, unless travelling (§6).
 
 **Balance before.** $X \cdot \mathcal{U}(1.2, 8.0)$ — mechanically consistent
@@ -269,11 +293,22 @@ time, takes $d(r, r')/70$ hours at road speed, stays $\mathcal{U}(12, 96)$ hours
 and returns symmetrically. Transactions during the stay carry $r'$; transactions
 falling *in transit* are re-timed to $\mathcal{U}(5,180)$ minutes after arrival.
 
-> **Realised share is 16.7%, not 18%.** A journey whose randomly drawn
-> destination equals the person's home region is skipped, so a person selected
-> for one journey who draws their own region ends up with no plan. $\tau$ is the
-> selection probability, not the observed traveller share — a distinction worth
-> keeping because the observed figure is what a reader can check.
+> **$\tau$ is the selection probability, not the observed traveller share.** A
+> journey whose randomly drawn destination equals the person's home region is
+> skipped, so a person selected for one journey who draws their own region ends
+> up with no plan. On the 2026-09-07 dataset, instrumented: **930 people pass
+> the $\tau$ gate (18.60%), 28 lose every journey to a self-region draw, 902
+> travel (18.04%)**.
+>
+> Worth reading twice, because the earlier revision of this note drew the wrong
+> lesson from it. It reported "realised share is 16.7%, not 18%" and presented
+> the shortfall as the point. The loss is real but small — 3% of those gated —
+> and it is *smaller than the noise in the gate itself*: 5,000 Bernoulli draws at
+> $\tau = 0.18$ have a standard deviation of 27 people, and this stream happened
+> to draw 930 rather than 900. So the realised share can land either side of
+> $\tau$, and on this dataset it lands above. The distinction between selection
+> probability and observed share is the durable claim; the direction of the gap
+> was an artefact of one seed.
 
 That re-timing is essential: an event at the origin followed minutes later by one
 at the destination would manufacture impossible travel inside legitimate traffic.
@@ -333,7 +368,7 @@ more useful than calling the number an artefact and moving on.
 
 **On the ROC-AUC ≈ 0.999 this data produces.** It is an artefact of a generator
 whose classes are separable by construction along several axes at once. PR-AUC
-(0.966 ± 0.008 across seeds) is the figure to read, and even that is a design
+(0.981 ± 0.009 across seeds) is the figure to read, and even that is a design
 target. Its floor is the **held-out slice's** 1.23% positive rate, not the
 dataset's overall 1.5% - AUPRC is scored where it is measured, and quoting it
 against the wrong rate is the error `related-work.md` §6 had to correct in the
@@ -425,36 +460,38 @@ and every comparison above was taken with it removed.
 ### The dataset of record
 
 `data-generator/out/` is gitignored, so the files every reported figure was
-computed on are pinned here instead. Generated 2026-07-19 on seed 42 with
-defaults.
+computed on are pinned here instead. **Regenerated 2026-09-07** on seed 42 with
+defaults, to fix the device defect in §4.
 
 ```
-transactions.csv   50,000 rows   16,162,896 bytes
-  sha256  b767f38489ab65628028b91638ca6cbfa7e0377128c0f86e844dffb35e0db596
-persons.csv         5,200 rows      546,044 bytes
-  sha256  010cddd6a60f30ee322dfd8c57643db87636f0ba1c3358e02d66711fcd9e463f
+transactions.csv   50,000 rows   16,181,796 bytes
+  sha256  c4e0be22dcaa77a7a4d8f9c1beccb11bc6133d3ce92ce5dadd764eca7e9b0496
+persons.csv         5,200 rows      546,356 bytes
+  sha256  4cac78575b574bf662ce8de98d9fb67bdf4efa532c1760780ce399fa0d2f3ed4
 ```
 
-Both were written with LF line endings. `pandas.to_csv` takes its terminator
-from `os.linesep`, so they were not produced on the Windows host, and a
-regeneration there differs in hash for that reason alone before any content
-difference is considered.
+**These hashes now hold on any host, which the previous pair did not.**
+`pandas.to_csv` takes its line terminator from `os.linesep`, so the same seed
+produced LF files on Linux and CRLF files on Windows — a different SHA-256 for
+every line in the file, before any content difference is considered. The
+previous entry recorded this as a property of the dataset ("they were not
+produced on the Windows host"). It is a property of the writer, and
+`generator.py` now passes `lineterminator="\n"` explicitly. A hash pin that only
+holds on one operating system is not a pin.
 
-**The fix does not regenerate these files.** Sorting changes which payee is
-drawn and therefore the entire downstream RNG stream. The dataset above stays
-frozen as the one the reported figures were measured on; determinism applies
-from this commit forward.
+Determinism re-checked after the change, since the generator moved: two runs at
+`PYTHONHASHSEED` 1 and 99 differ on **0 of 50,000 rows** ignoring
+`transaction_id`, and `persons.csv` is byte-identical.
 
-Measured 2026-08-31, because "the entire downstream RNG stream" invites the
-question *how much*: regenerating with the fixed generator gives 50,000 rows
-again, of which **36,110 carry a different receiver**. Sender, timestamp and
-amount are identical on every row; only `receiver_*` and the `is_family_transfer`
-that follows from it move. That is the same 72% and the same signature as the
-`PYTHONHASHSEED` experiment above (36,072 rows), which is what one would expect:
-both compare an arbitrary set ordering against the sorted one. The regenerated
-file is also self-consistent - two runs at different `PYTHONHASHSEED` now agree
-on every column except `transaction_id` - so the fix holds; what cannot be
-reproduced is this particular pre-fix file.
+**The previous dataset of record**
+(`b767f38489ab…` / `010cddd6a60f…`, generated 2026-07-19) is kept at
+`data-generator/out_frozen_2026-07-19/`, also gitignored, and its hashes were
+verified against this document before it was replaced. Every figure in this
+repository dated before 2026-09-07 was measured on it. It is retained rather
+than described because the payee-sorting fix means it cannot be regenerated:
+same seed, same versions, 36,110 of 50,000 rows carry a different receiver, the
+same 72% signature as the `PYTHONHASHSEED` experiment above. The old file can be
+kept or recomputed against, but not reproduced.
 
 `out/relationships.csv` is *not* part of this dataset. It is a leftover from the
 design in which kinship edges were loaded into the graph - removed because the
@@ -470,14 +507,15 @@ output is a wish list, so these are the numbers a reader can reproduce.
 |---|---|---|
 | transactions | 50,000 | 50,000 |
 | fraud rate | 1.5% | 1.500% |
-| fresh legitimate accounts | 12% | 12.5% |
-| aged fraud accounts | 30% | 27.0% |
-| channel mix (MOBILE_APP / USSD / WEB / ATM) | 0.70 / 0.12 / 0.13 / 0.05 | 0.700 / 0.118 / 0.130 / 0.051 |
-| median legitimate amount | ≈133k (baseline median) | 138,740 UZS |
-| `active_call` legitimate | 0.03 | 0.029 |
-| `active_call` APP | 0.70 | 0.669 |
+| fresh legitimate accounts | 12% | 11.5% |
+| aged fraud accounts | 30% | 30.0% |
+| channel mix (MOBILE_APP / USSD / WEB / ATM) | 0.70 / 0.12 / 0.13 / 0.05 | 0.701 / 0.119 / 0.130 / 0.049 |
+| median legitimate amount | ≈133k (baseline median) | 135,340 UZS |
+| `active_call` legitimate | 0.03 | 0.030 |
+| `active_call` APP | 0.70 | 0.721 |
 | STRUCTURING as fraction of threshold | 0.85–0.99 | 0.851–0.990 |
 | ATO events per episode | 2–4 | {2, 3, 4} |
-| travellers | $\tau$ = 0.18 selection | 16.7% realised (see §6) |
+| travellers | $\tau$ = 0.18 selection | 18.0% realised (see §6) |
+| `device_is_new` fires | both classes, ≥ 30 rows (§4) | 631 legit / 16 fraud, 2.5% precision |
 
 `verify_spec.py` regenerates these comparisons.

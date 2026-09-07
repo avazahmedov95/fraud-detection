@@ -102,7 +102,7 @@ def query(sql):
         with urllib.request.urlopen(url, timeout=60) as resp:
             body = resp.read().decode()
     except Exception as exc:                           # noqa: BLE001
-        raise SystemExit(f"ClickHouse unreachable at {CH_HOST}:{CH_PORT} — {exc}")
+        raise SystemExit(f"ClickHouse unreachable at {CH_HOST}:{CH_PORT} - {exc}")
     # strip("\n"), not strip(): a bare .strip() eats the LEADING TAB of the first
     # row when its first column is empty - and predicted_type is empty for every
     # alert no rule explains. The row then parses as one field and the caller
@@ -229,12 +229,12 @@ def _report_scorer(base, snap, expect):
     # so it is caught before anything else is claimed.
     if written <= 0:
         print("=" * 66)
-        print("NO DATA — the experiment did not run")
+        print("NO DATA - the experiment did not run")
         print("=" * 66)
         print(f"  rows at baseline : {base['total']:,}")
         print(f"  rows now         : {snap['total']:,}")
         print("\nNothing was written between the two phases, so there is nothing"
-              "\nto measure — this says nothing about loss or duplication.\n")
+              "\nto measure - this says nothing about loss or duplication.\n")
         print("The sequence needs traffic flowing WHILE the worker is killed:")
         print("\n  1. python outage.py --phase before")
         print("  2. in another terminal:  .\\run.ps1 produce-stream-docker")
@@ -245,7 +245,7 @@ def _report_scorer(base, snap, expect):
         print("  6. python outage.py --phase after --expect <sent>")
         print("\n`--expect` is the number the PRODUCER sent during this window,"
               "\nnot the size of the CSV. produce-stream is paced, so a few"
-              "\nminutes sends a few thousand — check with:")
+              "\nminutes sends a few thousand - check with:")
         print("     .\\run.ps1 query-scored")
         print("\nIf rows are still not arriving, the job itself may be down:")
         print("     docker compose ps")
@@ -263,11 +263,11 @@ def _report_scorer(base, snap, expect):
     # Rows arriving that add no new transaction ids means the job is re-reading
     # the topic, not processing new traffic. Duplicates from reprocessing are
     # indistinguishable from duplicates caused by the fault, so the measurement
-    # is void — say so rather than reporting a number that means nothing.
+    # is void - say so rather than reporting a number that means nothing.
     if unique == 0 and written > 0:
         ratio = snap["total"] / max(snap["distinct"], 1)
         print("\n" + "!" * 66)
-        print("MEASUREMENT VOID — the job is reprocessing, not progressing")
+        print("MEASUREMENT VOID - the job is reprocessing, not progressing")
         print("!" * 66)
         print(f"   {written:,} rows arrived and not one carried a transaction id"
               f"\n   that was not already stored. Across the whole table each"
@@ -287,10 +287,10 @@ def _report_scorer(base, snap, expect):
         print("     then the before / produce / kill / after sequence.")
         print("\n   This finding matters on its own: in production, every"
               "\n   deployment would have re-alerted on the entire retained"
-              "\n   topic — transfers that settled days earlier.")
+              "\n   topic - transfers that settled days earlier.")
         return
 
-    print("\n1. LOSS — the property that must hold")
+    print("\n1. LOSS - the property that must hold")
     if expect is None:
         print(f"   {unique:,} distinct transactions arrived. Pass --expect <n>"
               f"\n   with the number the producer sent to check for loss;"
@@ -303,7 +303,7 @@ def _report_scorer(base, snap, expect):
     else:
         lost = expect - unique
         if lost == 0:
-            print(f"   {unique:,} of {expect:,} transactions present — "
+            print(f"   {unique:,} of {expect:,} transactions present - "
                   f"NOTHING LOST")
             print("   Checkpointing plus committed Kafka offsets replayed the"
                   "\n   window between the last checkpoint and the kill.")
@@ -311,10 +311,10 @@ def _report_scorer(base, snap, expect):
             print(f"   {lost:,} transactions MISSING of {expect:,} "
                   f"({lost/expect:.2%})")
             print("   Before calling this a correctness failure, confirm the"
-                  "\n   producer finished and the topic fully drained — a"
+                  "\n   producer finished and the topic fully drained - a"
                   "\n   still-draining topic looks identical to loss.")
 
-    print("\n2. DUPLICATION — the cost of AT_LEAST_ONCE")
+    print("\n2. DUPLICATION - the cost of AT_LEAST_ONCE")
     if dupes == 0:
         print("   None observed. Note this does not prove exactly-once: with a"
               "\n   short checkpoint interval the replay window is small, so a"
@@ -331,14 +331,14 @@ def _report_scorer(base, snap, expect):
         for r in rows:
             print(f"     {r[0]:<10}{int(r[1]):>8,}")
         print("\n   What each duplicate costs:")
-        print("     ALLOW   — a duplicate row in the warehouse. Inflates volume"
+        print("     ALLOW   - a duplicate row in the warehouse. Inflates volume"
               "\n               metrics; no operational effect.")
-        print("     REVIEW  — a second identical case in the analyst queue."
+        print("     REVIEW  - a second identical case in the analyst queue."
               "\n               Wasted work, and erodes trust in the queue.")
-        print("     BLOCK   — a second alert on an already-blocked transfer."
+        print("     BLOCK   - a second alert on an already-blocked transfer."
               "\n               Safe: blocking twice does not double-block, but"
               "\n               it does inflate the reported fraud count.")
-        # Whether the copies agree is not assumed — it is queried. Replay is
+        # Whether the copies agree is not assumed - it is queried. Replay is
         # NOT a pure function of the event (see section 3), so copies of one
         # transaction can carry different scores.
         rows = query(f"""
@@ -362,7 +362,7 @@ def _report_scorer(base, snap, expect):
             if differing:
                 print("\n   Re-scoring is not reproducing the original score. The"
                       "\n   event is identical, so the difference comes from state"
-                      "\n   that did not roll back with the checkpoint — see"
+                      "\n   that did not roll back with the checkpoint - see"
                       "\n   section 3 below. A duplicate is therefore not merely a"
                       "\n   redundant row: it is a second, differently-computed"
                       "\n   opinion about the same transfer.")

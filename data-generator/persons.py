@@ -7,7 +7,8 @@ import numpy as np
 from config import (CARD_LENGTH, CARD_NETWORKS, BANKS_SOURCE, REGIONS,
                     REGION_WEIGHTS, BANKS, BANK_WEIGHTS,
                     MALE_FIRST, FEMALE_FIRST, SURNAME_STEMS,
-                    DECISION_TIME_MEDIAN_SEC, DECISION_TIME_CLIENT_SPREAD)
+                    DECISION_TIME_MEDIAN_SEC, DECISION_TIME_CLIENT_SPREAD,
+                    SECOND_DEVICE_SHARE)
 
 BANK_BY_BIN = {b["bin"]: b for b in BANKS}
 
@@ -24,6 +25,10 @@ class Person:
     active_end_hour: int
     household_id: int
     decision_time_median: float = 40.0   # personal login->confirm baseline (sec)
+    # A laptop beside the phone, or a replaced handset. Drawn per person rather
+    # than per event so a sender's device history is stable - see the
+    # SECOND_DEVICE_* note in config.py for why it exists at all.
+    has_second_device: bool = False
     full_name: str = ""
     bank_code: str = ""
     bank_name: str = ""
@@ -111,6 +116,7 @@ def _make_person(rng, region, age, household_id, is_fraud=False,
         ),
         full_name=gen_full_name(rng),
         bank_code=bank_code, bank_name=bank_name, is_fraud_account=is_fraud,
+        has_second_device=bool(rng.random() < SECOND_DEVICE_SHARE),
     )
 
 

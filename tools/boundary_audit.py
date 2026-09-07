@@ -510,30 +510,22 @@ def b_every_module_is_documented():
 
 #: Columns that are constant in the dataset of record and known to be so.
 #:
-#: `bank_code` is "00000" everywhere because banks.csv shipped that column as a
-#: placeholder - every row the same - and the dataset of record was generated
-#: (2026-07-19) while it was. Commit 538dc22 filled in the real codes and added
-#: bins.py the same day, so no measurement ever ran against the placeholder: the
-#: pipeline reads banks.csv directly, and bins._bank_identity REFUSES to load a
-#: `code` column with fewer than two distinct values, precisely because that
-#: would make is_on_us() true for every transfer.
+#: Empty, and it took a regeneration to empty it. It used to hold the three
+#: `bank_code` columns, constant at "00000" because banks.csv shipped that column
+#: as a placeholder and the 2026-07-19 dataset of record was generated while it
+#: was. Commit 538dc22 filled in the real codes the same day, so the fix long
+#: predated the regeneration - the columns stayed stale only because the dataset
+#: was frozen, and this entry existed to say so.
 #:
-#: It is not fixed by regenerating, and the reason is not the SHA-256 pins - it
-#: is that the dataset cannot be regenerated at all. The determinism fix in
-#: generator._assign_payees changed the RNG stream: same seed, same versions,
-#: 36,072 of 50,000 transaction rows different (generator-spec.md, and the
-#: comment at the fix). Every measurement in the thesis was taken on THIS file.
-#: So the column is stale because the dataset is deliberately frozen, which is
-#: the right decision, and this is its cost. Nothing reads it - the producer
-#: does not put it on the wire, the pipeline resolves the issuer from the BIN,
-#: and no Cypher query reads the property it lands in on (:Person).
+#: The exemption is gone rather than updated, which is the outcome worth noting:
+#: the check reports a KNOWN_CONSTANT column that has STOPPED being constant, so
+#: emptying this dict was something the audit demanded rather than something
+#: anyone remembered to do. An exemption that cannot expire is a second way to be
+#: silently wrong, and this one expired on its own.
 #:
-#: Named rather than ignored, the way bins.RETIRED_BINS is, so a NEW constant
-#: column still fails.
-KNOWN_CONSTANT = {
-    "transactions.csv": {"sender_bank_code", "receiver_bank_code"},
-    "persons.csv": {"bank_code"},
-}
+#: Keep the mapping. A future placeholder gets named here rather than ignored,
+#: the way bins.RETIRED_BINS is, so a NEW constant column still fails.
+KNOWN_CONSTANT = {}
 
 
 def b_no_new_constant_columns():

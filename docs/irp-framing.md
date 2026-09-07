@@ -72,7 +72,7 @@ velocity attacks — is addressed in §5 rather than dismissed.
 ## 4. Evidence already in hand
 
 All figures: PR-AUC on held-out time slices, paired within generator seed, 95%
-CI for the mean delta, 5 seeds unless stated. Baseline 0.966 ± 0.008. Synthetic
+CI for the mean delta, 5 seeds unless stated. Baseline 0.981 ± 0.009. Synthetic
 data — design targets, not validated findings.
 
 | Data source removed | Δ PR-AUC (95% CI) | sign | verdict |
@@ -123,7 +123,10 @@ separated the classes by construction.
 The generator now models both directions — 25% of legitimate transfers go to
 relatives, and a realistic minority of fraud does too (mule recruitment through
 families, complicit relatives). Under those conditions the feature is worth
-+0.004 PR-AUC.
++0.001 PR-AUC [-0.001, +0.003] over 5 seeds - an interval straddling zero, so
+no measurable effect at all. It read +0.004 [+0.001, +0.007] on the 2026-07-19
+dataset, which was already negligible; the 2026-09-07 regeneration removed even
+that.
 
 This is worth reporting as a finding about synthetic-data methodology, alongside
 the documented balance-column leakage in PaySim. A feature that dominates SHAP on
@@ -289,7 +292,7 @@ Ordered by what blocks what.
    **Relational fraud detection cannot be validated end-to-end on public real
    data, because the account identifiers that make it relational are exactly
    what cannot be published.** 14 of 24 features here are relational; removing
-   them costs 0.959 → 0.812 PR-AUC and 0.860 → 0.624 precision. Every public
+   them costs 0.968 → 0.801 PR-AUC and 0.930 → 0.591 precision. Every public
    real dataset examined is identifier-free.
 
    The response is to split the question:

@@ -101,7 +101,7 @@ def _save(state):
 
 
 def wilson(caught, n, z=1.96):
-    """Wilson score interval — well-behaved at small n and rates near 0 or 1,
+    """Wilson score interval - well-behaved at small n and rates near 0 or 1,
     unlike the normal approximation, which is exactly the regime here."""
     if n == 0:
         return 0.0, 0.0, 0.0
@@ -122,7 +122,7 @@ def run(seeds, budget):
     for seed in todo:
         if time.time() >= deadline:
             left = len([s for s in seeds if str(s) not in state])
-            print(f"\nbudget reached — {left} seed(s) left; invoke again.")
+            print(f"\nbudget reached - {left} seed(s) left; invoke again.")
             return state, False
         print(f"  seed={seed}", flush=True)
         state[str(seed)] = _train(_dataset(seed))
@@ -161,7 +161,7 @@ def report(state):
     for t, caught, n, p, lo, hi in rows:
         if t == best[0]:
             continue
-        print(f"  {t:<12} {'yes — genuinely weaker' if hi < best[4] else 'no'}")
+        print(f"  {t:<12} {'yes - genuinely weaker' if hi < best[4] else 'no'}")
     print(f"\n(best: {best[0]} at {best[3]:.1%})")
 
 
