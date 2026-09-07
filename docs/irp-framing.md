@@ -260,6 +260,26 @@ Ordered by what blocks what.
      not the round's delta, so a warehouse left populated by earlier runs
      swamps them. The series now refuses to start against a non-empty table.
 
+   **What exactly-once would have cost, since it was not attempted.** Three
+   routes exist and they are not equivalent:
+
+   - `ReplacingMergeTree` on ClickHouse keyed on `transaction_id`. The cheapest,
+     but deduplication is *eventual*: a query issued before the merge still sees
+     both rows, so the guarantee is about the table's eventual state and not
+     about what an analyst reads.
+   - `DeliveryGuarantee.EXACTLY_ONCE` on the Kafka sink. Transactional writes,
+     paid for by consumers reading only committed data - which adds the whole
+     checkpoint interval to end-to-end latency, 2 s here against a 300 ms
+     budget.
+   - An idempotent sink keyed on `transaction_id`. Correct and costs no latency,
+     but needs a deduplication store sized to the replay window.
+
+   For a fraud pipeline the second is the wrong trade, and that is the reason
+   `AT_LEAST_ONCE` is not an oversight: a duplicate alert is cheap, a two-second
+   delay before a decision is not. The first and third are the defensible routes,
+   and the audit chain in `sink-writer/integrity.py` already gives a way to
+   identify duplicates after the fact.
+
    Non-parametric statistics over repeated kills, the other half of point 6, are
    no longer owed.
 7. **External validation.** Harnesses built and tested; both need a manual

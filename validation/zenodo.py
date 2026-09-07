@@ -190,21 +190,13 @@ def provenance(df):
                 if r > 0.99:
                     print(f"     -> {c} IS the amount column under another name.")
 
-    print("""
-   If the v-columns are PCA components, this dataset inherits the exact
-   objection that ruled out the ULB/Kaggle credit-card set: features with no
-   meaning cannot support SHAP explanations, and CBU Regulation No. 3759
-   requires an explainable decision.
-
-   It also cannot be described as independent real-world corroboration if it is
-   derived from a dataset already in wide circulation - and the row and fraud
-   counts sit within rounding of a 1/5 sample of it.
-
-   NOT usable for: "validated against real production banking data" as a
-   headline, or anything resting on the promised latency column, which is
-   absent. What IS still usable is the profile below - and it is below rather
-   than in a second file because this conclusion is what makes it the only
-   remaining use.""")
+    print("\n   NOT usable as production data, and the objection is the one that"
+          "\n   ruled out ULB/Kaggle: PCA components carry no meaning, so no SHAP"
+          "\n   explanation and no compliance with Regulation 3759. Full reasoning:"
+          "\n   validation/README.md 2, docs/related-work.md 7."
+          "\n\n   What survives is the profile below. It is below rather than in a"
+          "\n   second file because this conclusion is what makes it the only"
+          "\n   remaining use.")
 
 
 # --------------------------------------------------------------------------

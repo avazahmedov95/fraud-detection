@@ -339,7 +339,7 @@ def _report_scorer(base, snap, expect):
               "\n               Safe: blocking twice does not double-block, but"
               "\n               it does inflate the reported fraud count.")
         # Whether the copies agree is not assumed — it is queried. Replay is
-        # NOT a pure function of the event (see section 4), so copies of one
+        # NOT a pure function of the event (see section 3), so copies of one
         # transaction can carry different scores.
         rows = query(f"""
             SELECT count() AS n,
@@ -363,7 +363,7 @@ def _report_scorer(base, snap, expect):
                 print("\n   Re-scoring is not reproducing the original score. The"
                       "\n   event is identical, so the difference comes from state"
                       "\n   that did not roll back with the checkpoint — see"
-                      "\n   section 4. A duplicate is therefore not merely a"
+                      "\n   section 3 below. A duplicate is therefore not merely a"
                       "\n   redundant row: it is a second, differently-computed"
                       "\n   opinion about the same transfer.")
             if flips:
@@ -372,65 +372,11 @@ def _report_scorer(base, snap, expect):
                       "\n   for one transfer disagree about what to do with it,"
                       "\n   and which one an operator sees depends on query order.")
 
-    print("\n3. WHAT WOULD MAKE THIS EXACTLY-ONCE")
-    print("""   Not attempted here, and the reasons are worth stating:
-
-     a) ClickHouse ReplacingMergeTree keyed on transaction_id. Cheapest fix,
-        but deduplication is eventual — a query before the merge still sees
-        both rows.
-     b) DeliveryGuarantee.EXACTLY_ONCE on the Kafka sink. Transactional
-        writes, at the cost of consumers reading only committed data, which
-        adds the checkpoint interval to end-to-end latency — measured at
-        2 s here, against a 300 ms budget. That trade is why AT_LEAST_ONCE
-        was chosen.
-     c) Idempotent sink keyed on transaction_id. Correct and latency-free,
-        but requires a deduplication store sized to the replay window.
-
-   For a fraud pipeline (b) is the wrong trade: duplicate alerts are cheap,
-   and a 2-second detection delay is not. (a) or (c) are the defensible
-   routes, and the audit chain in sink-writer/integrity.py already gives a
-   way to identify duplicates after the fact.""")
-
-    print("\n4. THE FAN-IN STORE — WHY THE COPIES DISAGREE")
-    print("""   Redis is external to the Flink checkpoint, so it does NOT roll
-   back on restore. The WRITE side is idempotent: the sorted-set member encodes
-   transaction_id, so a replayed record() is a no-op. (Before that fix the
-   member was time|sender|amount, under which two genuinely distinct transfers
-   sharing all three collapsed into one — and identical amounts from one sender
-   in the same second is precisely what structuring and mule runs look like.
-   See test_receiver_store.py.)
-
-   The READ side is not idempotent, and that is the finding. fraud_job.py does:
-
-       receiver_state = self._receivers.load(...)   # read the payee's window
-       result         = evaluate(..., receiver_state)
-       self._receivers.record(event, ...)           # then append this transfer
-
-   On replay the window returned by load() already contains this transaction —
-   written during the first pass — together with every later transaction that
-   was also processed before the kill. features.py then computes
-
-       rcv_inflow  = sum(amounts in window) + amount
-       rcv_senders = |{senders in window} u {this sender}|
-
-   so the transfer's own amount is counted twice and the payee looks busier than
-   it was. The feature vector on the second pass is not the vector of the first,
-   and the model returns a different probability from an identical event.
-
-   The drift is one-directional — replay can only ADD members to the window,
-   never remove them — so a replayed transfer looks riskier, not safer. That is
-   the benign direction for a fraud system, but it is a property of the fan-in
-   store rather than a guarantee: the model is not monotonicity-constrained, and
-   nothing stops a score crossing FINAL_REVIEW_THRESHOLD on the second pass.
-
-   Consequences worth stating plainly:
-     * "at-least-once means duplicate rows" understates it here. It means
-       duplicate rows that may disagree.
-     * Deduplicating by transaction_id (ReplacingMergeTree, or an idempotent
-       sink) silently picks one of two different answers unless the version
-       column is chosen deliberately.
-     * Any receiver-side feature computed from an external store has this
-       property. Only state inside the Flink checkpoint replays exactly.""")
+    print("\n3. WHY THIS IS NOT EXACTLY-ONCE, AND WHAT THE COPIES COST")
+    print("   Three routes to exactly-once, why AT_LEAST_ONCE is chosen over"
+          "\n   them, and the mechanism that makes duplicate copies DISAGREE"
+          "\n   - the fan-in store is outside the checkpoint and its READS are"
+          "\n   not idempotent: docs/irp-framing.md 6, point 6.")
 
 
 def _report_dependency(args, before, snap):
