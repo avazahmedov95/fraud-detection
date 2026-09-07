@@ -116,3 +116,42 @@ def test_switching_mode_does_not_change_the_feature_vector(mode):
     card_names = CAP.feature_names()
     mode("pinfl")
     assert CAP.feature_names() == card_names
+
+
+# --- a source that carries neither identity ---------------------------------
+
+def test_a_missing_card_collapses_every_payee_into_one(mode, caplog):
+    """Found running this extractor on PaySim, which names accounts and issues
+    no PANs at all.
+
+    The pinfl branch already warned when its identity was absent. The card
+    branch returned "" silently, and the consequence is worse than the one that
+    was guarded: an empty key does not make fan-in vanish, it makes every payee
+    share ONE ReceiverState. The store then reports the whole stream's inflow as
+    arriving at a single receiver - fabricating the pattern MULE_FAN_IN looks
+    for - and the shared window grows without bound, which is how it surfaced:
+    the replay went quadratic before producing a number.
+    """
+    mode("card")
+    F._warned_no_key = False
+    a = {"amount_uzs": 100_000, "receiver_pinfl": "P1", "sender_pinfl": "S1"}
+    b = {"amount_uzs": 100_000, "receiver_pinfl": "P2", "sender_pinfl": "S2"}
+
+    import logging
+    with caplog.at_level(logging.WARNING, logger="features"):
+        ka, kb = F.payee_key(a), F.payee_key(b)
+
+    assert ka == kb == "", "two different payees must be seen to collapse"
+    assert any("payee key is empty" in r.message or "EVERY" in r.message
+               for r in caplog.records), \
+        "collapsing every payee into one key must not be silent"
+
+
+def test_pinfl_mode_is_the_answer_for_such_a_source(mode):
+    """PaySim's accounts ARE the payee identity, so the mode exists for it."""
+    mode("pinfl")
+    a = {"amount_uzs": 100_000, "receiver_pinfl": "P1", "sender_pinfl": "S1"}
+    b = {"amount_uzs": 100_000, "receiver_pinfl": "P2", "sender_pinfl": "S2"}
+    assert F.payee_key(a) == "P1"
+    assert F.payee_key(b) == "P2"
+    assert F.payee_key(a) != F.payee_key(b)

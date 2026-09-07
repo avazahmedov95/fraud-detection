@@ -34,6 +34,22 @@ def _warn_pinfl_unavailable():
             "read the generated CSV, can run this mode.")
 
 
+_warned_no_key = False
+
+
+def _warn_no_payee_key():
+    """Once per process: neither identity is present, so the payee has no key."""
+    global _warned_no_key
+    if not _warned_no_key:
+        _warned_no_key = True
+        logging.getLogger("features").warning(
+            "no receiver_card on the event, so the payee key is empty and EVERY "
+            "payee shares one receiver-side state. Fan-in is then computed over "
+            "the whole stream and will fire on ordinary traffic. A source with "
+            "account identifiers but no PANs (PaySim) needs "
+            "CAP_PAYEE_IDENTITY=pinfl.")
+
+
 #: Values that mean False when a flag arrives as text.
 _FALSEY_TEXT = {"", "0", "false", "f", "no", "n", "none", "null", "nan"}
 
@@ -129,7 +145,17 @@ def payee_key(event: dict) -> str:
         # would make ReceiverStore skip write and read, and fan-in would silently
         # vanish with the knob still showing "on".
         _warn_pinfl_unavailable()
-    return str(event.get("receiver_card", "") or "")
+    card = str(event.get("receiver_card", "") or "")
+    if not card:
+        # The failure the branch above guards against, in its worse direction.
+        # An empty key does not make fan-in vanish - every payee collapses into
+        # ONE ReceiverState, so the store reports the whole stream's inflow as
+        # arriving at a single receiver and MANUFACTURES the pattern the rule
+        # looks for. Found running this on PaySim, which carries account names
+        # and no PANs at all: the shared deque grew without bound and the replay
+        # went quadratic before any result appeared.
+        _warn_no_payee_key()
+    return card
 
 
 def visible_receiver_age(event: dict, receiver_age_days):

@@ -122,6 +122,78 @@ difference between fraud *phenomena*, not a rule failure — and it is itself
 worth reporting: **fraud patterns are market-specific**, which is the premise of
 building an Uzbekistan-specific system rather than importing a generic one.
 
+### Result (`--our-model`): this project's model trained on PaySim
+
+The rules replay above asks whether the rules fire on foreign data. This asks the
+blunter question — *how does this system actually score on it* — and the answer
+is worth having in full, including the part that goes against the project.
+
+14 of the 24 features compute here: PaySim carries identifiers on both sides, so
+per-sender history and receiver-side aggregation both work. What it cannot supply
+is device, geo, session, channel, receiver age and kinship, and those capabilities
+are switched off rather than defaulted. Trained on the published baseline's own
+split (24 days / 7 days, a cut at step 576).
+
+| configuration | feat | PR-AUC | ROC-AUC | rec@2% | lift |
+|---|---|---|---|---|---|
+| **fitted as `train.py` fits it** (scale_pos_weight ≈ 974) | | | | | |
+| this project, all it can compute | 14 | 0.032 | 0.726 | 19.7% | 3.9× |
+| — without receiver aggregation | 12 | 0.021 | 0.696 | 17.3% | 2.9× |
+| — plus PaySim's own transaction type | 19 | 0.040 | 0.809 | 17.6% | 4.7× |
+| **fitted unweighted**, as the published baseline was | | | | | |
+| this project, all it can compute | 14 | **0.267** | 0.853 | 39.8% | 6.8× |
+| — without receiver aggregation | 12 | **0.315** | 0.867 | 44.6% | 6.9× |
+| — plus PaySim's own transaction type | 19 | **0.373** | 0.889 | 46.4% | 7.2× |
+| published generic baseline (§6 of `related-work.md`) | ~24 | 0.380 | 0.908 | 49.4% | 7.0× |
+
+**Three things follow, and the second is the uncomfortable one.**
+
+**1. The training recipe, not the feature set, produced the alarming number.**
+`train.py` sets `scale_pos_weight` from the class ratio. At this project's 1.5%
+fraud that is ~65 and harmless; at PaySim's 0.129% it is ~974, and heavy positive
+weighting flattens the top of the ranking, which is precisely what AUPRC reads.
+Same features, same split, **0.032 weighted against 0.267 unweighted**. Reporting
+only the first beside a baseline fitted unweighted would have compared this
+project's *recipe* against their *features* and called the difference a result.
+It is a genuine caveat for deployment: the recipe is calibrated for a 1.5% base
+rate and should not be carried unchanged to a rarer one.
+
+**2. Receiver aggregation does not merely fail to transfer — it reverses.**
+Removing those two features **improves** PaySim by +0.049 (0.267 → 0.315), where
+on this project's own data the same removal costs −0.040, the largest effect in
+the ablation. The sign flips.
+
+That is not a refutation, and the reason was written down before the run: PaySim
+drains one account straight to cash-out, with no collection stage where many
+senders converge on a drop account. There is no fan-in to detect, so features
+that look for it contribute noise, and a model does better without them. The
+prediction was made qualitatively above and is now quantitative.
+
+But it must be said plainly: **this run does not validate the project's largest
+finding, and no run on PaySim can.** The finding stays externally unvalidated
+until it meets a dataset that models a collection stage — AMLSim, below.
+
+**3. Once the recipe matches, the feature set is competitive.** 0.373 against the
+baseline's 0.380, with PaySim's own transaction type added to make the inputs
+comparable — this project's contract has no column for transaction type because
+its rail has one. That is a fair result on a dataset this project did not produce,
+and it is the strongest positive statement this exercise supports.
+
+```bash
+python paysim_adapter.py --file PS_20174392719_1491204439457_log.csv --our-model
+```
+
+Two minutes to extract 6.36M rows, then six model fits.
+
+> **A defect this run found in the extractor.** `features.payee_key` returned an
+> empty string when an event carried no `receiver_card`, silently. PaySim names
+> accounts and issues no PANs, so *every* payee collapsed into one shared
+> receiver state: fan-in was computed over the entire stream, which both
+> fabricates the pattern `MULE_FAN_IN` looks for and makes the replay quadratic —
+> that is how it surfaced, as a run that never finished. The `pinfl` branch had
+> warned about its own missing identity since it was written; the `card` branch
+> had not. It warns now, and `test_payee_identity.py` pins both.
+
 ### The gap this leaves, and what closes it
 
 Receiver-side aggregation is this project's **largest measured effect**

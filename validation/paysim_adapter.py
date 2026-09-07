@@ -5,6 +5,7 @@ features.py expects. What transfers and what does not: validation/README.md 2.
 import argparse
 import os
 import sys
+import time
 from collections import defaultdict, Counter
 
 import pandas as pd
@@ -166,6 +167,163 @@ BASELINE = dict(source="ris3abh/aml-p2p-fraud-detection (MIT)", cut_step=576,
                 lift_at_decile=7.0, pr_auc_with_leakage=0.988)
 
 
+def _fit_report(name, X, y, step, cut, drop=(), names=None, weighted=True):
+    """Train and score one configuration on the published split.
+
+    `weighted` is not a tuning knob; it is what makes the rows comparable at all.
+    train.py sets scale_pos_weight from the class ratio, which at PaySim's 0.129%
+    prevalence is ~974, and heavy positive weighting flattens the top of the
+    ranking - exactly what AUPRC reads. The published baseline was fitted
+    unweighted. Quoting only the weighted row beside it would compare this
+    project's TRAINING RECIPE against their FEATURE SET and report the difference
+    as though it were about features.
+    """
+    import numpy as np
+    import lightgbm as lgb
+    from sklearn.metrics import roc_auc_score, average_precision_score
+
+    keep = [i for i, n in enumerate(names) if n not in drop]
+    Xk = X[:, keep]
+    tr, te = step <= cut, step > cut
+    ytr, yte = y[tr], y[te]
+    spw = ((ytr == 0).sum() / max(int(ytr.sum()), 1)) if weighted else 1.0
+    m = lgb.LGBMClassifier(n_estimators=400, learning_rate=0.05, num_leaves=31,
+                           subsample=0.8, colsample_bytree=0.8,
+                           min_child_samples=30, scale_pos_weight=spw,
+                           random_state=42, n_jobs=-1, verbose=-1)
+    m.fit(Xk[tr], ytr)
+    p = m.predict_proba(Xk[te])[:, 1]
+    order = np.argsort(-p)
+    k = int(0.02 * len(yte))
+    rec2 = yte[order[:k]].sum() / max(1, yte.sum())
+    lift = yte[order[:len(yte) // 10]].mean() / yte.mean()
+    ap = average_precision_score(yte, p)
+    print(f"  {name:<34}{len(keep):>4}{ap:>9.3f}{roc_auc_score(yte, p):>10.3f}"
+          f"{rec2:>11.1%}{lift:>9.1f}x")
+    return ap
+
+
+def our_model(path, limit=None):
+    """This project's own feature extractor and model, trained on PaySim.
+
+    The question the rules replay above cannot answer: not "do the rules fire on
+    foreign data" but "how does this system score on it". 14 of the 24 features
+    survive - PaySim carries identifiers on both sides, so the per-sender history
+    and the receiver-side aggregation both compute; what it cannot supply is
+    device, geo, session, channel, receiver age and kinship, and those
+    capabilities are switched off rather than defaulted.
+
+    Trained on the SAME split as the published baseline (24 days / 7 days, a cut
+    at step 576), so the numbers sit beside `--baseline` on one axis.
+
+    The second configuration is the point of running this at all. Receiver-side
+    aggregation is this project's largest measured effect and the one with no
+    external evidence, because the only foreign dataset run so far could not
+    express the pattern. Dropping those two features here asks whether the
+    finding reproduces off this project's own generator - the one legitimate
+    training use of foreign data, per validation/README.md 1.
+    """
+    import numpy as np
+    from collections import defaultdict
+    sys.path.insert(0, _SP)
+    import features as F                       # noqa: E402
+    from rules import SenderState, ReceiverState   # noqa: E402
+
+    df = pd.read_csv(path)
+    if limit:
+        df = df.head(limit)
+    df = df.sort_values("step", kind="stable").reset_index(drop=True)
+    scale = scale_factor(df.amount)
+
+    # features.FEATURE_NAMES is fixed at IMPORT from the capability registry, so
+    # switching modes in main() cannot shrink it - the contract was already built.
+    # Rather than require the caller to get environment variables right, extract
+    # the full 24 and drop the columns whose capability is unavailable here. Those
+    # columns are computed from data PaySim does not carry, so what is dropped is
+    # exactly what would otherwise be a fabricated zero.
+    off = {f for cap in CAP.REGISTRY if CAP.MODES.get(cap.key) == "off"
+           for f in cap.features}
+    # Intersect with the contract: a capability that was ALREADY off at import
+    # (myid_kinship, by default) contributed no column to drop, and listing it
+    # as dropped would make the arithmetic in the line below not add up.
+    unavailable = off & set(F.FEATURE_NAMES)
+    names = [n for n in F.FEATURE_NAMES if n not in unavailable]
+    keep_idx = [i for i, n in enumerate(F.FEATURE_NAMES) if n not in unavailable]
+
+    print(f"{len(df):,} PaySim rows, {int(df.isFraud.sum()):,} fraud "
+          f"({df.isFraud.mean():.3%})")
+    print(f"features this project can compute here: {len(names)} of "
+          f"{len(F.FEATURE_NAMES)}")
+    print(f"  kept    : {', '.join(names)}")
+    print(f"  dropped : {', '.join(sorted(unavailable))}\n")
+
+    X = np.zeros((len(df), len(F.FEATURE_NAMES)), dtype="float32")
+    y = df.isFraud.values.astype("int8")
+    step = df.step.values
+    senders, receivers = defaultdict(SenderState), defaultdict(ReceiverState)
+    t0 = time.time()
+    for i, ev in enumerate(to_events(df, scale)):
+        ev.pop("_label"); ts = ev.pop("_ts"); ev.pop("_type")
+        key = F.payee_key(ev)
+        sender = senders[ev["sender_pinfl"]]
+        X[i] = F.to_vector(F.extract(ev, None, sender, ts, receivers[key]))
+        F.update_state(sender, ev, ts)
+        F.update_receiver_state(receivers[key], ev, ts)
+        if i and i % 500_000 == 0:
+            print(f"  ... {i:,} rows ({time.time()-t0:.0f}s)", flush=True)
+    print(f"  extracted {len(df):,} rows in {time.time()-t0:.0f}s\n")
+    X = X[:, keep_idx]
+
+    cut = BASELINE["cut_step"]
+    if not (step > cut).any():
+        raise SystemExit(
+            f"no rows past step {cut}. PaySim is ordered by step, so a "
+            f"--limit keeps only the training side of the published "
+            f"split and leaves nothing to score. Run without --limit.")
+    # PaySim puts ALL of its fraud in TRANSFER and CASH_OUT, so the transaction
+    # type carries much of the available signal - and this project's contract has
+    # no column for it. The channel one-hots are the nearest thing and PaySim has
+    # no channels, so they were dropped. Adding PaySim's own type tests whether
+    # the gap is the feature SET, rather than asserting it.
+    types = np.zeros((len(df), 5), dtype="float32")
+    tnames = ["CASH_IN", "CASH_OUT", "DEBIT", "PAYMENT", "TRANSFER"]
+    for j, t in enumerate(tnames):
+        types[:, j] = (df.type.values == t).astype("float32")
+    Xt = np.hstack([X, types])
+    tn = names + [f"type_{t}" for t in tnames]
+    RCV = ("rcv_distinct_senders_1h", "rcv_inflow_1h")
+
+    print(f"  {'configuration':<34}{'feat':>4}{'PR-AUC':>9}{'ROC-AUC':>10}"
+          f"{'rec@2%':>11}{'lift':>9}")
+    print("  -- scale_pos_weight from the class ratio, as train.py fits it --")
+    full = _fit_report("this project, all it can compute", X, y, step, cut,
+                       names=names)
+    less = _fit_report("  without receiver aggregation", X, y, step, cut,
+                       drop=RCV, names=names)
+    _fit_report("  + PaySim's own transaction type", Xt, y, step, cut, names=tn)
+
+    print("  -- unweighted, as the published baseline was fitted --")
+    full_u = _fit_report("this project, all it can compute", X, y, step, cut,
+                         names=names, weighted=False)
+    less_u = _fit_report("  without receiver aggregation", X, y, step, cut,
+                         drop=RCV, names=names, weighted=False)
+    _fit_report("  + PaySim's own transaction type", Xt, y, step, cut, names=tn,
+                weighted=False)
+    print(f"  {'published generic baseline':<34}{'~24':>4}"
+          f"{BASELINE['pr_auc']:>9.3f}{BASELINE['roc_auc']:>10.3f}"
+          f"{BASELINE['recall_at_2pct']:>11.1%}"
+          f"{BASELINE['lift_at_decile']:>9.1f}x")
+
+    print(f"\n  receiver aggregation on PaySim: {less - full:+.3f} PR-AUC weighted, "
+          f"{less_u - full_u:+.3f} unweighted")
+    print("  On this project's own data the same removal costs -0.040, the")
+    print("  largest effect in the ablation. Whether the sign and rough size")
+    print("  survive on a dataset this project did not produce is the whole")
+    print("  reason for the run - and PaySim drains one account straight to")
+    print("  cash-out with no collection stage, so a null here is a fact about")
+    print("  PaySim's fraud model, not a refutation. See validation/README.md 1.")
+
+
 def baseline(path):
     """Retrain the published PaySim baseline, because the file to do it with is
     already here.
@@ -240,6 +398,11 @@ def main():
                          "withdrawal, not a transfer between two customers.")
     ap.add_argument("--limit", type=int, default=None,
                     help="first N rows (the full file is 6.3M)")
+    ap.add_argument("--our-model", dest="our_model", action="store_true",
+                    help="train THIS project's feature set and model on PaySim, "
+                         "on the published baseline's split - and again without "
+                         "the receiver-side features, to see whether the "
+                         "largest finding reproduces on foreign data")
     ap.add_argument("--baseline", action="store_true",
                     help="retrain the published PaySim baseline instead of "
                          "replaying the rules - verifies the AUPRC 0.380 that "
@@ -249,6 +412,18 @@ def main():
     if not os.path.exists(args.file):
         raise SystemExit(f"{args.file} not found")
 
+    if args.our_model:
+        # Only what PaySim actually carries; the rest are switched off rather
+        # than defaulted, so no feature is computed from a fabricated value.
+        for key in ("receiver_age", "myid_kinship", "device_telemetry",
+                    "geo_telemetry", "session_telemetry", "channel"):
+            CAP.MODES[key] = "off"
+        # PaySim names accounts and issues no PANs, so the default card key
+        # resolves to "" on every row - one shared receiver state for the whole
+        # stream, which both fabricates fan-in and makes the replay quadratic.
+        # features.payee_key warns about it now; this is the correct setting.
+        CAP.MODES["payee_identity"] = "pinfl"
+        return our_model(args.file, args.limit)
     if args.baseline:
         return baseline(args.file)
 
