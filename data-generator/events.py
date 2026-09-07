@@ -11,7 +11,7 @@ EVENT_FIELDS = [
     "sender_name", "sender_bank_code", "sender_bank_name",
     "receiver_pinfl", "receiver_card", "receiver_network",
     "receiver_name", "receiver_bank_code", "receiver_bank_name",
-    "amount_uzs", "channel", "device_id",
+    "amount_uzs", "device_id",
     "sender_region", "receiver_region", "sender_balance_before",
     "active_call", "secs_login_to_confirm",
     # enriched (Flink-side in production)
@@ -65,7 +65,7 @@ def _payee_card(receiver, rng):
             "receiver_bank_name": receiver.bank_name}
 
 
-def make_event(sender, receiver, amount, ts, channel, device_id,
+def make_event(sender, receiver, amount, ts, device_id,
                is_new_payee, balance_before,
                is_fraud=0, fraud_type="NONE", rng=None):
     active_call, secs_login = gen_session_signals(sender, fraud_type, rng)
@@ -82,7 +82,6 @@ def make_event(sender, receiver, amount, ts, channel, device_id,
         "receiver_pinfl": receiver.pinfl,
         **_payee_card(receiver, rng),
         "amount_uzs": int(amount),
-        "channel": channel,
         "device_id": device_id,
         "sender_region": sender.region,
         "receiver_region": receiver.region,

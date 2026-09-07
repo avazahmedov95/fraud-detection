@@ -10,7 +10,7 @@ SCORED = {
     "transaction_id": "tx-1", "event_time": "2025-01-15T10:30:00",
     "sender_card": "8600...1", "receiver_card": "9860...2",
     "sender_pinfl": "S1", "receiver_pinfl": "R1",
-    "amount_uzs": 9_000_000, "channel": "MOBILE_APP",
+    "amount_uzs": 9_000_000,
     "sender_region": "Tashkent City",
     "is_new_payee": True,
     "cep_score": 0.5, "ml_score": 0.93, "final_score": 0.93,

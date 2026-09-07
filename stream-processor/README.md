@@ -59,7 +59,6 @@ CAP_DEVICE_TELEMETRY=on|off         stable device identifier
 CAP_GEO_TELEMETRY=on|off            operation region
 CAP_SESSION_TELEMETRY=on|off        mobile-app session signals
 CAP_PAYEE_IDENTITY=card|pinfl       what the payee can be resolved to
-CAP_CHANNEL=on|off                  channel identity
 
 `CAP_CORE_HISTORY` is not listed because it cannot be switched off: it is the
 input stream itself.

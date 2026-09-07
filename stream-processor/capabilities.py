@@ -122,14 +122,6 @@ REGISTRY = (
                   "back to the card and says so once. The harnesses that read "
                   "the generated CSV can run it.",
     ),
-    Capability(
-        key="channel",
-        requires="the channel the transfer came through",
-        features=("ch_mobile_app", "ch_ussd", "ch_web", "ch_atm"),
-        rules=(),
-        rationale="Present in the switch message; separable mainly to test how "
-                  "much channel identity contributes on its own.",
-    ),
 )
 
 BY_KEY = {c.key: c for c in REGISTRY}

@@ -1,6 +1,6 @@
 {
   "uid": "fraud-overview",
-  "title": "Fraud Detection \u2014 Overview",
+  "title": "Fraud Detection — Overview",
   "tags": [
     "fraud",
     "uzcard-humo"
@@ -324,46 +324,6 @@
           "showLegend": false
         },
         "xField": "score_bucket"
-      }
-    },
-    {
-      "id": 8,
-      "type": "barchart",
-      "title": "Alerts by channel",
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "gridPos": {
-        "x": 8,
-        "y": 13,
-        "w": 8,
-        "h": 8
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorType": "sql",
-          "rawSql": "SELECT channel, count() AS alerts\nFROM fraud.transactions_scored\nWHERE $__timeFilter(event_time) AND decision != 'ALLOW'\nGROUP BY channel ORDER BY alerts DESC",
-          "queryType": "table",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "showLegend": false
-        },
-        "xField": "channel"
       }
     },
     {

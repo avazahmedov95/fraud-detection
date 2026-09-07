@@ -91,10 +91,6 @@ LIMIT_DAILY = 100_000_000
 LIMIT_PER_TRANSACTION = 30_000_000   # UNUSED
 LIMIT_MONTHLY = 500_000_000          # UNUSED
 
-# --- Channels ----------------------------------------------------------------
-CHANNELS = ["MOBILE_APP", "USSD", "WEB", "ATM"]
-CHANNEL_WEIGHTS = [0.70, 0.12, 0.13, 0.05]
-
 # --- Geography (Uzbekistan regions) -----------------------------------------
 REGIONS = [
     "Tashkent City", "Tashkent Region", "Samarkand", "Bukhara", "Andijan",

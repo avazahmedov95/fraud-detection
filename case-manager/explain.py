@@ -66,10 +66,6 @@ _PHRASES = {
     "geo_is_anomaly":         ("operation away from the sender's usual region", lambda v: "yes" if v else "no"),
     "active_call":            ("phone call active while confirming", lambda v: "yes" if v else "no"),
     "secs_login_z":           ("hesitation before confirming vs this sender's habit", lambda v: f"{v:+.1f} sigma"),
-    "ch_mobile_app":          ("channel: mobile app",           lambda v: "yes" if v else "no"),
-    "ch_ussd":                ("channel: USSD",                 lambda v: "yes" if v else "no"),
-    "ch_web":                 ("channel: web",                  lambda v: "yes" if v else "no"),
-    "ch_atm":                 ("channel: ATM",                  lambda v: "yes" if v else "no"),
 }
 
 

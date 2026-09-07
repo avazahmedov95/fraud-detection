@@ -15,9 +15,6 @@ import bins as B
 # drift from what the deployment can observe.
 FEATURE_NAMES = CAP.feature_names()
 
-_CHANNEL_KEY = {"MOBILE_APP": "ch_mobile_app", "USSD": "ch_ussd",
-                "WEB": "ch_web", "ATM": "ch_atm"}
-
 
 _warned_no_pinfl = False
 
@@ -97,7 +94,6 @@ def event_from(row: dict) -> dict:
         "receiver_pinfl": row["receiver_pinfl"],
         "device_id": row["device_id"],
         "sender_region": row["sender_region"],
-        "channel": row.get("channel", "MOBILE_APP"),
         "sender_network": row.get("sender_network", ""),
         "receiver_network": row.get("receiver_network", ""),
         # Behavioural session signals - COACHED_SESSION and the secs_login_z
@@ -178,7 +174,6 @@ def extract(event: dict, receiver_age_days, state, now: float,
     payee = payee_key(event)
     device = event.get("device_id", "")
     region = event.get("sender_region", "")
-    channel = event.get("channel", "MOBILE_APP")
     s_net = event.get("sender_network", "")
     r_net = event.get("receiver_network", "")
 
@@ -283,7 +278,6 @@ def extract(event: dict, receiver_age_days, state, now: float,
         "daily_sum_ratio": daily_sum / C.LIMIT_DAILY,
         "hour": float(datetime.datetime.fromtimestamp(now, datetime.timezone.utc).hour),
         "cross_network": 1 if (s_net and r_net and s_net != r_net) else 0,
-        "ch_mobile_app": 0, "ch_ussd": 0, "ch_web": 0, "ch_atm": 0,
         # --- rule helpers (NOT model features) ---
         "travel_kmh": travel_kmh,
         "travel_distance_km": travel_distance_km,
@@ -291,9 +285,6 @@ def extract(event: dict, receiver_age_days, state, now: float,
         "has_history": 1 if has_history else 0,
         "amount_gt_factor_mean": 1 if ((not has_history) or (amount > C.NEW_PAYEE_AMOUNT_FACTOR * mean)) else 0,
     }
-    ch_key = _CHANNEL_KEY.get(channel)
-    if ch_key:
-        feat[ch_key] = 1
     return feat
 
 

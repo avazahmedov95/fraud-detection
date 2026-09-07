@@ -176,9 +176,6 @@ $\mathcal{U}\{H_{\text{start}}, H_{\text{end}}\}$ and minute/second uniform.
 > temporal seasonality from this data, and `hour` should be read as a weak
 > feature rather than a meaningful one.
 
-**Channel.** $\text{Cat}(0.70, 0.12, 0.13, 0.05)$ over
-MOBILE_APP / USSD / WEB / ATM.
-
 **Device.** A person owns a second device w.p. $\sigma = 0.25$, drawn once in
 `persons.py`, and each of their events comes from it w.p. $\rho = 0.15$;
 everyone else transacts from one device forever. Device identity is
@@ -393,7 +390,7 @@ more useful than calling the number an artefact and moving on.
 
 **On the ROC-AUC ≈ 0.999 this data produces.** It is an artefact of a generator
 whose classes are separable by construction along several axes at once. PR-AUC
-(0.967 ± 0.018 across seeds) is the figure to read, and even that is a design
+(0.970 ± 0.011 across seeds) is the figure to read, and even that is a design
 target. Its floor is the **held-out slice's** 1.23% positive rate, not the
 dataset's overall 1.5% - AUPRC is scored where it is measured, and quoting it
 against the wrong rate is the error `related-work.md` §6 had to correct in the
@@ -489,8 +486,8 @@ computed on are pinned here instead. **Regenerated 2026-09-07** on seed 42 with 
 to fix the device defect in §4 and the single-card defect in §2.
 
 ```
-transactions.csv   50,000 rows   16,180,834 bytes
-  sha256  aa1e2f1c7a23e45eac6cd53e37f45eb6f74b59ee3fd2e0d17fb429ec0fbe2add
+transactions.csv   50,000 rows   15,731,183 bytes
+  sha256  fd7763737ee61b53e89f3d8c7fc53bdfa7582ae93bcd85722f97e692128fdc42
 persons.csv         5,200 rows      578,549 bytes
   sha256  dbe01edd7626def3c8ce50a343915d80fe309c97895342476d9c22a01be37cb6
 ```
@@ -534,7 +531,6 @@ output is a wish list, so these are the numbers a reader can reproduce.
 | fraud rate | 1.5% | 1.500% |
 | fresh legitimate accounts | 12% | 12.2% |
 | aged fraud accounts | 30% | 28.0% |
-| channel mix (MOBILE_APP / USSD / WEB / ATM) | 0.70 / 0.12 / 0.13 / 0.05 | 0.700 / 0.120 / 0.129 / 0.051 |
 | median legitimate amount | ≈133k (baseline median) | 136,869 UZS |
 | `active_call` legitimate | 0.03 | 0.030 |
 | `active_call` APP | 0.70 | 0.751 |

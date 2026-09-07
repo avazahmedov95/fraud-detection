@@ -47,7 +47,7 @@ def _epoch_dt(v):
 
 SCORED_COLUMNS = [
     "transaction_id", "event_time", "sender_card", "receiver_card", "amount_uzs",
-    "channel", "sender_region", "is_new_payee",
+    "sender_region", "is_new_payee",
     "cep_score", "ml_score", "final_score", "decision",
     "predicted_type", "model_version",
     "active_call", "secs_login_to_confirm", "secs_login_z",
@@ -61,7 +61,6 @@ def scored_row(e: dict) -> list:
         e.get("sender_card", "") or "",
         e.get("receiver_card", "") or "",
         _i(e.get("amount_uzs")),
-        e.get("channel", "") or "",
         e.get("sender_region", "") or "",
         _b(e.get("is_new_payee")),
         _f(e.get("cep_score")),

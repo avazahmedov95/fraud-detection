@@ -28,7 +28,7 @@ except ImportError:  # allow --dry-run without the dependency installed
 # Raw fields the switch would actually emit; enrichment and labels are dropped here.
 RAW_FIELDS = [
     "transaction_id", "event_time", "sender_pinfl", "sender_card", "sender_network",
-    "receiver_card", "receiver_network", "amount_uzs", "channel",
+    "receiver_card", "receiver_network", "amount_uzs",
     "device_id", "sender_region", "sender_balance_before",
     # Session signals the mobile app sends with the confirmation. Raw, not enrichment:
     # omitting them scores every live event as "no call, average hesitation" while the

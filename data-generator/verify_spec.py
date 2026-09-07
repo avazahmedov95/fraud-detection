@@ -48,11 +48,6 @@ def main():
         ok.append(_check("aged fraud accounts",
                          (fraud.account_age_days >= 100).mean(), 0.30, 0.06))
 
-    print("\nchannel mix")
-    share = d.channel.value_counts(normalize=True)
-    for ch, w in zip(C.CHANNELS, C.CHANNEL_WEIGHTS):
-        ok.append(_check(f"  {ch}", share.get(ch, 0.0), w, 0.02))
-
     print("\nsession signals")
     legit_ev = d[d.label_is_fraud == 0]
     app = d[d.label_fraud_type == "APP"]
@@ -69,8 +64,20 @@ def main():
                          st.min(), 0.85, 0.02))
         ok.append(_check("STRUCTURING max fraction of threshold",
                          st.max(), 0.99, 0.02))
-    ato = d[d.label_fraud_type == "ATO"].groupby("sender_pinfl").size()
-    if len(ato):
+    # Group by EPISODE, not by victim. `pick(persons)` can select the same victim
+    # for two takeovers, and grouping by pinfl then reports 2+4 as a single
+    # six-event episode and fails a spec the generator did not violate. Found when
+    # a change to the RNG stream produced the first such collision; the check had
+    # been latently wrong until then. Events inside one episode are at most
+    # 3 x U(1,4) = 12 minutes apart, so an hour separates episodes unambiguously.
+    ato_rows = d[d.label_fraud_type == "ATO"].copy()
+    if len(ato_rows):
+        ato_rows["t"] = pd.to_datetime(ato_rows.event_time)
+        ato_rows = ato_rows.sort_values(["sender_pinfl", "t"])
+        gap = ato_rows.groupby("sender_pinfl").t.diff().dt.total_seconds()
+        ato_rows["episode"] = (
+            (gap.isna() | (gap > 3600)).cumsum())
+        ato = ato_rows.groupby("episode").size()
         within = set(ato.unique()) <= {2, 3, 4}
         print(f"  [{'ok ' if within else 'OFF'}] "
               f"{'ATO events per episode':<38} spec {'{2,3,4}':>10}   "

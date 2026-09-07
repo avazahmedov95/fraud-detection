@@ -4,7 +4,7 @@ signature a specific rule is meant to catch. Parameters: docs/generator-spec.md 
 import numpy as np
 from datetime import datetime, timedelta
 
-from config import (AMOUNT_MIN, AMOUNT_MAX, STRUCTURING_THRESHOLD, CHANNELS,
+from config import (AMOUNT_MIN, AMOUNT_MAX, STRUCTURING_THRESHOLD,
                     REGIONS, FAMILY_FRAUD_SHARE, MULE_RECRUITED_SHARE,
                     SEEDED_PAYEE_SHARE)
 from events import make_event
@@ -74,7 +74,7 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
         # AMOUNT_DEVIATION baseline: an evasion that raises its own alert is not one.
         amount = float(np.clip(np.exp(rng.normal(10.8, 0.4)), AMOUNT_MIN, AMOUNT_MAX))
         seeds.append(make_event(
-            victim, payee, amount, seed_ts, "MOBILE_APP",
+            victim, payee, amount, seed_ts,
             device_id=f"dev-{victim.pinfl[-8:]}",
             is_new_payee=True, balance_before=balance,
             is_fraud=0, fraud_type="NONE", rng=rng))
@@ -99,7 +99,7 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
             ts = rand_time()
             maybe_seed_payee(victim, fraudster, ts, balance)
             events.append(make_event(
-                victim, fraudster, amount, ts, "MOBILE_APP",
+                victim, fraudster, amount, ts,
                 device_id=f"dev-{victim.pinfl[-8:]}",
                 is_new_payee=True, balance_before=balance,
                 is_fraud=1, fraud_type="APP", rng=rng))
@@ -131,7 +131,7 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
                 amount = float(np.clip(np.exp(rng.normal(14.5, 0.5)), AMOUNT_MIN, AMOUNT_MAX))
                 ts = base + timedelta(minutes=float(i * rng.uniform(1, 4)))
                 ev = make_event(
-                    victim, fraudster, amount, ts, "MOBILE_APP",
+                    victim, fraudster, amount, ts,
                     device_id=device,
                     is_new_payee=True,
                     balance_before=amount * rng.uniform(1.1, 3.0),
@@ -147,7 +147,7 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
                 amount = float(STRUCTURING_THRESHOLD * rng.uniform(0.85, 0.99))  # just under limit
                 ts = base + timedelta(minutes=float(i * rng.uniform(3, 15)))
                 events.append(make_event(
-                    actor, fraudster, amount, ts, str(rng.choice(CHANNELS)),
+                    actor, fraudster, amount, ts,
                     device_id=f"dev-{actor.pinfl[-8:]}",
                     is_new_payee=True,
                     balance_before=amount * rng.uniform(1.05, 2.0),
@@ -168,7 +168,7 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
                 collected += amount
                 ts = base + timedelta(minutes=float(i * rng.uniform(1, 6)))
                 events.append(make_event(
-                    sender, mule, amount, ts, str(rng.choice(CHANNELS)),
+                    sender, mule, amount, ts,
                     device_id=f"dev-{sender.pinfl[-8:]}",
                     is_new_payee=True,
                     balance_before=amount * rng.uniform(1.1, 3.0),
@@ -179,7 +179,7 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
                 amount = float(collected / n_out * rng.uniform(0.80, 0.98))
                 ts = base + timedelta(minutes=float((n_in + j) * rng.uniform(1, 6)))
                 events.append(make_event(
-                    mule, dest, amount, ts, "MOBILE_APP",
+                    mule, dest, amount, ts,
                     device_id=f"dev-{mule.pinfl[-8:]}",
                     is_new_payee=True,
                     balance_before=collected,

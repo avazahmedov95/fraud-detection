@@ -11,7 +11,6 @@ CREATE TABLE IF NOT EXISTS fraud.transactions_scored
     sender_card         String,
     receiver_card       String,
     amount_uzs          UInt64,
-    channel             LowCardinality(String),
     sender_region       LowCardinality(String),
     is_new_payee        UInt8,
     cep_score           Float32,                 -- rule/CEP contribution
@@ -74,3 +73,12 @@ ORDER BY (recorded_at, transaction_id);
 -- or rule ever read the column. Init scripts run only on an empty data dir,
 -- so existing deployments need this line.
 ALTER TABLE fraud.transactions_scored DROP COLUMN IF EXISTS receiver_region;
+
+-- 07.09.2026: channel dropped. The four one-hot features it fed measured
+-- -0.002 PR-AUC across five seeds, no rule read them, and no public dataset
+-- carries the field - it is a concept of Uzbek retail banking, so there was
+-- never going to be external evidence either way. Removing it takes the
+-- Grafana "Alerts by channel" panel with it; that view was the only consumer
+-- left. Same reason this line exists at all: init scripts run only on an
+-- empty data dir.
+ALTER TABLE fraud.transactions_scored DROP COLUMN IF EXISTS channel;

@@ -169,7 +169,6 @@ class FraudDetector(KeyedProcessFunction):
             # No receiver_pinfl: a sending bank cannot resolve the destination PAN to
             # a person, so the payee is keyed by card.
             "amount_uzs": event.get("amount_uzs"),
-            "channel": event.get("channel"),
             "sender_region": event.get("sender_region"),
             "is_new_payee": result["is_new_payee"],
             "receiver_account_age_days": result["receiver_account_age_days"],

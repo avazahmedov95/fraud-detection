@@ -72,18 +72,26 @@ velocity attacks — is addressed in §5 rather than dismissed.
 ## 4. Evidence already in hand
 
 All figures: PR-AUC on held-out time slices, paired within generator seed, 95%
-CI for the mean delta, 5 seeds unless stated. Baseline 0.967 ± 0.018. Synthetic
+CI for the mean delta, 5 seeds unless stated. Baseline 0.970 ± 0.011. Synthetic
 data — design targets, not validated findings.
 
 | Data source removed | Δ PR-AUC (95% CI) | sign | verdict |
 |---|---|---|---|
-| receiver-side aggregation | −0.032 [−0.055, −0.009] | 5/5 | real |
-| mobile-app session telemetry | −0.019 [−0.025, −0.014] | 5/5 | real |
-| receiver account age | −0.011 [−0.020, −0.001] | 5/5 | real |
-| MyID kinship (added) | +0.004 [+0.001, +0.007] | 5/5 | negligible |
-| channel identity | −0.002 [−0.004, +0.001] | 5/5 | negligible |
-| geo telemetry | −0.001 [−0.004, +0.003] | 3/5 | negligible (see caveat) |
-| device identity | ±0.000 | 5/5 | none |
+| receiver-side aggregation | −0.033 [−0.046, −0.020] | 5/5 | real |
+| mobile-app session telemetry | −0.024 [−0.045, −0.003] | 5/5 | real |
+| receiver account age | −0.014 [−0.026, −0.002] | 5/5 | real |
+| device identity | −0.002 [−0.004, +0.001] | 4/5 | negligible |
+| geo telemetry | −0.001 [−0.003, +0.001] | 3/5 | negligible (see caveat) |
+| MyID kinship (added) | +0.001 [−0.004, +0.006] | 2/5 | negligible |
+| payee keyed by person, not card | +0.000 [−0.003, +0.004] | 2/5 | negligible |
+
+**Channel identity is no longer a row here.** It measured −0.002 across five
+seeds, fed no rule, and is a concept no public dataset carries, so no external
+evidence could ever have arrived. It was removed on 07.09.2026 — the four
+features, the wire field, the ingress hash input, the warehouse column and the
+dashboard panel that read it. Recorded rather than deleted quietly, because a
+capability that leaves the registry takes its measurement history with it, and
+the reason it left is the measurement.
 
 **Caveat that must travel with this table.** The measurement is of the ML
 model's ranking quality alone. A source whose value lies in a deterministic CEP
@@ -291,8 +299,8 @@ Ordered by what blocks what.
 
    **Relational fraud detection cannot be validated end-to-end on public real
    data, because the account identifiers that make it relational are exactly
-   what cannot be published.** 14 of 24 features here are relational; removing
-   them costs 0.947 → 0.709 PR-AUC and 0.910 → 0.630 precision. Every public
+   what cannot be published.** 14 of 20 features here are relational; removing
+   them costs 0.978 → 0.842 PR-AUC and 0.944 → 0.636 precision. Every public
    real dataset examined is identifier-free.
 
    The response is to split the question:
@@ -1617,7 +1625,7 @@ amount: 7 307 603 UZS (+4.59)
 ```
 
 Where this runs, and why it is not on the scoring path: exact contributions cost
-**1.89 ms per event** (400 trees, 24 features, LightGBM `pred_contrib`), which
+**1.89 ms per event** (400 trees, 24 features at the time, LightGBM `pred_contrib`), which
 at ~1.5% alert traffic the 300 ms budget could absorb. It was still the wrong
 place. It would put a second copy of the model in the serving worker beside
 `model.onnx`, and nobody consumes an explanation at decision time - the analyst

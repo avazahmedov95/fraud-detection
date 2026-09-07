@@ -5,7 +5,7 @@ distinction is the point.
 
 ## The constraint that shapes everything here
 
-14 of this project's 24 features are **relational** — computed over the history
+14 of this project's 20 features are **relational** — computed over the history
 of a named sender and a named receiver: velocity, new-payee, amount deviation
 against a personal baseline, fan-in concentration.
 
@@ -13,9 +13,9 @@ Measured cost of losing them (seed 42, held-out slice, 2026-09-07 dataset):
 
 | available | PR-AUC | precision | recall |
 |---|---|---|---|
-| full system | 0.947 | 0.910 | 0.865 |
-| no account identifiers | 0.709 | 0.630 | 0.688 |
-| amount + hour only | 0.581 | 0.254 | 0.759 |
+| full system | 0.978 | 0.944 | 0.957 |
+| no account identifiers | 0.842 | 0.636 | 0.830 |
+| amount + hour only | 0.691 | 0.244 | 0.922 |
 
 Public transaction datasets do not carry account identifiers, because those are
 precisely what cannot be published. So:
@@ -59,10 +59,10 @@ threshold tuning.
 order of weight. (i) **Training here destroys the thing this directory is for.**
 The evidence being sought is that the features detect fraud in data this project
 did not produce; fit the model to that data and the test answers a different,
-circular question. (ii) **The feature spaces do not align.** 14 of 24 features
-are relational and six more need device, geo, session, channel, receiver age or
+circular question. (ii) **The feature spaces do not align.** 14 of 20 features
+are relational and five more need device, geo, session, receiver age or
 kinship, none of which PaySim carries. Training on what remains would produce a
-model over ~5 features while the Flink job computes 24 — train/serve skew, which
+model over ~5 features while the Flink job computes 20 — train/serve skew, which
 is precisely what the single ordered `FEATURE_NAMES` built from `capabilities.py`
 exists to make impossible. (iii) **Different rail, different units.** PaySim is
 mobile money at ~1/1000 of UZS amounts; pooling it with generated card P2P
@@ -73,7 +73,7 @@ The one legitimate training use of foreign data is not training *this* system:
 it is fitting a throwaway model twice on a foreign dataset, with and without a
 capability, to see whether an **ablation delta reproduces** off this project's
 own generator. That is the shape the AMLSim run below should take. Capabilities PaySim cannot support (device, geo, session,
-channel, receiver age, kinship) are switched **off** rather than defaulted, so no
+receiver age, kinship) are switched **off** rather than defaulted, so no
 rule can fire on a fabricated zero — enforced by a test.
 
 **Get it.** Kaggle, "Synthetic Financial Datasets For Fraud Detection" (~470 MB).
@@ -128,9 +128,9 @@ The rules replay above asks whether the rules fire on foreign data. This asks th
 blunter question — *how does this system actually score on it* — and the answer
 is worth having in full, including the part that goes against the project.
 
-14 of the 24 features compute here: PaySim carries identifiers on both sides, so
+14 of the 20 features compute here: PaySim carries identifiers on both sides, so
 per-sender history and receiver-side aggregation both work. What it cannot supply
-is device, geo, session, channel, receiver age and kinship, and those capabilities
+is device, geo, session, receiver age and kinship, and those capabilities
 are switched off rather than defaulted. Trained on the published baseline's own
 split (24 days / 7 days, a cut at step 576).
 

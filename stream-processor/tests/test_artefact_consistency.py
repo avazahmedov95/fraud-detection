@@ -1,6 +1,6 @@
 """The deployed artefacts must agree with each other and with the code.
 
-Three files describe the same 24 columns in the same order: the capability
+Three files describe the same 20 columns in the same order: the capability
 registry (which generates FEATURE_NAMES), feature_names.json (which labels the
 model's contributions in case-manager/explain.py), and the model itself. The
 vector is passed positionally, so a reordered registry trains and serves happily

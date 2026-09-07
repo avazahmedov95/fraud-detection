@@ -15,7 +15,7 @@ EVENT = {
     "transaction_id": "tx-1", "event_time": "2025-01-15T10:30:00",
     "sender_pinfl": "S1", "sender_card": "8600000000000001",
     "receiver_pinfl": "R1", "receiver_card": "9860000000000002",
-    "amount_uzs": 9_000_000, "channel": "MOBILE_APP",
+    "amount_uzs": 9_000_000,
     "sender_region": "Tashkent City",
 }
 
@@ -25,7 +25,7 @@ EVENT = {
 # Frozen vectors; these exact strings must also appear in
 # data-generator/test_integrity.py. Changed when receiver_pinfl left the wire:
 # the hash binds only fields the event carries.
-INGRESS_VECTOR = "1e3525aea867ee6350005d2977b63d0e1a8c360e012a9d038a8c17f1b4dd3910"
+INGRESS_VECTOR = "2a1db4b7be624d44b152ad0eb1dc41d293db2a0955057477304ed6dd9173fb43"
 RECORD_VECTOR = "0b78fd33b284062eb5b9f6dc32f1c4507ed4fbb4c1d00c2a48cc4b885c964cad"
 
 

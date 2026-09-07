@@ -340,6 +340,39 @@ def b_serve_prep_ships_every_artefact():
     return None
 
 
+def b_served_copy_is_not_stale():
+    """The serve-prep copy of the feature contract must match the exported one.
+
+    `make serve-prep` copies model.onnx and feature_names.json into
+    stream-processor/ for the job to mount. Both are gitignored, so a stale copy
+    never ships - but it does sit on the machine that runs the job, and the
+    vector is positional. Retraining without re-copying serves the new model
+    against the old names: every SHAP contribution attributed to the wrong
+    feature, confidently, with no error anywhere.
+
+    Found when removing the channel capability took the contract from 24 columns
+    to 20 and left a 24-name copy dated six days earlier. The consistency test in
+    stream-processor/tests only compares ml/models/feature_names.json against the
+    registry; nothing looked at the copy the job actually mounts.
+    """
+    served = os.path.join(ROOT, "stream-processor", "feature_names.json")
+    exported = os.path.join(ROOT, "ml", "models", "feature_names.json")
+    if not os.path.exists(served):
+        return "SKIP: no serve-prep copy on this machine"
+    if not os.path.exists(exported):
+        return "SKIP: model not exported"
+    with open(served, encoding="utf-8") as fh:
+        a = json.load(fh)
+    with open(exported, encoding="utf-8") as fh:
+        b = json.load(fh)
+    if a != b:
+        return (f"stream-processor/feature_names.json is stale: {len(a)} names "
+                f"against the exported {len(b)}. Re-run serve-prep; the vector is "
+                f"positional, so the job would label the new model's outputs with "
+                f"the old contract.")
+    return None
+
+
 def b_no_artefact_path_derived_from_file():
     """__file__-relative data paths are the trap that killed the job twice."""
     offenders = []
@@ -674,6 +707,7 @@ CHECKS = [
     ("case_row -> ClickHouse 02-cases", b_case_row_matches_the_schema),
     ("fraud_job imports -> run.ps1 AND Makefile", b_job_modules_cover_every_import),
     ("config artefacts -> run.ps1 serve-prep", b_serve_prep_ships_every_artefact),
+    ("exported contract -> the served copy", b_served_copy_is_not_stale),
     ("no data path derived from __file__", b_no_artefact_path_derived_from_file),
     ("ReceiverStore write -> read (Redis member)", b_receiver_store_round_trips),
     ("features.event_from -> generated CSV columns", b_event_mapping_matches_the_csv),

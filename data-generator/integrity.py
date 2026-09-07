@@ -15,13 +15,13 @@ vector, so drift fails a test instead of producing an unverifiable chain.
 import hashlib
 
 # BREAKING to change this list or its order: it invalidates every stored hash.
-# receiver_pinfl left on 01.09.2026 and receiver_region on 03.09.2026, both
-# when they left the wire - docs/audit-anchors.md records each anchored head
-# with the field list behind it.
+# receiver_pinfl left on 01.09.2026, receiver_region on 03.09.2026 and channel
+# on 07.09.2026, each when it left the wire - docs/audit-anchors.md records every
+# anchored head with the field list behind it.
 INGRESS_FIELDS = (
     "transaction_id", "event_time",
     "sender_pinfl", "sender_card", "receiver_card",
-    "amount_uzs", "channel", "sender_region",
+    "amount_uzs", "sender_region",
 )
 
 GENESIS = "0" * 64          # prev_hash of the first record in a chain

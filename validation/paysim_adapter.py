@@ -207,7 +207,7 @@ def our_model(path, limit=None):
     """This project's own feature extractor and model, trained on PaySim.
 
     The question the rules replay above cannot answer: not "do the rules fire on
-    foreign data" but "how does this system score on it". 14 of the 24 features
+    foreign data" but "how does this system score on it". 14 of the 20 features
     survive - PaySim carries identifiers on both sides, so the per-sender history
     and the receiver-side aggregation both compute; what it cannot supply is
     device, geo, session, channel, receiver age and kinship, and those

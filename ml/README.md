@@ -60,12 +60,12 @@ quietly stop being true.
 
 | metric            | ML model | CEP rules only |
 |-------------------|----------|----------------|
-| ROC-AUC           | 0.998    | —              |
-| PR-AUC            | 0.947    | —              |
-| precision @0.50   | 0.910    | 0.335          |
-| recall @0.50      | 0.865    | 0.461          |
+| ROC-AUC           | 1.000    | —              |
+| PR-AUC            | 0.978    | —              |
+| precision @0.50   | 0.944    | 0.364          |
+| recall @0.50      | 0.957    | 0.539          |
 
-Recall by fraud type (ML @0.50): STRUCTURING 90.0%, APP 87.5%, ATO 90.9%, MULE 82.4%.
+Recall by fraud type (ML @0.50): STRUCTURING 95.2%, APP 93.9%, ATO 100.0%, MULE 93.8%.
 
 The table this replaced was measured BEFORE the receiver-side aggregation
 capability and was never refreshed: it showed MULE recall at 54%, against 85.7%
@@ -104,12 +104,12 @@ prevalence-robust measures agreeing on about 2x is what makes the AUPRC ratio
 believable.
 
 But **feature availability is about half of it**: stripped to amount and hour,
-the columns a public dataset can carry, this model scores 0.581 on this data
-(`validation/README.md`). So 0.947 -> 0.581 is what publishing costs, and
-0.581 -> 0.380 is the generator being separable. The first half is a property of
+the columns a public dataset can carry, this model scores 0.691 on this data
+(`validation/README.md`). So 0.978 -> 0.691 is what publishing costs, and
+0.691 -> 0.380 is the generator being separable. The first half is a property of
 the field, not of this project.
 
-**And the number that should be read next to 0.967 is 0.988** - their AUPRC
+**And the number that should be read next to 0.970 is 0.988** - their AUPRC
 *before* they removed the balance leakage, reproduced here at 1.000. A PR-AUC in
 the high nineties is the range a known-broken model reaches on public data, which
 is the honest frame for this one. See `docs/related-work.md` §6.
@@ -154,7 +154,7 @@ industry-recognised drop/mule-account signal.
 **It was not deleted, and the story did not end there** - which matters, because
 this paragraph used to say "removed" and stop. `is_family` is the
 `myid_kinship` capability, which simply **defaults to off**, so it is absent from
-the deployed 24-column vector. The generator was then fixed to model both
+the deployed 20-column vector. The generator was then fixed to model both
 directions (25% of legitimate transfers go to relatives, and a realistic minority
 of fraud does too), and under those conditions switching the capability on is
 worth **+0.001 PR-AUC [-0.001, +0.003]** over 5 seeds - an interval that now
@@ -194,18 +194,32 @@ grown to 24, so they are history rather than current figures.
 Deltas are paired within each seed; the interval is a 95% CI for the mean delta.
 
 All rows measured on one feature set and one generator version, 5 seeds,
-baseline PR-AUC **0.967 ± 0.018**:
+baseline PR-AUC **0.970 ± 0.011**:
 
 | configuration | delta (95% CI) | sign | verdict |
 |---|---|---|---|
-| receiver_velocity=off | −0.040 [−0.065, −0.015] | 5/5 | **real** |
-| session_telemetry=off | −0.016 [−0.025, −0.007] | 5/5 | **real** |
-| receiver_age=off | −0.009 [−0.023, +0.005] | 4/5 | unresolved |
-| payee_identity=pinfl | +0.004 [−0.002, +0.010] | 4/5 | no effect |
-| myid_kinship=on | +0.003 [−0.001, +0.007] | 3/5 | no effect |
-| channel=off | −0.002 [−0.006, +0.002] | 3/5 | no effect |
-| device_telemetry=off | +0.001 [−0.002, +0.004] | 3/5 | no effect |
-| geo_telemetry=off | +0.001 [−0.001, +0.003] | 4/5 | no effect |
+| receiver_velocity=off | −0.033 [−0.046, −0.020] | 5/5 | **real** |
+| session_telemetry=off | −0.024 [−0.045, −0.003] | 5/5 | **real** |
+| receiver_age=off | −0.014 [−0.026, −0.002] | 5/5 | **real** |
+| device_telemetry=off | −0.002 [−0.004, +0.001] | 4/5 | no effect |
+| geo_telemetry=off | −0.001 [−0.003, +0.001] | 3/5 | no effect |
+| myid_kinship=on | +0.001 [−0.004, +0.006] | 2/5 | no effect |
+| payee_identity=pinfl | +0.000 [−0.003, +0.004] | 2/5 | no effect |
+
+**`channel=off` is absent because the capability is gone.** It measured
+−0.002 [−0.006, +0.002] over five seeds, no rule read its four one-hot features,
+and no public dataset carries the field — "mobile app / USSD / web / ATM" is a
+concept of Uzbek retail banking, so there was never going to be external evidence
+either way. Removed on 07.09.2026, and not only from the model: the `channel`
+field left the wire and the ingress hash, the ClickHouse column, the Grafana panel
+that was its last remaining consumer, and four reason codes in the case view. The
+contract is 20 columns.
+
+Two things came out of the re-measurement that the removal did not promise. The
+intervals **tightened** — the baseline's spread across seeds fell from ±0.018 to
+±0.011 — because four columns of noise had been widening every one of them. And
+`receiver_age` moved from *unresolved* back to **real**: same capability, same
+data, a measurement that could finally resolve it.
 
 **Two rows in this table used to read `+0.000 [+0.000, +0.000] | 5/5 | no
 effect`, and neither meant it.** Both were configurations compared against
@@ -326,16 +340,16 @@ findings:
 
 `metrics.json` carries a `calibration` block beside the AUCs. It answers a
 different question from everything else there: not *does the model rank fraud
-above legitimate traffic* (it does, ROC-AUC 0.998 / PR-AUC 0.947) but *are its
+above legitimate traffic* (it does, ROC-AUC 1.000 / PR-AUC 0.978) but *are its
 probabilities usable as magnitudes*.
 
 ```
-brier               0.00265
-n_alerts            135          (>= 0.40 on the held-out slice)
-saturated_share     64.4%        rounding to 1.000
-distinct_scores     33
-review_band         10           alerts in [0.40, 0.80)
-median_alert_score  0.999951
+brier               0.00135
+n_alerts            143          (>= 0.40 on the held-out slice)
+saturated_share     75.5%        rounding to 1.000
+distinct_scores     24
+review_band         3           alerts in [0.40, 0.80)
+median_alert_score  0.999961
 scored_with         model.onnx
 ```
 

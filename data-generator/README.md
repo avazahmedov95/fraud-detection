@@ -63,7 +63,7 @@ Set `WEIGHT_BANKS_BY_CARD_SHARE = False` in `config.py` for uniform assignment.
 
 | Group | Fields | Notes |
 |---|---|---|
-| Raw (from switch) | `transaction_id, event_time, sender_*, receiver_*, amount_uzs, channel, device_id, *_region, sender_balance_before` | what Kafka ingests |
+| Raw (from switch) | `transaction_id, event_time, sender_*, receiver_*, amount_uzs, device_id, *_region, sender_balance_before` | what Kafka ingests |
 | Behavioural (session) | `active_call, secs_login_to_confirm` | signals the mobile channel observes during the session; `secs_login_to_confirm` is converted to a per-client z-score downstream |
 | Enriched | `is_new_payee, receiver_account_age_days` | in production these come from the **Flink** stage via the Neo4j account lookup and Redis feature store — not from the raw message. Materialised here so a model can train directly. |
 | Labels | `label_is_fraud, label_fraud_type` | ground truth; never available at inference |

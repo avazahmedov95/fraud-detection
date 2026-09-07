@@ -10,8 +10,7 @@ import numpy as np
 import pandas as pd
 
 from config import (GeneratorConfig, AMOUNT_MIN, AMOUNT_MAX,
-                    CHANNELS, CHANNEL_WEIGHTS, FAMILY_PAYEE_SHARE,
-                    SECOND_DEVICE_USE_RATE)
+                    FAMILY_PAYEE_SHARE, SECOND_DEVICE_USE_RATE)
 from events import EVENT_FIELDS, make_event
 import persons as P
 import travel as T
@@ -59,7 +58,6 @@ def generate_normal(config, persons, by_pinfl, n_normal, rng, start_dt, trips):
     # Heavy-tailed activity: a few very active senders.
     activity = _normalise(rng.random(len(persons)) ** 3)
     sender_idx = rng.choice(len(persons), size=n_normal, p=activity)
-    channel_p = _normalise(CHANNEL_WEIGHTS)
     span_seconds = config.days * 24 * 3600
 
     events = []
@@ -113,7 +111,6 @@ def generate_normal(config, persons, by_pinfl, n_normal, rng, start_dt, trips):
 
         ev = make_event(
             sender, receiver, amount, ts,
-            channel=str(rng.choice(CHANNELS, p=channel_p)),
             device_id=device_id,
             is_new_payee=is_new,
             balance_before=amount * float(rng.uniform(1.2, 8.0)), rng=rng)

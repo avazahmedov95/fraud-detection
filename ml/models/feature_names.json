@@ -18,9 +18,5 @@
   "device_is_new",
   "geo_is_anomaly",
   "active_call",
-  "secs_login_z",
-  "ch_mobile_app",
-  "ch_ussd",
-  "ch_web",
-  "ch_atm"
+  "secs_login_z"
 ]

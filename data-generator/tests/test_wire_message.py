@@ -18,7 +18,7 @@ _ROW = {
     "sender_pinfl": "S1", "sender_card": "8600330000000001",
     "sender_network": "UZCARD", "receiver_pinfl": "R1",
     "receiver_card": "8600030000000002", "receiver_network": "UZCARD",
-    "amount_uzs": "4800000", "channel": "MOBILE_APP", "device_id": "dev-1",
+    "amount_uzs": "4800000", "device_id": "dev-1",
     "sender_region": "Tashkent City",
     "sender_balance_before": "9000000", "active_call": "False",
     "secs_login_to_confirm": "41.2",
