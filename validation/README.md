@@ -5,7 +5,7 @@ rejected. No single one answers everything, and the distinction is the point.
 
 Each has its own adapter, because each file has its own shape. Everything
 downstream of a translated event — the unit conversion, the replay over the
-deployed rule engine, the report sections — is in **`replay.py`**, shared by all
+deployed rule engine, the report sections — is in **`harness.py`**, shared by all
 three: three copies of the measurement would make the three results
 incomparable the first time one of them was changed.
 

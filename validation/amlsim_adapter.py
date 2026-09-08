@@ -2,7 +2,7 @@
 collection stage PaySim lacks. Landmines and the negative result: README.md 3.
 
 Everything downstream of a translated event - the unit conversion, the replay, the
-report sections - is in replay.py, shared with the other two adapters.
+report sections - is in harness.py, shared with the other two adapters.
 """
 
 import argparse
@@ -11,8 +11,8 @@ from collections import Counter
 
 import pandas as pd
 
-import replay as RP
-from replay import CAP, C, Event, scale_factor      # noqa: F401  (scale_factor: tests)
+import harness as RP
+from harness import CAP, C, Event, scale_factor      # noqa: F401  (scale_factor: tests)
 
 
 def load(dirpath):
@@ -93,10 +93,14 @@ def _events(tx, open_dt, typ, scale):
         if pd.notna(opened):
             age_days = max(0, (pd.Timestamp(ts, unit="s") - opened).days)
 
+        # str(), and not decoration: AMLSim numbers its accounts from zero, and
+        # features.payee_key resolves the identity as `event.get(...) or ""`, so the
+        # integer 0 is falsy and account 0 gets an EMPTY key - 21 rows here, all of
+        # them collapsing into the shared receiver state the guard exists to prevent.
         yield Event(
             ev={"amount_uzs": float(getattr(r, "base_amt")) * scale,
-                "sender_pinfl": getattr(r, "orig_acct"),
-                "receiver_pinfl": bene},
+                "sender_pinfl": str(getattr(r, "orig_acct")),
+                "receiver_pinfl": str(bene)},
             ts=ts,
             label=1 if str(getattr(r, "is_sar")).lower() in ("true", "1") else 0,
             receiver_age=age_days,
@@ -152,8 +156,8 @@ def main():
 
     # receiver_age stays ON - the one capability this dataset supports and PaySim
     # did not.
-    RP.capabilities_off("myid_kinship", "device_telemetry", "geo_telemetry",
-                        "session_telemetry")
+    RP.capability_profile("myid_kinship", "device_telemetry", "geo_telemetry",
+                          "session_telemetry")
 
     res, hits = run(args.dir, args.limit)
     report(res, hits)

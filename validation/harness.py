@@ -9,6 +9,15 @@ So each adapter owns exactly its dataset's shape - which file, which columns, wh
 identifiers, which capabilities the data can support - and everything downstream of
 "a translated event" lives here: the unit conversion, the replay over the DEPLOYED
 rule engine, and the report sections.
+
+Named `harness` and not `replay` for two reasons, and the second is the load-bearing
+one. stream-processor/experiments/replay.py already exists and does the same job for
+this project's OWN generated CSV, so the name would have been ambiguous to a reader;
+and pytest imports test modules by bare module name, so two files called replay.py
+collide the moment anyone runs the suites together. They are kept separate because
+the two sides differ in what they may assume - full capabilities and a known schema
+here, a reduced profile and a foreign schema there - not because the loop is worth
+writing twice.
 """
 
 import os
@@ -26,6 +35,7 @@ if _SP not in sys.path:
 import capabilities as CAP                                     # noqa: E402
 import config as C                                             # noqa: E402
 import rules as _R                                             # noqa: E402
+import features as F                                            # noqa: E402
 from rules import ReceiverState, SenderState, evaluate          # noqa: E402
 
 
@@ -70,8 +80,12 @@ def replay(events):
     """
     senders, receivers = defaultdict(SenderState), defaultdict(ReceiverState)
     rows, hits_by_class = [], defaultdict(Counter)
+    checked = False
 
     for e in events:
+        if not checked:
+            _require_a_payee_key(e.ev)
+            checked = True
         res = evaluate(e.ev, e.receiver_age, senders[e.ev["sender_pinfl"]],
                        e.ts, receivers[e.ev["receiver_pinfl"]])
         rows.append((e.label, res["cep_score"], res["decision"], e.typology))
@@ -83,18 +97,50 @@ def replay(events):
             hits_by_class)
 
 
-def capabilities_off(*keys):
-    """Switch off what the dataset cannot supply, and print the resulting profile.
+def capability_profile(*off, payee_identity="pinfl"):
+    """The profile a foreign dataset gets: what it cannot supply, switched off, and
+    the payee keyed by account.
 
     Switching OFF rather than leaving a field absent is the point: an absent field
     reaches the extractor as a zero, and a rule firing on that measures the adapter,
     not the data. An unknown key raises - see test_capabilities.py.
+
+    `payee_identity` defaults to "pinfl" here while the deployed default is "card",
+    and that is a property of these datasets rather than a convenience: all three
+    NAME accounts and none of them issues a PAN, so the deployed default resolves the
+    key to "" on every row. See `_require_a_payee_key` for what that costs.
     """
-    for key in keys:
+    for key in off:
         CAP.MODES[key] = "off"
+    CAP.MODES["payee_identity"] = payee_identity
     print("capability profile for this run:")
     print(CAP.describe())
     print()
+
+
+def _require_a_payee_key(ev):
+    """Refuse to replay a stream whose payee key resolves empty.
+
+    features.payee_key falls back to the destination PAN, and none of these datasets
+    issues one. With the deployed `card` default the key is then "" on every row, and
+    the damage is quiet rather than loud: `state.seen_payees` holds exactly one
+    element forever, so is_new_payee is true once per sender and never again,
+    DISTINCT_PAYEE_BURST cannot fire at all, and NEW_PAYEE_HIGH_AMOUNT inverts -
+    measured at 0.2x on IBM AML against the 4.0x the same rule reaches on PaySim.
+
+    features.py has warned about this on stderr since the PaySim run, and a warning
+    inside a run that prints eighty lines of report is not enough: the AMLSim result
+    in README.md 3 was published with the key empty and nothing said so. Re-run with
+    it set, that table does not move by a single figure - the two rules that fire
+    there read amounts and receiver-side state, neither of which goes through this
+    key. That is luck, not design, and it is why this raises rather than warns.
+    """
+    if not F.payee_key(ev):
+        raise SystemExit(
+            "the payee key resolves empty on this stream. features.payee_key falls "
+            "back to receiver_card and this dataset issues no PANs, so every sender "
+            "would have exactly one payee forever. Build the profile with "
+            "replay.capability_profile(...), which sets payee_identity=pinfl.")
 
 
 def _head(title, width):

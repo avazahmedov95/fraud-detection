@@ -10,7 +10,7 @@ at MINUTE resolution over 17 days, which is not our hour but is roughly two orde
 of magnitude closer, and section D of the report measures the remaining gap from
 the data instead of assuming it.
 
-Everything downstream of a translated event is in replay.py, shared with the other
+Everything downstream of a translated event is in harness.py, shared with the other
 two adapters.
 """
 
@@ -19,8 +19,8 @@ import os
 
 import pandas as pd
 
-import replay as RP
-from replay import C, Event                                   # noqa: F401
+import harness as RP
+from harness import C, Event                                   # noqa: F401
 
 
 #: The file's own headers contain spaces, and itertuples renames any such column to
@@ -202,8 +202,8 @@ def main():
     # Same profile PaySim forced: account identifiers, amounts and a clock, and
     # nothing else this project uses. receiver_age is off here too - unlike AMLSim,
     # the released files carry no account-opening date.
-    RP.capabilities_off("receiver_age", "myid_kinship", "device_telemetry",
-                        "geo_telemetry", "session_telemetry")
+    RP.capability_profile("receiver_age", "myid_kinship", "device_telemetry",
+                          "geo_telemetry", "session_telemetry")
 
     formats = ([f.strip() for f in args.formats.split(",")]
                if args.formats else None)

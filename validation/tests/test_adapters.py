@@ -20,7 +20,7 @@ import paysim_adapter as PS      # noqa: E402
 import amlsim_adapter as AS      # noqa: E402
 import ibm_aml_adapter as IB    # noqa: E402
 import capabilities as CAP       # noqa: E402
-import replay as RP             # noqa: E402
+import harness as RP             # noqa: E402
 
 
 @pytest.fixture
@@ -83,6 +83,7 @@ def test_rules_fire_on_foreign_data(paysim_df, tmp_path):
         for key in ("receiver_age", "myid_kinship", "device_telemetry",
                     "geo_telemetry", "session_telemetry"):
             CAP.MODES[key] = "off"
+        CAP.MODES["payee_identity"] = "pinfl"
         res, hits = PS.run(str(path), ["TRANSFER"], None)
     finally:
         CAP.MODES.clear(); CAP.MODES.update(saved)
@@ -107,6 +108,7 @@ def test_capabilities_without_data_are_off_in_the_run(paysim_df, tmp_path):
         for key in ("receiver_age", "myid_kinship", "device_telemetry",
                     "geo_telemetry", "session_telemetry"):
             CAP.MODES[key] = "off"
+        CAP.MODES["payee_identity"] = "pinfl"
         _, hits = PS.run(str(path), ["TRANSFER"], None)
     finally:
         CAP.MODES.clear(); CAP.MODES.update(saved)
@@ -195,6 +197,7 @@ def test_amlsim_receiver_age_is_read_from_accounts(amlsim_dir):
         for key in ("myid_kinship", "device_telemetry", "geo_telemetry",
                     "session_telemetry"):
             CAP.MODES[key] = "off"
+        CAP.MODES["payee_identity"] = "pinfl"
         _, hits = AS.run(amlsim_dir, None)
     finally:
         CAP.MODES.clear(); CAP.MODES.update(saved)
@@ -209,6 +212,7 @@ def test_amlsim_typology_labels_survive_to_the_result(amlsim_dir):
         for key in ("myid_kinship", "device_telemetry", "geo_telemetry",
                     "session_telemetry"):
             CAP.MODES[key] = "off"
+        CAP.MODES["payee_identity"] = "pinfl"
         res, _ = AS.run(amlsim_dir, None)
     finally:
         CAP.MODES.clear(); CAP.MODES.update(saved)
@@ -223,6 +227,7 @@ def test_amlsim_capabilities_without_data_are_off(amlsim_dir):
         for key in ("myid_kinship", "device_telemetry", "geo_telemetry",
                     "session_telemetry"):
             CAP.MODES[key] = "off"
+        CAP.MODES["payee_identity"] = "pinfl"
         _, hits = AS.run(amlsim_dir, None)
     finally:
         CAP.MODES.clear(); CAP.MODES.update(saved)
@@ -325,6 +330,7 @@ def test_ibm_fan_in_is_visible_to_the_rules(ibm_file):
         for key in ("receiver_age", "myid_kinship", "device_telemetry",
                     "geo_telemetry", "session_telemetry"):
             CAP.MODES[key] = "off"
+        CAP.MODES["payee_identity"] = "pinfl"
         d, scales = _loaded(ibm_file)
         _, hits = RP.replay(IB.to_events(d, scales))
     finally:
@@ -339,6 +345,7 @@ def test_ibm_capabilities_without_data_are_off(ibm_file):
         for key in ("receiver_age", "myid_kinship", "device_telemetry",
                     "geo_telemetry", "session_telemetry"):
             CAP.MODES[key] = "off"
+        CAP.MODES["payee_identity"] = "pinfl"
         d, scales = _loaded(ibm_file)
         _, hits = RP.replay(IB.to_events(d, scales))
     finally:
@@ -371,3 +378,38 @@ def test_ibm_window_stats_measure_the_span(ibm_file):
     assert stats["receivers"] == 1          # DROP, six inbound
     assert stats["median_h"] < 1.0
     assert stats["within_window"] == 1.0
+
+
+def test_replay_refuses_a_stream_with_no_payee_key():
+    """The defect this guard exists for, and it shipped a published number.
+
+    features.payee_key falls back to the destination PAN; none of these datasets
+    issues one. Under the deployed `card` default the key is "" on every row, so
+    `seen_payees` holds one element forever: is_new_payee is true once per sender and
+    never again, DISTINCT_PAYEE_BURST cannot fire, and NEW_PAYEE_HIGH_AMOUNT inverts.
+    Measured at 0.2x on IBM AML against 4.0x for the same rule on PaySim.
+
+    features.py warned on stderr throughout, and the AMLSim table in README.md 3 was
+    published anyway - a warning inside an eighty-line report is not a failure.
+    """
+    saved = dict(CAP.MODES)
+    try:
+        CAP.MODES["payee_identity"] = "card"      # the deployed default
+        ev = RP.Event(ev={"amount_uzs": 1.0, "sender_pinfl": "A",
+                          "receiver_pinfl": "B"}, ts=0, label=0)
+        with pytest.raises(SystemExit):
+            RP.replay([ev])
+    finally:
+        CAP.MODES.clear(); CAP.MODES.update(saved)
+
+
+def test_the_shared_profile_sets_the_payee_key(capsys):
+    """capability_profile is the one place that gets this right, so every adapter
+    must go through it rather than setting modes itself."""
+    saved = dict(CAP.MODES)
+    try:
+        RP.capability_profile("device_telemetry")
+        assert CAP.MODES["payee_identity"] == "pinfl"
+        assert CAP.MODES["device_telemetry"] == "off"
+    finally:
+        CAP.MODES.clear(); CAP.MODES.update(saved)

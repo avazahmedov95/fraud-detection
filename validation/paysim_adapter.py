@@ -2,7 +2,7 @@
 features.py expects. What transfers and what does not: validation/README.md 2.
 
 Everything downstream of a translated event - the unit conversion, the replay, the
-report sections - is in replay.py, shared with the other two adapters. The second
+report sections - is in harness.py, shared with the other two adapters. The second
 half of this file is not shared and should not be: fitting a model on foreign data
 answers a different question, and only PaySim has a published baseline to fit
 against.
@@ -14,8 +14,8 @@ import time
 
 import pandas as pd
 
-import replay as RP
-from replay import CAP, Event, scale_factor      # noqa: F401  (scale_factor: tests)
+import harness as RP
+from harness import CAP, Event, scale_factor      # noqa: F401  (scale_factor: tests)
 
 
 def to_events(df, scale):
@@ -318,21 +318,16 @@ def main():
     if args.our_model:
         # Only what PaySim actually carries; the rest are switched off rather
         # than defaulted, so no feature is computed from a fabricated value.
-        RP.capabilities_off("receiver_age", "myid_kinship", "device_telemetry",
-                            "geo_telemetry", "session_telemetry")
-        # PaySim names accounts and issues no PANs, so the default card key
-        # resolves to "" on every row - one shared receiver state for the whole
-        # stream, which both fabricates fan-in and makes the replay quadratic.
-        # features.payee_key warns about it now; this is the correct setting.
-        CAP.MODES["payee_identity"] = "pinfl"
+        RP.capability_profile("receiver_age", "myid_kinship", "device_telemetry",
+                              "geo_telemetry", "session_telemetry")
         return our_model(args.file, args.limit)
     if args.baseline:
         return baseline(args.file)
 
     # PaySim has account ids, amounts and a clock, nothing else this project uses. What
     # is not backed by real data is switched off, not defaulted: nothing fires on a zero.
-    RP.capabilities_off("receiver_age", "myid_kinship", "device_telemetry",
-                        "geo_telemetry", "session_telemetry")
+    RP.capability_profile("receiver_age", "myid_kinship", "device_telemetry",
+                          "geo_telemetry", "session_telemetry")
 
     types = [t.strip() for t in args.types.split(",") if t.strip()]
     res, hits = run(args.file, types, args.limit)
