@@ -340,48 +340,6 @@ def b_serve_prep_ships_every_artefact():
     return None
 
 
-def b_seed_baseline_agrees_across_documents():
-    """The multi-seed baseline is quoted in four documents; all must match.
-
-    metrics.json -> ml/README already has a check, and it was not enough: the
-    figures it guards live in ONE file, while the seed baseline is repeated in
-    generator-spec, irp-framing, related-work and ml/README. A regeneration on
-    08.09.2026 moved it and updated ml/README only - nothing noticed, because the
-    check that would notice was pointed at the file that happened to be right.
-
-    A figure repeated in four places needs a check that reads all four, not four
-    checks each reading one.
-    """
-    path = os.path.join(ROOT, "ml", "models", "ablation", "seeds.json")
-    if not os.path.exists(path):
-        return "SKIP: no seed ablation"
-    with open(path, encoding="utf-8") as fh:
-        data = json.load(fh)
-    vals = [v["baseline"]["pr_auc"] for k, v in data.items()
-            if k != "_contract" and "baseline" in v]
-    if len(vals) < 2:
-        return "SKIP: fewer than two seeds recorded"
-    import statistics
-    mean, sd = statistics.mean(vals), statistics.stdev(vals)
-    want = f"{mean:.3f}"
-
-    problems = []
-    for parts in (("docs", "generator-spec.md"), ("docs", "irp-framing.md"),
-                  ("docs", "related-work.md"), ("ml", "README.md")):
-        text = _read(*parts)
-        # "0.960 +/- 0.018 across seeds", however each document words it.
-        found = re.findall(r"(\d\.\d{3})\s*(?:±|\+/-)\s*(\d\.\d{3})", text)
-        rel = "/".join(parts)
-        if not found:
-            problems.append(f"{rel}: no 'mean +/- sd' figure where this check looks")
-            continue
-        for m, s in found:
-            if m != want or abs(float(s) - sd) > 0.0006:
-                problems.append(f"{rel}: says {m} +/- {s}, seeds.json gives "
-                                f"{want} +/- {sd:.3f}")
-    return "; ".join(problems) or None
-
-
 def b_served_copy_is_not_stale():
     """The serve-prep copy of the feature contract must match the exported one.
 
@@ -640,59 +598,114 @@ def b_no_new_constant_columns():
 #: finds it and how metrics.json's raw value is rendered to match. A missing
 #: pattern fails as loudly as a wrong number: a check that quietly stops finding
 #: what it verifies is the seventeenth entry in irp-framing.md 8.
-_README_FIGURES = [
-    (r"^\| ROC-AUC\s+\|\s+([\d.]+)", ("roc_auc",), lambda v: f"{v:.3f}"),
-    (r"^\| PR-AUC\s+\|\s+([\d.]+)", ("pr_auc",), lambda v: f"{v:.3f}"),
-    (r"^\| precision @0\.50\s+\|\s+([\d.]+)", ("at_0_50", "precision"), lambda v: f"{v:.3f}"),
-    (r"^\| precision @0\.50\s+\|\s+[\d.]+\s+\|\s+([\d.]+)", ("cep_only", "precision"), lambda v: f"{v:.3f}"),
-    (r"^\| recall @0\.50\s+\|\s+([\d.]+)", ("at_0_50", "recall"), lambda v: f"{v:.3f}"),
-    (r"^\| recall @0\.50\s+\|\s+[\d.]+\s+\|\s+([\d.]+)", ("cep_only", "recall"), lambda v: f"{v:.3f}"),
-    (r"STRUCTURING ([\d.]+)%", ("by_fraud_type", "STRUCTURING", "recall"), lambda v: f"{v*100:.1f}"),
-    (r"fraud type \(ML @0\.50\):.*?APP ([\d.]+)%", ("by_fraud_type", "APP", "recall"), lambda v: f"{v*100:.1f}"),
-    (r"fraud type \(ML @0\.50\):.*?ATO ([\d.]+)%", ("by_fraud_type", "ATO", "recall"), lambda v: f"{v*100:.1f}"),
-    (r"fraud type \(ML @0\.50\):.*?MULE ([\d.]+)%", ("by_fraud_type", "MULE", "recall"), lambda v: f"{v*100:.1f}"),
-    (r"^brier\s+([\d.]+)", ("calibration", "brier"), lambda v: f"{v:.5f}"),
-    (r"^n_alerts\s+(\d+)", ("calibration", "n_alerts"), str),
-    (r"^saturated_share\s+([\d.]+)%", ("calibration", "saturated_share"), lambda v: f"{v*100:.1f}"),
-    (r"^distinct_scores\s+(\d+)", ("calibration", "distinct_scores"), str),
-    (r"^review_band\s+(\d+)", ("calibration", "review_band"), str),
-    (r"^median_alert_score\s+([\d.]+)", ("calibration", "median_alert_score"), lambda v: f"{v:.6f}"),
+#: Every figure a DOCUMENT quotes from a GENERATED artefact, wherever it lives.
+#:
+#: Merged on 08.09.2026 from two checks that each covered part of the problem:
+#: one read sixteen values but only in ml/README, the other read one value across
+#: four documents. Nine figures went stale in the gap between them - a
+#: regeneration updated ml/README, and the check that would have caught the rest
+#: was pointed at the file that happened to be right.
+#:
+#: The figures are duplicated on purpose and stay duplicated: irp-framing is a
+#: working note for a thesis, related-work is a literature review, and a document
+#: that says "see ml/README 3" instead of the number reads worse for the person
+#: it is written for. So the copies remain and drift is what fails - the same
+#: bargain b_duplicated_modules_are_identical makes for source files.
+#:
+#: (document, pattern with ONE capture group, source, how the raw value renders)
+#: `source` is ("metrics", *keys) into metrics.json, or ("seeds", "mean"|"sd").
+#: A pattern that stops matching fails as loudly as a wrong number: a check that
+#: quietly stops finding what it verifies is this document's seventeenth entry.
+_f3 = lambda v: f"{v:.3f}"
+_pct1 = lambda v: f"{v*100:.1f}"
+
+_TRACKED_FIGURES = [
+    # --- ml/README.md: the metrics table and the calibration block -----------
+    ("ml/README.md", r"^\| ROC-AUC\s+\|\s+([\d.]+)", ("metrics", "roc_auc"), _f3),
+    ("ml/README.md", r"^\| PR-AUC\s+\|\s+([\d.]+)", ("metrics", "pr_auc"), _f3),
+    ("ml/README.md", r"^\| precision @0\.50\s+\|\s+([\d.]+)", ("metrics", "at_0_50", "precision"), _f3),
+    ("ml/README.md", r"^\| precision @0\.50\s+\|\s+[\d.]+\s+\|\s+([\d.]+)", ("metrics", "cep_only", "precision"), _f3),
+    ("ml/README.md", r"^\| recall @0\.50\s+\|\s+([\d.]+)", ("metrics", "at_0_50", "recall"), _f3),
+    ("ml/README.md", r"^\| recall @0\.50\s+\|\s+[\d.]+\s+\|\s+([\d.]+)", ("metrics", "cep_only", "recall"), _f3),
+    ("ml/README.md", r"STRUCTURING ([\d.]+)%", ("metrics", "by_fraud_type", "STRUCTURING", "recall"), _pct1),
+    ("ml/README.md", r"fraud type \(ML @0\.50\):.*?APP ([\d.]+)%", ("metrics", "by_fraud_type", "APP", "recall"), _pct1),
+    ("ml/README.md", r"fraud type \(ML @0\.50\):.*?ATO ([\d.]+)%", ("metrics", "by_fraud_type", "ATO", "recall"), _pct1),
+    ("ml/README.md", r"fraud type \(ML @0\.50\):.*?MULE ([\d.]+)%", ("metrics", "by_fraud_type", "MULE", "recall"), _pct1),
+    ("ml/README.md", r"^brier\s+([\d.]+)", ("metrics", "calibration", "brier"), lambda v: f"{v:.5f}"),
+    ("ml/README.md", r"^n_alerts\s+(\d+)", ("metrics", "calibration", "n_alerts"), str),
+    ("ml/README.md", r"^saturated_share\s+([\d.]+)%", ("metrics", "calibration", "saturated_share"), _pct1),
+    ("ml/README.md", r"^distinct_scores\s+(\d+)", ("metrics", "calibration", "distinct_scores"), str),
+    ("ml/README.md", r"^review_band\s+(\d+)", ("metrics", "calibration", "review_band"), str),
+    ("ml/README.md", r"^median_alert_score\s+([\d.]+)", ("metrics", "calibration", "median_alert_score"), lambda v: f"{v:.6f}"),
+    ("ml/README.md", r"baseline PR-AUC \*\*([\d.]+) ±", ("seeds", "mean"), _f3),
+    ("ml/README.md", r"baseline PR-AUC \*\*[\d.]+ ± ([\d.]+)\*\*", ("seeds", "sd"), _f3),
+    ("ml/README.md", r"5 seeds, baseline ([\d.]+) ±", ("seeds", "mean"), _f3),
+    # --- the same numbers, in the documents written for other readers --------
+    ("docs/generator-spec.md", r"\(([\d.]+) ± [\d.]+ across seeds\)", ("seeds", "mean"), _f3),
+    ("docs/generator-spec.md", r"\([\d.]+ ± ([\d.]+) across seeds\)", ("seeds", "sd"), _f3),
+    ("docs/irp-framing.md", r"Baseline ([\d.]+) ±", ("seeds", "mean"), _f3),
+    ("docs/irp-framing.md", r"Baseline [\d.]+ ± ([\d.]+)\.", ("seeds", "sd"), _f3),
+    ("docs/related-work.md", r"\| PR-AUC \| ([\d.]+) \(", ("metrics", "pr_auc"), _f3),
+    ("docs/related-work.md", r"\| PR-AUC \| [\d.]+ \(([\d.]+) ±", ("seeds", "mean"), _f3),
+    ("docs/related-work.md", r"\| PR-AUC \| [\d.]+ \([\d.]+ ± ([\d.]+) across", ("seeds", "sd"), _f3),
+    ("docs/related-work.md", r"\| all 20 \| ([\d.]+) \|", ("metrics", "pr_auc"), _f3),
+    ("validation/README.md", r"\| full system \| ([\d.]+) \|", ("metrics", "pr_auc"), _f3),
+    ("validation/README.md", r"\| full system \| [\d.]+ \| ([\d.]+) \|", ("metrics", "at_0_50", "precision"), _f3),
+    ("validation/README.md", r"\| full system \| [\d.]+ \| [\d.]+ \| ([\d.]+) \|", ("metrics", "at_0_50", "recall"), _f3),
 ]
 
 
-def b_readme_figures_match_metrics_json():
-    """ml/README.md quotes metrics.json; the quotes must still be true.
+def b_documents_match_the_generated_figures():
+    """Every figure a document quotes must still be the one that was measured.
 
-    The identical construction in stream-processor/README.md was removed rather
-    than checked, because that file is not about the model. This one is - a ml
-    README with no figures in it is worse than one that can drift - so the table
-    stays and drifting is what fails. It has drifted once already, reporting MULE
-    recall at 68% while the pipeline achieved 85.7%, across a whole capability,
-    under a note saying metrics.json was authoritative. A disclaimer is not a
-    refresh; this is.
+    One check over every (document, figure) pair, replacing two that each covered
+    part of it: sixteen values in ml/README, and one value across four documents.
+    Nine figures went stale in the gap - a regeneration updated ml/README and
+    nothing looked at the rest.
+
+    It does not say the numbers are good. It says the text describes the system
+    that exists, which is the weaker claim and the one a reader depends on: a
+    figure describing a model that no longer exists is worse than no figure,
+    because it still looks like a measurement.
     """
-    path = os.path.join(ROOT, "ml", "models", "metrics.json")
-    if not os.path.exists(path):
+    mpath = os.path.join(ROOT, "ml", "models", "metrics.json")
+    spath = os.path.join(ROOT, "ml", "models", "ablation", "seeds.json")
+    if not os.path.exists(mpath):
         return "SKIP: metrics.json not present"
-    with open(path) as fh:
+    with open(mpath, encoding="utf-8") as fh:
         metrics = json.load(fh)
-    text = _read("ml", "README.md")
 
-    problems = []
-    for pattern, keys, render in _README_FIGURES:
-        m = re.search(pattern, text, re.M | re.S)
-        label = ".".join(keys)
+    seeds = None
+    if os.path.exists(spath):
+        import statistics
+        with open(spath, encoding="utf-8") as fh:
+            data = json.load(fh)
+        vals = [v["baseline"]["pr_auc"] for k, v in data.items()
+                if k != "_contract" and "baseline" in v]
+        if len(vals) > 1:
+            seeds = {"mean": statistics.mean(vals), "sd": statistics.stdev(vals)}
+
+    cache, problems = {}, []
+    for doc, pattern, source, render in _TRACKED_FIGURES:
+        if source[0] == "seeds":
+            if seeds is None:
+                continue                      # no ablation recorded; nothing to compare
+            value = seeds[source[1]]
+        else:
+            value = metrics
+            for k in source[1:]:
+                value = value[k]
+        if doc not in cache:
+            cache[doc] = _read(*doc.split("/"))
+        m = re.search(pattern, cache[doc], re.M | re.S)
+        label = f"{doc}:{'.'.join(source[1:])}"
         if not m:
-            problems.append(f"{label}: ml/README.md no longer states it where "
-                            f"this check looks")
+            problems.append(f"{label}: no longer stated where this check looks")
             continue
-        value = metrics
-        for k in keys:
-            value = value[k]
         expected = render(value)
         if m.group(1) != expected:
-            problems.append(f"{label}: README says {m.group(1)}, "
-                            f"metrics.json gives {expected}")
+            problems.append(f"{label}: document says {m.group(1)}, "
+                            f"the artefact gives {expected}")
     return "; ".join(problems) or None
 
 
@@ -749,7 +762,6 @@ CHECKS = [
     ("case_row -> ClickHouse 02-cases", b_case_row_matches_the_schema),
     ("fraud_job imports -> run.ps1 AND Makefile", b_job_modules_cover_every_import),
     ("config artefacts -> run.ps1 serve-prep", b_serve_prep_ships_every_artefact),
-    ("seeds.json -> the four docs that quote it", b_seed_baseline_agrees_across_documents),
     ("exported contract -> the served copy", b_served_copy_is_not_stale),
     ("no data path derived from __file__", b_no_artefact_path_derived_from_file),
     ("ReceiverStore write -> read (Redis member)", b_receiver_store_round_trips),
@@ -759,7 +771,7 @@ CHECKS = [
     ("docker-compose env -> case-manager config", b_compose_env_names_are_read),
     ("modules -> their package README", b_every_module_is_documented),
     ("generated CSV -> no new constant columns", b_no_new_constant_columns),
-    ("metrics.json -> ml/README figures", b_readme_figures_match_metrics_json),
+    ("generated artefacts -> every document that quotes them", b_documents_match_the_generated_figures),
     ("paysim_adapter.BASELINE -> related-work 6", b_external_baseline_matches_the_docs),
 ]
 
