@@ -1,28 +1,18 @@
 """Replays the deployed rules over an IBM AMLSim run, which generates the mule
 collection stage PaySim lacks. Landmines and the negative result: README.md 3.
+
+Everything downstream of a translated event - the unit conversion, the replay, the
+report sections - is in replay.py, shared with the other two adapters.
 """
 
 import argparse
 import os
-import sys
-from collections import defaultdict, Counter
+from collections import Counter
 
 import pandas as pd
 
-_SP = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                   "..", "stream-processor")
-sys.path.insert(0, _SP)
-
-import capabilities as CAP     # noqa: E402
-import config as C             # noqa: E402
-from rules import SenderState, ReceiverState, evaluate   # noqa: E402
-
-
-# AMLSim's amounts are ~100-1000, three orders below UZS, so rules with absolute
-# thresholds would never fire. A unit conversion, not tuning; same as paysim_adapter.
-def scale_factor(amounts, our_median_uzs=138_740.0):
-    med = float(amounts.median())
-    return our_median_uzs / med if med > 0 else 1.0
+import replay as RP
+from replay import CAP, C, Event, scale_factor      # noqa: F401  (scale_factor: tests)
 
 
 def load(dirpath):
@@ -88,12 +78,12 @@ def run(dirpath, limit):
               ", ".join(f"{k}={v}" for k, v in Counter(typ.values()).most_common()))
     print()
 
-    senders, receivers = defaultdict(SenderState), defaultdict(ReceiverState)
-    rows, hits_by_class = [], defaultdict(Counter)
+    return RP.replay(_events(tx, open_dt, typ, scale))
 
+
+def _events(tx, open_dt, typ, scale):
     for r in tx.itertuples(index=False):
         ts = int(getattr(r, "ts_epoch"))
-        label = 1 if str(getattr(r, "is_sar")).lower() in ("true", "1") else 0
         bene = getattr(r, "bene_acct")
 
         # Receiver account age in days, from the accounts file. PaySim had no equivalent
@@ -103,81 +93,36 @@ def run(dirpath, limit):
         if pd.notna(opened):
             age_days = max(0, (pd.Timestamp(ts, unit="s") - opened).days)
 
-        ev = {
-            "amount_uzs": float(getattr(r, "base_amt")) * scale,
-            "sender_pinfl": getattr(r, "orig_acct"),
-            "receiver_pinfl": bene,
-        }
-        res = evaluate(ev, age_days, senders[ev["sender_pinfl"]], ts,
-                       receivers[bene])
-        rows.append((label, res["cep_score"], res["decision"],
-                     typ.get(getattr(r, "tran_id"), "")))
-        for h in res["rule_hits"]:
-            hits_by_class["fraud" if label else "legit"][h] += 1
+        yield Event(
+            ev={"amount_uzs": float(getattr(r, "base_amt")) * scale,
+                "sender_pinfl": getattr(r, "orig_acct"),
+                "receiver_pinfl": bene},
+            ts=ts,
+            label=1 if str(getattr(r, "is_sar")).lower() in ("true", "1") else 0,
+            receiver_age=age_days,
+            typology=typ.get(getattr(r, "tran_id"), ""))
 
-    return (pd.DataFrame(rows, columns=["label", "cep_score", "decision", "typology"]),
-            hits_by_class)
+
+BY_TYPOLOGY_NOTES = (
+    "PaySim has no collection stage, so MULE_FAN_IN could not be tested",
+    "there at all. AMLSim labels fan_in and fan_out separately, so the leg",
+    "asymmetry reported in ml/README.md can be checked rather than asserted.",
+    "",
+    "Read the fan_in row against fan_out. On our own data the split was 57.8%",
+    "against 93.8% BEFORE receiver-side state, and the whole design claim is",
+    "that the gap closes with it. A gap of the same SIGN here reproduces the",
+    "finding off our generator; no gap, or the opposite sign, falsifies it -",
+    "which is why this run is worth doing.",
+)
 
 
 def report(res, hits):
-    n_fraud = int((res.label == 1).sum())
-    n_legit = int((res.label == 0).sum())
-    flagged = res.decision.isin(["REVIEW", "BLOCK"])
-
-    print("=" * 72)
-    print("A. PER-RULE LIFT - does each rule carry signal on foreign data?")
-    print("=" * 72)
-    print("Threshold-free, so it answers the question whatever the decision")
-    print("layer does. Same measure as the PaySim run, for comparability.\n")
-    print(f"{'rule':<26}{'on SAR':>11}{'on legit':>12}{'lift':>9}")
-    every = set(hits["fraud"]) | set(hits["legit"])
-    lifts = []
-    for rule in sorted(every):
-        f = hits["fraud"][rule] / max(n_fraud, 1)
-        l = hits["legit"][rule] / max(n_legit, 1)
-        lifts.append((rule, f, l, (f / l) if l > 0 else float("inf")))
-    for rule, f, l, lift in sorted(lifts, key=lambda x: -x[3]):
-        shown = "inf" if lift == float("inf") else f"{lift:.1f}x"
-        print(f"{rule:<26}{f:>10.2%}{l:>12.2%}{shown:>9}")
-
-    print("\n" + "=" * 72)
-    print("B. BY TYPOLOGY - the reason this dataset was chosen")
-    print("=" * 72)
-    print("PaySim has no collection stage, so MULE_FAN_IN could not be tested")
-    print("there at all. AMLSim labels fan_in and fan_out separately, so the leg")
-    print("asymmetry reported in ml/README.md can be checked rather than asserted.\n")
-    labelled = res[(res.label == 1) & (res.typology != "")]
-    if labelled.empty:
-        print("  No typology labels found - alert_transactions.csv was missing or")
-        print("  carried no alert_type column. Section B is unavailable.")
-    else:
-        print(f"{'typology':<18}{'n':>8}{'flagged':>10}{'recall':>10}")
-        for t, g in labelled.groupby("typology"):
-            fl = g.decision.isin(["REVIEW", "BLOCK"])
-            print(f"{t:<18}{len(g):>8,}{int(fl.sum()):>10,}{fl.mean():>10.1%}")
-        print("\n  Read the fan_in row against fan_out. On our own data the split")
-        print("  was 57.8% against 93.8% BEFORE receiver-side state, and the whole")
-        print("  design claim is that the gap closes with it. A gap of the same")
-        print("  SIGN here reproduces the finding off our generator; no gap, or the")
-        print("  opposite sign, falsifies it - which is why this run is worth doing.")
-
-    print("\n" + "=" * 72)
-    print("C. DECISION LAYER")
-    print("=" * 72)
-    fr = flagged[res.label == 1].mean() if n_fraud else 0.0
-    lg = flagged[res.label == 0].mean() if n_legit else 0.0
-    print(f"  SAR flagged   : {int(flagged[res.label==1].sum()):>7,} / {n_fraud:<7,} ({fr:.1%})")
-    print(f"  legit flagged : {int(flagged[res.label==0].sum()):>7,} / {n_legit:<7,} ({lg:.2%})")
-    if fr > 0 and lg > 0:
-        print(f"  decision-layer lift: {fr/lg:.1f}x")
-
-    import rules as _R
-    review_at, block_at = _R._thresholds()
-    if abs(review_at - C.REVIEW_THRESHOLD) > 1e-9:
-        print(f"  REVIEW threshold : {review_at:.2f} "
-              f"(scaled from {C.REVIEW_THRESHOLD:.2f} for this capability profile)")
-    else:
-        print(f"  REVIEW threshold : {review_at:.2f}")
+    RP.section_lift(res, hits, positive="SAR", width=72)
+    print()
+    RP.section_by_group(res, "B. BY TYPOLOGY - the reason this dataset was chosen",
+                        BY_TYPOLOGY_NOTES, width=72)
+    print()
+    RP.section_decision(res, hits, positive="SAR", width=72)
 
     print("\n" + "=" * 72)
     print("D. THE WINDOW, AND WHY IT IS NOT WIDENED HERE")
@@ -205,16 +150,10 @@ def main():
     if not os.path.isdir(args.dir):
         raise SystemExit(f"{args.dir} is not a directory")
 
-    # Anything not backed by real data is switched OFF rather than defaulted, so no
-    # rule can fire on a fabricated zero. receiver_age stays ON - the one capability
-    # this dataset supports and PaySim did not.
-    for key in ("myid_kinship", "device_telemetry", "geo_telemetry",
-                "session_telemetry", "channel"):
-        CAP.MODES[key] = "off"
-
-    print("capability profile for this run:")
-    print(CAP.describe())
-    print()
+    # receiver_age stays ON - the one capability this dataset supports and PaySim
+    # did not.
+    RP.capabilities_off("myid_kinship", "device_telemetry", "geo_telemetry",
+                        "session_telemetry")
 
     res, hits = run(args.dir, args.limit)
     report(res, hits)

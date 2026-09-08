@@ -122,7 +122,54 @@ def test_feature_order_is_stable_across_calls():
 
 def test_minimal_deployment_still_has_a_usable_contract(set_mode):
     """With every optional integration off, only own-stream features remain."""
-    set_mode(**{cap.key: "off" for cap in CAP.REGISTRY if not cap.always_on})
+    set_mode(**{cap.key: "off" for cap in CAP.REGISTRY if "off" in cap.modes})
     names = CAP.feature_names()
     assert names == list(CAP.BY_KEY["core_history"].features)
     assert len(names) == 12
+
+
+# --- a write that configures nothing --------------------------------------
+#
+# MODES was a plain dict until 08.09.2026, so setting a key it did not have was a
+# successful write that switched nothing off. Twelve such writes across five files
+# survived the removal of the `channel` capability, and every one of those runs used
+# the FULL profile while printing a reduced one - including two external-validation
+# adapters. Nothing failed, because nothing looked.
+
+def test_an_unknown_capability_cannot_be_set(set_mode):
+    with pytest.raises(KeyError):
+        set_mode(channel="off")
+    with pytest.raises(KeyError):
+        CAP.MODES["no_such_capability"] = "off"
+
+
+def test_a_mode_outside_the_declared_set_cannot_be_set(set_mode):
+    """The same silence in the other direction, and the one that had teeth.
+
+    payee_identity selects BETWEEN two data sources and declares no "off"; two tests
+    switched it off anyway while describing "every optional integration off". The
+    write landed, `enabled()` read it and returned False for a capability the
+    registry says is always enabled, and both tests asserted against a deployment
+    that cannot exist. No published figure moved - payee_identity contributes no
+    features and no rules - which is exactly why it went unnoticed.
+    """
+    assert "off" not in CAP.BY_KEY["payee_identity"].modes
+    with pytest.raises(ValueError):
+        set_mode(payee_identity="off")
+    assert CAP.enabled("payee_identity")
+
+
+def test_update_is_guarded_too(set_mode):
+    """dict.update is C code that skips a subclass's __setitem__, and the fixtures
+    set profiles that way - so the guard has to cover it explicitly."""
+    with pytest.raises(KeyError):
+        CAP.MODES.update({"channel": "off"})
+
+
+def test_restoring_a_saved_profile_still_works(set_mode):
+    """clear() + update(saved) is how every fixture here restores state; guarding
+    writes must not break it."""
+    saved = dict(CAP.MODES)
+    CAP.MODES.clear()
+    CAP.MODES.update(saved)
+    assert CAP.MODES == saved

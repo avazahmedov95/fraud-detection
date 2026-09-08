@@ -1,7 +1,13 @@
 # External validation
 
-Two datasets answering two different questions. Neither answers both, and the
-distinction is the point.
+Three datasets answering three different questions, and two more examined and
+rejected. No single one answers everything, and the distinction is the point.
+
+Each has its own adapter, because each file has its own shape. Everything
+downstream of a translated event — the unit conversion, the replay over the
+deployed rule engine, the report sections — is in **`replay.py`**, shared by all
+three: three copies of the measurement would make the three results
+incomparable the first time one of them was changed.
 
 ## The constraint that shapes everything here
 
@@ -580,7 +586,144 @@ the SHAP explanations required under CBU 3759 meaningless.
 cd validation && python -m pytest -q
 ```
 
-Fixtures in the shape of both real files, so the harnesses are known to work
+Fixtures in the shape of all three real files, so the harnesses are known to work
 before anything is downloaded. They test the **adapters** — the mapping from a
 foreign schema onto this project's event contract — not the detection outcome,
 which is what the real run is for.
+
+---
+
+## 4. IBM AML — the collection stage on a clock that can see it
+
+`ibm_aml_adapter.py`
+
+**The risk it addresses.** Section 3 above reports a rule that did not merely fail
+to transfer, it **inverted**: `MULE_FAN_IN` fired *less* often on AMLSim's fan-in
+targets than on ordinary accounts. Two incompatible readings survive that run.
+Either the rule encodes a rate rather than a topology and does not generalise, or
+the deployed one-hour window cannot see a pattern whose median span is 363 days.
+Both were stated; neither could be eliminated, because AMLSim cannot separate
+them.
+
+Separating them needs a dataset that models a collection stage on a **finer
+clock**. This is that dataset.
+
+**What it is.** *IBM Transactions for Anti-Money Laundering* — Altman et al.,
+"Realistic Synthetic Financial Transactions for Anti-Money Laundering Models",
+NeurIPS 2023 Datasets and Benchmarks
+([arXiv:2306.16424](https://arxiv.org/abs/2306.16424)). A multi-agent simulation
+of banks, businesses and individuals, released under CDLA-Sharing-1.0 as six
+graphs from 5M to 180M transactions. `HI-Small_Trans.csv` is used here.
+
+| | PaySim | AMLSim | **IBM AML (HI-Small)** |
+|---|---|---|---|
+| clock resolution | 1 hour | 1 day | **1 minute** |
+| rows | 6.36M | 198K | 5.08M |
+| span | 30 days | ~2 years | **17 days** |
+| positives | 0.129% | 0.339% | 0.102% |
+| collection stage | absent | present, ~363-day span | **present, ~3.6-day span** |
+
+**Why the clock is the whole point.** `RECEIVER_WINDOW_S` is one hour. Against
+AMLSim's 363-day patterns the mismatch is about 10⁴ and swamps every other
+effect. Here the median laundering receiver collects over **86.8 hours**, so the
+mismatch is ~87× — still real, still reported, but no longer large enough to
+explain any result on its own. Section D of the report measures it from the data
+on every run rather than restating it as a caveat.
+
+**The measurement that made this dataset worth fetching**, taken before any rule
+was replayed — distinct senders per receiver per hour, against the rule's
+threshold of more than five:
+
+| | above threshold |
+|---|---|
+| receivers of laundering funds | **1.02%** |
+| all other receivers | 0.18% |
+
+**5.6× the right way.** On AMLSim the same quantity was 1.16% against 2.69% —
+0.4×, inverted. The sign flips back on an independent dataset with a finer clock,
+which is the first evidence that section 3's inversion is a property of that
+dataset's timescale rather than of the rule. It is not yet a positive result for
+the rule: the deployed replay is what tests that, and 87× is still 87×.
+
+**Get it.** Kaggle
+([ealtman2019/ibm-transactions-for-anti-money-laundering-aml](https://www.kaggle.com/datasets/ealtman2019/ibm-transactions-for-anti-money-laundering-aml)),
+IBM Box (linked from [IBM/AML-Data](https://github.com/IBM/AML-Data)), or a
+Hugging Face mirror of the HI-Small transactions that needs no Kaggle account.
+
+```bash
+python ibm_aml_adapter.py --file HI-Small_Trans.csv --limit 500000
+```
+
+`--patterns HI-Small_Patterns.txt` adds the per-typology breakdown; the released
+transaction CSV carries only `Is Laundering`, and which typology a row belongs to
+lives in that sidecar. Without it section B is empty and the aggregate question is
+still answered.
+
+**Three translation decisions, none of them free.**
+
+1. **Self-transfers are dropped** — 591,212 rows, 12% of the file, almost all
+   `Reinvestment`. An account paying itself is not a transfer between two parties;
+   left in, every one becomes a fan-in edge from an account to itself. The count
+   is printed on every run.
+2. **Amounts are scaled per currency**, each by its own median. The file carries
+   15 currencies and this project's thresholds are written in UZS, so one global
+   factor would put a yen and a dollar amount on opposite sides of the structuring
+   threshold for no reason but their denomination.
+3. **No filter on payment format**, deliberately. Laundering here concentrates in
+   ACH (0.75% against 0.02% elsewhere), so defaulting to ACH would be selecting
+   rows by the label. The per-format rates are printed instead, and `--formats`
+   makes a narrower run an explicit choice.
+
+### Result
+
+**Not yet run.** The adapter and its fixtures are in place and tested; the replay
+over 5M rows is the next step.
+
+---
+
+## 5. Mendeley ktbthg777x — examined and NOT used
+
+*"Synthetic Banking Transaction Dataset with Multi-Pattern Fraud Labels for
+Machine Learning Research"*, [doi 10.17632/ktbthg777x.1](https://data.mendeley.com/datasets/ktbthg777x/1),
+CC BY 4.0. 1,000,000 rows, 100,000 customers, 20,000 merchants, four fraud
+patterns: card testing, account takeover, money laundering rings, geographic
+anomalies.
+
+It was the strongest candidate on paper, and the only public dataset found that
+carries **`device_id` and coordinates** — the two capabilities no external run has
+ever exercised. It does not survive contact.
+
+**1. The coordinates are random, and the release says so.** Its own limitations
+note reads: coordinates "are randomized within realistic ranges; they do not
+represent actual merchant locations". Every country in the file spans latitude
+−60…70 and longitude −180…180; `merchant_country` and the coordinates are
+independent draws. One of the four fraud patterns is nonetheless *geographic
+anomaly*.
+
+Measured on the 400 rows carrying that label, against the same customers' own
+legitimate rows:
+
+| | median distance from that customer's previous transaction |
+|---|---|
+| labelled `geo_anomaly` | 9,880 km |
+| legitimate, same customers | 9,995 km |
+
+The labelled anomalies are, if anything, **less** anomalous. 10,000 km is simply
+the median distance between two uniform points on a globe. A fraud class defined
+by geography, in a file whose geography carries no information.
+
+**2. The history is too sparse for any relational feature.** Ten transactions per
+customer over a year; a median of 19 days between two events on the same card. The
+10-minute and 1-hour windows are empty on essentially every row, and
+`secs_since_last` is measured in weeks. 14 of 20 features degenerate.
+
+**3. The "laundering ring" has no collection stage.** 80 transfers, 80 distinct
+senders, 80 distinct receivers — each receiver receives exactly one. The
+`merchant_id` on those rows is the literal string `TRANSFER_TO_<customer>`. There
+is no convergence to detect, which is the one thing this project most needs a
+dataset to contain.
+
+**What survives.** Nothing quotable. Recorded here so the next reader does not
+spend the same day on it, and because it is the second published dataset in this
+directory whose headline claim does not survive being checked — see section 2, and
+`docs/irp-framing.md`.

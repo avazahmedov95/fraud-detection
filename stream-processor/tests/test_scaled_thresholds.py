@@ -70,7 +70,7 @@ def test_reduced_capability_lowers_the_threshold(profile):
 
 
 def test_threshold_never_goes_negative_or_above_the_base(profile):
-    profile(**{c.key: "off" for c in CAP.REGISTRY if not c.always_on})
+    profile(**{c.key: "off" for c in CAP.REGISTRY if "off" in c.modes})
     t = CAP.scaled_threshold(C.REVIEW_THRESHOLD)
     assert 0.0 <= t <= C.REVIEW_THRESHOLD
 
@@ -93,7 +93,7 @@ def _ev(amount, payee, bank="BankA"):
 def test_single_rule_can_flag_when_it_is_all_that_is_available(profile):
     """The PaySim case: one rule at 0.35 is below the 0.40 cutoff but must act."""
     profile(receiver_age="off", myid_kinship="off", device_telemetry="off",
-            geo_telemetry="off", session_telemetry="off", channel="off")
+            geo_telemetry="off", session_telemetry="off")
 
     st = R.SenderState()
     for i in range(6):
@@ -110,7 +110,7 @@ def test_scaling_can_be_switched_off(profile, monkeypatch):
     """The previous fixed-threshold behaviour stays available for comparison."""
     monkeypatch.setattr(C, "SCALE_THRESHOLDS_BY_CAPABILITY", False)
     profile(receiver_age="off", myid_kinship="off", device_telemetry="off",
-            geo_telemetry="off", session_telemetry="off", channel="off")
+            geo_telemetry="off", session_telemetry="off")
     assert R._thresholds() == (C.REVIEW_THRESHOLD, C.BLOCK_THRESHOLD)
 
 

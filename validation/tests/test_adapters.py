@@ -18,7 +18,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
 
 import paysim_adapter as PS      # noqa: E402
 import amlsim_adapter as AS      # noqa: E402
+import ibm_aml_adapter as IB    # noqa: E402
 import capabilities as CAP       # noqa: E402
+import replay as RP             # noqa: E402
 
 
 @pytest.fixture
@@ -59,17 +61,16 @@ def test_scale_factor_survives_a_degenerate_median():
 
 def test_events_carry_only_fields_paysim_actually_has(paysim_df):
     """A fabricated default would let a rule fire on data that does not exist."""
-    ev = next(PS.to_events(paysim_df.head(1), 1.0))
-    assert set(ev) == {"amount_uzs", "sender_pinfl", "receiver_pinfl",
-                       "_ts", "_label", "_type"}
-    for absent in ("device_id", "sender_region", "channel", "active_call",
+    e = next(PS.to_events(paysim_df.head(1), 1.0))
+    assert set(e.ev) == {"amount_uzs", "sender_pinfl", "receiver_pinfl"}
+    for absent in ("device_id", "sender_region", "active_call",
                    "is_family_transfer"):
-        assert absent not in ev
+        assert absent not in e.ev
 
 
 def test_step_becomes_an_hourly_timestamp(paysim_df):
     evs = list(PS.to_events(paysim_df.head(3), 1.0))
-    assert all(e["_ts"] % 3600 == 0 for e in evs)
+    assert all(e.ts % 3600 == 0 for e in evs)
 
 
 def test_rules_fire_on_foreign_data(paysim_df, tmp_path):
@@ -80,7 +81,7 @@ def test_rules_fire_on_foreign_data(paysim_df, tmp_path):
     saved = dict(CAP.MODES)
     try:
         for key in ("receiver_age", "myid_kinship", "device_telemetry",
-                    "geo_telemetry", "session_telemetry", "channel"):
+                    "geo_telemetry", "session_telemetry"):
             CAP.MODES[key] = "off"
         res, hits = PS.run(str(path), ["TRANSFER"], None)
     finally:
@@ -97,14 +98,14 @@ def test_rules_fire_on_foreign_data(paysim_df, tmp_path):
 
 
 def test_capabilities_without_data_are_off_in_the_run(paysim_df, tmp_path):
-    """PaySim has no device, geo, session or channel; a rule firing means invented data."""
+    """PaySim has no device, geo or session; a rule firing means invented data."""
     path = tmp_path / "paysim.csv"
     paysim_df.to_csv(path, index=False)
 
     saved = dict(CAP.MODES)
     try:
         for key in ("receiver_age", "myid_kinship", "device_telemetry",
-                    "geo_telemetry", "session_telemetry", "channel"):
+                    "geo_telemetry", "session_telemetry"):
             CAP.MODES[key] = "off"
         _, hits = PS.run(str(path), ["TRANSFER"], None)
     finally:
@@ -192,7 +193,7 @@ def test_amlsim_receiver_age_is_read_from_accounts(amlsim_dir):
     saved = dict(CAP.MODES)
     try:
         for key in ("myid_kinship", "device_telemetry", "geo_telemetry",
-                    "session_telemetry", "channel"):
+                    "session_telemetry"):
             CAP.MODES[key] = "off"
         _, hits = AS.run(amlsim_dir, None)
     finally:
@@ -206,7 +207,7 @@ def test_amlsim_typology_labels_survive_to_the_result(amlsim_dir):
     saved = dict(CAP.MODES)
     try:
         for key in ("myid_kinship", "device_telemetry", "geo_telemetry",
-                    "session_telemetry", "channel"):
+                    "session_telemetry"):
             CAP.MODES[key] = "off"
         res, _ = AS.run(amlsim_dir, None)
     finally:
@@ -220,7 +221,7 @@ def test_amlsim_capabilities_without_data_are_off(amlsim_dir):
     saved = dict(CAP.MODES)
     try:
         for key in ("myid_kinship", "device_telemetry", "geo_telemetry",
-                    "session_telemetry", "channel"):
+                    "session_telemetry"):
             CAP.MODES[key] = "off"
         _, hits = AS.run(amlsim_dir, None)
     finally:
@@ -229,3 +230,144 @@ def test_amlsim_capabilities_without_data_are_off(amlsim_dir):
                  "COACHED_SESSION"}
     fired = set(hits["fraud"]) | set(hits["legit"])
     assert not (fired & forbidden), f"fired without data: {fired & forbidden}"
+
+
+# --- IBM AML ---------------------------------------------------------------
+#
+# The dataset fetched to retest MULE_FAN_IN on a clock finer than the deployed
+# window. These pin the translation, not the result: which rows are dropped, how
+# amounts in fifteen currencies are made comparable, and that the minute timestamps
+# survive - the last being the entire reason this dataset was chosen over the two
+# already here.
+
+IBM_HEADER = ["Timestamp", "From Bank", "Account", "To Bank", "Account",
+              "Amount Received", "Receiving Currency", "Amount Paid",
+              "Payment Currency", "Payment Format", "Is Laundering"]
+
+
+def _ibm_row(ts, src, dst, amount, currency="US Dollar", fmt="ACH", label=0):
+    return [ts, "010", src, "020", dst, amount, currency, amount, currency,
+            fmt, label]
+
+
+@pytest.fixture
+def ibm_file(tmp_path):
+    """Six senders converging on one receiver inside a minute, plus background."""
+    rows = [_ibm_row("2022/09/01 00:0%d" % i, f"S{i}", "DROP", 900.0, label=1)
+            for i in range(6)]
+    rows += [_ibm_row("2022/09/01 01:%02d" % i, f"L{i}", f"R{i}", 100.0)
+             for i in range(10)]
+    # a self-transfer, which must not reach the replay
+    rows.append(_ibm_row("2022/09/01 02:00", "SELF", "SELF", 5000.0,
+                         fmt="Reinvestment"))
+    # a second currency, three orders of magnitude away
+    rows += [_ibm_row("2022/09/01 03:%02d" % i, f"Y{i}", f"Z{i}", 120000.0,
+                      currency="Yen") for i in range(4)]
+    path = tmp_path / "HI-Small_Trans.csv"
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(",".join(IBM_HEADER) + "\n")
+        for r in rows:
+            fh.write(",".join(str(v) for v in r) + "\n")
+    return str(path)
+
+
+def test_ibm_self_transfers_are_dropped_and_counted(ibm_file):
+    """12% of the real file is an account paying itself. Left in, every one of them
+    becomes a fan-in edge from an account to itself."""
+    d, n_all, n_self = IB.load(ibm_file)
+    assert n_self == 1
+    assert len(d) == n_all - 1
+    assert not (d.sender == d.receiver).any()
+
+
+def test_ibm_rows_arrive_in_time_order(ibm_file):
+    d, _, _ = IB.load(ibm_file)
+    assert d.ts.is_monotonic_increasing
+
+
+def test_ibm_minute_timestamps_are_not_rounded_to_the_hour(ibm_file):
+    """The reason this dataset was fetched. PaySim's clock is hourly and AMLSim's is
+    daily, so neither can exercise a sub-hour window at all; if this collapsed to
+    the hour the run would answer nothing the other two did not."""
+    evs = list(IB.to_events(*_loaded(ibm_file)))
+    assert any(e.ts % 3600 != 0 for e in evs)
+
+
+def _loaded(path):
+    d, _, _ = IB.load(path)
+    return d, IB._scales(d)
+
+
+def test_ibm_each_currency_is_scaled_by_its_own_median(ibm_file):
+    """One global factor would put a yen amount and a dollar amount on opposite
+    sides of the structuring threshold for no reason but their denomination."""
+    d, scales = _loaded(ibm_file)
+    assert set(scales) == {"US Dollar", "Yen"}
+    assert scales["US Dollar"] != scales["Yen"]
+    amounts = [e.ev["amount_uzs"] for e in IB.to_events(d, scales)]
+    # every converted amount lands within an order of magnitude of our own median
+    assert all(RP.OUR_MEDIAN_UZS / 20 < a < RP.OUR_MEDIAN_UZS * 20 for a in amounts)
+
+
+def test_ibm_a_file_of_the_wrong_shape_is_refused(tmp_path):
+    """A schema mismatch must not read as 'the rules found nothing'."""
+    path = tmp_path / "wrong.csv"
+    pd.DataFrame({"step": [1], "amount": [1.0]}).to_csv(path, index=False)
+    with pytest.raises(SystemExit):
+        IB.load(str(path))
+
+
+def test_ibm_fan_in_is_visible_to_the_rules(ibm_file):
+    """Six senders onto one receiver inside a minute is what MULE_FAN_IN is for, and
+    the fixture exists to prove the wiring reaches it - not to claim a result."""
+    saved = dict(CAP.MODES)
+    try:
+        for key in ("receiver_age", "myid_kinship", "device_telemetry",
+                    "geo_telemetry", "session_telemetry"):
+            CAP.MODES[key] = "off"
+        d, scales = _loaded(ibm_file)
+        _, hits = RP.replay(IB.to_events(d, scales))
+    finally:
+        CAP.MODES.clear(); CAP.MODES.update(saved)
+    assert "MULE_FAN_IN" in (set(hits["fraud"]) | set(hits["legit"]))
+
+
+def test_ibm_capabilities_without_data_are_off(ibm_file):
+    """The released files carry no device, geo, session or account-opening date."""
+    saved = dict(CAP.MODES)
+    try:
+        for key in ("receiver_age", "myid_kinship", "device_telemetry",
+                    "geo_telemetry", "session_telemetry"):
+            CAP.MODES[key] = "off"
+        d, scales = _loaded(ibm_file)
+        _, hits = RP.replay(IB.to_events(d, scales))
+    finally:
+        CAP.MODES.clear(); CAP.MODES.update(saved)
+    forbidden = {"DEVICE_CHANGE", "GEO_ANOMALY", "IMPOSSIBLE_TRAVEL",
+                 "COACHED_SESSION", "FRESH_RECEIVER"}
+    fired = set(hits["fraud"]) | set(hits["legit"])
+    assert not (fired & forbidden), f"fired without data: {fired & forbidden}"
+
+
+def test_ibm_patterns_sidecar_labels_the_edges(tmp_path):
+    """Typologies live in a separate file the Hugging Face mirror does not carry;
+    without it section B is empty, so the parser must work when it IS supplied."""
+    p = tmp_path / "HI-Small_Patterns.txt"
+    p.write_text(
+        "BEGIN LAUNDERING ATTEMPT - FAN-IN\n"
+        "2022/09/01 00:00,010,S1,020,DROP,900,US Dollar,900,US Dollar,ACH,1\n"
+        "2022/09/01 00:01,010,S2,020,DROP,900,US Dollar,900,US Dollar,ACH,1\n"
+        "END LAUNDERING ATTEMPT - FAN-IN\n", encoding="utf-8")
+    typ = IB.read_patterns(str(p))
+    assert typ == {("S1", "DROP"): "fan-in", ("S2", "DROP"): "fan-in"}, (
+        "the typology names are hyphenated; splitting on every '-' yields 'in'")
+
+
+def test_ibm_window_stats_measure_the_span(ibm_file):
+    """Section D quotes this rather than asserting a caveat; on AMLSim the same
+    quantity turned out to be 363 days and changed the reading of the result."""
+    d, _, _ = IB.load(ibm_file)
+    stats = IB.window_stats(d)
+    assert stats["receivers"] == 1          # DROP, six inbound
+    assert stats["median_h"] < 1.0
+    assert stats["within_window"] == 1.0

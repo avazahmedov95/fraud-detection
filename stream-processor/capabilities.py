@@ -141,7 +141,36 @@ def _configured(cap: Capability) -> str:
     return mode
 
 
-MODES = {c.key: _configured(c) for c in REGISTRY}
+class _Modes(dict):
+    """The live capability profile, with every write checked against the registry.
+
+    This was a plain dict, so `MODES["channel"] = "off"` for a capability that had
+    been DELETED was a successful write that switched nothing off: the key lands,
+    no reader looks at it, and the caller believes it configured something. Eleven
+    such writes survived the channel removal across five files and nothing failed -
+    each of those runs used the FULL profile while reporting a reduced one. A mode
+    outside a capability's declared set was silent the same way; `_configured`
+    validates the env var, and direct writes went around it.
+
+    `update` is overridden because dict.update is C code that does not route
+    through a subclass's __setitem__, and the test fixtures set profiles that way.
+    """
+
+    def __setitem__(self, key, value):
+        cap = BY_KEY.get(key)
+        if cap is None:
+            raise KeyError(f"no capability {key!r}; the registry declares "
+                           f"{sorted(BY_KEY)}")
+        if value not in cap.modes:
+            raise ValueError(f"{key} must be one of {cap.modes}, got {value!r}")
+        super().__setitem__(key, value)
+
+    def update(self, *args, **kwargs):
+        for key, value in dict(*args, **kwargs).items():
+            self[key] = value
+
+
+MODES = _Modes({c.key: _configured(c) for c in REGISTRY})
 
 
 def mode(key: str) -> str:
