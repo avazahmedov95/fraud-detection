@@ -91,6 +91,135 @@ def _train(csv, env_overrides):
             "f1": metrics["at_0_50"]["f1"], "n_features": n_feats}
 
 
+# Two-sided 95% t critical values by df (n-1) - honest at the small n here.
+T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447,
+       7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228, 11: 2.201, 12: 2.179,
+       13: 2.160, 14: 2.145, 15: 2.131, 16: 2.120, 17: 2.110, 18: 2.101,
+       19: 2.093, 20: 2.086, 24: 2.064, 29: 2.045, 39: 2.023}
+
+
+def ci95(values):
+    """Half-width of the 95% confidence interval for the MEAN.
+    Governed by the standard error (sd/sqrt(n)), not the spread of individual deltas:
+    an earlier revision compared a mean against a standard deviation, understating
+    the evidence and calling established effects unresolved.
+
+    Module level, not nested in report(): the feature sweep needs the same
+    interval, and a second copy of an interval calculation is how two numbers in
+    one document come to mean different things.
+    """
+    n = len(values)
+    if n < 2:
+        return float("inf")
+    se = statistics.stdev(values) / math.sqrt(n)
+    df = n - 1
+    t = T95.get(df) or min(T95[k] for k in T95 if k >= df) if df <= 39 else 1.96
+    return t * se
+
+
+def sweep_features(seeds):
+    """What each COLUMN contributes, which the capability sweep cannot ask.
+
+    A capability is something a deployment can lack, so `core_history` is
+    always_on - it is the bank's own transaction stream and no bank runs without
+    it. That is correct as a deployment statement and it left **eleven of the
+    twenty features unmeasured**, permanently: no toggle removes them, so nothing
+    ever asked what they were worth. Splitting the capability to make them
+    switchable would fix the measurement by asserting something false. This asks
+    the question directly instead.
+
+    Two results are reported because one of them alone misleads.
+
+    ONE AT A TIME gives the MARGINAL value: what is lost if this column goes and
+    every other stays. Redundant columns score zero here - two similar features
+    each look worthless because the other covers the gap.
+
+    TOGETHER gives the joint value of everything the first pass called
+    negligible. Measured 08.09.2026: twelve features were individually
+    indistinguishable from zero and dropping all twelve cost -0.027, twice the
+    largest single-feature effect in the contract. "Contributes nothing on its
+    own" and "can be removed" are different claims, and only the second one is a
+    decision.
+    """
+    import numpy as np
+    import lightgbm as lgb
+    from sklearn.metrics import average_precision_score
+    sys.path.insert(0, _PKG)
+    import dataset as D
+
+    feats = list(D.FEATURE_NAMES)
+    per = {f: [] for f in feats}
+    bases = []
+    for seed in seeds:
+        df = D.build_matrix(_dataset(seed))
+        cut = int(len(df) * 0.80)
+        tr, te = df.iloc[:cut], df.iloc[cut:]
+        ytr, yte = tr.label.values, te.label.values
+
+        def fit(cols):
+            m = lgb.LGBMClassifier(
+                n_estimators=400, learning_rate=0.05, num_leaves=31,
+                subsample=0.8, colsample_bytree=0.8, min_child_samples=30,
+                scale_pos_weight=(ytr == 0).sum() / max(int(ytr.sum()), 1),
+                random_state=42, n_jobs=-1, verbose=-1)
+            m.fit(tr[cols].astype("float32").values, ytr)
+            return average_precision_score(
+                yte, m.predict_proba(te[cols].astype("float32").values)[:, 1])
+
+        base = fit(feats)
+        bases.append(base)
+        for f in feats:
+            per[f].append(fit([x for x in feats if x != f]) - base)
+        print(f"  seed {seed:>5}  baseline {base:.4f}", flush=True)
+
+    print(f"\nbaseline {statistics.mean(bases):.4f} "
+          f"+/-{statistics.stdev(bases):.4f} over {len(seeds)} seeds")
+    print("\nDelta is what DROPPING the column does; negative means it carried")
+    print("signal. Paired within seed, 95% t-interval for the mean.\n")
+    print(f"{'column dropped':<26}{'mean':>9}{'95% CI':>22}{'sign':>7}  verdict")
+    negligible = []
+    for f in sorted(feats, key=lambda k: statistics.mean(per[k])):
+        d = per[f]
+        m, half = statistics.mean(d), ci95(d)
+        agree = sum(1 for x in d if (x > 0) == (m > 0))
+        if m + half < 0:
+            v = "carries signal"
+        else:
+            v = "not distinguishable alone"
+            negligible.append(f)
+        print(f"{f:<26}{m:>+9.4f}   [{m - half:+.4f},{m + half:+.4f}]"
+              f"{agree:>5}/{len(d)}  {v}")
+
+    if not negligible:
+        return
+    print(f"\nAll {len(negligible)} 'not distinguishable alone' columns removed "
+          f"TOGETHER:")
+    joint = []
+    keep = [f for f in feats if f not in negligible]
+    for seed in seeds:
+        df = D.build_matrix(_dataset(seed))
+        cut = int(len(df) * 0.80)
+        tr, te = df.iloc[:cut], df.iloc[cut:]
+        ytr, yte = tr.label.values, te.label.values
+
+        def fit(cols):
+            m = lgb.LGBMClassifier(
+                n_estimators=400, learning_rate=0.05, num_leaves=31,
+                subsample=0.8, colsample_bytree=0.8, min_child_samples=30,
+                scale_pos_weight=(ytr == 0).sum() / max(int(ytr.sum()), 1),
+                random_state=42, n_jobs=-1, verbose=-1)
+            m.fit(tr[cols].astype("float32").values, ytr)
+            return average_precision_score(
+                yte, m.predict_proba(te[cols].astype("float32").values)[:, 1])
+        joint.append(fit(keep) - fit(feats))
+    m, half = statistics.mean(joint), ci95(joint)
+    print(f"  {len(keep)} columns instead of {len(feats)}: "
+          f"{m:+.4f} [{m - half:+.4f},{m + half:+.4f}]")
+    print("  Compare that against the largest SINGLE delta above. If it is "
+          "bigger,\n  the columns are redundant with each other, not worthless "
+          "- and the\n  one-at-a-time column is not a removal list.")
+
+
 GEN_SOURCES = ("config.py", "persons.py", "events.py", "fraud_patterns.py",
                "generator.py", "travel.py")
 
@@ -176,25 +305,6 @@ def report(results, only=None):
         s = statistics.stdev(values) if len(values) > 1 else 0.0
         return m, s
 
-    # Two-sided 95% t critical values by df (n-1) - honest at the small n here.
-    T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447,
-           7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228, 11: 2.201, 12: 2.179,
-           13: 2.160, 14: 2.145, 15: 2.131, 16: 2.120, 17: 2.110, 18: 2.101,
-           19: 2.093, 20: 2.086, 24: 2.064, 29: 2.045, 39: 2.023}
-
-    def ci95(values):
-        """Half-width of the 95% confidence interval for the MEAN.
-        Governed by the standard error (sd/sqrt(n)), not the spread of individual deltas:
-        an earlier revision compared a mean against a standard deviation, understating
-        the evidence and calling established effects unresolved."""
-        n = len(values)
-        if n < 2:
-            return float("inf")
-        se = statistics.stdev(values) / math.sqrt(n)
-        df = n - 1
-        t = T95.get(df) or min(T95[k] for k in T95 if k >= df) if df <= 39 else 1.96
-        return t * se
-
     print(f"{'configuration':<24}{'PR-AUC mean+/-sd':>20}"
           f"{'delta (95% CI)':>28}{'sign':>8}{'verdict':>13}")
     for label in configs:
@@ -268,6 +378,10 @@ def main():
                     help="seconds to work before saving and exiting")
     ap.add_argument("--report", action="store_true", help="print results only")
     ap.add_argument("--reset", action="store_true", help="discard progress")
+    ap.add_argument("--features", action="store_true",
+                    help="sweep individual FEATURE columns instead of "
+                         "capabilities - the only way the eleven in "
+                         "core_history get measured at all")
     ap.add_argument("--only", default=None,
                     help="comma-separated capabilities to sweep (default: all)")
     args = ap.parse_args()
@@ -282,6 +396,9 @@ def main():
         return
 
     seeds = [int(s) for s in args.seeds.split(",") if s.strip()]
+    if args.features:
+        return sweep_features(seeds)
+
     results, done = run(seeds, args.budget, only)
     if done:
         report(results, only)

@@ -253,6 +253,51 @@ data moves the baseline, which silently invalidates every stored delta. Earlier
 measurements are kept in `models/ablation/seeds_pre_*.json` and must not be read
 alongside this table.
 
+### Per-column value, and why the capability table could not give it
+
+`experiments/ablate_seeds.py --features`
+
+A capability is something a *deployment can lack*, so `core_history` is
+always-on: it is the bank's own transaction stream and no bank runs without it.
+That is right as a deployment statement, and it meant **eleven of the twenty
+columns had never been measured at all** — no toggle removed them, so nothing
+ever asked. Splitting the capability to make them switchable would have fixed
+the measurement by asserting something false. This asks the question directly.
+
+Paired within seed, 5 seeds, baseline 0.970 ± 0.011. Negative = the column
+carried signal.
+
+| column | Δ if dropped | verdict |
+|---|---|---|
+| `receiver_age` | −0.0131 [−0.0176, −0.0086] | carries signal |
+| `hour` | −0.0107 [−0.0206, −0.0008] | carries signal |
+| `active_call` | −0.0103 [−0.0199, −0.0007] | carries signal |
+| `is_new_payee` | −0.0080 [−0.0135, −0.0024] | carries signal |
+| `rcv_distinct_senders_1h` | −0.0068 [−0.0135, −0.0001] | carries signal |
+| `secs_login_z` | −0.0063 [−0.0104, −0.0022] | carries signal |
+| `rcv_inflow_1h` | −0.0033 [−0.0063, −0.0004] | carries signal |
+| `sub_threshold_1h` | −0.0022 [−0.0041, −0.0002] | carries signal |
+| the other twelve | between −0.0022 and +0.0012, every interval crossing zero | not distinguishable alone |
+
+**The twelve are not a removal list, and that is the finding.** Dropping all
+twelve *together* costs **−0.0278 [−0.0494, −0.0061]** — more than twice the
+largest single-column effect in the table. They are redundant with each other,
+not worthless: drop `vel_1h` and `vel_10m` covers it, drop either and the other
+does. One-at-a-time measures the *marginal* contribution, and reading it as a
+list of things to delete would cost 0.028 PR-AUC while every row said "zero".
+
+The harness reports both numbers for that reason. **"Contributes nothing on its
+own" and "can be removed" are different claims, and only the second is a
+decision.**
+
+**A single seed said the opposite, and it was wrong.** On seed 42 alone, six
+columns had a *positive* delta — the model apparently better without them, led
+by `secs_since_last` at +0.0038. Across five seeds that column reads −0.0000,
+with per-seed values from +0.0038 to −0.0053. Six independent coin flips landing
+the same way is unremarkable; it looked like a finding because it was read off
+one run. This is the same trap the capability table's `payee_identity` row
+records, met again on the same data a day later.
+
 ### What this measurement does not cover
 
 **PR-AUC here is the ML model's alone.** A capability whose value sits in the CEP
