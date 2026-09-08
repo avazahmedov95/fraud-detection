@@ -56,7 +56,7 @@ reader:
 
 | document | what it holds |
 |---|---|
-| `docs/irp-framing.md` | the research question, every measurement with its interval, a line-by-line answer to the seven review points, eighteen silent failure modes, and what a real work queue exposed that no metric did |
+| `docs/irp-framing.md` | the research question, every measurement with its interval, a line-by-line answer to the seven review points, nineteen silent failure modes, and what a real work queue exposed that no metric did |
 | `docs/threat-model.md` | three adversaries, what each control assumes, and what evading it costs — one of those costs is now measured rather than argued |
 | `docs/generator-spec.md` | the generator as a specification, the dataset of record with its hashes, and why the data is generated at all |
 | `validation/README.md` | four foreign datasets, what each could and could not test, and the screens that came out of it |

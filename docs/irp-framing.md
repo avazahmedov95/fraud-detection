@@ -1285,6 +1285,45 @@ replays a fixed slice and stopping the transport also stops the offer.*
 
 ## 8. Silent failure modes
 
+**Nineteenth: a fraud category the system could never assign.** `classify_type`
+names an alert from whichever rule fired, and named MULE from
+`DISTINCT_PAYEE_BURST` and `VELOCITY` alone. Both fire when one sender pays out
+more than five times in ten minutes, and **neither has ever fired**: the
+generator's fastest burst reaches exactly five. `STRUCTURING` episodes spread
+5-11 transfers over up to 150 minutes, ATO episodes cap at four events. So the
+MULE label was unreachable - **0 assignments across 50,000 rows** - while real
+mule transfers were labelled "(none)" 65% of the time and APP 33%.
+
+`MULE_FAN_IN` detects the pattern, fires 30 times at 100% precision, and was not
+in the table. Adding it gives 30 MULE alerts, all 30 on true mule fraud, none
+misattributed.
+
+Three things make this worth the catalogue rather than a one-line fix.
+
+*Half of it had already been found, and filed as something else.* §9 records an
+outage experiment whose prediction was about `MULE_FAN_IN` while the column it
+read maps MULE to two other rules, and concluded: "a category error in the
+metric, not a confound in the experiment". True, and the same sentence contains
+the defect - the metric is wrong because the *mapping* is wrong, and the analysis
+stopped at the measurement. A finding that explains why a number is meaningless
+is not finished until it asks whether the thing producing the number is correct.
+
+*Every guard passed.* The rules fire, the fusion returns a decision, the label is
+a valid enum value, tests are green. Nothing is broken. A category is simply
+never chosen, and only counting the outcomes shows it.
+
+*The two dead rules are still dead*, and that is a separate question this does
+not close. `VELOCITY` misses its threshold by exactly one event, on a generator
+whose structuring pattern spaces transfers 3-15 minutes apart while real
+smurfing is fast because the attacker is racing detection. Either the threshold
+is wrong for this rail or the generator is too slow; both are testable and
+neither is tested. Recorded rather than adjusted, because tuning a threshold
+until a rule fires on synthetic data is how a detection claim becomes a
+tautology.
+
+`test_fusion.py` now pins the label and, more usefully, asserts that **every**
+label has at least one trigger the engine can actually emit.
+
 **Eighteenth: the external number that anchored this project's headline claim was
 quoted against the wrong prevalence, and nothing in the repository could tell.**
 §6 of `related-work.md` calibrated this project's PR-AUC against a published

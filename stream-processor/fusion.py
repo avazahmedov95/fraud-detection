@@ -82,10 +82,26 @@ def decide(score: float, rule_hits, cep_only: bool = False) -> str:
 
 
 # Priority order: the first pattern whose triggers fired names the alert.
+#: Alert label from whichever rule fired, first match wins.
+#:
+#: MULE lists MULE_FAN_IN first, and did not until 08.09.2026. It named the
+#: pattern by DISTINCT_PAYEE_BURST and VELOCITY alone - two sender-side rules
+#: that fire when one account pays out fast, and NEITHER OF WHICH FIRES ON THIS
+#: DATASET AT ALL: both need more than five events in ten minutes and the
+#: generator's fastest burst reaches exactly five. So the label was unreachable.
+#: Measured before the fix: 0 MULE alerts across 50,000 rows, while real mule
+#: transfers were labelled "(none)" 65% of the time and APP 33%.
+#:
+#: The rule that does detect the pattern - MULE_FAN_IN, 30 hits at 100%
+#: precision - was not in this table, which irp-framing.md 9 had noticed from the
+#: other side: an outage experiment predicted MULE_FAN_IN would stop firing and
+#: read a column that could not see it. That was recorded as a category error in
+#: the metric. It was also a defect here, and this is the half that was missed:
+#: fan-in is the collection stage, which is what makes a mule a mule.
 _TYPE_PRIORITY = (
     ("STRUCTURING", ("STRUCTURING",)),
     ("ATO",         ("DEVICE_CHANGE", "GEO_ANOMALY")),
-    ("MULE",        ("DISTINCT_PAYEE_BURST", "VELOCITY")),
+    ("MULE",        ("MULE_FAN_IN", "DISTINCT_PAYEE_BURST", "VELOCITY")),
     ("APP",         ("NEW_PAYEE_HIGH_AMOUNT", "AMOUNT_DEVIATION")),
 )
 

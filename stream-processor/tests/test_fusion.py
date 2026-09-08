@@ -1,5 +1,7 @@
 """Unit tests for fusion.py."""
 
+import re
+
 import pytest
 
 import capabilities as CAP
@@ -181,3 +183,42 @@ def test_no_model_reaches_the_scaled_cutoffs(profile):
     # and with a model present the same score is correctly left alone
     _, fused = fusion.score_and_decide(lone, 0.05, ["NEW_PAYEE_HIGH_AMOUNT"])
     assert fused == "ALLOW"
+
+
+# --- the alert label, and a category that could never be assigned ------------
+
+def test_fan_in_names_the_mule_pattern():
+    """MULE_FAN_IN must reach the MULE label, and until 08.09.2026 it did not.
+
+    The label was named by DISTINCT_PAYEE_BURST and VELOCITY alone. Both need
+    more than five events in ten minutes from one sender; the generator's fastest
+    burst reaches exactly five, so neither fires and the MULE category was
+    unreachable - 0 alerts across 50,000 rows, while real mule transfers were
+    labelled "(none)" 65% of the time and APP 33%.
+
+    Fan-in is the collection stage, which is the thing that makes a mule a mule,
+    and MULE_FAN_IN detects it at 100% precision on this data. It was the one
+    rule the table did not consult.
+    """
+    assert classify_type(["MULE_FAN_IN"]) == "MULE"
+
+
+def test_structuring_still_outranks_fan_in():
+    """Priority order is load-bearing: STRUCTURING is a mandatory-review rule and
+    must keep its label when both fire."""
+    assert classify_type(["MULE_FAN_IN", "STRUCTURING"]) == "STRUCTURING"
+
+
+def test_every_label_is_reachable_by_some_rule_that_can_fire():
+    """A label whose every trigger is a rule that never fires is dead weight the
+    dashboard reports as a real category. Checked against the rule names the
+    engine can actually emit, so a renamed rule fails here rather than silently
+    emptying a category."""
+    import rules as R
+    emitted = set(re.findall(r'hits\.append\("([A-Z_]+)"\)',
+                             open(R.__file__, encoding="utf-8").read()))
+    assert emitted, "could not read the rule names out of rules.py"
+    for label, triggers in fusion._TYPE_PRIORITY:
+        assert set(triggers) & emitted, (
+            f"the {label} label is unreachable: none of {triggers} is a rule "
+            f"the engine emits")
