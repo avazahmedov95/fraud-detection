@@ -72,18 +72,18 @@ velocity attacks — is addressed in §5 rather than dismissed.
 ## 4. Evidence already in hand
 
 All figures: PR-AUC on held-out time slices, paired within generator seed, 95%
-CI for the mean delta, 5 seeds unless stated. Baseline 0.970 ± 0.011. Synthetic
+CI for the mean delta, 5 seeds unless stated. Baseline 0.960 ± 0.018. Synthetic
 data — design targets, not validated findings.
 
 | Data source removed | Δ PR-AUC (95% CI) | sign | verdict |
 |---|---|---|---|
-| receiver-side aggregation | −0.033 [−0.046, −0.020] | 5/5 | real |
-| mobile-app session telemetry | −0.024 [−0.045, −0.003] | 5/5 | real |
-| receiver account age | −0.014 [−0.026, −0.002] | 5/5 | real |
-| device identity | −0.002 [−0.004, +0.001] | 4/5 | negligible |
-| geo telemetry | −0.001 [−0.003, +0.001] | 3/5 | negligible (see caveat) |
-| MyID kinship (added) | +0.001 [−0.004, +0.006] | 2/5 | negligible |
-| payee keyed by person, not card | +0.000 [−0.003, +0.004] | 2/5 | negligible |
+| receiver-side aggregation | −0.036 [−0.068, −0.004] | 5/5 | real |
+| mobile-app session telemetry | −0.034 [−0.051, −0.016] | 5/5 | real |
+| receiver account age | −0.022 [−0.040, −0.004] | 4/5 | real |
+| MyID kinship (added) | +0.002 [−0.000, +0.004] | 4/5 | negligible |
+| device identity | +0.002 [−0.001, +0.005] | 4/5 | negligible |
+| payee keyed by person, not card | +0.001 [−0.004, +0.007] | 2/5 | negligible |
+| geo telemetry | +0.000 [−0.002, +0.002] | 2/5 | negligible (see caveat) |
 
 **Channel identity is no longer a row here.** It measured −0.002 across five
 seeds, fed no rule, and is a concept no public dataset carries, so no external
@@ -300,7 +300,7 @@ Ordered by what blocks what.
    **Relational fraud detection cannot be validated end-to-end on public real
    data, because the account identifiers that make it relational are exactly
    what cannot be published.** 14 of 20 features here are relational; removing
-   them costs 0.978 → 0.842 PR-AUC and 0.944 → 0.636 precision. Every public
+   them costs 0.936 → 0.761 PR-AUC and 0.921 → 0.563 precision. Every public
    real dataset examined is identifier-free.
 
    The response is to split the question:

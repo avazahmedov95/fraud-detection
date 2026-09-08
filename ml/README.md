@@ -104,12 +104,12 @@ prevalence-robust measures agreeing on about 2x is what makes the AUPRC ratio
 believable.
 
 But **feature availability is about half of it**: stripped to amount and hour,
-the columns a public dataset can carry, this model scores 0.691 on this data
-(`validation/README.md`). So 0.978 -> 0.691 is what publishing costs, and
-0.691 -> 0.380 is the generator being separable. The first half is a property of
+the columns a public dataset can carry, this model scores 0.653 on this data
+(`validation/README.md`). So 0.936 -> 0.653 is what publishing costs, and
+0.653 -> 0.380 is the generator being separable. The first half is a property of
 the field, not of this project.
 
-**And the number that should be read next to 0.970 is 0.988** - their AUPRC
+**And the number that should be read next to 0.960 is 0.988** - their AUPRC
 *before* they removed the balance leakage, reproduced here at 1.000. A PR-AUC in
 the high nineties is the range a known-broken model reaches on public data, which
 is the honest frame for this one. See `docs/related-work.md` §6.
@@ -194,17 +194,17 @@ grown to 24, so they are history rather than current figures.
 Deltas are paired within each seed; the interval is a 95% CI for the mean delta.
 
 All rows measured on one feature set and one generator version, 5 seeds,
-baseline PR-AUC **0.970 ± 0.011**:
+baseline PR-AUC **0.960 ± 0.018**:
 
 | configuration | delta (95% CI) | sign | verdict |
 |---|---|---|---|
-| receiver_velocity=off | −0.033 [−0.046, −0.020] | 5/5 | **real** |
-| session_telemetry=off | −0.024 [−0.045, −0.003] | 5/5 | **real** |
-| receiver_age=off | −0.014 [−0.026, −0.002] | 5/5 | **real** |
-| device_telemetry=off | −0.002 [−0.004, +0.001] | 4/5 | no effect |
-| geo_telemetry=off | −0.001 [−0.003, +0.001] | 3/5 | no effect |
-| myid_kinship=on | +0.001 [−0.004, +0.006] | 2/5 | no effect |
-| payee_identity=pinfl | +0.000 [−0.003, +0.004] | 2/5 | no effect |
+| receiver_velocity=off | −0.036 [−0.068, −0.004] | 5/5 | **real** |
+| session_telemetry=off | −0.034 [−0.051, −0.016] | 5/5 | **real** |
+| receiver_age=off | −0.022 [−0.040, −0.004] | 4/5 | **real** |
+| myid_kinship=on | +0.002 [−0.000, +0.004] | 4/5 | no effect |
+| device_telemetry=off | +0.002 [−0.001, +0.005] | 4/5 | no effect |
+| payee_identity=pinfl | +0.001 [−0.004, +0.007] | 2/5 | no effect |
+| geo_telemetry=off | +0.000 [−0.002, +0.002] | 2/5 | no effect |
 
 **`channel=off` is absent because the capability is gone.** It measured
 −0.002 [−0.006, +0.002] over five seeds, no rule read its four one-hot features,
@@ -264,78 +264,45 @@ columns had never been measured at all** — no toggle removed them, so nothing
 ever asked. Splitting the capability to make them switchable would have fixed
 the measurement by asserting something false. This asks the question directly.
 
-Paired within seed, 5 seeds, baseline 0.970 ± 0.011. Negative = the column
+Paired within seed, 5 seeds, baseline 0.960 ± 0.018. Negative = the column
 carried signal.
 
 | column | Δ if dropped | verdict |
 |---|---|---|
-| `receiver_age` | −0.0131 [−0.0176, −0.0086] | carries signal |
-| `hour` | −0.0107 [−0.0206, −0.0008] | carries signal |
-| `active_call` | −0.0103 [−0.0199, −0.0007] | carries signal |
-| `is_new_payee` | −0.0080 [−0.0135, −0.0024] | carries signal |
-| `rcv_distinct_senders_1h` | −0.0068 [−0.0135, −0.0001] | carries signal |
-| `secs_login_z` | −0.0063 [−0.0104, −0.0022] | carries signal |
-| `rcv_inflow_1h` | −0.0033 [−0.0063, −0.0004] | carries signal |
-| `sub_threshold_1h` | −0.0022 [−0.0041, −0.0002] | carries signal |
-| the other twelve | between −0.0022 and +0.0012, every interval crossing zero | not distinguishable alone |
+| `secs_login_z` | −0.0089 [−0.0141, −0.0037] | carries signal |
+| `is_new_payee` | −0.0062 [−0.0112, −0.0012] | carries signal |
+| the other eighteen | between −0.0131 and +0.0028, every interval crossing zero | not distinguishable alone |
 
-**The twelve are not a removal list, and that is the finding.** Dropping all
-twelve *together* costs **−0.0278 [−0.0494, −0.0061]** — more than twice the
-largest single-column effect in the table. They are redundant with each other,
-not worthless: drop `vel_1h` and `vel_10m` covers it, drop either and the other
-does. One-at-a-time measures the *marginal* contribution, and reading it as a
-list of things to delete would cost 0.028 PR-AUC while every row said "zero".
+**The eighteen are not a removal list, and that is the finding.** Keeping only
+the two costs **−0.865** — the model collapses. They are redundant with each
+other, not worthless: drop `vel_1h` and `vel_10m` covers it, drop either and the
+other does. One-at-a-time measures the *marginal* contribution, and reading it as
+a list of things to delete would be catastrophic while every row said "zero".
 
 The harness reports both numbers for that reason. **"Contributes nothing on its
 own" and "can be removed" are different claims, and only the second is a
 decision.**
 
-**A single seed said the opposite, and it was wrong.** On seed 42 alone, six
-columns had a *positive* delta — the model apparently better without them, led
-by `secs_since_last` at +0.0038. Across five seeds that column reads −0.0000,
-with per-seed values from +0.0038 to −0.0053. Six independent coin flips landing
-the same way is unremarkable; it looked like a finding because it was read off
-one run. This is the same trap the capability table's `payee_identity` row
-records, met again on the same data a day later.
+**Eight columns cleared the bar on the previous dataset and two do now, on the
+same feature set.** Nothing about the features changed; the data got noisier. The
+08.09.2026 generator fix widened ATO episodes from 2–4 events to 2–8, which
+raised the between-seed spread of the baseline from ±0.011 to ±0.018 — and every
+interval widened with it. `receiver_age` is the clearest case: −0.0131, the
+largest single effect in the table, and *not* distinguishable from zero because
+its interval now spans [−0.0303, +0.0040].
 
-### A rule's own precision is the wrong number, and it misleads twice
+That is worth stating plainly, because "not distinguishable" reads like a
+statement about the feature and is a statement about the **measurement's power**.
+Five seeds resolved these effects on quieter data and do not resolve them here.
+The answer is more seeds, not fewer features.
 
-`FRESH_RECEIVER` looks like the most expensive control in the system: 326 hits
-on fraud against **6,447 on legitimate traffic**, 4.8% precision, firing on 13%
-of everything. Two measurements say leave it alone, and a third says tightening
-it would make things worse.
-
-**On the deployed path it costs nothing, because it is not an alert.** The fused
-decision is the model's; the CEP score reaches it only through
-`MANDATORY_REVIEW_RULES`, and this rule is not in that set. Recomputing every
-decision with its 0.15 removed gives **byte-identical output**. Those 6,447 are
-rule *hits* — reason codes attached to alerts raised on other grounds — not work
-arriving in a queue.
-
-**On the fallback path it is the single most valuable rule.** With no model,
-removing that 0.15 drops CEP-only recall from **49.7% to 28.9%**. It alone lifts
-46 decisions to REVIEW, of which **31 are fraud** — 67% precision on the
-decisions it actually causes, against the 4.8% it shows standing alone.
-
-That gap is the whole point. An additive score measures *corroboration*: a weak
-rule earns its place by tipping combinations over the line, and its standalone
-precision describes a job it is never asked to do. The same reasoning was
-checked from the other direction and agrees — setting every weight to its
-measured precision drops CEP-only recall 53.9% → 42.6%.
-
-**Tightening the window makes it worse, not better**, which is worth stating
-because it is the obvious fix:
-
-| receiver age | hits | fraud | precision | fraud recall |
-|---|---|---|---|---|
-| < 30d (current) | 1,354 | 67 | 4.9% | 45.0% |
-| < 14d | 640 | 32 | 5.0% | 21.5% |
-| < 7d | 281 | 10 | 3.6% | 6.7% |
-
-Precision does not improve; recall collapses. `generator-spec.md` §2 ages 30% of
-fraud accounts at 100–1,499 days deliberately, so that "new account" is not a
-fraud-exclusive signal — narrowing the window cuts fraud faster than it cuts
-legitimate traffic.
+**A single seed said something different again.** On seed 42 alone, six columns
+had a *positive* delta — the model apparently better without them, led by
+`secs_since_last` at +0.0038. Across five seeds that column reads +0.0028 with an
+interval spanning zero. Six independent coin flips landing the same way is
+unremarkable; it looked like a finding because it was read off one run. This is
+the same trap the capability table's `payee_identity` row records, met again on
+the same data a day later.
 
 ### What this measurement does not cover
 

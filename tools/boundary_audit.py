@@ -340,6 +340,48 @@ def b_serve_prep_ships_every_artefact():
     return None
 
 
+def b_seed_baseline_agrees_across_documents():
+    """The multi-seed baseline is quoted in four documents; all must match.
+
+    metrics.json -> ml/README already has a check, and it was not enough: the
+    figures it guards live in ONE file, while the seed baseline is repeated in
+    generator-spec, irp-framing, related-work and ml/README. A regeneration on
+    08.09.2026 moved it and updated ml/README only - nothing noticed, because the
+    check that would notice was pointed at the file that happened to be right.
+
+    A figure repeated in four places needs a check that reads all four, not four
+    checks each reading one.
+    """
+    path = os.path.join(ROOT, "ml", "models", "ablation", "seeds.json")
+    if not os.path.exists(path):
+        return "SKIP: no seed ablation"
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    vals = [v["baseline"]["pr_auc"] for k, v in data.items()
+            if k != "_contract" and "baseline" in v]
+    if len(vals) < 2:
+        return "SKIP: fewer than two seeds recorded"
+    import statistics
+    mean, sd = statistics.mean(vals), statistics.stdev(vals)
+    want = f"{mean:.3f}"
+
+    problems = []
+    for parts in (("docs", "generator-spec.md"), ("docs", "irp-framing.md"),
+                  ("docs", "related-work.md"), ("ml", "README.md")):
+        text = _read(*parts)
+        # "0.960 +/- 0.018 across seeds", however each document words it.
+        found = re.findall(r"(\d\.\d{3})\s*(?:±|\+/-)\s*(\d\.\d{3})", text)
+        rel = "/".join(parts)
+        if not found:
+            problems.append(f"{rel}: no 'mean +/- sd' figure where this check looks")
+            continue
+        for m, s in found:
+            if m != want or abs(float(s) - sd) > 0.0006:
+                problems.append(f"{rel}: says {m} +/- {s}, seeds.json gives "
+                                f"{want} +/- {sd:.3f}")
+    return "; ".join(problems) or None
+
+
 def b_served_copy_is_not_stale():
     """The serve-prep copy of the feature contract must match the exported one.
 
@@ -707,6 +749,7 @@ CHECKS = [
     ("case_row -> ClickHouse 02-cases", b_case_row_matches_the_schema),
     ("fraud_job imports -> run.ps1 AND Makefile", b_job_modules_cover_every_import),
     ("config artefacts -> run.ps1 serve-prep", b_serve_prep_ships_every_artefact),
+    ("seeds.json -> the four docs that quote it", b_seed_baseline_agrees_across_documents),
     ("exported contract -> the served copy", b_served_copy_is_not_stale),
     ("no data path derived from __file__", b_no_artefact_path_derived_from_file),
     ("ReceiverStore write -> read (Redis member)", b_receiver_store_round_trips),
