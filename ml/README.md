@@ -60,12 +60,12 @@ quietly stop being true.
 
 | metric            | ML model | CEP rules only |
 |-------------------|----------|----------------|
-| ROC-AUC           | 1.000    | —              |
-| PR-AUC            | 0.978    | —              |
-| precision @0.50   | 0.944    | 0.364          |
-| recall @0.50      | 0.957    | 0.539          |
+| ROC-AUC           | 0.999    | —              |
+| PR-AUC            | 0.936    | —              |
+| precision @0.50   | 0.921    | 0.361          |
+| recall @0.50      | 0.859    | 0.497          |
 
-Recall by fraud type (ML @0.50): STRUCTURING 95.2%, APP 93.9%, ATO 100.0%, MULE 93.8%.
+Recall by fraud type (ML @0.50): STRUCTURING 100.0%, APP 86.3%, ATO 94.4%, MULE 76.8%.
 
 The table this replaced was measured BEFORE the receiver-side aggregation
 capability and was never refreshed: it showed MULE recall at 54%, against 85.7%
@@ -385,16 +385,16 @@ findings:
 
 `metrics.json` carries a `calibration` block beside the AUCs. It answers a
 different question from everything else there: not *does the model rank fraud
-above legitimate traffic* (it does, ROC-AUC 1.000 / PR-AUC 0.978) but *are its
+above legitimate traffic* (it does, ROC-AUC 0.999 / PR-AUC 0.936) but *are its
 probabilities usable as magnitudes*.
 
 ```
-brier               0.00135
-n_alerts            143          (>= 0.40 on the held-out slice)
-saturated_share     75.5%        rounding to 1.000
-distinct_scores     24
-review_band         3           alerts in [0.40, 0.80)
-median_alert_score  0.999961
+brier               0.00284
+n_alerts            141          (>= 0.40 on the held-out slice)
+saturated_share     63.1%        rounding to 1.000
+distinct_scores     35
+review_band         9           alerts in [0.40, 0.80)
+median_alert_score  0.999915
 scored_with         model.onnx
 ```
 

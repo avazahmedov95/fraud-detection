@@ -126,7 +126,20 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
                         region = where
                 else:
                     region = str(rng.choice(REGIONS))
-            for i in range(int(rng.integers(2, 5))):
+            # 2..8, widened from 2..4 on 08.09.2026 to stop contradicting the
+            # threat model. threat-model.md 4 rates VELOCITY and
+            # DISTINCT_PAYEE_BURST as costly for A2 to evade - "A2's window is
+            # short by nature", credentials get revoked and the victim notices,
+            # so the takeover operator cannot slow down. At 2..4 events the
+            # generator had A2 evading both rules for free on every episode, and
+            # neither rule fired once in 50,000 rows. The document said the
+            # attacker cannot slow down; the data said he always does.
+            #
+            # A1 and A3 are the ones the same table rates as cheap to evade, and
+            # STRUCTURING's 3-15 minute spacing below is left alone for exactly
+            # that reason - a smurfing run that paces itself IS the modelled
+            # behaviour, not a gap.
+            for i in range(int(rng.integers(2, 9))):
                 fraudster = pick(fraud_accounts)
                 amount = float(np.clip(np.exp(rng.normal(14.5, 0.5)), AMOUNT_MIN, AMOUNT_MAX))
                 ts = base + timedelta(minutes=float(i * rng.uniform(1, 4)))

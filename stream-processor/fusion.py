@@ -84,24 +84,30 @@ def decide(score: float, rule_hits, cep_only: bool = False) -> str:
 # Priority order: the first pattern whose triggers fired names the alert.
 #: Alert label from whichever rule fired, first match wins.
 #:
-#: MULE lists MULE_FAN_IN first, and did not until 08.09.2026. It named the
-#: pattern by DISTINCT_PAYEE_BURST and VELOCITY alone - two sender-side rules
-#: that fire when one account pays out fast, and NEITHER OF WHICH FIRES ON THIS
-#: DATASET AT ALL: both need more than five events in ten minutes and the
-#: generator's fastest burst reaches exactly five. So the label was unreachable.
-#: Measured before the fix: 0 MULE alerts across 50,000 rows, while real mule
-#: transfers were labelled "(none)" 65% of the time and APP 33%.
+#: Reassigned on 08.09.2026, in two steps, and the second one matters more.
 #:
-#: The rule that does detect the pattern - MULE_FAN_IN, 30 hits at 100%
-#: precision - was not in this table, which irp-framing.md 9 had noticed from the
-#: other side: an outage experiment predicted MULE_FAN_IN would stop firing and
-#: read a column that could not see it. That was recorded as a category error in
-#: the metric. It was also a defect here, and this is the half that was missed:
-#: fan-in is the collection stage, which is what makes a mule a mule.
+#: MULE used to be named by DISTINCT_PAYEE_BURST and VELOCITY alone - two
+#: SENDER-side burst rules - and MULE_FAN_IN was not in this table at all.
+#: irp-framing.md 9 had noticed that from the other side: an outage experiment
+#: predicted MULE_FAN_IN would stop firing and read a column that could not see
+#: it, recorded as a category error in the metric. It was also a defect here.
+#:
+#: Adding MULE_FAN_IN gave the label back (30 alerts, 30 correct). Then the
+#: generator was corrected so A2 stops evading VELOCITY for free, both burst
+#: rules started firing - and 7 of 28 MULE alerts turned out to be account
+#: takeovers. A fast run of outbound transfers does NOT say which pattern it is:
+#: a drained account and a mule paying out look the same from the sender's side.
+#:
+#: So the burst rules moved to ATO, where threat-model.md 3 puts them - "A2's
+#: window is short by nature", the takeover operator cannot slow down - and MULE
+#: keeps only MULE_FAN_IN. Fan-in is money CONVERGING, which is the one thing a
+#: mule does that a takeover does not, and it is the only rule here that
+#: identifies the pattern rather than its tempo.
 _TYPE_PRIORITY = (
     ("STRUCTURING", ("STRUCTURING",)),
-    ("ATO",         ("DEVICE_CHANGE", "GEO_ANOMALY")),
-    ("MULE",        ("MULE_FAN_IN", "DISTINCT_PAYEE_BURST", "VELOCITY")),
+    ("ATO",         ("DEVICE_CHANGE", "GEO_ANOMALY", "VELOCITY",
+                     "DISTINCT_PAYEE_BURST")),
+    ("MULE",        ("MULE_FAN_IN",)),
     ("APP",         ("NEW_PAYEE_HIGH_AMOUNT", "AMOUNT_DEVIATION")),
 )
 

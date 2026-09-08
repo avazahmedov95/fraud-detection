@@ -78,9 +78,9 @@ def main():
         ato_rows["episode"] = (
             (gap.isna() | (gap > 3600)).cumsum())
         ato = ato_rows.groupby("episode").size()
-        within = set(ato.unique()) <= {2, 3, 4}
+        within = set(ato.unique()) <= set(range(2, 9))
         print(f"  [{'ok ' if within else 'OFF'}] "
-              f"{'ATO events per episode':<38} spec {'{2,3,4}':>10}   "
+              f"{'ATO events per episode':<38} spec {'2..8':>10}   "
               f"observed {sorted(ato.unique())}")
         ok.append(within)
 

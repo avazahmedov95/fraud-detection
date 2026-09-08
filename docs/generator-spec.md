@@ -254,9 +254,29 @@ The 40% moderate branch exists so APP is not trivially "the largest transfers".
 
 ### 5.3 ATO — account takeover
 
-$\mathcal{U}\{2,3,4\}$ events per episode, spaced $i \cdot \mathcal{U}(1,4)$
-minutes. Stealth w.p. 0.40: victim's own device and region (on-device malware),
-leaving only behavioural signals.
+$\mathcal{U}\{2,\dots,8\}$ events per episode, spaced
+$i \cdot \mathcal{U}(1,4)$ minutes. Stealth w.p. 0.40: victim's own device and
+region (on-device malware), leaving only behavioural signals.
+
+> **Widened from 2-4 on 08.09.2026, to stop contradicting the threat model.**
+> `threat-model.md` §4 rates `VELOCITY` and `DISTINCT_PAYEE_BURST` as costly for
+> A2 to evade - "A2's window is short by nature", credentials get revoked and the
+> victim notices, so the takeover operator cannot slow down. Both rules need more
+> than five events in ten minutes. At 2-4 events the generator had A2 evading
+> both for free on **every** episode, and **neither rule fired once in 50,000
+> rows**: the document said the attacker cannot slow down, the data said he
+> always does.
+>
+> The thresholds were NOT touched, which is the point. Tuning a cutoff until a
+> rule fires on synthetic data turns a detection claim into a tautology; the
+> change is to the modelled behaviour, justified by a document written before the
+> measurement. Both rules now fire at 100% precision (10 and 9 hits, no false
+> positives).
+>
+> **STRUCTURING's 3-15 minute spacing is deliberately left alone.** The same
+> table rates those rules as *cheap* for A1 and A3 to evade, and a smurfing run
+> that paces itself is the modelled behaviour rather than a gap. Making both
+> patterns fast would have been the tautology this avoids.
 
 Non-stealth (0.60) anchors to the victim's real history: pick a random prior
 legitimate event $(t_j, r_j)$, set the session $\Delta \sim \mathcal{U}(3,45)$
@@ -486,8 +506,8 @@ computed on are pinned here instead. **Regenerated 2026-09-07** on seed 42 with 
 to fix the device defect in §4 and the single-card defect in §2.
 
 ```
-transactions.csv   50,000 rows   15,731,183 bytes
-  sha256  fd7763737ee61b53e89f3d8c7fc53bdfa7582ae93bcd85722f97e692128fdc42
+transactions.csv   50,000 rows   15,730,392 bytes
+  sha256  ca8a3dcd48bf586be144e6c7b96c78f27d0a7edfe57bfe1282994d6ab53f7899
 persons.csv         5,200 rows      578,549 bytes
   sha256  dbe01edd7626def3c8ce50a343915d80fe309c97895342476d9c22a01be37cb6
 ```
@@ -535,7 +555,7 @@ output is a wish list, so these are the numbers a reader can reproduce.
 | `active_call` legitimate | 0.03 | 0.030 |
 | `active_call` APP | 0.70 | 0.751 |
 | STRUCTURING as fraction of threshold | 0.85–0.99 | 0.851–0.990 |
-| ATO events per episode | 2–4 | {2, 3, 4} |
+| ATO events per episode | 2–8 | {2, 3, 4, 5, 6, 7, 8} |
 | travellers | $\tau$ = 0.18 selection | 18.0% realised (see §6) |
 | `device_is_new` fires | both classes, ≥ 30 rows (§4) | 598 legit / 26 fraud, 4.2% precision |
 | receivers on >1 card | $\kappa$ = 0.20 hold one (§2) | 901 of 5,071, 9,796 rows |

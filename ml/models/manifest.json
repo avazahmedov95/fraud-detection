@@ -1,15 +1,15 @@
 {
-  "exported_at": "2026-09-07T17:17:09+00:00",
-  "commit": "79afa7b85e0b4e4f5a301b5db87b796d55257d22",
+  "exported_at": "2026-09-08T03:48:25+00:00",
+  "commit": "2f2b95cda04839ac5813c90938257be0a712a227",
   "artefacts": {
-    "model.onnx": "09bfbc7dfe5dfbff9d6ba4d4bf0824fcccfdecdcbf6d257c42e3dad1692b663e",
-    "model.txt": "42b1c22d2396e70335532fb518ce7db80005f53b30acc287e6f7233531e7335d",
-    "model.joblib": "e5c775c35ffc79cc4cbcc777c4b99a37defd2828ddf07bb10df16ace048cd9bb",
+    "model.onnx": "8164746abcc5e2e17de972534523c082fa1e17791ab4796be364396b11438012",
+    "model.txt": "d1543a3a738e2ab5186137ff6cf1067e7ea9a0d094c85ea8d2c72fcf96bc6f79",
+    "model.joblib": "895acb803ed907c4c6c386ead81ce4ef0d861e24ec64991f0506a4d713c56eb2",
     "feature_names.json": "2be31d614cfdc46d133ad0701742ab0c0a0c949d92734468ac543d3ddfa70b44"
   },
   "dataset": {
     "transactions.csv": {
-      "sha256": "fd7763737ee61b53e89f3d8c7fc53bdfa7582ae93bcd85722f97e692128fdc42",
+      "sha256": "ca8a3dcd48bf586be144e6c7b96c78f27d0a7edfe57bfe1282994d6ab53f7899",
       "path": "data-generator/out/transactions.csv"
     },
     "persons.csv": {
@@ -53,7 +53,7 @@
     }
   },
   "metrics": {
-    "roc_auc": 0.9996748479806405,
-    "pr_auc": 0.9784847411594618
+    "roc_auc": 0.9986346904446726,
+    "pr_auc": 0.9357096356393394
   }
 }

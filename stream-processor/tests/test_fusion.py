@@ -115,9 +115,27 @@ def test_default_is_the_fused_path(profile):
 def test_type_priority():
     assert classify_type(["STRUCTURING", "VELOCITY"]) == "STRUCTURING"
     assert classify_type(["DEVICE_CHANGE"]) == "ATO"
-    assert classify_type(["VELOCITY", "DISTINCT_PAYEE_BURST"]) == "MULE"
     assert classify_type(["NEW_PAYEE_HIGH_AMOUNT"]) == "APP"
     assert classify_type([]) is None
+
+
+def test_a_sender_side_burst_is_not_evidence_of_a_mule():
+    """Changed 08.09.2026; this line used to assert MULE and was wrong.
+
+    VELOCITY and DISTINCT_PAYEE_BURST fire when one account pays out fast, and a
+    drained account looks exactly like a mule paying out - the tempo does not say
+    which. Measured once both rules could fire at all: 7 of 28 MULE alerts were
+    account takeovers.
+
+    They belong to ATO because that is where threat-model.md 3 puts the short
+    window: A2 cannot slow down, credentials get revoked. MULE keeps only
+    MULE_FAN_IN, which is money CONVERGING - the one thing a mule does that a
+    takeover does not.
+    """
+    assert classify_type(["VELOCITY", "DISTINCT_PAYEE_BURST"]) == "ATO"
+    assert classify_type(["MULE_FAN_IN"]) == "MULE"
+    # And a burst alongside fan-in is still the takeover, by priority order.
+    assert classify_type(["MULE_FAN_IN", "VELOCITY"]) == "ATO"
 
 
 # --- the deployed call site, which no other test can reach -------------------
