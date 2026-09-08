@@ -298,6 +298,45 @@ the same way is unremarkable; it looked like a finding because it was read off
 one run. This is the same trap the capability table's `payee_identity` row
 records, met again on the same data a day later.
 
+### A rule's own precision is the wrong number, and it misleads twice
+
+`FRESH_RECEIVER` looks like the most expensive control in the system: 326 hits
+on fraud against **6,447 on legitimate traffic**, 4.8% precision, firing on 13%
+of everything. Two measurements say leave it alone, and a third says tightening
+it would make things worse.
+
+**On the deployed path it costs nothing, because it is not an alert.** The fused
+decision is the model's; the CEP score reaches it only through
+`MANDATORY_REVIEW_RULES`, and this rule is not in that set. Recomputing every
+decision with its 0.15 removed gives **byte-identical output**. Those 6,447 are
+rule *hits* — reason codes attached to alerts raised on other grounds — not work
+arriving in a queue.
+
+**On the fallback path it is the single most valuable rule.** With no model,
+removing that 0.15 drops CEP-only recall from **49.7% to 28.9%**. It alone lifts
+46 decisions to REVIEW, of which **31 are fraud** — 67% precision on the
+decisions it actually causes, against the 4.8% it shows standing alone.
+
+That gap is the whole point. An additive score measures *corroboration*: a weak
+rule earns its place by tipping combinations over the line, and its standalone
+precision describes a job it is never asked to do. The same reasoning was
+checked from the other direction and agrees — setting every weight to its
+measured precision drops CEP-only recall 53.9% → 42.6%.
+
+**Tightening the window makes it worse, not better**, which is worth stating
+because it is the obvious fix:
+
+| receiver age | hits | fraud | precision | fraud recall |
+|---|---|---|---|---|
+| < 30d (current) | 1,354 | 67 | 4.9% | 45.0% |
+| < 14d | 640 | 32 | 5.0% | 21.5% |
+| < 7d | 281 | 10 | 3.6% | 6.7% |
+
+Precision does not improve; recall collapses. `generator-spec.md` §2 ages 30% of
+fraud accounts at 100–1,499 days deliberately, so that "new account" is not a
+fraud-exclusive signal — narrowing the window cuts fraud faster than it cuts
+legitimate traffic.
+
 ### What this measurement does not cover
 
 **PR-AUC here is the ML model's alone.** A capability whose value sits in the CEP
