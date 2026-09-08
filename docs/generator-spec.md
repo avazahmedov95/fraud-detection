@@ -107,8 +107,8 @@ relationship.
 > person behind it. With one card each, the two keys partition the stream
 > identically — so the ablation compared a configuration against itself and
 > returned a delta of exactly zero on all five seeds, printed as "no effect".
-> The honest reading was *not measured*. 901 of 5,071 receivers are now reachable
-> on two cards, 9,796 rows land on them, and the two modes train genuinely
+> The honest reading was *not measured*. 892 of 5,078 receivers are now reachable
+> on two cards, 9,826 rows land on them, and the two modes train genuinely
 > different models.
 >
 > **Receiving only, deliberately.** A sender drawing from two cards would
@@ -192,8 +192,8 @@ everyone else transacts from one device forever. Device identity is
 > five seeds — not a small effect, no effect, and the ablation table read as a
 > statement about the model when it was a statement about this generator.
 >
-> With $\sigma, \rho$ as above it fires on 647 rows, 631 of them legitimate:
-> precision 2.5% against a 1.5% base rate. A device change is now mostly an
+> With $\sigma, \rho$ as above it fires on 581 rows, 570 of them legitimate:
+> precision 1.9% against a 1.5% base rate. A device change is now mostly an
 > ordinary event, which is what it is in life and what makes it usable as one
 > signal among several rather than a giveaway.
 >
@@ -338,19 +338,21 @@ falling *in transit* are re-timed to $\mathcal{U}(5,180)$ minutes after arrival.
 > **$\tau$ is the selection probability, not the observed traveller share.** A
 > journey whose randomly drawn destination equals the person's home region is
 > skipped, so a person selected for one journey who draws their own region ends
-> up with no plan. On the 2026-09-07 dataset, instrumented: **930 people pass
-> the $\tau$ gate (18.60%), 28 lose every journey to a self-region draw, 902
-> travel (18.04%)**.
+> up with no plan. On the 2026-09-08 dataset, instrumented: **890 people pass
+> the $\tau$ gate (17.80%), 41 lose every journey to a self-region draw, 849
+> travel (16.98%)**.
 >
-> Worth reading twice, because the earlier revision of this note drew the wrong
+> Worth reading twice, because an earlier revision of this note drew the wrong
 > lesson from it. It reported "realised share is 16.7%, not 18%" and presented
-> the shortfall as the point. The loss is real but small — 3% of those gated —
-> and it is *smaller than the noise in the gate itself*: 5,000 Bernoulli draws at
-> $\tau = 0.18$ have a standard deviation of 27 people, and this stream happened
-> to draw 930 rather than 900. So the realised share can land either side of
-> $\tau$, and on this dataset it lands above. The distinction between selection
-> probability and observed share is the durable claim; the direction of the gap
-> was an artefact of one seed.
+> the shortfall as the point. The loss is real but small - 41 of 890 gated, 4.6%
+> - and comparable to the noise in the gate itself: 5,000 Bernoulli draws at
+> $\tau = 0.18$ have a standard deviation of 27 people, and this stream drew 890
+> against an expected 900.
+>
+> So the realised share can land either side of $\tau$, and has done both:
+> **18.04% on the 2026-09-07 dataset and 16.98% here**, same $\tau$, same code,
+> a regenerated stream. The distinction between selection probability and
+> observed share is the durable claim; the direction of the gap is not.
 
 That re-timing is essential: an event at the origin followed minutes later by one
 at the destination would manufacture impossible travel inside legitimate traffic.
@@ -551,13 +553,13 @@ output is a wish list, so these are the numbers a reader can reproduce.
 | fraud rate | 1.5% | 1.500% |
 | fresh legitimate accounts | 12% | 12.2% |
 | aged fraud accounts | 30% | 28.0% |
-| median legitimate amount | ≈133k (baseline median) | 136,869 UZS |
+| median legitimate amount | ≈133k (baseline median) | 137,430 UZS |
 | `active_call` legitimate | 0.03 | 0.030 |
-| `active_call` APP | 0.70 | 0.751 |
+| `active_call` APP | 0.70 | 0.649 |
 | STRUCTURING as fraction of threshold | 0.85–0.99 | 0.851–0.990 |
 | ATO events per episode | 2–8 | {2, 3, 4, 5, 6, 7, 8} |
-| travellers | $\tau$ = 0.18 selection | 18.0% realised (see §6) |
-| `device_is_new` fires | both classes, ≥ 30 rows (§4) | 598 legit / 26 fraud, 4.2% precision |
-| receivers on >1 card | $\kappa$ = 0.20 hold one (§2) | 901 of 5,071, 9,796 rows |
+| travellers | $\tau$ = 0.18 selection | 17.0% realised (see §6) |
+| `device_is_new` fires | both classes, ≥ 30 rows (§4) | 570 legit / 11 fraud, 1.9% precision |
+| receivers on >1 card | $\kappa$ = 0.20 hold one (§2) | 892 of 5,078, 9,826 rows |
 
 `verify_spec.py` regenerates these comparisons.
