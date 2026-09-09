@@ -1285,6 +1285,45 @@ replays a fixed slice and stopping the transport also stops the offer.*
 
 ## 8. Silent failure modes
 
+**Twentieth: the feature extractor is quadratic in a population this project
+never streams, and only foreign data could show it.** Replaying IBM's AML set
+(4.49M rows) took **5.5 hours**, and the throughput collapsed as it ran:
+22,102 rows/s over the first 100,000, 226 rows/s cumulative at the end. Profiled
+rather than guessed - one generator expression in `features.extract` was entered
+**157 million times for 400,000 events**, roughly 400 passes per event.
+
+`extract` makes five separate linear passes over the sender's 24-hour history on
+every event - `vel_10m`, `vel_1h`, the structuring band, the distinct-payee set,
+`daily_sum` - each recomputed from scratch. Per-event cost is O(the sender's
+recent history). On this project's own rail that history is 2 events on a median
+sender-day, so the term is invisible. IBM's file contains banks and corporates:
+its maximum sender-day is **26,365**.
+
+Three things make this worth the catalogue.
+
+*The latency chapter cannot see it.* §7.1a measures 5,956 records of generated
+retail traffic, where short histories are true by construction. Every figure
+there is correct and none of them exercises the term that grows. A benchmark
+drawn from the same generator as the system shares the system's assumptions, and
+this is what that costs - not a wrong number, an unasked question.
+
+*The same property explains a detection result.* `DAILY_LIMIT_BREACH` scores
+**0.9x** on this dataset - below one, anti-correlated with the label - because
+breaching a retail daily limit is ordinary corporate behaviour and laundering,
+which stays deliberately small, does it less often than the background.
+`VELOCITY` and `DISTINCT_PAYEE_BURST` land at 1.2x for the same reason, and
+together they flag 22.18% of legitimate traffic. The runtime and the false
+positives are one finding seen from two sides: three rules count events against
+a limit calibrated for a person, on a stream that contains institutions.
+
+*The fix was available and was not taken.* Excluding hub accounts would have made
+the run finish in minutes. They are almost entirely legitimate, so dropping them
+raises the base rate and inflates every lift in the table - selecting on a
+quantity correlated with the label. The run was left slow and the boundary
+recorded, which is the whole point of validating on data this project did not
+produce. What was added instead is progress output, so the next person can tell
+a five-hour run from a hung one.
+
 **Nineteenth: a fraud category the system could never assign.** `classify_type`
 names an alert from whichever rule fired, and named MULE from
 `DISTINCT_PAYEE_BURST` and `VELOCITY` alone. Both fire when one sender pays out

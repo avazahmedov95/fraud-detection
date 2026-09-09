@@ -240,7 +240,7 @@ def main():
               "row lives in the sidecar.")
     print()
 
-    res, hits = RP.replay(to_events(d, scales, typologies))
+    res, hits = RP.replay(to_events(d, scales, typologies), total=len(d))
     report(res, hits, window_stats(d))
 
     print("\nWhat this does and does not show:")

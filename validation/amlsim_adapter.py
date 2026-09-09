@@ -78,7 +78,7 @@ def run(dirpath, limit):
               ", ".join(f"{k}={v}" for k, v in Counter(typ.values()).most_common()))
     print()
 
-    return RP.replay(_events(tx, open_dt, typ, scale))
+    return RP.replay(_events(tx, open_dt, typ, scale), total=len(tx))
 
 
 def _events(tx, open_dt, typ, scale):

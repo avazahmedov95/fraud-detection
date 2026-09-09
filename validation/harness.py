@@ -22,6 +22,7 @@ writing twice.
 
 import os
 import sys
+import time
 from collections import Counter, defaultdict
 from typing import NamedTuple, Optional
 
@@ -71,18 +72,23 @@ class Event(NamedTuple):
     typology: str = ""
 
 
-def replay(events):
+def replay(events, total=None):
     """Run the deployed rule engine over translated events, in stream order.
 
     Receiver state is keyed by `receiver_pinfl` because that is the identifier these
     datasets carry; the payee_identity capability, which chooses between PAN and
     person on this project's own rail, has nothing to choose between here.
+
+    Pass `total` to get progress on stderr. The IBM AML run is 4.5M rows and took
+    over an hour with no output at all, which left no way to tell a slow run from a
+    hung one - the same confusion that made the PaySim quadratic bug take so long to
+    recognise. stderr, so a redirected report stays clean.
     """
     senders, receivers = defaultdict(SenderState), defaultdict(ReceiverState)
     rows, hits_by_class = [], defaultdict(Counter)
-    checked = False
+    checked, started = False, time.time()
 
-    for e in events:
+    for n, e in enumerate(events, 1):
         if not checked:
             _require_a_payee_key(e.ev)
             checked = True
@@ -91,6 +97,10 @@ def replay(events):
         rows.append((e.label, res["cep_score"], res["decision"], e.typology))
         for hit in res["rule_hits"]:
             hits_by_class["fraud" if e.label else "legit"][hit] += 1
+        if n % PROGRESS_EVERY == 0:
+            _progress(n, total, started)
+    if total:
+        _progress(n, total, started, final=True)
 
     return (pd.DataFrame(rows,
                          columns=["label", "cep_score", "decision", "typology"]),
@@ -141,6 +151,22 @@ def _require_a_payee_key(ev):
             "back to receiver_card and this dataset issues no PANs, so every sender "
             "would have exactly one payee forever. Build the profile with "
             "replay.capability_profile(...), which sets payee_identity=pinfl.")
+
+
+#: Rows between progress lines. Large enough that the print costs nothing, small
+#: enough that a stalled run is obvious within seconds.
+PROGRESS_EVERY = 100_000
+
+
+def _progress(n, total, started, final=False):
+    if not total:
+        return
+    secs = time.time() - started
+    rate = n / secs if secs > 0 else 0.0
+    left = (total - n) / rate if rate > 0 else 0.0
+    print(f"\r  replayed {n:,} / {total:,} ({n/total:.0%})  "
+          f"{rate:,.0f} rows/s  {left/60:.0f} min left    ",
+          end="\n" if final else "", file=sys.stderr, flush=True)
 
 
 def _head(title, width):

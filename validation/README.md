@@ -674,10 +674,95 @@ still answered.
    rows by the label. The per-format rates are printed instead, and `--formats`
    makes a narrower run an explicit choice.
 
-### Result
+### Result (4,487,133 rows, 5,166 laundering, full file)
 
-**Not yet run.** The adapter and its fixtures are in place and tested; the replay
-over 5M rows is the next step.
+**Per-rule lift — threshold-free, and the section that answers the question:**
+
+| rule | on laundering | on legit | lift |
+|---|---|---|---|
+| `NEW_PAYEE_HIGH_AMOUNT` | 17.15% | 1.84% | **9.3x** |
+| `AMOUNT_DEVIATION` | 6.08% | 0.88% | **6.9x** |
+| `MULE_FAN_IN` | 3.17% | 1.12% | **2.8x** |
+| `STRUCTURING` | 5.59% | 4.36% | 1.3x |
+| `DISTINCT_PAYEE_BURST` | 11.61% | 9.48% | 1.2x |
+| `VELOCITY` | 11.79% | 9.68% | 1.2x |
+| `DAILY_LIMIT_BREACH` | 18.00% | 19.23% | 0.9x |
+
+**1. The question this dataset was fetched for is answered.** `MULE_FAN_IN`
+separates the classes 2.8:1. On AMLSim the same rule ran the wrong way — it
+fired on 1.16% of fan-in targets against 2.69% of ordinary receivers — and two
+readings survived that run: the rule detects a rate rather than a topology, or
+the window is shorter than the pattern. The sign flips back here, on an
+independent dataset with a clock three orders of magnitude finer. **The
+inversion was a property of AMLSim's timescale, not of the rule.**
+
+It is a conservative 2.8x, which is what makes it worth having. The median
+laundering receiver here still collects over 86.8 hours against a one-hour
+window — 87x — so the rule sees a fraction of each pattern and separates the
+classes anyway. Section D prints that ratio from the data on every run.
+
+This is the first external evidence for the receiver-side aggregation this
+project's largest measured effect (−0.032 PR-AUC) rests on. It does not
+reproduce that number, and cannot: the effect is a model ablation and this is a
+rule replay. What it establishes is that the pattern the rule looks for exists
+in data this project did not produce, and that the rule finds it.
+
+**2. The relational features transfer more strongly than on PaySim.**
+`NEW_PAYEE_HIGH_AMOUNT` reaches 9.3x here against 4.0x on PaySim — computed
+entirely from per-sender history, the machinery that cannot exist without
+account identifiers. `AMOUNT_DEVIATION` at 6.9x had no counterpart on PaySim,
+whose hourly clock left personal baselines nearly flat.
+
+**3. The thresholds do not transfer, and this run says so more sharply than any
+other.** The decision layer flags 39.1% of laundering — and **22.18% of
+legitimate traffic**, 994,140 alerts. Lift 1.8x; the best cutoff available on
+this data (0.35) reaches only 2.5x.
+
+The reason is measurable rather than mysterious, and it is the same one behind
+the runtime below. Three rules — `VELOCITY`, `DISTINCT_PAYEE_BURST`,
+`DAILY_LIMIT_BREACH` — count events against limits calibrated for a retail
+sender. The median sender-day here is 2 transactions, but the maximum is
+**26,365**: the simulation contains banks and corporates. Those accounts breach
+a personal daily limit continuously, which is why `DAILY_LIMIT_BREACH` lands at
+0.9x — *below* one, anti-correlated with the label, because breaching it is
+ordinary corporate behaviour and laundering deliberately is not.
+
+None of that contradicts the design. It is the clearest available demonstration
+of what "a result here is about the rules' shape, never about their thresholds"
+actually costs when the shape is right and the population is wrong.
+
+### What the run cost, and the defect it exposed
+
+**5.5 hours for 4.5M rows**, and the rate collapsed as it went: 22,102 rows/s
+over the first 100,000, 226 rows/s cumulative by the end. Profiled rather than
+guessed — one generator expression in `features.extract` was entered 157 million
+times for 400,000 events.
+
+`extract` makes **five separate linear passes** over the sender's 24-hour
+history per event: `vel_10m`, `vel_1h`, the structuring band, the distinct-payee
+set and `daily_sum`, each recomputed from scratch. Per-event cost is therefore
+O(sender's recent history), which on retail P2P is free — the median sender-day
+is 2 events — and quadratic on a stream containing hub accounts, where one
+sender-day reaches 26,365.
+
+**This is a property of the deployed extractor, not of the harness.** The
+latency figures this project reports are measured on retail-shaped traffic,
+where the history is short by construction, so nothing had ever exercised the
+term that grows. It is a scalability boundary found by running on foreign data,
+which is what this directory is for, and it is worth stating as one rather than
+optimising away quietly.
+
+Hub accounts were **not** excluded to make the run finish. They are almost
+entirely legitimate traffic, so dropping them would raise the base rate and
+inflate every lift in the table above — selecting on a quantity correlated with
+the label, which is the one thing this directory exists to avoid.
+
+```bash
+python ibm_aml_adapter.py --file HI-Small_Trans.csv
+```
+
+Progress is printed to stderr, so a redirected report stays clean and a five-hour
+run can be told apart from a hung one.
 
 ---
 

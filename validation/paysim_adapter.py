@@ -52,7 +52,7 @@ def run(path, txn_types, limit):
     print(f"amount scale factor: {scale:.1f}x "
           f"(median {df.amount.median():,.0f} -> {df.amount.median()*scale:,.0f})\n")
 
-    return RP.replay(to_events(df, scale))
+    return RP.replay(to_events(df, scale), total=len(df))
 
 
 def report(res, hits):
