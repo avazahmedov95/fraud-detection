@@ -99,6 +99,15 @@ def read_patterns(path):
 
     Format: blocks introduced by a `BEGIN LAUNDERING ATTEMPT - <TYPE>` line,
     followed by transaction rows in the same column order as the CSV.
+
+    UNVERIFIED against a real sidecar - written from the dataset's description,
+    because the Hugging Face mirror carries only the transactions and the file
+    itself is behind a Kaggle account. The column indices ARE confirmed: IBM's own
+    Multi-GNN loader reads the accounts from positions 2 and 4, which is what this
+    reads. The marker lines are not. So the first real run must check that section B
+    is non-empty and that the typology names look like typologies - an empty table
+    here means "the file was not parsed", not "the system missed everything", and
+    those two must not be confused.
     """
     typ, current = {}, None
     with open(path, encoding="utf-8") as fh:

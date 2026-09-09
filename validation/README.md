@@ -659,6 +659,15 @@ transaction CSV carries only `Is Laundering`, and which typology a row belongs t
 lives in that sidecar. Without it section B is empty and the aggregate question is
 still answered.
 
+The sidecar is not on the Hugging Face mirror and needs a Kaggle account, so
+`read_patterns` is written from the dataset's description and has **never been run
+against a real one**. Its column indices are confirmed — IBM's own Multi-GNN
+loader reads the accounts from positions 2 and 4 — but the `BEGIN LAUNDERING
+ATTEMPT` marker lines are not. Whoever runs it first must check that section B
+comes back non-empty: an empty table means the parse failed, not that the system
+missed everything, and reading one as the other would be the worst available
+outcome.
+
 **Three translation decisions, none of them free.**
 
 1. **Self-transfers are dropped** — 591,212 rows, 12% of the file, almost all
