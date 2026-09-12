@@ -659,6 +659,89 @@ about behaviour at a switch's volumes. And the warehouse path at a 30.3 s median
 sits at the top of the 20-33 s band reported earlier and is still undiagnosed;
 nothing real-time rides on it, but it did not improve.
 
+### 7.1b The same run on the regenerated dataset: 7,000 records, and a sixteen-minute sleep
+
+7.1a was taken on the July dataset of record, before the regeneration of
+2026-09-07/08, the removal of the `channel` capability and a retrained model.
+This is the same protocol on the system as it now stands: a fresh job with empty
+keyed state, an empty warehouse, the producer inside the Docker network,
+`produce-stream-docker 7000`, the dataset of record at `ca8a3dcd…`. Fused on
+every row - all 7,000 stamped `model_version = cep+ml-fusion-v1`, checked against
+the verified export after the warehouse was cleared. Host-to-container clock
+offset +2 ms, 8 ms round trip.
+
+Whole run, nothing clipped:
+
+| stage | n | median (95% CI) | p95 | p99 | max |
+|---|---|---|---|---|---|
+| ingest -> decision | 7,000 | 86 ms [85, 87] | 164 ms | 204 ms | 1,494 ms |
+| of which scoring work | 7,000 | 5.8 ms [6, 6] | 24.5 ms | 39.3 ms | 696.7 ms |
+| decision -> ClickHouse | 7,000 | 25.1 s | 62.9 s | 70.2 s | 978 s |
+
+**Target met: 3 of 7,000 over 300 ms (0.04%).**
+
+Clipped exactly as 7.1a was - its reporting window dropped the first 1,044
+records, so the comparison drops them too:
+
+| ingest -> decision | 7.1a, July dataset | 7.1b, first 1,044 clipped |
+|---|---|---|
+| n | 5,956 | 5,956 |
+| median | 69 ms [68, 70] | 84 ms [83, 85] |
+| p95 | 131 ms | 154 ms |
+| p99 | 176 ms | 192 ms |
+| max | 325 ms | 259 ms |
+| over 300 ms | 2 (0.03%) | **0** |
+| scoring work, median / p99 | 4.2 / 22.0 ms | 5.1 / 36.7 ms |
+
+**The tail improved and the middle did not.** No warm record breached the target
+and the maximum fell, but the median rose 15 ms, and the scoring work itself by
+about a fifth at the median and two thirds at p99. The system changed in several
+ways between the runs - a regenerated dataset whose ATO episodes now run to eight
+events, a retrained model, a 20-feature contract in place of 24 - and nothing here
+separates them. It is recorded as unattributed rather than explained: an
+explanation fitted to one before-and-after pair would be exactly that.
+
+Three things the clipped window hid, or that this run added.
+
+**The first record costs a second and a half, once.** Record 1 took 1,494 ms,
+697 ms of it scoring: the Python worker initialises on the first element it
+receives, and the job log shows that initialisation in the second the record
+arrived. 7.1a's window cut its coldest 1,044 records and could not see this. It is
+*not* the rare stall described under "What is not yet resolved" below - those fell
+late in their runs, which is why ONNX warm-up was ruled out for them. This is a
+separate, predictable cost of starting a job, and one record pays it.
+
+**The rare stall did not recur.** After record 1 the worst scoring excursion was
+129 ms. Together with 7.1a that is 12,955 records without a recurrence, so under
+steady state it is rarer than about one in 13,000. And 1,043 of those records fell
+in the first minutes after a job submission - exactly where 7.1a suspected the
+stall belonged. That weakens the startup hypothesis rather than supporting it, on
+numbers that are still small. The two remaining breaches, records 956 and 957 at
+303 and 302 ms, are adjacent and spent 1.1 and 16.5 ms scoring: queueing behind
+something, not work.
+
+**The host slept for sixteen minutes, and only Windows recorded it.** At 23:11:09
+local time the laptop entered Modern Standby on an idle timeout, and left it at
+23:27:25 on touchpad input (System log, Kernel-Power 506 and 507). Everything froze
+together. The last event before the pause was ingested at 23:11:21.5 and the next
+at 23:27:28.2; Flink triggered checkpoint 520 at 23:11:21 and 521 at 23:27:29 -
+consecutive, nothing failed or expired between them. No container logged anything
+at all. The 24 decisions taken just before the pause reached the warehouse three
+seconds after it ended, and that is the whole of the 978 s maximum on the warehouse
+path. `latency.py` printing "3 events/s" is likewise 7,000 over a wall time that
+includes the pause: about 4.9 events/s over the 24 active minutes. The
+decision-path figures are unaffected - every record was decided before the pause
+or after it, none across it.
+
+Two consequences. The cause was the session, not the system: the run outlived the
+interactive turn that was keeping the machine awake, and the machine is now held
+awake for the whole session. And the open "VM-level pause" hypothesis for the rare
+stall gains a place to be checked - a host-level freeze leaves no trace inside any
+container, and the one log that records it is outside all of them.
+
+**Which figure to quote.** 7.1b for the system as it now stands; 7.1a for the July
+dataset. The audit-chain anchor for this run is in `audit-anchors.md`.
+
 ### 7.2 The enrichment cache is the variable, and the prototype flatters it
 
 `enrichment.py` looks up receiver account age in Neo4j, cached in Redis with a
@@ -1029,15 +1112,22 @@ produced on desktop Docker needs to say so.
 - **A rare multi-second stall in scoring**, 1452 ms in run B, 323 ms in run A.
   **Frequency now bounded (7.1a):** a 5,956-record run over thirty minutes did
   not reproduce it at all, worst scoring excursion 168 ms, so under warm
-  steady-state conditions it is rarer than one in ~6,000 records. The cause
+  steady-state conditions it is rarer than one in ~6,000 records. **7.1b adds
+  6,999 more** on the regenerated dataset, worst excursion after the first record
+  129 ms: about one in 13,000, including the first minutes after a job submission
+  where it was suspected to belong. The cause
   remains unidentified and the thirty-minute run that was owed is done.
   Three hypotheses were tested and rejected or left open: it is **not** ONNX
-  warm-up (the stalls occur late in a run, not on the first records); it is
+  warm-up (the stalls occur late in a run, not on the first records - 7.1b shows
+  what warm-up does look like: 697 ms of scoring on record 1, and never again);
+  it is
   **not** enrichment cache misses (the worst stall fell in the cache-hit
   bucket); and it is **not** a Neo4j pause (that component's own pause monitor
   logged nothing at the time). VM-level pause and Python worker GC remain
   plausible and were not separated — with n=2 any attribution would be fitted
-  rather than measured. Characterising the cause needs *occurrences*, and the
+  rather than measured. A VM-level pause is at least checkable now: 7.1b found
+  a sixteen-minute one that no container logged and the host's System log did.
+  Characterising the cause needs *occurrences*, and the
   thirty-minute run produced none: bounding the frequency and diagnosing the
   cause turn out to need opposite conditions, and the run that settled the
   first made the second no easier.

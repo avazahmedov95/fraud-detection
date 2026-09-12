@@ -70,6 +70,40 @@ commit and that query altered, removed or reordered a decision.
 > database nobody can produce — which is the honest status to record rather than
 > to leave implied.
 
+### 2026-09-12 - reference latency run on the regenerated dataset
+
+- **Run.** A fresh job (empty keyed state) on a stack whose warehouse and Redis
+  were empty and whose graph matched the dataset, then `produce-stream-docker
+  7000` with the producer inside the Docker network and no faults injected.
+  Not through `latency-setup`: the stack had been started with `resume-job`
+  from a 2026-09-07 checkpoint built on the previous dataset, so that job was
+  cancelled and replaced rather than the volumes wiped. Figures:
+  `irp-framing.md` 7.1b.
+- **Dataset.** The dataset of record, rows 0..7000 of
+  `data-generator/out/transactions.csv`, SHA-256
+  `ca8a3dcd48bf586be144e6c7b96c78f27d0a7edfe57bfe1282994d6ab53f7899`
+  (`generator-spec.md`, "The dataset of record").
+- **Chain.** 7,000 audit records, seq 0..6999, INTACT, no gaps, projections
+  consistent.
+- **Head `record_hash`:**
+
+```
+c50b725bddee106d33b2512c582a17b31969fb5fff8b86f2d12a04d584f83d20
+```
+
+The host was in Modern Standby from 23:11:09 to 23:27:25 local time during this
+run (Windows System log, Kernel-Power 506 and 507). The chain runs straight
+across the pause - it is a property of the stored records, not of wall time -
+but the 24 decisions taken just before it reached the warehouse only after it.
+
+> **Exported and then cleared on 2026-09-12**, ahead of the fault-injection
+> series, which refuses to start against a non-empty warehouse. Exported first
+> to `_warehouse_backup_2026-09-12/` (gitignored, ClickHouse `Native`), and the
+> export verified by restoring every table into a scratch copy - 7,000, 7,000
+> and 278 rows matched, and the head hash above was present - before
+> `latency-setup` removed the volumes. To check the anchor, restore and run
+> `verify-audit` exactly as for the 2026-08-31 entry.
+
 ## Change of hashed field list — 03.09.2026
 
 `receiver_region` was removed from `integrity.INGRESS_FIELDS`, for the same
