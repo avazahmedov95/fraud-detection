@@ -944,8 +944,17 @@ switch ($Target.ToLower()) {
     }
 
     "load-graph" {
-        # `docker compose exec -T` has no TTY, so the script is piped in.
-        Get-Content "infra/neo4j/import.cypher" | docker compose exec -T neo4j cypher-shell -u neo4j -p $Neo4jPassword
+        # Copied into the container and read with -f - never piped. Piped, the
+        # script reached cypher-shell starting with U+FEFF and was rejected at
+        # line 1, column 1: in a session whose [Console]::OutputEncoding is UTF-8
+        # with a preamble, Windows PowerShell 5.1 put a BOM in front of the text it
+        # wrote to the native command's stdin. The file has none. So the same
+        # target worked from an ordinary terminal and failed from one configured
+        # for UTF-8; copying the bytes takes the encoding step out entirely.
+        docker compose cp "infra/neo4j/import.cypher" neo4j:/tmp/import.cypher
+        if ($LASTEXITCODE -eq 0) {
+            docker compose exec -T neo4j cypher-shell -u neo4j -p $Neo4jPassword -f /tmp/import.cypher
+        }
     }
 
     # Reading a file says a component is right; it does not say that what it
