@@ -332,9 +332,39 @@ function Reset-FeatureState {
         windows key on event_time from the CSV, so replaying the same rows
         lands them in the same simulated windows - STRUCTURING and ATO came out
         4 and 1 on every arm. Only the wall-clock state drifted, and only the
-        wall-clock state lives in Redis. Flushing it is therefore sufficient,
-        and no job restart is needed between passes.
+        wall-clock state lives in Redis.
+
+        WITHDRAWN 2026-09-13: "flushing it is therefore sufficient, and no job
+        restart is needed between passes." The event-time windows do take a
+        replayed row into the same simulated window - and the sender's history
+        deque still holds the previous pass's copy of it, so every replay adds
+        another copy to the same window. Velocity doubles on the second pass and
+        triples on the third. Measured on six passes of one 1,000-row slice: ATO
+        alerts 0, 0, 7, 24, 48 by pass number, whichever service was down, and
+        APP 6 on the first pass then 0, every payee already seen. The 4-and-1
+        evidence above predates 2026-09-08, when VELOCITY and
+        DISTINCT_PAYEE_BURST could not fire on this generator at all, so it
+        could not have shown the drift. The job is therefore also restarted with
+        EMPTY keyed state before every pass - and cancelled BEFORE the flush,
+        not after it. The population histogram's writes are batched, and a
+        cancelled job flushes its last batch on close: done the other way round,
+        the first test of this reset left mule:fanin:hist holding 5,236
+        observations from the pass it was meant to erase.
     #>
+
+    # Stop the job first, so nothing it still holds can land after the flush.
+    $jobs = @((Invoke-RestMethod -Uri "http://localhost:8081/jobs/overview" -TimeoutSec 10).jobs |
+        Where-Object { $_.state -notin @("FAILED", "CANCELED", "FINISHED") })
+    foreach ($j in $jobs) {
+        Invoke-RestMethod -Method Patch -Uri "http://localhost:8081/jobs/$($j.jid)?mode=cancel" -TimeoutSec 10 | Out-Null
+    }
+    $deadline = (Get-Date).AddSeconds(90)
+    while ((Get-Date) -lt $deadline) {
+        $left = @((Invoke-RestMethod -Uri "http://localhost:8081/jobs/overview" -TimeoutSec 10).jobs |
+            Where-Object { $_.state -notin @("FAILED", "CANCELED", "FINISHED") })
+        if ($left.Count -eq 0) { break }
+        Start-Sleep -Seconds 2
+    }
     $del = {
         param($pattern)
         docker compose exec -T redis sh -c "redis-cli --scan --pattern '$pattern' | xargs -r redis-cli DEL" | Out-Null
@@ -342,6 +372,10 @@ function Reset-FeatureState {
     & $del "age:*"
     & $del "rcv:*"
     docker compose exec -T redis sh -c "redis-cli DEL mule:fanin:hist" | Out-Null
+
+    # Only now the fresh job, with empty keyed state.
+    Invoke-SubmitJob | Out-Host
+    if (-not (Assert-JobRunning)) { throw "no fresh job reached RUNNING - the pass would measure nothing" }
 }
 
 function Invoke-DependencyOutage {
