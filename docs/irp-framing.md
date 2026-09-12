@@ -205,18 +205,30 @@ Ordered by what blocks what.
    mid-stream, recount after recovery. 500 transactions per round, six rounds
    (`run-kill-series.ps1`), against a warehouse emptied beforehand.
 
-   **Nothing lost — 500 of 500 in every round.** Across twelve kills in two
+   **Nothing lost — 500 of 500 in every round.** Across eighteen kills in three
    series, not one transaction was lost. Checkpointing plus committed offsets
    replayed the window between the last checkpoint and the kill.
 
    **Duplication, six kills: median 0.89%, distribution-free 96.9% interval
    [0.40%, 1.38%]** (for six order statistics that interval is the range).
    Per round: 0.40, 1.38, 0.79, 0.40, 0.99, 1.19 per cent, i.e. 2 to 7 rows in
-   500. The count is the traffic in one checkpoint interval - 2 s at about 5
-   events/s, so a ceiling near ten - and which value comes up is decided by
-   where the kill lands in the cycle, a phase nobody controls in production
-   either. Twelve observations across both series span 1 to 10 rows, which is
-   the predicted range.
+   500. The count is the traffic between the last completed checkpoint and the
+   kill, and which value comes up is decided by where the kill lands in the
+   cycle - a phase nobody controls in production either.
+
+   **A third series, 2026-09-13, on the regenerated dataset** (fresh job, empty
+   warehouse): 1.20, 0.60, 0.00, 0.20, 1.60 and 3.20 per cent - 6, 3, 0, 1, 8 and
+   16 rows in 500. **Median 0.90%**, against 0.89% before; the 96.9% interval
+   widens to [0.00%, 3.20%].
+
+   Round six's 16 rows broke what this section used to call "a ceiling near
+   ten", and the ceiling was the error. It was 2 s at about 5 events/s, which
+   assumes an even stream, and the paced replay is not one: at 200x the
+   dataset's own bursts compress into seconds, and the busiest 2 s of each
+   500-row slice held 19 to 30 events. Sixteen sits inside that. Nor does the
+   count simply follow the traffic just before the kill - round three had 21
+   events in the 2 s before its kill and produced no duplicates at all. Phase
+   decides, as the paragraph above says; only the bound was wrong.
 
    **The result worth reporting is not the rate but that the duplicates can
    disagree — and how much, which is a separate question from whether.**
@@ -225,6 +237,13 @@ Ordered by what blocks what.
    **3 with a different final score, a largest divergence of 0.0003, and no
    decision change at all**. The mechanism below is confirmed; its operational
    magnitude on this traffic is small, and both halves have to be said.
+
+   The third series moved the magnitude, not the conclusion: 34 duplicate rows,
+   **6 with a different final score, a largest divergence of 0.0076** -
+   twenty-five times the earlier maximum - and again **no decision change**.
+   That is the direction the mechanism below predicts wherever receivers are
+   more concentrated. Which payees the diverging copies went to was not checked,
+   so the attribution stays a prediction rather than a finding.
 
    The reason it is small is the reason it matters. Divergence needs the payee's
    window to be non-empty: the replayed transfer counts its own amount twice in
