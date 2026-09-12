@@ -225,12 +225,25 @@ function Assert-NoActiveJob {
     measurement: the replacement is a cancel and then a submit, and submit-job
     had no way to say so.
     #>
-    try {
-        $active = @((Invoke-RestMethod -Uri "http://localhost:8081/jobs/overview" -TimeoutSec 5).jobs |
-            Where-Object { $_.state -notin @("FAILED", "CANCELED", "FINISHED") })
-    } catch {
-        Write-Host "Flink REST API unreachable on :8081 - is the stack up?" -ForegroundColor Red
-        return $false
+    param([int]$TimeoutSeconds = 60)
+
+    # Poll for the API rather than sampling once. latency-setup and pipeline reach
+    # this seconds after `up` recreated the jobmanager, and a guard that aborts the
+    # whole setup because the REST endpoint was not listening yet is the kind
+    # Assert-JobRunning already warns against: one that blocks correct work.
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ($true) {
+        try {
+            $active = @((Invoke-RestMethod -Uri "http://localhost:8081/jobs/overview" -TimeoutSec 5).jobs |
+                Where-Object { $_.state -notin @("FAILED", "CANCELED", "FINISHED") })
+            break
+        } catch {
+            if ((Get-Date) -gt $deadline) {
+                Write-Host "Flink REST API unreachable on :8081 - is the stack up?" -ForegroundColor Red
+                return $false
+            }
+            Start-Sleep -Seconds 3
+        }
     }
     if ($active.Count -eq 0) { return $true }
 
