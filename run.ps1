@@ -209,6 +209,41 @@ function Assert-JobRunning {
     return $false
 }
 
+function Assert-NoActiveJob {
+    <#
+    Refuse to start a second job beside a running one.
+
+    `flink run` does not replace a job, it starts another beside it. And a Flink
+    KafkaSource does not split partitions through the consumer group - each job's
+    own enumerator assigns itself every partition, and the group id is used only
+    to commit offsets. Two jobs therefore score every event twice: duplicate rows
+    in the warehouse, twice the work on the one taskmanager, both committing
+    offsets to the same group - and any latency figure taken meanwhile measured
+    under that load. Nothing fails and nothing warns.
+
+    Found on 2026-09-12, replacing a job resumed from a stale checkpoint before a
+    measurement: the replacement is a cancel and then a submit, and submit-job
+    had no way to say so.
+    #>
+    try {
+        $active = @((Invoke-RestMethod -Uri "http://localhost:8081/jobs/overview" -TimeoutSec 5).jobs |
+            Where-Object { $_.state -notin @("FAILED", "CANCELED", "FINISHED") })
+    } catch {
+        Write-Host "Flink REST API unreachable on :8081 - is the stack up?" -ForegroundColor Red
+        return $false
+    }
+    if ($active.Count -eq 0) { return $true }
+
+    Write-Host ""
+    Write-Host "A JOB IS ALREADY ACTIVE - not submitting a second one." -ForegroundColor Red
+    foreach ($j in $active) { Write-Host "  $($j.jid)  $($j.name)  $($j.state)" }
+    Write-Host "  Two jobs would each read every partition and score every event twice."
+    Write-Host "  Cancel it first, then resubmit:" -ForegroundColor Yellow
+    Write-Host '    Invoke-RestMethod -Method Patch "http://localhost:8081/jobs/<jid>?mode=cancel"'
+    Write-Host ""
+    return $false
+}
+
 function Invoke-Native {
     <#
     Run a native command and return its output lines, stderr included.
@@ -550,6 +585,8 @@ function Invoke-SubmitJob {
     restoring the wrong state silently would be worse than starting clean.
     #>
     param([string]$FromCheckpoint)
+
+    if (-not (Assert-NoActiveJob)) { exit 1 }
 
     & $PSCommandPath serve-prep
     $modules = $JobModules -join ","
