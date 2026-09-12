@@ -1294,6 +1294,14 @@ Results, alerts by `predicted_type`:
 | clickhouse down | — | — | — | ~6 s |
 | kafka mid-stream | 25 | 4 | 1 | ~6 s |
 
+> **Read with 7.7b, fifth, and 7.7c.** This table was taken with Redis flushed
+> between passes but the Flink job left running, so every pass after the first
+> scored the slice on top of the passes before it. The MULE column was then named by
+> `DISTINCT_PAYEE_BURST` and `VELOCITY` - the two rules replay inflates - so it
+> cannot be read as a per-arm effect. The first finding below is also superseded:
+> since 2026-09-08 MULE is named by `MULE_FAN_IN`, and 7.7c tests the Redis
+> prediction directly. The third finding stands, and was reproduced.
+
 Three things fall out, and the third is the finding.
 
 **The alert-type column cannot test its own prediction, and no experimental
@@ -1357,10 +1365,10 @@ this, and it does not need the cluster to settle: replaying the slice offline
 with the age forced to unknown would separate the mechanism from the noise.
 
 
-### 7.7b Four ways this harness computed a confident wrong number
+### 7.7b Five ways this harness computed a confident wrong number
 
-Recorded because all four produced output that looked like a result, and because
-three of them were caught only by a value that could not have been true:
+Recorded because all five produced output that looked like a result, and because
+four of them were caught only by a value that could not have been true:
 
 1. **`uniqExact(transaction_id)` as the loss denominator.** The producer replays
    the same CSV, so distinct ids do not grow. The tool reported "1000 LOST" for
@@ -1379,8 +1387,27 @@ three of them were caught only by a value that could not have been true:
    ignores a native command's exit code, the arm then produced traffic for five
    minutes before reporting that it had nothing to compare against. The restart
    is now in a `finally` and the baseline's exit code is checked.
+5. **A state reset that reset half the state.** `Reset-FeatureState` flushed the
+   three Redis namespaces between passes and said, in as many words, that this
+   was sufficient: the CEP windows key on event time, so a replayed row lands in
+   the same simulated window. It does - and the sender's history deque still
+   holds the previous pass's copy, so every replay adds another copy to that
+   window. The evidence the claim rested on, STRUCTURING and ATO constant across
+   arms, was taken before 2026-09-08, when the two burst rules could not fire on
+   this generator at all. On the 2026-09-13 run the same 1,000 transactions
+   produced ATO alerts 0, 0, 7, 24 and 48 by pass number, whichever service was
+   down, and APP 6 then 0 - and the harness reported that a twenty-second Kafka
+   outage had silenced every other alert type. Kafka has nothing to do with a
+   sender's velocity; that was the value that could not have been true. The
+   loss column, which counts rows, was unaffected. The reset now cancels the
+   job, restarts the TaskManager, flushes Redis and submits a fresh job, in
+   that order, and each step is there because its absence was measured.
+   Flushing first let the cancelled job's close write 5,236
+   population-histogram observations from the pass being erased back into the
+   store; restarting the job without the TaskManager leaked Metaspace until
+   the eighth submission killed it (§8, twenty-first).
 
-The pattern across all four is worth naming, because it is the same one §8
+The pattern across all five is worth naming, because it is the same one §8
 catalogues for the pipeline: **none of these failed. Each returned a plausible
 number.** A measurement harness is a piece of production software with no user
 to notice when it is wrong, and the only defences that worked here were a
@@ -1389,8 +1416,68 @@ show nothing.
 
 For chapter 7 this section reduces to one sentence of method: *loss is measured
 as delivered minus stored rather than requested minus stored, and the alert mix
-against a healthy control pass over the same transactions, because the producer
+against a healthy control pass over the same transactions, each pass scored by a
+fresh job with empty state, because the producer
 replays a fixed slice and stopping the transport also stops the offer.*
+
+### 7.7c Re-measured on 2026-09-13: one fresh job per pass
+
+The matrix was run three times on the regenerated dataset.
+
+The first run used the protocol above and reproduced its loss column - Redis 0,
+Neo4j 0, ClickHouse 1,000 by design, Kafka 0 on a job that had been running for
+hours - and its drain failures: with Redis, and again with Neo4j, killed under a
+running job, 1,000 events had not drained after 300 s. Its alert-mix column is
+void: the same 1,000 transactions produced ATO alerts 0, 0, 7, 24 and 48 by pass
+number, whichever service was down (7.7b, fifth).
+
+The second run gave every pass a fresh job with empty keyed state and an empty
+Redis, so each arm scores the slice exactly once. Its Kafka arm then landed on a
+TaskManager that a Metaspace leak had killed two seconds earlier (§8,
+twenty-first). The reset now restarts the TaskManager as well, and the third run
+repeated the Kafka arm that way, with its own control:
+
+| arm | stored | lost | drain | alert mix against the control |
+|---|---:|---:|---|---|
+| control | 1,000 | 0 | 14 s | reference: unlabelled 17, APP 6, MULE 1 |
+| Redis down | 1,000 | 0 | 13 s | **MULE 1 -> 0**, APP 6 -> 2, unlabelled 17 -> 7 |
+| Neo4j down | 1,000 | 0 | 13 s | **APP 6 -> 20, unlabelled 17 -> 30**, MULE 1 |
+| ClickHouse down | 0 | **1,000** | 14 s | none observable - nothing stored |
+| Kafka down 20 s, mid-stream (third run) | 1,000 | 0 | drained | **identical**: unlabelled 17, APP 6, MULE 1 |
+
+**Kafka: nothing lost and nothing changed - which is what makes the other rows
+readable.** The third run's control reproduced the second run's to the unit - 17,
+6 and 1 both times - and a pass through a twenty-second broker outage matched it
+exactly. Under this protocol a pass that changes nothing reproduces the reference
+count for count, so the Redis and Neo4j rows are effects, not noise. That is the
+question 7.7a's noise floor was trying to answer, answered by the design rather
+than by a margin.
+
+**Redis: the prediction held, and is now testable.** MULE is named by
+`MULE_FAN_IN` since 2026-09-08, and with the payee's inbound window unreachable it
+went silent. What the prediction did not say is that the model-driven alerts fell
+too, by about sixty per cent: the receiver-side features read zero, and the model
+loses the signal they carry.
+
+**Neo4j: the opposite of blindness.** The prediction was about a rule -
+`FRESH_RECEIVER` stops firing - and that rule names no alert label, so this column
+cannot test it. What the column does show is alerts *rising*, APP more than
+threefold. The mechanism is in `features.py`: in the deployed `always` mode an age
+that cannot be obtained is encoded as -1, the very sentinel the neighbouring
+`on_us` branch rejects in its own comment - "a sentinel like -1 would be ordered
+against real ages". Every age split therefore reads an unknown payee as younger
+than any real account. A Neo4j outage makes the model more suspicious, not blind:
+fail-open at the rule, fail-noisy at the model. It is recorded rather than
+patched, because the model was trained on data where the age was always known,
+so any encoding of "unknown" is outside what it has seen; the fix is on the
+training side.
+
+**Drain: fast in every arm, and not a contradiction of 7.7a.** Here the dependency
+was already down when the Python worker - which starts lazily, on its first
+element (7.1b) - opened its clients, so `open()` set the handle to `None` and
+every event skipped the lookup. In the first run the dependency died under a
+running worker, which is 7.7a's mechanism, and reproduced it. They are the two
+halves of one code path, and only the second is the production case.
 
 ## 8. Silent failure modes
 
