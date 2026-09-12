@@ -365,6 +365,32 @@ function Reset-FeatureState {
         if ($left.Count -eq 0) { break }
         Start-Sleep -Seconds 2
     }
+
+    # And the TaskManager itself. Every job submitted to this session cluster
+    # loads its own user-code classloader, and cancelling the job does not give
+    # the Metaspace back: the eighth job on one TaskManager process died of
+    # OutOfMemoryError: Metaspace (256 MB) two seconds after it was submitted,
+    # the container's restart policy is "no", and the pass that followed
+    # measured a dead TaskManager. A fresh JVM per pass is what makes a fresh
+    # job per pass sustainable. Wait for a NEW registration: the old one can
+    # linger in the list until its heartbeat times out.
+    $oldIds = @()
+    try {
+        $oldIds = @((Invoke-RestMethod -Uri "http://localhost:8081/taskmanagers" -TimeoutSec 10).taskmanagers |
+            ForEach-Object { $_.id })
+    } catch {}
+    docker compose restart taskmanager | Out-Null
+    $deadline = (Get-Date).AddSeconds(120)
+    $ready = $false
+    while ((Get-Date) -lt $deadline) {
+        try {
+            $fresh = @((Invoke-RestMethod -Uri "http://localhost:8081/taskmanagers" -TimeoutSec 10).taskmanagers |
+                Where-Object { ($oldIds -notcontains $_.id) -and $_.freeSlots -ge 1 })
+            if ($fresh.Count -ge 1) { $ready = $true; break }
+        } catch {}
+        Start-Sleep -Seconds 3
+    }
+    if (-not $ready) { throw "no fresh TaskManager registered - the pass would measure nothing" }
     $del = {
         param($pattern)
         docker compose exec -T redis sh -c "redis-cli --scan --pattern '$pattern' | xargs -r redis-cli DEL" | Out-Null

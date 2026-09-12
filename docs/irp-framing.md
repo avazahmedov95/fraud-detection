@@ -1394,6 +1394,43 @@ replays a fixed slice and stopping the transport also stops the offer.*
 
 ## 8. Silent failure modes
 
+**Twenty-first: the session cluster leaks a little on every redeploy, and the
+eighth one kills it.** Every job submitted to the Flink session cluster loads its
+own user-code classloader into JVM Metaspace, and cancelling the job does not give
+it back. On 2026-09-13 one TaskManager process ran eight jobs in succession - the
+dependency matrix had just been changed to restart the job before every pass - and
+two seconds after the eighth was submitted it died: `java.lang.OutOfMemoryError:
+Metaspace` in `FlinkUserCodeClassLoader`, against the default 256 MB. Flink's own
+message offers two readings, a job that needs more metaspace or a class-loading
+leak. One job runs for hours in that budget and the eighth submission exhausts it,
+which is the leak's signature rather than a large job's. It is not root-caused
+here.
+
+Three things make it worth the catalogue.
+
+*It is silent several times over.* The container's restart policy is `no`, so the
+TaskManager stays down. The JobManager takes fifty seconds to notice the missing
+heartbeat. The job then spends its failure-rate budget - ten restarts in under a
+minute, each failing for want of a slot - and goes FAILED. Every other container
+reads Up, and the events keep arriving in Kafka and wait there, unscored.
+
+*The harness that hit it read it as something else, and so did its operator.* The
+pass it landed on was the Kafka arm, so the report said "LOST 1,000" and the
+obvious culprit was the twenty-second broker outage - which had not started yet.
+The first diagnosis written here repeated it: a job twenty seconds old does not
+survive Kafka going away. The TaskManager's own log said Metaspace, two seconds
+after submission. The lesson is the section's usual one, sharpened: a failure
+that coincides with the injected fault is attributed to the fault, and the
+coincidence has to be checked before the attribution is written down.
+
+*It is a deployment property, not a test artefact.* Anything that redeploys onto a
+long-lived session cluster - a model update, a configuration change, a capability
+switched on - is a submission, and on this configuration the eighth one takes the
+scorer down without an error anywhere a dashboard would look. The harness now
+restarts the TaskManager with every job, which is a workaround. The durable fixes
+are a per-job cluster (application mode) or a TaskManager restart as part of every
+redeploy, and a restart policy that brings a dead TaskManager back.
+
 **Twentieth: the feature extractor is quadratic in a population this project
 never streams, and only foreign data could show it.** Replaying IBM's AML set
 (4.49M rows) took **5.5 hours**, and the throughput collapsed as it ran:
