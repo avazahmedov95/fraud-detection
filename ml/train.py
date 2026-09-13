@@ -21,6 +21,38 @@ CSV = os.getenv(
     "DATASET_CSV", os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "data-generator", "out", "transactions.csv"))
 REVIEW_THRESHOLD = 0.40   # CEP flag cutoff, for the head-to-head comparison
+TRAIN_SHARE = 0.80        # the earliest 80% trains; the rest is the held-out slice
+
+#: Share of TRAINING rows replayed with the payee's age withheld, as the live job
+#: sees every event while Neo4j cannot be read. Without such rows the model has no
+#: missing branch to learn: LightGBM sends NaN in a feature never missing in
+#: training down the 0.0 side of every split - an account opened today - and the
+#: -1 this replaced sorted below every real age (docs/irp-framing.md 7.7a).
+#: Random, independent of the label, and only before the cut, so the held-out
+#: figures still describe a healthy graph; `_graph_outage` measures the other case.
+AGE_UNKNOWN_SHARE = 0.10
+AGE_UNKNOWN_SEED = 42
+
+
+def cut_index(n):
+    return int(n * TRAIN_SHARE)
+
+
+def age_unknown_rows(n, outage=False, seed=AGE_UNKNOWN_SEED, share=AGE_UNKNOWN_SHARE):
+    """Rows replayed with no payee age: a random share of the training slice, and
+    with `outage` the whole held-out slice as well - Neo4j down from the cut on."""
+    rows = np.random.default_rng(seed).random(n) < share
+    rows[cut_index(n):] = outage
+    return rows
+
+
+def make_model(scale_pos_weight, random_state=42):
+    """The deployed recipe, in one place for the experiments that refit it."""
+    return lgb.LGBMClassifier(
+        n_estimators=400, learning_rate=0.05, num_leaves=31,
+        subsample=0.8, colsample_bytree=0.8, min_child_samples=30,
+        scale_pos_weight=scale_pos_weight, random_state=random_state,
+        n_jobs=-1, verbose=-1)
 
 
 def _metrics(y, proba, thr):
@@ -50,13 +82,29 @@ def _calibration(y, proba, review_thr=REVIEW_THRESHOLD, block_thr=0.80):
     )
 
 
+def _graph_outage(model, feats, yte, healthy_proba):
+    """The held-out slice replayed as if Neo4j were down throughout: no payee has an
+    age, so FRESH_RECEIVER cannot fire and the model sees the age as missing. A
+    dependency that fails open should cost alerts, not add them - under the -1
+    encoding it added them (docs/irp-framing.md 7.7a, 7.7c)."""
+    df = D.build_matrix(CSV, age_unknown=lambda n: age_unknown_rows(n, outage=True))
+    test = df.iloc[cut_index(len(df)):]
+    if not np.array_equal(test["label"].values, yte):
+        raise RuntimeError("the outage replay does not line up with the held-out slice")
+    proba = model.predict_proba(test[feats].astype("float32").values)[:, 1]
+    m = _metrics(yte, proba, 0.50)
+    return dict(pr_auc=float(average_precision_score(yte, proba)), at_0_50=m,
+                alerts_healthy=int((healthy_proba >= 0.50).sum()),
+                alerts_outage=m["tp"] + m["fp"])
+
+
 def main():
     os.makedirs(MODELS_DIR, exist_ok=True)
     print("building feature matrix ...")
-    df = D.build_matrix(CSV)
+    df = D.build_matrix(CSV, age_unknown=age_unknown_rows)
     feats = D.FEATURE_NAMES
 
-    cut = int(len(df) * 0.80)
+    cut = cut_index(len(df))
     train, test = df.iloc[:cut], df.iloc[cut:]
     Xtr, ytr = train[feats].astype("float32").values, train["label"].values
     Xte, yte = test[feats].astype("float32").values, test["label"].values
@@ -65,10 +113,11 @@ def main():
     spw = neg / max(pos, 1)
     print(f"train {len(ytr):,} (pos={pos}) | test {len(yte):,} (pos={int(yte.sum())}) | scale_pos_weight={spw:.1f}")
 
-    model = lgb.LGBMClassifier(
-        n_estimators=400, learning_rate=0.05, num_leaves=31,
-        subsample=0.8, colsample_bytree=0.8, min_child_samples=30,
-        scale_pos_weight=spw, random_state=42, n_jobs=-1, verbose=-1)
+    if "receiver_age" in feats:
+        print(f"payee age withheld on {int(train['receiver_age'].isna().sum()):,} "
+              f"training rows ({AGE_UNKNOWN_SHARE:.0%} drawn, plus any the data lacks)")
+
+    model = make_model(spw)
     model.fit(Xtr, ytr)
 
     proba = model.predict_proba(Xte)[:, 1]
@@ -117,13 +166,20 @@ def main():
     # Counts beside the rate: a per-type recall on a few dozen events has a wide
     # binomial interval.
 
+    print("\nreplaying the held-out slice with Neo4j down (every payee age withheld) ...")
+    outage = _graph_outage(model, feats, yte, proba)
+    om = outage["at_0_50"]
+    print(f"alerts @0.50: {outage['alerts_healthy']} with the graph -> "
+          f"{outage['alerts_outage']} without   precision={om['precision']:.3f}  "
+          f"recall={om['recall']:.3f}  PR-AUC={outage['pr_auc']:.3f}")
+
     joblib.dump(model, os.path.join(MODELS_DIR, "model.joblib"))
     with open(os.path.join(MODELS_DIR, "feature_names.json"), "w") as fh:
         json.dump(feats, fh, indent=2)
     with open(os.path.join(MODELS_DIR, "metrics.json"), "w") as fh:
         json.dump(dict(roc_auc=auc, pr_auc=ap, at_0_50=m05,
                        high_recall=best, cep_only=cep, calibration=cal,
-                       by_fraud_type=by_type),
+                       by_fraud_type=by_type, graph_outage=outage),
                   fh, indent=2)
     print(f"\nsaved model + feature_names + metrics to {MODELS_DIR}/")
     print("NOTE: metrics are design targets on synthetic data, not validated findings.")

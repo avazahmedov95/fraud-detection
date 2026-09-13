@@ -224,14 +224,17 @@ def extract(event: dict, receiver_age_days, state, now: float,
     if age is not None:
         receiver_age = float(age)
         receiver_is_fresh = 1.0 if age < C.FRESH_RECEIVER_DAYS else 0.0
-    elif CAP.mode("receiver_age") == "on_us":
+    else:
         # NaN, not a sentinel: LightGBM branches on missing natively, so "unknown"
-        # stays distinct. A sentinel like -1 would be ordered against real ages.
+        # stays distinct. A sentinel like -1 would be ordered against real ages -
+        # and in the default mode it was: an age Neo4j could not supply read as
+        # younger than any real account, and losing the graph made the model MORE
+        # suspicious (docs/irp-framing.md 7.7a, 7.7c). NaN is half the fix. A
+        # feature never missing in training sends NaN down the 0.0 side of every
+        # split - an account opened today - so ml/train.py withholds the age on a
+        # share of its rows, and the model learns where "unknown" belongs.
         receiver_age = float("nan")
         receiver_is_fresh = float("nan")
-    else:
-        receiver_age = -1.0
-        receiver_is_fresh = 0.0
 
     # Inbound concentration on the PAYEE - the fan-in shape sender-keyed state
     # cannot see. Distinct senders, not transfers: ten from one person is a habit.

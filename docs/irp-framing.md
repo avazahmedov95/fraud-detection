@@ -319,7 +319,7 @@ Ordered by what blocks what.
    **Relational fraud detection cannot be validated end-to-end on public real
    data, because the account identifiers that make it relational are exactly
    what cannot be published.** 14 of 20 features here are relational; removing
-   them costs 0.936 → 0.761 PR-AUC and 0.921 → 0.563 precision. Every public
+   them costs 0.937 → 0.761 PR-AUC and 0.928 → 0.563 precision. Every public
    real dataset examined is identifier-free.
 
    The response is to split the question:
@@ -1364,6 +1364,17 @@ simply never applied to the default branch. One arm is not enough to establish
 this, and it does not need the cluster to settle: replaying the slice offline
 with the age forced to unknown would separate the mechanism from the noise.
 
+> **Since done (2026-09-13).** `ml/experiments/receiver_age_outage.py` replays
+> the held-out slice with every payee age withheld, through the model as it was
+> deployed - reproduced exactly, max |delta| 0 - and four more seeds. False alarms
+> went from 10 to 95 on average and rose on every seed (77-107): the mechanism is
+> confirmed. The fix is on the training side, as 7.7c says: the age is now NaN in
+> every mode, and `train.py` withholds it on a tenth of its rows so the model
+> learns where "unknown" goes. Under the same replay the retrained recipe raises
+> 14 false alarms against 10 with the ages known - most of the damage undone, not
+> all of it, and short of the verdict fixed before the run, which asked for no
+> more false alarms without the ages than with them. `ml/README.md` has the table.
+
 
 ### 7.7b Five ways this harness computed a confident wrong number
 
@@ -1471,6 +1482,9 @@ fail-open at the rule, fail-noisy at the model. It is recorded rather than
 patched, because the model was trained on data where the age was always known,
 so any encoding of "unknown" is outside what it has seen; the fix is on the
 training side.
+
+> **Since made there (2026-09-13)**, with the offline replay in 7.7a: the -1
+> took false alarms from 10 to 95; the retrained recipe, from 10 to 14.
 
 **Drain: fast in every arm, and not a contradiction of 7.7a.** Here the dependency
 was already down when the Python worker - which starts lazily, on its first

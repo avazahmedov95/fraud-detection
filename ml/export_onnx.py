@@ -60,6 +60,14 @@ def main():
 
     df = D.build_matrix(CSV)
     sample = df.iloc[int(len(df) * 0.80):][feats].astype("float32").values[:2000]
+    # The same rows again with the payee age unknown, as the live job sends them
+    # while Neo4j is down. NaN routing is where a converter can part from the
+    # native model, and a sample with no NaN in it would never notice.
+    age_cols = [feats.index(c) for c in ("receiver_age", "receiver_is_fresh") if c in feats]
+    if age_cols:
+        unknown = sample[:500].copy()
+        unknown[:, age_cols] = np.nan
+        sample = np.vstack([sample, unknown])
 
     native = model.predict_proba(sample)[:, 1]
     sess = ort.InferenceSession(ONNX_PATH, providers=["CPUExecutionProvider"])

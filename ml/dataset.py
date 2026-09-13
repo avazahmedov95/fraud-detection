@@ -20,8 +20,15 @@ import rules as R             # noqa: E402
 FEATURE_NAMES = F.FEATURE_NAMES
 
 
-def build_matrix(csv_path: str) -> pd.DataFrame:
+def build_matrix(csv_path: str, age_unknown=None) -> pd.DataFrame:
+    """`age_unknown`, if given, is called with the row count and returns a boolean
+    array over the rows in time order. A True row is replayed with no payee age,
+    as the live job replays every event while Neo4j cannot be read - withheld
+    before the rules run, not blanked after, so FRESH_RECEIVER cannot fire and
+    cep_score agrees with the missing age as it does live.
+    """
     df = pd.read_csv(csv_path).sort_values("event_time").reset_index(drop=True)
+    unknown = None if age_unknown is None else age_unknown(len(df))
     states = defaultdict(R.SenderState)
     # Keyed by payee, mirroring the shared store the live job reads.
     receiver_states = defaultdict(R.ReceiverState)
@@ -32,11 +39,13 @@ def build_matrix(csv_path: str) -> pd.DataFrame:
     # PopulationStore reads out of Redis in the job.
     population = R.PopulationBaseline()
     rows = []
-    for rec in df.itertuples(index=False):
+    for i, rec in enumerate(df.itertuples(index=False)):
         d = rec._asdict()
         event = F.event_from(d)
         now = pd.Timestamp(d["event_time"]).timestamp()
+        withheld = unknown is not None and unknown[i]
         res = R.evaluate(event,
+                         None if withheld else
                          F.age_or_none(d.get("receiver_account_age_days")),
                          states[d["sender_card"]], now,
                          receiver_states[F.payee_key(event)],

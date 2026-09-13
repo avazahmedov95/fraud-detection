@@ -197,7 +197,7 @@ survive the prevalence question that AUPRC raises:
 | test prevalence | 1.23% | 1.142% |
 | recall @ 2% alert budget | **98.4%** | 49.4% |
 | lift @ top decile | 10.0× (capped) | 7.0× |
-| PR-AUC | 0.936 (0.960 ± 0.018 across seeds) | 0.380 |
+| PR-AUC | 0.937 (0.960 ± 0.018 across seeds) | 0.380 |
 
 Two independent prevalence-robust measures both say **about 2×**, which
 corroborates the 2.5× the AUPRC ratio gives. So the headline claim survives
@@ -209,11 +209,11 @@ does when stripped to what a public dataset can carry:
 
 | features available | PR-AUC on THIS data |
 |---|---|
-| all 20 | 0.936 |
+| all 20 | 0.937 |
 | amount + hour only | 0.653 |
 | — PaySim, leak-free, 6 raw columns | 0.380 |
 
-Feature poverty costs 0.936 → 0.653; the data itself accounts for 0.653 → 0.380.
+Feature poverty costs 0.937 → 0.653; the data itself accounts for 0.653 → 0.380.
 **Roughly half the gap is features public data cannot publish, and half is a
 generator whose classes are separable by construction.** That is a sharper answer
 than "2.5× easier" and a more defensible one, because the first half is a

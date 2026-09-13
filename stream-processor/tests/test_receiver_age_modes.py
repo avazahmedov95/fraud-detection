@@ -121,3 +121,16 @@ def test_audit_trail_records_what_the_bank_could_see(mode):
     mode("on_us")
     res = evaluate(_ev("BankA", "BankB"), 5, SenderState(), now=1000)
     assert res["receiver_account_age_days"] is None
+
+
+def test_unknown_age_is_nan_in_the_default_mode_too(mode):
+    """The default mode encoded an unobtainable age as -1.0, below every real age,
+    so a Neo4j outage read as the newest account there is and alerts rose
+    (docs/irp-framing.md 7.7a). Unknown is NaN in every mode; the rule stays off."""
+    mode("always")
+    f = F.extract(_ev("BankA", "BankB"), None, SenderState(), now=1000)
+    assert math.isnan(f["receiver_age"])
+    assert math.isnan(f["receiver_is_fresh"])
+    assert f["receiver_age_known"] == 0
+    res = evaluate(_ev("BankA", "BankB"), None, SenderState(), now=1000)
+    assert "FRESH_RECEIVER" not in res["rule_hits"]

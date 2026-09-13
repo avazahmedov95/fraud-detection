@@ -1,10 +1,10 @@
 {
-  "exported_at": "2026-09-08T03:48:25+00:00",
-  "commit": "2f2b95cda04839ac5813c90938257be0a712a227",
+  "exported_at": "2026-09-13T10:41:30+00:00",
+  "commit": "64c5782d72f5285d0e30b9b8d52ae5d518ff8600",
   "artefacts": {
-    "model.onnx": "8164746abcc5e2e17de972534523c082fa1e17791ab4796be364396b11438012",
-    "model.txt": "d1543a3a738e2ab5186137ff6cf1067e7ea9a0d094c85ea8d2c72fcf96bc6f79",
-    "model.joblib": "895acb803ed907c4c6c386ead81ce4ef0d861e24ec64991f0506a4d713c56eb2",
+    "model.onnx": "7915d0d03e4909f03d699e03ce5df7b3a1f67077cd2612390eaabdd635948be6",
+    "model.txt": "67f6e22c284461463959da312655d9d1c177e6fffbccdf334a535211b9b0274c",
+    "model.joblib": "bd66845a519a31e7dbfcc9d2dc5d47301cb9c41a5c28191f785dea867f9849e9",
     "feature_names.json": "2be31d614cfdc46d133ad0701742ab0c0a0c949d92734468ac543d3ddfa70b44"
   },
   "dataset": {
@@ -53,7 +53,7 @@
     }
   },
   "metrics": {
-    "roc_auc": 0.9986346904446726,
-    "pr_auc": 0.9357096356393394
+    "roc_auc": 0.9986496788729248,
+    "pr_auc": 0.9370586256471342
   }
 }

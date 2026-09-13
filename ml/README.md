@@ -61,11 +61,36 @@ quietly stop being true.
 | metric            | ML model | CEP rules only |
 |-------------------|----------|----------------|
 | ROC-AUC           | 0.999    | —              |
-| PR-AUC            | 0.936    | —              |
-| precision @0.50   | 0.921    | 0.361          |
+| PR-AUC            | 0.937    | —              |
+| precision @0.50   | 0.928    | 0.361          |
 | recall @0.50      | 0.859    | 0.497          |
 
-Recall by fraud type (ML @0.50): STRUCTURING 100.0%, APP 86.3%, ATO 94.4%, MULE 76.8%.
+Recall by fraud type (ML @0.50): STRUCTURING 95.8%, APP 88.2%, ATO 94.4%, MULE 76.8%.
+
+**Since 2026-09-13 the recipe withholds the payee's age on a tenth of the
+training rows**, as the live job sees every event while Neo4j is down. Until then
+an age the graph could not supply was encoded as -1, which sorts below every real
+age, and a model that had never seen an unknown age read it as the newest account
+there is. `experiments/receiver_age_outage.py` replays the held-out slice with
+every age withheld, for both recipes, five seeds (docs/irp-framing.md 7.7a):
+
+| recipe | payee ages | alerts | false alarms | recall | PR-AUC |
+|---|---|---|---|---|---|
+| before: -1 for unknown | known | 137 | 10 | 0.854 | 0.935 |
+| | none | 228 | **95** | 0.891 | 0.891 |
+| since: withheld in training, NaN | known | 137 | 10 | 0.851 | 0.937 |
+| | none | 129 | **14** | 0.773 | 0.911 |
+
+The old encoding turned a dependency that fails open into ten times the false
+alarms, on every seed (77-107). The new one undoes most of that, not all: the
+verdict fixed before the run - no more false alarms without the ages than with
+them - fails, at 14 against 10 (9-17 across seeds; the deployed seed happens to
+give 9). A plausible reading, not tested: an old account is evidence FOR a
+payment, and losing it moves a few legitimate transfers over the line, which
+losing any informative feature does. The outage's real price is now where it
+belongs, in recall - 0.851 to 0.773, fraud the age would have caught - and with
+the ages known nothing moved (PR-AUC +0.002). `train.py` scores the outage on
+every retrain, as `graph_outage` in `metrics.json`.
 
 The table this replaced was measured BEFORE the receiver-side aggregation
 capability and was never refreshed: it showed MULE recall at 54%, against 85.7%
@@ -105,7 +130,7 @@ believable.
 
 But **feature availability is about half of it**: stripped to amount and hour,
 the columns a public dataset can carry, this model scores 0.653 on this data
-(`validation/README.md`). So 0.936 -> 0.653 is what publishing costs, and
+(`validation/README.md`). So 0.937 -> 0.653 is what publishing costs, and
 0.653 -> 0.380 is the generator being separable. The first half is a property of
 the field, not of this project.
 
@@ -192,6 +217,8 @@ the migration: valid when taken, and against a 22-feature vector that has since
 grown to 24, so they are history rather than current figures.
 
 Deltas are paired within each seed; the interval is a 95% CI for the mean delta.
+Measured before `train.py` began withholding the payee age on a tenth of its
+training rows (2026-09-13); the receiver_age row is the one that change could move.
 
 All rows measured on one feature set and one generator version, 5 seeds,
 baseline PR-AUC **0.960 ± 0.018**:
@@ -430,16 +457,16 @@ findings:
 
 `metrics.json` carries a `calibration` block beside the AUCs. It answers a
 different question from everything else there: not *does the model rank fraud
-above legitimate traffic* (it does, ROC-AUC 0.999 / PR-AUC 0.936) but *are its
+above legitimate traffic* (it does, ROC-AUC 0.999 / PR-AUC 0.937) but *are its
 probabilities usable as magnitudes*.
 
 ```
-brier               0.00284
-n_alerts            141          (>= 0.40 on the held-out slice)
-saturated_share     63.1%        rounding to 1.000
-distinct_scores     35
-review_band         9           alerts in [0.40, 0.80)
-median_alert_score  0.999915
+brier               0.00293
+n_alerts            139          (>= 0.40 on the held-out slice)
+saturated_share     66.9%        rounding to 1.000
+distinct_scores     33
+review_band         7           alerts in [0.40, 0.80)
+median_alert_score  0.999928
 scored_with         model.onnx
 ```
 

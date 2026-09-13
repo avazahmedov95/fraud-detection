@@ -1,25 +1,25 @@
 {
-  "roc_auc": 0.9986346904446726,
-  "pr_auc": 0.9357096356393394,
+  "roc_auc": 0.9986496788729248,
+  "pr_auc": 0.9370586256471342,
   "at_0_50": {
     "threshold": 0.5,
-    "precision": 0.920863309352518,
+    "precision": 0.927536231884058,
     "recall": 0.8590604026845637,
-    "f1": 0.8888888888888888,
+    "f1": 0.89198606271777,
     "tp": 128,
-    "fp": 11,
+    "fp": 10,
     "fn": 21,
-    "tn": 9840
+    "tn": 9841
   },
   "high_recall": {
-    "threshold": 0.25,
-    "precision": 0.9027777777777778,
+    "threshold": 0.2,
+    "precision": 0.9090909090909091,
     "recall": 0.87248322147651,
-    "f1": 0.8873720136518771,
+    "f1": 0.8904109589041096,
     "tp": 130,
-    "fp": 14,
+    "fp": 13,
     "fn": 19,
-    "tn": 9837
+    "tn": 9838
   },
   "cep_only": {
     "threshold": 0.5,
@@ -32,18 +32,17 @@
     "tn": 9720
   },
   "calibration": {
-    "brier": 0.0028444442945166613,
-    "n_alerts": 141,
-    "saturated_share": 0.6312056737588653,
-    "distinct_scores": 35,
-    "review_band": 9,
-    "median_alert_score": 0.999915361404419,
-    "scored_with": "model.onnx"
+    "brier": 0.0029273829445861477,
+    "n_alerts": 139,
+    "saturated_share": 0.6690647482014388,
+    "distinct_scores": 33,
+    "review_band": 7,
+    "median_alert_score": 0.9999278356208828
   },
   "by_fraud_type": {
     "APP": {
-      "recall": 0.8627450980392157,
-      "caught": 44,
+      "recall": 0.8823529411764706,
+      "caught": 45,
       "n": 51
     },
     "ATO": {
@@ -57,9 +56,24 @@
       "n": 56
     },
     "STRUCTURING": {
-      "recall": 1.0,
-      "caught": 24,
+      "recall": 0.9583333333333334,
+      "caught": 23,
       "n": 24
     }
+  },
+  "graph_outage": {
+    "pr_auc": 0.9210553188133975,
+    "at_0_50": {
+      "threshold": 0.5,
+      "precision": 0.9285714285714286,
+      "recall": 0.785234899328859,
+      "f1": 0.850909090909091,
+      "tp": 117,
+      "fp": 9,
+      "fn": 32,
+      "tn": 9842
+    },
+    "alerts_healthy": 138,
+    "alerts_outage": 126
   }
 }

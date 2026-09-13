@@ -15,11 +15,13 @@ incomparable the first time one of them was changed.
 of a named sender and a named receiver: velocity, new-payee, amount deviation
 against a personal baseline, fan-in concentration.
 
-Measured cost of losing them (seed 42, held-out slice, 2026-09-07 dataset):
+Measured cost of losing them (seed 42, held-out slice, 2026-09-07 dataset; the
+full-system row re-measured 2026-09-13, when training began withholding the payee
+age on a tenth of its rows - `ml/README.md`):
 
 | available | PR-AUC | precision | recall |
 |---|---|---|---|
-| full system | 0.936 | 0.921 | 0.859 |
+| full system | 0.937 | 0.928 | 0.859 |
 | no account identifiers | 0.761 | 0.563 | 0.745 |
 | amount + hour only | 0.653 | 0.272 | 0.819 |
 
