@@ -16,7 +16,7 @@
 COMPOSE = docker compose
 GEN_DIR = data-generator
 
-.PHONY: help up down clean ps logs topics generate produce produce-stream produce-stream-docker load-graph serve-prep submit-job resume-job sink-logs latency query-scored
+.PHONY: help up down clean ps logs topics generate produce produce-stream no-active-job fresh-taskmanager produce-stream-docker load-graph serve-prep submit-job resume-job sink-logs latency query-scored
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -77,11 +77,41 @@ serve-prep: ## copy the trained ONNX model + feature spec next to the Flink job
 # and fails if either submitter drifts from it.
 PYFILES = /opt/flink/usrjobs/config.py,/opt/flink/usrjobs/capabilities.py,/opt/flink/usrjobs/features.py,/opt/flink/usrjobs/geo.py,/opt/flink/usrjobs/bins.py,/opt/flink/usrjobs/rules.py,/opt/flink/usrjobs/enrichment.py,/opt/flink/usrjobs/receiver_store.py,/opt/flink/usrjobs/fusion.py,/opt/flink/usrjobs/payload_crypto.py
 
-submit-job: serve-prep ## submit the PyFlink CEP+ML job (EMPTY keyed state)
+# Refuse to start a second job beside a running one. `flink run` adds a job, it
+# does not replace one, and a Flink KafkaSource assigns itself every partition,
+# so two jobs score every event twice. run.ps1's Assert-NoActiveJob, in sh.
+no-active-job:
+	@ACTIVE=$$(curl -s --max-time 10 http://localhost:8081/jobs/overview | \
+	  grep -o '"state":"[A-Z_]*"' | grep -v -E 'FAILED|CANCELED|FINISHED'); \
+	if [ -n "$$ACTIVE" ]; then \
+	  echo "A JOB IS ALREADY ACTIVE - not submitting a second one. Cancel it first:"; \
+	  echo "  curl -X PATCH 'http://localhost:8081/jobs/<jid>?mode=cancel'"; exit 1; \
+	fi
+
+# A fresh TaskManager JVM before every submission. Each job loads its own
+# user-code classloader and a cancelled job does not give the Metaspace back: the
+# eighth job on one TaskManager process killed it (docs/irp-framing.md 8,
+# twenty-first). run.ps1's Restart-TaskManager, in sh - including waiting for a
+# NEW registration rather than accepting the old one while it lingers.
+fresh-taskmanager: no-active-job
+	@OLD=$$(curl -s --max-time 10 http://localhost:8081/taskmanagers | \
+	  grep -o '"id":"[^"]*"' | tr '\n' ' '); \
+	$(COMPOSE) restart taskmanager >/dev/null; \
+	i=0; while [ $$i -lt 40 ]; do \
+	  for id in $$(curl -s --max-time 10 http://localhost:8081/taskmanagers | \
+	      grep -o '"id":"[^"]*"'); do \
+	    case " $$OLD " in *" $$id "*) ;; \
+	      *) echo "fresh TaskManager registered"; exit 0;; esac; \
+	  done; \
+	  i=$$((i+1)); sleep 3; \
+	done; \
+	echo "no fresh TaskManager registered within 120 s"; exit 1
+
+submit-job: serve-prep fresh-taskmanager ## fresh TaskManager, then the PyFlink job (EMPTY keyed state)
 	$(COMPOSE) exec jobmanager flink run -d -py /opt/flink/usrjobs/fraud_job.py \
 	  --pyFiles $(PYFILES)
 
-resume-job: serve-prep ## submit, restoring keyed state from the newest retained checkpoint
+resume-job: serve-prep fresh-taskmanager ## submit, restoring keyed state from the newest retained checkpoint
 	@# Without -s the job starts with empty keyed state: offsets are committed
 	@# so nothing is re-read and no error appears, but every sender's velocity
 	@# and structuring window starts blank and the rules depending on history
