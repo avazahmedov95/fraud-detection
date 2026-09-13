@@ -1400,7 +1400,7 @@ four of them were caught only by a value that could not have been true:
    outage had silenced every other alert type. Kafka has nothing to do with a
    sender's velocity; that was the value that could not have been true. The
    loss column, which counts rows, was unaffected. The reset now cancels the
-   job, restarts the TaskManager, flushes Redis and submits a fresh job, in
+   job, flushes Redis, restarts the TaskManager and submits a fresh job, in
    that order, and each step is there because its absence was measured.
    Flushing first let the cancelled job's close write 5,236
    population-histogram observations from the pass being erased back into the
@@ -1513,10 +1513,16 @@ coincidence has to be checked before the attribution is written down.
 *It is a deployment property, not a test artefact.* Anything that redeploys onto a
 long-lived session cluster - a model update, a configuration change, a capability
 switched on - is a submission, and on this configuration the eighth one takes the
-scorer down without an error anywhere a dashboard would look. The harness now
-restarts the TaskManager with every job, which is a workaround. The durable fixes
-are a per-job cluster (application mode) or a TaskManager restart as part of every
-redeploy, and a restart policy that brings a dead TaskManager back.
+scorer down without an error anywhere a dashboard would look. Two mitigations are now
+in place, tested live on 2026-09-13. Every submission through `run.ps1`
+restarts the TaskManager first, so the leak never accumulates. And the TaskManager
+has `restart: unless-stopped`: its JVM was made to exit on its own, Docker brought
+it back, a new TaskManager registered, and the running job restored from
+checkpoint 35 and completed checkpoint 37 without anyone touching it. A deliberate
+`docker compose kill` is still left down - also checked - so `run-kill-series.ps1`,
+which injects its fault that way and restarts by hand, measures exactly what it did
+before. Neither mitigation fixes the leak itself: the production answer remains a
+per-job cluster (application mode), and the `Makefile` submit path does neither.
 
 **Twentieth: the feature extractor is quadratic in a population this project
 never streams, and only foreign data could show it.** Replaying IBM's AML set

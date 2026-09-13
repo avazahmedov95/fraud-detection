@@ -365,32 +365,6 @@ function Reset-FeatureState {
         if ($left.Count -eq 0) { break }
         Start-Sleep -Seconds 2
     }
-
-    # And the TaskManager itself. Every job submitted to this session cluster
-    # loads its own user-code classloader, and cancelling the job does not give
-    # the Metaspace back: the eighth job on one TaskManager process died of
-    # OutOfMemoryError: Metaspace (256 MB) two seconds after it was submitted,
-    # the container's restart policy is "no", and the pass that followed
-    # measured a dead TaskManager. A fresh JVM per pass is what makes a fresh
-    # job per pass sustainable. Wait for a NEW registration: the old one can
-    # linger in the list until its heartbeat times out.
-    $oldIds = @()
-    try {
-        $oldIds = @((Invoke-RestMethod -Uri "http://localhost:8081/taskmanagers" -TimeoutSec 10).taskmanagers |
-            ForEach-Object { $_.id })
-    } catch {}
-    docker compose restart taskmanager | Out-Null
-    $deadline = (Get-Date).AddSeconds(120)
-    $ready = $false
-    while ((Get-Date) -lt $deadline) {
-        try {
-            $fresh = @((Invoke-RestMethod -Uri "http://localhost:8081/taskmanagers" -TimeoutSec 10).taskmanagers |
-                Where-Object { ($oldIds -notcontains $_.id) -and $_.freeSlots -ge 1 })
-            if ($fresh.Count -ge 1) { $ready = $true; break }
-        } catch {}
-        Start-Sleep -Seconds 3
-    }
-    if (-not $ready) { throw "no fresh TaskManager registered - the pass would measure nothing" }
     $del = {
         param($pattern)
         docker compose exec -T redis sh -c "redis-cli --scan --pattern '$pattern' | xargs -r redis-cli DEL" | Out-Null
@@ -641,6 +615,45 @@ function Get-LatestCheckpoint {
     return $path
 }
 
+function Restart-TaskManager {
+    <#
+    A fresh TaskManager JVM for every job this file submits.
+
+    Every job submitted to this session cluster loads its own user-code
+    classloader, and cancelling the job does not give the Metaspace back: the
+    eighth job on one TaskManager process died of OutOfMemoryError: Metaspace
+    (256 MB) two seconds after it was submitted, and nothing brought it back
+    (irp-framing.md 8, twenty-first). The leak is in the job's class loading and
+    is not fixed here. Restarting the TaskManager before every submission means
+    it never accumulates; the restart policy in docker-compose.yml is the second
+    line, for a TaskManager that dies anyway.
+
+    Waits for a NEW registration: the old one can linger in the JobManager's
+    list until its heartbeat times out, and a check that accepts it would submit
+    onto a process that no longer exists.
+    #>
+    $deadline = (Get-Date).AddSeconds(60)
+    $oldIds = $null
+    while ($null -eq $oldIds -and (Get-Date) -lt $deadline) {
+        try {
+            $oldIds = @((Invoke-RestMethod -Uri "http://localhost:8081/taskmanagers" -TimeoutSec 10).taskmanagers |
+                ForEach-Object { $_.id })
+        } catch { Start-Sleep -Seconds 3 }
+    }
+    if ($null -eq $oldIds) { throw "Flink REST API unreachable on :8081 - is the stack up?" }
+    docker compose restart taskmanager | Out-Null
+    $deadline = (Get-Date).AddSeconds(120)
+    while ((Get-Date) -lt $deadline) {
+        try {
+            $fresh = @((Invoke-RestMethod -Uri "http://localhost:8081/taskmanagers" -TimeoutSec 10).taskmanagers |
+                Where-Object { ($oldIds -notcontains $_.id) -and $_.freeSlots -ge 1 })
+            if ($fresh.Count -ge 1) { return }
+        } catch {}
+        Start-Sleep -Seconds 3
+    }
+    throw "no fresh TaskManager registered within 120 s of a restart"
+}
+
 function Invoke-SubmitJob {
     <#
     Submit the PyFlink job, optionally restoring from a retained checkpoint.
@@ -660,6 +673,7 @@ function Invoke-SubmitJob {
     param([string]$FromCheckpoint)
 
     if (-not (Assert-NoActiveJob)) { exit 1 }
+    Restart-TaskManager
 
     & $PSCommandPath serve-prep
     $modules = $JobModules -join ","
@@ -717,7 +731,7 @@ switch ($Target.ToLower()) {
             "measure-throughput"    = "latency vs offered load (.\run.ps1 measure-throughput 3000)"
             "load-graph"     = "load the account population into Neo4j"
             "serve-prep"     = "copy the ONNX model next to the Flink job"
-            "submit-job"     = "submit the PyFlink CEP+ML job (empty state)"
+            "submit-job"     = "fresh TaskManager, then the PyFlink job (empty state)"
             "resume-job"     = "same, restoring keyed state from the newest checkpoint"
             "sink-logs"      = "tail the sink-writer logs"
             "boundaries"     = "audit every place one component hands something to another"
