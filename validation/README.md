@@ -169,7 +169,9 @@ Same features, same split, **0.032 weighted against 0.267 unweighted**. Reportin
 only the first beside a baseline fitted unweighted would have compared this
 project's *recipe* against their *features* and called the difference a result.
 It is a genuine caveat for deployment: the recipe is calibrated for a 1.5% base
-rate and should not be carried unchanged to a rarer one.
+rate and should not be carried unchanged to a rarer one. Since 2026-09-13 it
+cannot be: below 0.5% fraud `train.py` stops unless told how to weight
+(`CLASS_WEIGHTING`, `ml/README.md`).
 
 **2. Receiver aggregation does not merely fail to transfer — it reverses.**
 Removing those two features **improves** PaySim by +0.049 (0.267 → 0.315), where
@@ -839,7 +841,8 @@ with caveats - the next subsection.
 **4. The training recipe does not survive a 0.1% base rate - now on two
 datasets.** `scale_pos_weight` from the class ratio is about 870 here, and every
 weighted fit collapses to an F1 of 1.5 - 2.2%. PaySim showed the same, less
-severely. It is a deployment caveat, not a feature result.
+severely. It is a deployment caveat, not a feature result - and since 2026-09-13
+a guarded one: `train.py` stops below 0.5% fraud unless told how to weight.
 
 **5. The spread is wide, and it misled once already.** +/-4 F1 points across
 seeds, against the published +/-0.3 for LightGBM: F1 at a tuned threshold on 1,653

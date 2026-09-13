@@ -33,6 +33,18 @@ TRAIN_SHARE = 0.80        # the earliest 80% trains; the rest is the held-out sl
 AGE_UNKNOWN_SHARE = 0.10
 AGE_UNKNOWN_SEED = 42
 
+#: The class weighting - negatives over positives - is validated on this project's
+#: data, at 1.5% fraud (a weight near 65). At the rates real card traffic runs at
+#: it collapses: PaySim at 0.13% (weight ~974) fell from PR-AUC 0.267 unweighted to
+#: 0.032, IBM AML at 0.10% (~870) from F1 17.5 to 1.5-2.2 (validation/README.md 1,
+#: 4). Nothing between 0.13% and 1.5% has been measured. The line sits between
+#: them - a guard, not a measured boundary - and below it training stops rather
+#: than hand over a collapsed model that looks like any other.
+MIN_WEIGHTED_POSITIVE_RATE = 0.005
+#: auto: weight above the line, stop below it. off: fit unweighted, the recipe that
+#: held on both datasets where the weighted one collapsed. on: weight regardless.
+CLASS_WEIGHTING = os.getenv("CLASS_WEIGHTING", "auto")
+
 
 def cut_index(n):
     return int(n * TRAIN_SHARE)
@@ -44,6 +56,31 @@ def age_unknown_rows(n, outage=False, seed=AGE_UNKNOWN_SEED, share=AGE_UNKNOWN_S
     rows = np.random.default_rng(seed).random(n) < share
     rows[cut_index(n):] = outage
     return rows
+
+
+def class_weight(pos, neg, mode=None):
+    """scale_pos_weight for the training slice, or a stop with the reason.
+
+    Below MIN_WEIGHTED_POSITIVE_RATE the default refuses rather than guesses. The
+    unweighted alternative is not a drop-in: its probabilities sit near the base
+    rate, so the 0.50 cutoff the metrics use flags too little and the decision
+    thresholds have to be set again from data - a choice for whoever deploys it.
+    """
+    mode = CLASS_WEIGHTING if mode is None else mode
+    if mode not in ("auto", "on", "off"):
+        raise ValueError(f"CLASS_WEIGHTING={mode!r}: expected auto, on or off")
+    if mode == "off":
+        return 1.0
+    rate = pos / max(pos + neg, 1)
+    if mode == "auto" and rate < MIN_WEIGHTED_POSITIVE_RATE:
+        raise SystemExit(
+            f"fraud is {rate:.3%} of the training rows, below the "
+            f"{MIN_WEIGHTED_POSITIVE_RATE:.1%} this recipe's class weighting is "
+            "trusted at; it collapsed at 0.13% and 0.10% (validation/README.md 1, "
+            "4). Rerun with CLASS_WEIGHTING=off to fit unweighted, then set the "
+            "decision thresholds from a validation slice - the 0.50 cutoff will "
+            "flag too little - or with CLASS_WEIGHTING=on to weight anyway.")
+    return neg / max(pos, 1)
 
 
 def make_model(scale_pos_weight, random_state=42):
@@ -110,7 +147,7 @@ def main():
     Xte, yte = test[feats].astype("float32").values, test["label"].values
 
     pos, neg = int(ytr.sum()), int((ytr == 0).sum())
-    spw = neg / max(pos, 1)
+    spw = class_weight(pos, neg)
     print(f"train {len(ytr):,} (pos={pos}) | test {len(yte):,} (pos={int(yte.sum())}) | scale_pos_weight={spw:.1f}")
 
     if "receiver_age" in feats:

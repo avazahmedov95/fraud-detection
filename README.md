@@ -74,16 +74,18 @@ Each package keeps its tests in its own `tests/` directory, and the packages are
 run **one at a time**:
 
 ```bash
-python -m pytest stream-processor -q     # 173
+python -m pytest stream-processor -q     # 184
 python -m pytest data-generator   -q     #  43
 python -m pytest sink-writer      -q     #  23
-python -m pytest validation       -q     #  11
+python -m pytest validation       -q     #  29
 python -m pytest case-manager     -q     #  45
+python -m pytest ml               -q     #   5
 ```
 
-Not all five in one invocation: three module names occur twice across packages
-(`config.py`, `integrity.py`, `payload_crypto.py`), because the packages deploy
-as separate units, and pytest cannot import two modules of the same name.
+Not all six in one invocation: five module names recur across packages
+(`config.py` in four of them, `consumer.py`, `explain.py`, `integrity.py`,
+`payload_crypto.py`), because the packages deploy as separate units, and pytest
+cannot import two modules of the same name.
 
 Nine of those files were written after a defect that had already happened —
 `test_wire_types.py` after a boolean that travelled as the string `"False"` and
