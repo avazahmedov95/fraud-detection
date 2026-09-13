@@ -358,6 +358,147 @@ def our_model(cache, seeds=3):
     return results
 
 
+def _bootstrap_delta(y, p_full, p_less, t_full, t_less, boots, seed=0):
+    """Paired Poisson bootstrap over the test rows: the SAME resampling weights for
+    both models, so what varies is the test set, not the comparison.
+
+    Returns the 2.5th/97.5th percentiles of the F1 and PR-AUC deltas (full minus
+    less) and the share of resamples in which the delta is not positive. PR-AUC is
+    computed from one fixed ordering per model with weighted cumulative sums, which
+    ignores score ties - immaterial for an interval, and the point estimates are
+    taken with sklearn separately.
+    """
+    import numpy as np
+    rng = np.random.default_rng(seed)
+
+    def f1_w(pred, w):
+        tp = float(np.sum(w * y * pred))
+        fp = float(np.sum(w * (1 - y) * pred))
+        fn = float(np.sum(w * y * (1 - pred)))
+        return 200.0 * tp / max(2 * tp + fp + fn, 1e-12)
+
+    def ap_w(order, w):
+        ys, ws = y[order], w[order]
+        tp = np.cumsum(ws * ys)
+        seen = np.cumsum(ws)
+        prec = np.where(seen > 0, tp / np.maximum(seen, 1e-12), 0.0)
+        total = tp[-1]
+        return float(np.sum(ws * ys * prec) / total) if total > 0 else 0.0
+
+    pf, pl = (p_full >= t_full).astype("int8"), (p_less >= t_less).astype("int8")
+    of, ol = np.argsort(-p_full, kind="stable"), np.argsort(-p_less, kind="stable")
+    d_f1, d_ap = [], []
+    for _ in range(boots):
+        w = rng.poisson(1.0, len(y)).astype("float64")
+        d_f1.append(f1_w(pf, w) - f1_w(pl, w))
+        d_ap.append(ap_w(of, w) - ap_w(ol, w))
+    d_f1, d_ap = np.array(d_f1), np.array(d_ap)
+    return {"f1_ci": tuple(np.percentile(d_f1, [2.5, 97.5])),
+            "ap_ci": tuple(np.percentile(d_ap, [2.5, 97.5])),
+            "f1_share_not_positive": float(np.mean(d_f1 <= 0)),
+            "ap_share_not_positive": float(np.mean(d_ap <= 0))}
+
+
+def receiver_ablation(cache, seeds=20, boots=1000):
+    """Is receiver aggregation worth anything to the model here? Asked so that seed
+    noise cannot answer it.
+
+    Ten seeds put the paired F1 delta at +2.1, 95% CI [-1.5, +5.6]: the model's own
+    fit-to-fit spread, about 4 F1 points, is wider than the effect. So the question
+    is asked two ways, both fixed before the run and both reported whatever they
+    say:
+
+    1. per seed, paired, with a t-based 95% interval - the ablate_seeds convention,
+       at twenty seeds instead of ten;
+    2. on the seed-AVERAGED model - the mean of every seed's probabilities, which
+       removes most of the fit-to-fit noise - with a paired bootstrap over the test
+       rows, which measures the uncertainty that remains, the test set's own.
+
+    Decision rule, stated in advance: the effect counts as established only if BOTH
+    intervals exclude zero for F1 on the fourteen-feature configuration, which is
+    this project's own feature set. PR-AUC and the configuration with the file's own
+    format and currency are reported beside it and do not change the verdict.
+    Unweighted recipe only: the weighted one collapses at this base rate (README 4).
+    """
+    import warnings
+    import numpy as np
+    from sklearn.metrics import average_precision_score, f1_score
+    warnings.filterwarnings("ignore", message="X does not have valid feature names")
+    z = np.load(cache, allow_pickle=False)
+    X, y = z["X"], z["y"].astype("int8")
+    names = [str(n) for n in z["names"]]
+    n = len(y)
+    a, b = int(n * 0.6), int(n * 0.8)
+    fmt, fnames = z["fmt"], [str(c) for c in z["fmt_names"]]
+    own = np.column_stack([(fmt == k).astype("float32") for k in range(len(fnames))]
+                          + [z["currency"].astype("float32")])
+    keep = [i for i, c in enumerate(names) if c not in RCV]
+    pairs = (("fourteen features", X, X[:, keep]),
+             ("plus format and currency", np.hstack([X, own]),
+              np.hstack([X[:, keep], own])))
+    yte = y[b:]
+
+    def fit(M, seed):
+        import lightgbm as lgb
+        m = lgb.LGBMClassifier(n_estimators=400, learning_rate=0.05, num_leaves=31,
+                               subsample=0.8, colsample_bytree=0.8,
+                               min_child_samples=30, scale_pos_weight=1.0,
+                               random_state=seed, n_jobs=-1, verbose=-1)
+        m.fit(M[:a], y[:a])
+        return m.predict_proba(M[a:b])[:, 1], m.predict_proba(M[b:])[:, 1]
+
+    def tuned(pva):
+        from sklearn.metrics import precision_recall_curve
+        prec, rec, thr = precision_recall_curve(y[a:b], pva)
+        f1s = 2 * prec[:-1] * rec[:-1] / np.maximum(prec[:-1] + rec[:-1], 1e-12)
+        return float(thr[int(np.argmax(f1s))]) if len(thr) else 0.5
+
+    def score(pva, pte):
+        t = tuned(pva)
+        return t, (100 * f1_score(yte, pte >= t, zero_division=0),
+                   average_precision_score(yte, pte))
+
+    out = {}
+    print(f"test: {n - b:,} rows, {int(yte.sum()):,} laundering; {seeds} seeds, "
+          f"{boots} bootstrap resamples; unweighted recipe\n")
+    for label, Mf, Ml in pairs:
+        per_f1, per_ap = [], []
+        sva_f = np.zeros(b - a); ste_f = np.zeros(n - b)
+        sva_l = np.zeros(b - a); ste_l = np.zeros(n - b)
+        for seed in range(seeds):
+            vf, tf = fit(Mf, seed)
+            vl, tl = fit(Ml, seed)
+            _, (f1f, apf) = score(vf, tf)
+            _, (f1l, apl) = score(vl, tl)
+            per_f1.append(f1f - f1l); per_ap.append(apf - apl)
+            sva_f += vf; ste_f += tf; sva_l += vl; ste_l += tl
+        tf_, (ef1f, eapf) = score(sva_f / seeds, ste_f / seeds)
+        tl_, (ef1l, eapl) = score(sva_l / seeds, ste_l / seeds)
+        bs = _bootstrap_delta(yte, ste_f / seeds, ste_l / seeds, tf_, tl_, boots)
+        h1, h2 = _ci95(per_f1), _ci95(per_ap)
+        m1, m2 = float(np.mean(per_f1)), float(np.mean(per_ap))
+        out[label] = {"per_seed_f1": (m1, h1), "per_seed_ap": (m2, h2),
+                      "positive_seeds_f1": int(sum(d > 0 for d in per_f1)),
+                      "ensemble_f1": (ef1f, ef1l), "ensemble_ap": (eapf, eapl),
+                      **bs}
+        print(f"  {label}")
+        print(f"    per seed, paired     F1 {m1:+.2f} [{m1 - h1:+.2f}, {m1 + h1:+.2f}]"
+              f"   PR-AUC {m2:+.4f} [{m2 - h2:+.4f}, {m2 + h2:+.4f}]"
+              f"   ({out[label]['positive_seeds_f1']}/{seeds} seeds positive)")
+        print(f"    seed-averaged model  F1 {ef1f:.2f} vs {ef1l:.2f} = {ef1f - ef1l:+.2f} "
+              f"[{bs['f1_ci'][0]:+.2f}, {bs['f1_ci'][1]:+.2f}]   PR-AUC "
+              f"{eapf:.4f} vs {eapl:.4f} = {eapf - eapl:+.4f} "
+              f"[{bs['ap_ci'][0]:+.4f}, {bs['ap_ci'][1]:+.4f}]")
+    r = out["fourteen features"]
+    lo_seed = r["per_seed_f1"][0] - r["per_seed_f1"][1]
+    established = bool(lo_seed > 0 and r["f1_ci"][0] > 0)
+    print("\n  verdict (rule fixed in advance: both F1 intervals on the fourteen "
+          "features exclude zero):")
+    print(f"    {'ESTABLISHED' if established else 'NOT ESTABLISHED'}")
+    out["established"] = established
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--file", required=True,
@@ -382,6 +523,12 @@ def main():
                          "score it on the published 60/20/20 temporal split")
     ap.add_argument("--seeds", type=int, default=3,
                     help="fits per configuration, for the spread")
+    ap.add_argument("--receiver-ablation", dest="receiver_ablation",
+                    action="store_true",
+                    help="the receiver-aggregation delta, per seed and on the "
+                         "seed-averaged model with a paired bootstrap")
+    ap.add_argument("--boots", type=int, default=1000,
+                    help="bootstrap resamples for --receiver-ablation")
     args = ap.parse_args()
 
     if not os.path.exists(args.file):
@@ -399,6 +546,10 @@ def main():
         if not os.path.exists(args.cache):
             raise SystemExit(f"{args.cache} not found - run --extract-only first")
         return our_model(args.cache, args.seeds)
+    if args.receiver_ablation:
+        if not os.path.exists(args.cache):
+            raise SystemExit(f"{args.cache} not found - run --extract-only first")
+        return receiver_ablation(args.cache, args.seeds, args.boots)
 
     formats = ([f.strip() for f in args.formats.split(",")]
                if args.formats else None)

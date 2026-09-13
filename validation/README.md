@@ -217,9 +217,11 @@ true and is also the most convenient possible outcome, which is a reason to
 distrust it.
 
 > **Since then (section 4).** IBM AML has a collection stage, and it gives
-> rule-level evidence - `MULE_FAN_IN` separates the classes 2.8:1 - and a
-> model-level ablation that points the right way but cannot be told from zero at
-> ten seeds: +2.1 F1 points, 95% CI [-1.5, +5.6].
+> rule-level evidence - `MULE_FAN_IN` separates the classes 2.8:1 - and, at
+> twenty seeds, model-level evidence that meets a rule fixed before the run:
+> removing the two receiver-side features costs 2.5 F1 points, 95% CI
+> [+0.5, +4.4], and a seed-averaged model agrees (+2.3, [+1.1, +3.5]). It took a
+> second look to get there, and section 4 says what that costs.
 
 **IBM AMLSim** (open source, agent-based, run locally) generates **fan-in** as an
 explicit typology — "multiple accounts send substantial funds to a single main
@@ -826,14 +828,13 @@ The paper does not say which rule its F1 used, so the honest reading lies betwee
 "clearly better" and "slightly worse", and this section does not pick the kinder
 one.
 
-**3. Receiver aggregation points the right way and cannot be told from zero.**
+**3. Receiver aggregation points the right way; ten seeds could not tell it from zero.**
 Paired by seed, removing the two receiver-side features costs 2.1 F1 points, 95%
 CI [-1.5, +5.6], and 0.009 PR-AUC, CI [-0.006, +0.023]; seven seeds of ten go the
 way the design predicts. On PaySim, which has no collection stage, the same
 removal *improved* PR-AUC by 0.049, so the sign has turned as predicted - but at
-this spread ten seeds do not establish it. The rule-level evidence above stands on
-its own; the model-level effect is not measured to the standard this project
-applies to its own data.
+this spread ten seeds do not establish it. Twenty seeds and a second method do,
+with caveats - the next subsection.
 
 **4. The training recipe does not survive a 0.1% base rate - now on two
 datasets.** `scale_pos_weight` from the class ratio is about 870 here, and every
@@ -853,6 +854,57 @@ cached, so every fit reads it rather than repeating it:
 ```bash
 python ibm_aml_adapter.py --file HI-Small_Trans.csv --extract-only --cache ibm_features.npz
 python ibm_aml_adapter.py --file HI-Small_Trans.csv --our-model --cache ibm_features.npz --seeds 10
+```
+
+### Receiver aggregation, asked so that seed noise cannot answer it (`--receiver-ablation`)
+
+Ten seeds left the receiver-side delta inside the model's own spread (point 3
+above). This asks again with twenty seeds, and a second way: the mean of all
+twenty fits' probabilities - a seed-averaged model, which removes most of the
+fit-to-fit noise - with a paired bootstrap over the test rows (1,000 resamples)
+for the uncertainty that remains. The rule was fixed before the run: established
+only if both F1 intervals on the fourteen features exclude zero.
+
+| configuration | per seed, paired (20 seeds) | seed-averaged model, paired bootstrap |
+|---|---|---|
+| 14 features - F1 points | **+2.46 [+0.52, +4.40]**, 14 of 20 positive | **22.33 vs 20.00 = +2.33 [+1.05, +3.52]** |
+| 14 features - PR-AUC | +0.012 [+0.005, +0.019] | 0.153 vs 0.099 = +0.053 [+0.042, +0.064] |
+| plus format and currency - F1 points | -0.76 [-4.27, +2.75], 9 of 20 positive | 53.02 vs 49.77 = +3.25 [+1.73, +4.69] |
+| plus format and currency - PR-AUC | +0.003 [-0.023, +0.028] | 0.463 vs 0.423 = +0.040 [+0.026, +0.055] |
+
+**Verdict: established.** On the fourteen features both intervals exclude zero,
+for PR-AUC as well as F1. It is the first model-level external evidence for the
+fan-in design: on data with a collection stage, removing the two receiver-side
+features costs about 2.4 F1 points and about a third of the averaged model's
+PR-AUC. On PaySim, which has no collection stage, the same removal helped (point
+3) - the sign turns where the design says it should.
+
+Three things temper it, and belong next to it:
+
+- **It is a second look.** The twenty seeds include the ten above, and they were
+  run because ten were inconclusive. A result sought until it appears is weaker
+  than one found the first time; the rule was fixed before this run but not
+  before the first, so the per-seed interval is somewhat optimistic. The
+  averaged model is a different method and agrees, which is the main reason to
+  believe it.
+- **With the file's own columns the two methods disagree.** Per seed the delta
+  drowns in a spread of +/-4 F1 points; on the averaged model it is +3.25, clear
+  of zero. The rule did not cover this configuration; the disagreement is
+  recorded, not resolved.
+- **The bootstrap measures the test set's uncertainty only.** It holds the
+  twenty-fit average fixed; a different twenty seeds would move it somewhat.
+
+**A side result, not what the run was for.** Averaging twenty fits more than
+doubles PR-AUC against the single fits in the table above - 0.153 against 0.065
+on the fourteen features, 0.463 against 0.200 with the file's columns - and
+lifts F1 to 22.3 and 53.0. 53.0 sits near PNA's 56.8, but the paper's table
+compares single models and this is an average of twenty; it is recorded as a
+lead, not as a place in that table.
+
+Forty minutes on this laptop, most of it the eighty fits:
+
+```bash
+python ibm_aml_adapter.py --file HI-Small_Trans.csv --receiver-ablation --cache ibm_features.npz --seeds 20 --boots 1000
 ```
 
 ---

@@ -518,3 +518,26 @@ def test_ibm_events_carry_the_bank_on_each_side(ibm_file):
         assert X[:, F.FEATURE_NAMES.index("cross_network")].min() == 1.0
     finally:
         CAP.MODES.clear(); CAP.MODES.update(saved)
+
+
+def test_ibm_receiver_ablation_reports_both_methods_and_a_verdict(tmp_path):
+    """Wiring: a synthetic cache where fan-in is informative, two seeds, a few
+    resamples. The verdict must be a boolean and every interval ordered."""
+    import numpy as np
+    rng = np.random.default_rng(1)
+    n = 3000
+    names = ["log_amount", "vel_1h", "rcv_distinct_senders_1h", "rcv_inflow_1h"]
+    y = (rng.random(n) < 0.05).astype("int8")
+    X = rng.normal(size=(n, len(names))).astype("float32")
+    X[:, 2] += 2.0 * y
+    cache = tmp_path / "c.npz"
+    np.savez(cache, X=X, y=y, ts=np.arange(n), names=np.array(names),
+             fmt=rng.integers(0, 3, n).astype("int8"),
+             fmt_names=np.array(["ACH", "Cheque", "Wire"]),
+             currency=rng.integers(0, 2, n).astype("int8"),
+             currency_names=np.array(["Euro", "US Dollar"]))
+    out = IB.receiver_ablation(str(cache), seeds=2, boots=20)
+    assert isinstance(out["established"], bool)
+    r = out["fourteen features"]
+    assert r["f1_ci"][0] <= r["f1_ci"][1] and r["ap_ci"][0] <= r["ap_ci"][1]
+
