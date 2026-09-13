@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fraud detection — live demo</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--ink:#18202c;--muted:#667085;--line:#e3e6eb;
+--allow:#12a15f;--review:#e98a07;--block:#e0412f;--accent:#2a64d6;--head:#0f1b2d}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 24px;background:var(--head);color:#fff}
+header h1{font-size:17px;margin:0;font-weight:600}
+.chips{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+.chip{font-size:12px;padding:3px 10px;border-radius:999px;background:#24324a}
+.chip.ok::before,.chip.bad::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.chip.ok::before{background:#32d583}.chip.bad::before{background:#f97066}
+.lang button{background:transparent;color:#aab4c5;border:1px solid #3a4a66;padding:3px 9px;cursor:pointer;font-weight:600}
+.lang button:first-child{border-radius:6px 0 0 6px}.lang button:last-child{border-radius:0 6px 6px 0}
+.lang button.on{background:#fff;color:var(--head)}
+nav{display:flex;gap:2px;padding:0 24px;background:var(--head)}
+nav button{background:transparent;border:0;color:#aab4c5;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer;border-bottom:3px solid transparent}
+nav button.on{color:#fff;border-bottom-color:#5b8def}
+main{max-width:1240px;margin:0 auto;padding:18px 24px 40px}
+.hint{color:var(--muted);margin:0 0 14px;max-width:900px}
+.banner{background:#fff5e6;border:1px solid #f6c98a;padding:10px 14px;border-radius:8px;margin-bottom:14px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 14px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.tile span{color:var(--muted);font-size:12px}.tile b{display:block;font-size:22px;font-weight:650}
+.wrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:10px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;white-space:nowrap}
+td.wide{white-space:normal}
+th{font-size:12px;color:var(--muted);font-weight:600;background:#fafbfc}
+tr:last-child td{border-bottom:0}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:650;color:#fff}
+.ALLOW{background:var(--allow)}.REVIEW{background:var(--review)}.BLOCK{background:var(--block)}
+.rule{display:inline-block;margin:1px 4px 1px 0;padding:1px 7px;border-radius:6px;background:#edf1f8;font-size:12px}
+.bar{display:inline-block;width:80px;height:7px;border-radius:4px;background:#edf0f3;vertical-align:middle;margin-right:6px}
+.bar i{display:block;height:100%;border-radius:4px}
+button.primary{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer}
+button.primary:disabled{opacity:.5;cursor:default}
+button.ghost{background:#fff;border:1px solid var(--line);border-radius:8px;padding:7px 12px;font:inherit;cursor:pointer}
+select{font:inherit;padding:6px;border-radius:8px;border:1px solid var(--line)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:12px;margin-bottom:18px}
+.scn{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.scn h3{margin:0;font-size:15px}.scn p{margin:0;color:var(--muted);font-size:13px;flex:1}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+.panel h2{margin:0 0 6px;font-size:16px}
+.summary{display:flex;gap:18px;flex-wrap:wrap;margin:10px 0 12px;font-weight:600}
+tr.hist td{color:var(--muted)}
+.why{margin:6px 0 2px}.why div{display:flex;align-items:center;gap:8px;margin:3px 0;font-size:13px}
+.why .w{height:8px;border-radius:4px;background:var(--block);min-width:4px}
+.split{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px;align-items:start}
+tr.pick{cursor:pointer}tr.pick:hover td{background:#f7f9fd}tr.sel td{background:#eaf1ff}
+.muted{color:var(--muted)}
+@media (max-width:900px){.split{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1 data-t="title"></h1>
+  <div class="chips"><span class="chip" id="c-kafka"></span><span class="chip" id="c-bg"></span><span class="chip" id="c-model"></span></div>
+  <div class="lang"><button data-lang="ru">RU</button><button data-lang="en">EN</button></div>
+</header>
+<nav>
+  <button data-tab="live" data-t="tab_live"></button>
+  <button data-tab="scn" data-t="tab_scn"></button>
+  <button data-tab="cases" data-t="tab_cases"></button>
+</nav>
+<main>
+  <div id="banner" class="banner" hidden></div>
+
+  <section id="live">
+    <p class="hint" data-t="live_hint"></p>
+    <div class="row">
+      <button class="primary" id="bg-btn"></button>
+      <label><span data-t="speed"></span>
+        <select id="bg-speed"><option value="100">×100</option><option value="200" selected>×200</option><option value="500">×500</option></select></label>
+      <label><input type="checkbox" id="alerts-only"> <span data-t="alerts_only"></span></label>
+    </div>
+    <div class="tiles" id="tiles"></div>
+    <div class="wrap"><table><thead><tr>
+      <th data-t="h_time"></th><th class="num" data-t="h_amount"></th><th data-t="h_route"></th>
+      <th data-t="h_decision"></th><th data-t="h_risk"></th><th data-t="h_rules"></th>
+    </tr></thead><tbody id="stream"></tbody></table></div>
+  </section>
+
+  <section id="scn" hidden>
+    <p class="hint" data-t="scn_hint"></p>
+    <div class="cards" id="cards"></div>
+    <div id="result"></div>
+  </section>
+
+  <section id="cases" hidden>
+    <p class="hint" data-t="cases_hint"></p>
+    <div class="row"><label><input type="checkbox" id="new-only" checked> <span data-t="new_only"></span></label></div>
+    <div class="tiles" id="case-stats"></div>
+    <div class="split">
+      <div class="wrap"><table><thead><tr>
+        <th data-t="h_prio"></th><th data-t="h_time"></th><th class="num" data-t="h_amount"></th>
+        <th data-t="h_decision"></th><th data-t="h_type"></th>
+      </tr></thead><tbody id="case-list"></tbody></table></div>
+      <div class="panel" id="case-detail"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const T = {
+ru: {
+  title: "Обнаружение мошенничества в P2P-переводах — живое демо",
+  tab_live: "Поток", tab_scn: "Сценарии", tab_cases: "Аналитик",
+  kafka_on: "Kafka: подключено", kafka_off: "Kafka: нет связи",
+  bg_on: "Фоновый поток: идёт", bg_off: "Фоновый поток: выключен", model: "Модель",
+  bg_start: "Запустить фоновый поток", bg_stop: "Остановить фоновый поток",
+  speed: "Скорость ", alerts_only: "Только тревоги",
+  live_hint: "Каждая строка — перевод, который система только что оценила: решение, риск от 0 до 1 и сработавшие правила. Фоновый поток — переводы из набора данных в их исходном ритме, ускоренном в выбранное число раз.",
+  t_total: "Решений", t_allow: "Пропущено", t_review: "На проверку", t_block: "Заблокировано", t_ms: "Время решения, медиана",
+  h_time: "Время", h_amount: "Сумма", h_route: "Откуда → куда", h_decision: "Решение", h_risk: "Риск",
+  h_rules: "Сработавшие правила", h_role: "Роль", h_when: "Когда", h_prio: "Приоритет", h_type: "Тип",
+  empty_live: "Пока нет решений. Запустите фоновый поток или проиграйте сценарий.",
+  scn_hint: "Каждый сценарий — настоящий эпизод из той части данных, которую модель не видела при обучении. Отправитель получает новую карту, поэтому система знакомится с ним с нуля: сначала его обычные переводы, затем сам эпизод.",
+  real_note: "Настоящий эпизод из данных, которых модель не видела",
+  play: "Проиграть", role_history: "история", role_episode: "эпизод",
+  now: "сейчас", u_min: "мин", u_h: "ч", u_d: "дн",
+  waiting: "ждём решения…", sending: "отправляем…",
+  caught: "Поймано мошеннических переводов: {a} из {b}",
+  false_alarms: "Ложных тревог на обычных переводах: {a} из {b}",
+  why: "Почему модель насторожилась", why_status: {NO_MODEL: "файл модели для объяснений не найден", MODEL_MISMATCH: "модель объяснений не совпадает с рабочей — объяснение не показано", NO_FEATURES: "решение принято без признаков модели", FAILED: "объяснение не удалось посчитать"},
+  cases_hint: "Тревоги, попавшие в очередь аналитика: самые срочные сверху. Решение аналитика — единственная настоящая метка, которую система может получить; из них считается точность.",
+  confirm: "Подтвердить мошенничество", fp: "Ложная тревога",
+  st_open: "Открыто дел", st_conf: "Подтверждено", st_fp: "Ложных тревог", st_prec: "Точность по разобранным",
+  empty_cases: "Открытых дел нет. Проиграйте сценарий — тревоги появятся здесь через несколько секунд.",
+  pick_case: "Выберите дело в списке.",
+  new_only: "Только новые — открытые с начала показа",
+  no_kafka: "Нет связи с Kafka. Запустите стек (.\\run.ps1 up) и задачу (.\\run.ps1 submit-job), страница подключится сама.",
+  no_decisions: "Переводы отправлены, но решений нет. Проверьте, что задача Flink запущена: http://localhost:8081",
+  no_store: "Очередь недоступна: ",
+  sum: "сум", score: "риск",
+  dec: {ALLOW: "Пропущен", REVIEW: "На проверку", BLOCK: "Заблокирован"},
+  kind: {NORMAL: "Обычный перевод", APP: "Мошенник по телефону", ATO: "Захват аккаунта", MULE: "Дроп-счёт", STRUCTURING: "Дробление сумм", NONE: "обычный"},
+  kind_desc: {
+    NORMAL: "Привычный перевод знакомому получателю после обычной истории отправителя. Ожидаем: пропуск.",
+    APP: "Мошенник по телефону убеждает жертву перевести крупную сумму на новый, недавно открытый счёт.",
+    ATO: "Кто-то получил доступ к чужой карте и выводит с неё деньги новым получателям.",
+    MULE: "Дроп-счёт: деньги многих людей за короткое время стекаются на один счёт и уходят дальше.",
+    STRUCTURING: "Крупная сумма дробится на части чуть ниже порога отчётности в 10 млн сум, в течение часа."},
+  rules: {NEW_PAYEE_HIGH_AMOUNT: "новый получатель и крупная сумма", FRESH_RECEIVER: "счёт получателя открыт недавно",
+    VELOCITY: "много переводов за 10 минут", STRUCTURING: "суммы чуть ниже порога отчётности",
+    DISTINCT_PAYEE_BURST: "много разных получателей за 10 минут", DEVICE_CHANGE: "новое устройство",
+    GEO_ANOMALY: "необычный регион", IMPOSSIBLE_TRAVEL: "невозможное перемещение",
+    AMOUNT_DEVIATION: "сумма намного выше обычной", COACHED_SESSION: "идёт звонок, долгое подтверждение",
+    DAILY_LIMIT_BREACH: "превышен дневной лимит", MULE_FAN_IN: "много отправителей на один счёт за час"},
+  feat: {log_amount: "сумма", amount_to_mean: "сумма к средней у отправителя", amount_z: "сумма к обычному разбросу",
+    is_new_payee: "получатель новый", vel_10m: "переводов за 10 минут", vel_1h: "переводов за час",
+    distinct_payees_10m: "разных получателей за 10 минут", sub_threshold_1h: "переводов чуть ниже порога за час",
+    secs_since_last: "время с прошлого перевода", daily_sum_ratio: "доля дневного лимита", hour: "час суток (UTC)",
+    cross_network: "перевод UzCard ↔ HUMO", receiver_age: "возраст счёта получателя", receiver_is_fresh: "счёт получателя новый",
+    rcv_distinct_senders_1h: "разных отправителей этому получателю за час", rcv_inflow_1h: "поступило получателю за час",
+    device_is_new: "устройство новое для отправителя", geo_is_anomaly: "операция вне обычного региона",
+    active_call: "звонок во время подтверждения", secs_login_z: "задержка подтверждения против привычки",
+    cep_score: "оценка правил"}
+},
+en: {
+  title: "P2P transfer fraud detection — live demo",
+  tab_live: "Stream", tab_scn: "Scenarios", tab_cases: "Analyst",
+  kafka_on: "Kafka: connected", kafka_off: "Kafka: unreachable",
+  bg_on: "Background stream: on", bg_off: "Background stream: off", model: "Model",
+  bg_start: "Start background stream", bg_stop: "Stop background stream",
+  speed: "Speed ", alerts_only: "Alerts only",
+  live_hint: "Each row is a transfer the system has just scored: the decision, a risk from 0 to 1 and the rules that fired. The background stream replays the dataset at its own pacing, sped up by the chosen factor.",
+  t_total: "Decisions", t_allow: "Allowed", t_review: "Review", t_block: "Blocked", t_ms: "Decision time, median",
+  h_time: "Time", h_amount: "Amount", h_route: "From → to", h_decision: "Decision", h_risk: "Risk",
+  h_rules: "Rules fired", h_role: "Role", h_when: "When", h_prio: "Priority", h_type: "Type",
+  empty_live: "No decisions yet. Start the background stream or replay a scenario.",
+  scn_hint: "Each scenario is a real episode from the part of the data the model never trained on. The sender gets a new card, so the system meets them from scratch: their usual transfers first, then the episode itself.",
+  real_note: "A real episode from data the model never saw",
+  play: "Replay", role_history: "history", role_episode: "episode",
+  now: "now", u_min: "min", u_h: "h", u_d: "d",
+  waiting: "waiting for the decision…", sending: "sending…",
+  caught: "Fraudulent transfers caught: {a} of {b}",
+  false_alarms: "False alarms on ordinary transfers: {a} of {b}",
+  why: "Why the model was suspicious", why_status: {NO_MODEL: "no model file for explanations", MODEL_MISMATCH: "the explanation model disagrees with the scorer — not shown", NO_FEATURES: "decided without model features", FAILED: "the explanation could not be computed"},
+  cases_hint: "Alerts in the analyst's queue, most urgent first. The analyst's verdict is the only real label this system can ever get; precision is computed from those.",
+  confirm: "Confirm fraud", fp: "False alarm",
+  st_open: "Open cases", st_conf: "Confirmed", st_fp: "False alarms", st_prec: "Precision on resolved",
+  empty_cases: "No open cases. Replay a scenario — its alerts appear here within seconds.",
+  pick_case: "Pick a case from the list.",
+  new_only: "Only new — opened since this demo started",
+  no_kafka: "Kafka is unreachable. Start the stack (.\\run.ps1 up) and the job (.\\run.ps1 submit-job); the page reconnects by itself.",
+  no_decisions: "The transfers were sent but no decision came back. Check that the Flink job is running: http://localhost:8081",
+  no_store: "Queue unavailable: ",
+  sum: "UZS", score: "risk",
+  dec: {ALLOW: "Allowed", REVIEW: "Review", BLOCK: "Blocked"},
+  kind: {NORMAL: "Ordinary transfer", APP: "Phone scam (APP)", ATO: "Account takeover", MULE: "Money mule", STRUCTURING: "Structuring", NONE: "ordinary"},
+  kind_desc: {
+    NORMAL: "A usual transfer to a known payee after the sender's ordinary history. Expected: allowed.",
+    APP: "A caller talks the victim into sending a large amount to a new, freshly opened account.",
+    ATO: "Someone has taken over a card and is draining it to new payees.",
+    MULE: "A mule account: money from many people converges on one account within a short time and moves on.",
+    STRUCTURING: "A large amount split into pieces just under the 10 million UZS reporting threshold, within an hour."},
+  rules: {NEW_PAYEE_HIGH_AMOUNT: "new payee, large amount", FRESH_RECEIVER: "payee's account newly opened",
+    VELOCITY: "many transfers in 10 minutes", STRUCTURING: "amounts just under the reporting threshold",
+    DISTINCT_PAYEE_BURST: "many distinct payees in 10 minutes", DEVICE_CHANGE: "new device",
+    GEO_ANOMALY: "unusual region", IMPOSSIBLE_TRAVEL: "impossible travel",
+    AMOUNT_DEVIATION: "amount far above usual", COACHED_SESSION: "call in progress, slow confirmation",
+    DAILY_LIMIT_BREACH: "daily limit exceeded", MULE_FAN_IN: "many senders into one account within an hour"},
+  feat: {}
+}};
+
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let lang = "ru", tab = "live", runId = null, runStarted = 0, selCase = null, lastCases = null, status = null;
+try { lang = localStorage.getItem("demo-lang") || "ru"; } catch (e) {}
+const t = k => (T[lang][k] ?? T.en[k] ?? k);
+const fmtAmount = n => Number(n || 0).toLocaleString("ru-RU").replace(/ /g, " ") + " " + t("sum");
+const fmtTime = s => s ? new Date((typeof s === "number" ? s * 1000 : Date.parse(String(s).replace(" ", "T") + "Z"))).toLocaleTimeString(lang === "ru" ? "ru-RU" : "en-GB") : "";
+const badge = d => d ? `<span class="badge ${esc(d)}">${esc(t("dec")[d] || d)}</span>` : `<span class="muted">${t("waiting")}</span>`;
+const bar = (s, d) => s == null ? "" : `<span class="bar"><i style="width:${Math.round(Math.min(1, s) * 100)}%;background:var(--${(d || "ALLOW").toLowerCase()})"></i></span>${Number(s).toFixed(2)}`;
+const rules = rs => (rs || []).map(r => `<span class="rule" title="${esc(r)}">${esc(t("rules")[r] || r)}</span>`).join("");
+// An alert with no rule behind it - the model alone - has no pattern type.
+const kindName = k => (k ? (t("kind")[k] || k) : "—");
+
+function ago(sec) {
+  const s = Math.round(-sec);
+  if (s < 60) return t("now");
+  const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+  if (d) return `−${d} ${t("u_d")} ${h} ${t("u_h")}`;
+  if (h) return `−${h} ${t("u_h")} ${m} ${t("u_min")}`;
+  return `−${m} ${t("u_min")}`;
+}
+
+function shown(s) {
+  if (lang !== "ru") return s;
+  return String(s).replace(/\byes\b/g, "да").replace(/\bno\b/g, "нет").replace("unknown", "неизвестно")
+    .replace(" days", " дн.").replace(" min", " мин").replace(" sigma", " σ").replace(" UZS", " сум");
+}
+
+function whyBlock(why) {
+  if (!why) return "";
+  if (!why.items || !why.items.length) {
+    const st = t("why_status")[why.status];
+    return st ? `<div class="why muted">${esc(st)}</div>` : "";
+  }
+  const max = Math.max(...why.items.map(i => i.weight), 0.01);
+  return `<div class="why"><div class="muted">${t("why")}:</div>` + why.items.map(i =>
+    `<div><span class="w" style="width:${Math.round(90 * i.weight / max)}px"></span>` +
+    `${esc(lang === "ru" ? (T.ru.feat[i.feature] || i.label_en) : i.label_en)}: <b>${esc(shown(i.shown))}</b>` +
+    `<span class="muted">(+${i.weight.toFixed(2)})</span></div>`).join("") + "</div>";
+}
+
+async function api(path, body) {
+  const r = await fetch(path, body ? {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)} : {cache: "no-store"});
+  return r.json();
+}
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-t]").forEach(el => el.textContent = t(el.dataset.t));
+  document.querySelectorAll("[data-lang]").forEach(b => b.classList.toggle("on", b.dataset.lang === lang));
+  renderCards(); renderStatus(); refreshTab(); if (runId) refreshRun();
+}
+
+function renderStatus() {
+  if (!status) return;
+  const k = status.kafka.connected, bg = status.background.on;
+  $("#c-kafka").className = "chip " + (k ? "ok" : "bad"); $("#c-kafka").textContent = t(k ? "kafka_on" : "kafka_off");
+  $("#c-bg").className = "chip " + (bg ? "ok" : ""); $("#c-bg").textContent = t(bg ? "bg_on" : "bg_off");
+  $("#c-model").textContent = `${t("model")}: ${status.model || "—"}`;
+  $("#bg-btn").textContent = t(bg ? "bg_stop" : "bg_start");
+  const c = status.counts || {}, total = Object.values(c).reduce((a, b) => a + b, 0);
+  $("#tiles").innerHTML = [["t_total", total], ["t_allow", c.ALLOW || 0], ["t_review", c.REVIEW || 0], ["t_block", c.BLOCK || 0],
+    ["t_ms", status.median_ms == null ? "—" : status.median_ms.toFixed(1) + " ms"]]
+    .map(([k, v]) => `<div class="tile"><span>${t(k)}</span><b>${esc(v)}</b></div>`).join("");
+  let msg = "";
+  if (!k) msg = t("no_kafka");
+  else if (runId && Date.now() - runStarted > 15000 && !(status.kafka.last && status.kafka.last * 1000 > runStarted)) msg = t("no_decisions");
+  $("#banner").hidden = !msg; $("#banner").textContent = msg;
+}
+
+async function refreshStatus() { try { status = await api("/api/status"); renderStatus(); } catch (e) {} }
+
+async function refreshLive() {
+  const rows = await api("/api/stream" + ($("#alerts-only").checked ? "?alerts=1" : ""));
+  $("#stream").innerHTML = rows.length ? rows.map(r => `<tr><td>${fmtTime(r.at)}</td><td class="num">${fmtAmount(r.amount)}</td>` +
+    `<td>${esc(r.from)} → ${esc(r.to)}</td><td>${badge(r.decision)}</td><td>${bar(r.score, r.decision)}</td>` +
+    `<td class="wide">${rules(r.rules)}</td></tr>`).join("")
+    : `<tr><td colspan="6" class="muted">${t("empty_live")}</td></tr>`;
+}
+
+function renderCards() {
+  $("#cards").innerHTML = ["NORMAL", "APP", "ATO", "MULE", "STRUCTURING"].map(k =>
+    `<div class="scn"><h3>${esc(kindName(k))}</h3><p>${esc(t("kind_desc")[k])}</p>` +
+    `<button class="primary" data-play="${k}">${t("play")}</button></div>`).join("");
+}
+
+async function play(kind) {
+  document.querySelectorAll("[data-play]").forEach(b => b.disabled = true);
+  try {
+    const r = await api("/api/episode", {kind});
+    if (r.error) { $("#result").innerHTML = `<div class="banner">${esc(r.error)}</div>`; return; }
+    runId = r.id; runStarted = Date.now(); await refreshRun();
+  } finally { setTimeout(() => document.querySelectorAll("[data-play]").forEach(b => b.disabled = false), 1500); }
+}
+
+async function refreshRun() {
+  if (!runId) return;
+  const run = await api("/api/episode/" + runId);
+  if (run.error && !run.rows) return;
+  const rows = run.rows, fraud = rows.filter(r => r.truth !== "NONE"), normal = rows.filter(r => r.truth === "NONE");
+  const flagged = r => r.decision && r.decision !== "ALLOW";
+  let html = `<div class="panel"><h2>${esc(kindName(run.kind))}</h2><div class="muted">${esc(t("real_note"))}</div>`;
+  if (run.error) html += `<div class="banner">${esc(run.error)}</div>`;
+  html += `<div class="summary">`;
+  if (fraud.length) html += `<span>${t("caught").replace("{a}", fraud.filter(flagged).length).replace("{b}", fraud.length)}</span>`;
+  if (normal.length) html += `<span>${t("false_alarms").replace("{a}", normal.filter(flagged).length).replace("{b}", normal.length)}</span>`;
+  html += `</div><div class="wrap"><table><thead><tr><th>${t("h_role")}</th><th>${t("h_when")}</th><th class="num">${t("h_amount")}</th>` +
+    `<th>${t("h_route")}</th><th>${t("h_decision")}</th><th>${t("h_risk")}</th><th>${t("h_rules")}</th></tr></thead><tbody>` +
+    rows.map(r => `<tr class="${r.role === "history" ? "hist" : ""}"><td>${t("role_" + r.role)}${r.truth !== "NONE" ? ` <span class="rule">${esc(kindName(r.truth))}</span>` : ""}</td>` +
+      `<td>${ago(r.offset_s)}</td><td class="num">${fmtAmount(r.amount)}</td><td>${esc(r.from)} → ${esc(r.to)}</td>` +
+      `<td>${badge(r.decision)}</td><td>${bar(r.score, r.decision)}</td><td class="wide">${rules(r.rules)}</td></tr>` +
+      (r.why ? `<tr><td></td><td colspan="6" class="wide">${whyBlock(r.why)}</td></tr>` : "")).join("") +
+    `</tbody></table></div></div>`;
+  $("#result").innerHTML = html;
+}
+
+async function refreshCases() {
+  const r = await api("/api/cases" + ($("#new-only").checked ? "?new=1" : ""));
+  lastCases = r;
+  const s = r.stats || {};
+  $("#case-stats").innerHTML = [["st_open", s.NEW ?? 0], ["st_conf", s.CONFIRMED_FRAUD ?? 0], ["st_fp", s.FALSE_POSITIVE ?? 0],
+    ["st_prec", s._precision == null ? "—" : Math.round(s._precision * 100) + "%"]]
+    .map(([k, v]) => `<div class="tile"><span>${t(k)}</span><b>${esc(v)}</b></div>`).join("");
+  if (r.error) { $("#case-list").innerHTML = `<tr><td colspan="5">${esc(t("no_store") + r.error)}</td></tr>`; return; }
+  $("#case-list").innerHTML = r.cases.length ? r.cases.map(c => `<tr class="pick ${c.id === selCase ? "sel" : ""}" data-case="${esc(c.id)}">` +
+    `<td>${c.priority}</td><td>${fmtTime(c.at)}</td><td class="num">${fmtAmount(c.amount)}</td><td>${badge(c.decision)}</td>` +
+    `<td>${esc(kindName(c.type))}</td></tr>`).join("")
+    : `<tr><td colspan="5" class="muted">${t("empty_cases")}</td></tr>`;
+  renderCase();
+}
+
+function renderCase() {
+  const c = lastCases && lastCases.cases.find(x => x.id === selCase);
+  if (!c) { $("#case-detail").innerHTML = `<div class="muted">${t("pick_case")}</div>`; return; }
+  $("#case-detail").innerHTML = `<h2>${fmtAmount(c.amount)} ${badge(c.decision)}</h2>` +
+    `<div>${esc(c.from)} → ${esc(c.to)}</div><div class="muted">${esc(kindName(c.type))} · ${t("score")} ${Number(c.score).toFixed(2)}</div>` +
+    `<div style="margin:10px 0">${rules(c.rules)}</div>${whyBlock(c.why)}` +
+    `<div class="row" style="margin-top:14px"><button class="primary" data-res="CONFIRMED_FRAUD">${t("confirm")}</button>` +
+    `<button class="ghost" data-res="FALSE_POSITIVE">${t("fp")}</button></div>`;
+}
+
+function refreshTab() {
+  if (tab === "live") refreshLive().catch(() => {});
+  if (tab === "cases") refreshCases().catch(() => {});
+}
+
+document.addEventListener("click", async e => {
+  const el = e.target.closest("[data-tab],[data-lang],[data-play],[data-case],[data-res],#bg-btn");
+  if (!el) return;
+  if (el.dataset.tab) {
+    tab = el.dataset.tab;
+    document.querySelectorAll("section").forEach(s => s.hidden = s.id !== tab);
+    document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+    refreshTab();
+  } else if (el.dataset.lang) {
+    lang = el.dataset.lang; try { localStorage.setItem("demo-lang", lang); } catch (err) {}
+    applyLang();
+  } else if (el.dataset.play) {
+    play(el.dataset.play);
+  } else if (el.dataset.case) {
+    selCase = el.dataset.case; refreshCases();
+  } else if (el.dataset.res) {
+    el.disabled = true;
+    await api(`/api/cases/${encodeURIComponent(selCase)}/resolve`, {disposition: el.dataset.res});
+    selCase = null; refreshCases();
+  } else if (el.id === "bg-btn") {
+    await api("/api/background", {on: !(status && status.background.on), speed: Number($("#bg-speed").value)});
+    refreshStatus();
+  }
+});
+$("#alerts-only").addEventListener("change", () => refreshLive());
+$("#new-only").addEventListener("change", () => refreshCases());
+
+document.querySelector('[data-tab="live"]').classList.add("on");
+applyLang(); refreshStatus();
+setInterval(() => { refreshStatus(); if (tab === "live") refreshLive().catch(() => {}); }, 1000);
+setInterval(() => { if (runId && tab === "scn") refreshRun().catch(() => {}); }, 700);
+setInterval(() => { if (tab === "cases") refreshCases().catch(() => {}); }, 5000);
+</script>
+</body>
+</html>

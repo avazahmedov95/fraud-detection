@@ -521,7 +521,7 @@ def b_every_module_is_documented():
     """
     problems = []
     for pkg in ("stream-processor", "data-generator", "ml", "sink-writer",
-                "case-manager", "validation", "tools"):
+                "case-manager", "validation", "tools", "demo"):
         d = os.path.join(ROOT, pkg)
         readme = os.path.join(d, "README.md")
         if not os.path.isdir(d) or not os.path.exists(readme):

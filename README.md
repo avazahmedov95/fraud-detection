@@ -46,6 +46,7 @@ fraud-detection/
 │   └── zenodo.py           why one published dataset was rejected
 ├── tools/
 │   └── boundary_audit.py   what one component produces vs what the next expects
+├── demo/                   one page to show it working: stream, replayed episodes, queue
 └── docs/                   the evidence base — read irp-framing.md first
 ```
 
@@ -80,9 +81,10 @@ python -m pytest sink-writer      -q     #  23
 python -m pytest validation       -q     #  29
 python -m pytest case-manager     -q     #  45
 python -m pytest ml               -q     #   5
+python -m pytest demo             -q     #   6
 ```
 
-Not all six in one invocation: five module names recur across packages
+Not all seven in one invocation: five module names recur across packages
 (`config.py` in four of them, `consumer.py`, `explain.py`, `integrity.py`,
 `payload_crypto.py`), because the packages deploy as separate units, and pytest
 cannot import two modules of the same name.
@@ -124,6 +126,9 @@ make submit-job         # serves model.onnx inside Flink and starts scoring
 
 # 4. watch it: Flink UI (8081), Grafana dashboard (3000), or:
 make query-scored       # decision counts in ClickHouse
+
+# 5. show it: one page over the running stack, Russian or English
+python demo/server.py   # http://localhost:8090 - demo/README.md
 ```
 
 ## Service endpoints
