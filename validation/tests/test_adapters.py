@@ -413,3 +413,108 @@ def test_the_shared_profile_sets_the_payee_key(capsys):
         assert CAP.MODES["device_telemetry"] == "off"
     finally:
         CAP.MODES.clear(); CAP.MODES.update(saved)
+
+
+# --- the shared extractor ----------------------------------------------------------
+
+def _ibm_profile():
+    saved = dict(CAP.MODES)
+    for key in ("receiver_age", "myid_kinship", "device_telemetry",
+                "geo_telemetry", "session_telemetry"):
+        CAP.MODES[key] = "off"
+    CAP.MODES["payee_identity"] = "pinfl"
+    return saved
+
+
+def test_extract_features_returns_one_row_per_event_and_the_labels(ibm_file):
+    saved = _ibm_profile()
+    try:
+        d, scales = _loaded(ibm_file)
+        X, y, ts = RP.extract_features(IB.to_events(d, scales), total=len(d))
+        import features as F
+        assert X.shape == (len(d), len(F.FEATURE_NAMES))
+        assert list(y) == list(d.label)
+        assert (ts[1:] >= ts[:-1]).all(), "rows must stay in stream order"
+    finally:
+        CAP.MODES.clear(); CAP.MODES.update(saved)
+
+
+def test_available_features_drops_exactly_what_the_profile_switched_off():
+    """A column computed from data the dataset lacks is a fabricated zero; this is
+    the list that keeps it out of a model."""
+    saved = _ibm_profile()
+    try:
+        idx, names = RP.available_features()
+        for gone in ("receiver_age", "receiver_is_fresh", "device_is_new",
+                     "geo_is_anomaly", "active_call", "secs_login_z"):
+            assert gone not in names
+        assert "rcv_distinct_senders_1h" in names and "vel_10m" in names
+        assert len(idx) == len(names) == 14
+    finally:
+        CAP.MODES.clear(); CAP.MODES.update(saved)
+
+
+def test_extract_features_accepts_what_paysim_to_events_yields(paysim_df):
+    """The regression that motivated sharing the loop: PaySim's model mode unpacked
+    dict events after `to_events` had started yielding `Event`s."""
+    saved = _ibm_profile()
+    try:
+        X, y, _ = RP.extract_features(PS.to_events(paysim_df, 1.0),
+                                      total=len(paysim_df))
+        assert X.shape[0] == len(paysim_df)
+        assert list(y) == list(paysim_df.isFraud)
+    finally:
+        CAP.MODES.clear(); CAP.MODES.update(saved)
+
+
+def test_extract_matrix_caches_what_a_fit_needs(ibm_file, tmp_path):
+    saved = _ibm_profile()
+    try:
+        cache = tmp_path / "f.npz"
+        IB.extract_matrix(ibm_file, str(cache))
+        import numpy as np
+        z = np.load(cache)
+        assert z["X"].shape == (len(z["y"]), len(z["names"]))
+        assert len(z["ts"]) == len(z["y"]) == len(z["fmt"]) == len(z["currency"])
+    finally:
+        CAP.MODES.clear(); CAP.MODES.update(saved)
+
+
+def test_ibm_our_model_scores_every_configuration_on_a_temporal_split(tmp_path):
+    """Wiring, not quality: a synthetic cache in the shape extract_matrix writes, with
+    positives in every third of the timeline so each split has some."""
+    import numpy as np
+    rng = np.random.default_rng(0)
+    n = 3000
+    names = ["log_amount", "vel_1h", "rcv_distinct_senders_1h", "rcv_inflow_1h"]
+    y = (rng.random(n) < 0.05).astype("int8")
+    X = rng.normal(size=(n, len(names))).astype("float32")
+    X[:, 2] += 2.0 * y                          # make fan-in informative
+    cache = tmp_path / "c.npz"
+    np.savez(cache, X=X, y=y, ts=np.arange(n), names=np.array(names),
+             fmt=rng.integers(0, 3, n).astype("int8"),
+             fmt_names=np.array(["ACH", "Cheque", "Wire"]),
+             currency=rng.integers(0, 2, n).astype("int8"),
+             currency_names=np.array(["Euro", "US Dollar"]))
+    res = IB.our_model(str(cache), seeds=1)
+    assert {k[0] for k in res} == {"this project, all it can compute",
+                                   "without receiver aggregation",
+                                   "+ the file's own format and currency"}
+    agg, _ = res[("this project, all it can compute", False)]
+    assert 0.0 <= agg["f1_tuned"][0] <= 100.0 and 0.5 < agg["roc_auc"][0] <= 1.0
+
+
+def test_ibm_events_carry_the_bank_on_each_side(ibm_file):
+    """cross_network compares the issuers behind the two cards; an interbank
+    transfer is the same distinction, and without the banks the feature was a
+    constant zero on a file that names both."""
+    saved = _ibm_profile()
+    try:
+        d, scales = _loaded(ibm_file)
+        e = next(IB.to_events(d, scales))
+        assert (e.ev["sender_network"], e.ev["receiver_network"]) == ("010", "020")
+        import features as F
+        X, _, _ = RP.extract_features(IB.to_events(d, scales), total=len(d))
+        assert X[:, F.FEATURE_NAMES.index("cross_network")].min() == 1.0
+    finally:
+        CAP.MODES.clear(); CAP.MODES.update(saved)

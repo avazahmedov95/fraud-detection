@@ -29,7 +29,8 @@ from harness import C, Event                                   # noqa: F401
 #: pandas de-duplicates the file's two `Account` columns into Account / Account.1.
 COLUMNS = {"Account": "sender", "Account.1": "receiver", "Amount Paid": "amount",
            "Payment Currency": "currency", "Payment Format": "fmt",
-           "Is Laundering": "label"}
+           "Is Laundering": "label", "From Bank": "from_bank",
+           "To Bank": "to_bank"}
 
 #: Rows whose sender and receiver are the same account. 12% of the file, almost all
 #: of them `Reinvestment`. They are not transfers between two parties: counted as
@@ -82,7 +83,12 @@ def to_events(d, scales, typologies=None):
         yield Event(
             ev={"amount_uzs": float(r.amount) * scales.get(r.currency, 1.0),
                 "sender_pinfl": r.sender,
-                "receiver_pinfl": r.receiver},
+                "receiver_pinfl": r.receiver,
+                # The bank on each side. cross_network compares the issuers behind
+                # the two cards, and an interbank transfer is the same distinction;
+                # left out, the feature was a constant zero on a file naming both.
+                "sender_network": r.from_bank,
+                "receiver_network": r.to_bank},
             ts=int(r.ts.timestamp()),
             label=int(r.label),
             typology=typologies.get((r.sender, r.receiver), ""))
@@ -189,6 +195,148 @@ def report(res, hits, stats):
     print("  validation set; a longer-window run is a separate experiment.")
 
 
+def extract_matrix(path, cache, limit=None):
+    """Run the deployed extractor over the file once and cache what a model needs.
+
+    The rules replay over these 4.49M rows took 5.5 hours, because the extractor
+    re-scans each sender's day of history per event and this file holds senders
+    with 26,365 transactions in one day (README.md 4). Every fit reads the cache, so
+    a fit that fails costs minutes rather than the extraction again.
+
+    Saved beside the features: the label, the timestamp for a temporal split, and
+    the file's own payment format and currency - columns this project's contract has
+    no place for, kept so a configuration WITH them can be compared, as PaySim's
+    transaction type was.
+    """
+    import numpy as np
+    d, n_all, n_self = load(path, None, limit)
+    print(f"{len(d):,} transactions ({n_self:,} self-transfers dropped), "
+          f"{int(d.label.sum()):,} laundering")
+    X, y, ts = RP.extract_features(to_events(d, _scales(d)), total=len(d))
+    idx, names = RP.available_features()
+    fmt = d.fmt.astype("category")
+    cur = d.currency.astype("category")
+    np.savez_compressed(
+        cache, X=X[:, idx], y=y, ts=ts, names=np.array(names),
+        fmt=fmt.cat.codes.values.astype("int8"),
+        fmt_names=np.array([str(c) for c in fmt.cat.categories]),
+        currency=cur.cat.codes.values.astype("int8"),
+        currency_names=np.array([str(c) for c in cur.cat.categories]))
+    print(f"cached {X.shape[0]:,} x {len(idx)} features to {cache}")
+    print(f"  kept: {', '.join(names)}")
+
+
+#: Published minority-class F1 (%) on HI-Small, on the split `our_model` uses:
+#: the earliest 60% of transactions train, the next 20% validate, the last 20% test.
+#: arXiv:2402.08593 (Graph Feature Preprocessor), Table 4, mean +/- sd over runs;
+#: for GFP the better of its two batch settings. The paper does not say how the
+#: threshold behind each F1 was chosen - see `our_model` for the rule used here.
+PUBLISHED_F1 = (
+    ("XGBoost, the file's own columns", 19.75, 0.89),
+    ("LightGBM, the file's own columns", 21.30, 0.30),
+    ("GIN (graph neural network)", 28.70, 1.13),
+    ("GIN+EU", 47.73, 7.86),
+    ("PNA (graph neural network)", 56.77, 2.41),
+    ("GFP + LightGBM (graph features)", 62.86, 0.25),
+    ("GFP + XGBoost (graph features)", 64.77, 0.47),
+)
+
+RCV = ("rcv_distinct_senders_1h", "rcv_inflow_1h")
+
+
+def _fit_score(Xtr, ytr, Xva, yva, Xte, yte, weighted, seed):
+    """One fit of train.py's recipe; test metrics at a threshold chosen on validation.
+
+    The threshold is the one that maximises F1 on the VALIDATION slice, then applied
+    unchanged to the test slice. The published table does not state its rule, so
+    F1 at 0.5 is reported beside it: the gap between the two is the size of that
+    uncertainty, not something to be hidden by picking the kinder one.
+    """
+    import numpy as np
+    import lightgbm as lgb
+    from sklearn.metrics import (average_precision_score, f1_score,
+                                 precision_recall_curve, roc_auc_score)
+    spw = ((ytr == 0).sum() / max(int(ytr.sum()), 1)) if weighted else 1.0
+    m = lgb.LGBMClassifier(n_estimators=400, learning_rate=0.05, num_leaves=31,
+                           subsample=0.8, colsample_bytree=0.8,
+                           min_child_samples=30, scale_pos_weight=spw,
+                           random_state=seed, n_jobs=-1, verbose=-1)
+    m.fit(Xtr, ytr)
+    pva = m.predict_proba(Xva)[:, 1]
+    prec, rec, thr = precision_recall_curve(yva, pva)
+    f1s = 2 * prec[:-1] * rec[:-1] / np.maximum(prec[:-1] + rec[:-1], 1e-12)
+    t = float(thr[int(np.argmax(f1s))]) if len(thr) else 0.5
+    pte = m.predict_proba(Xte)[:, 1]
+    return {"f1_tuned": 100 * f1_score(yte, pte >= t, zero_division=0),
+            "f1_05": 100 * f1_score(yte, pte >= 0.5, zero_division=0),
+            "pr_auc": average_precision_score(yte, pte),
+            "roc_auc": roc_auc_score(yte, pte)}
+
+
+def our_model(cache, seeds=3):
+    """This project's features and training recipe on IBM AML, scored on the
+    published split and metric so it sits beside published models on one axis.
+
+    Nothing is tuned to this dataset: train.py's hyperparameters, the deployed
+    extractor's features, the capability profile the data supports. What is new is
+    only the evaluation - minority-class F1 on a temporal 60/20/20 split, the
+    convention of the IBM benchmark - because a number on a different split or
+    metric could not be compared with anything.
+
+    The second configuration is the reason to run it at all: receiver-side
+    aggregation is this project's largest measured effect, PaySim could not test it
+    (no collection stage, and the sign reversed), and this dataset has one.
+    """
+    import numpy as np
+    z = np.load(cache, allow_pickle=False)
+    X, y = z["X"], z["y"].astype("int8")
+    names = [str(n) for n in z["names"]]
+    n = len(y)
+    a, b = int(n * 0.6), int(n * 0.8)      # load() sorted by time; split by count
+    fmt, fnames = z["fmt"], [str(c) for c in z["fmt_names"]]
+    own = np.column_stack([(fmt == k).astype("float32") for k in range(len(fnames))]
+                          + [z["currency"].astype("float32")])
+    keep = [i for i, c in enumerate(names) if c not in RCV]
+    configs = (("this project, all it can compute", X),
+               ("  without receiver aggregation", X[:, keep]),
+               ("  + the file's own format and currency", np.hstack([X, own])))
+    print(f"{n:,} transactions, {int(y.sum()):,} laundering; split by time "
+          f"60/20/20: train {a:,}, validate {b - a:,}, test {n - b:,} "
+          f"({int(y[b:].sum()):,} laundering in test)")
+    print(f"features: {len(names)} ({', '.join(names)})\n")
+
+    results = {}
+    print(f"  {'configuration':<40}{'recipe':>10}{'F1 %':>14}{'F1@0.5 %':>12}"
+          f"{'PR-AUC':>9}{'ROC-AUC':>9}")
+    for label, M in configs:
+        for weighted in (True, False):
+            runs = [_fit_score(M[:a], y[:a], M[a:b], y[a:b], M[b:], y[b:],
+                               weighted, seed) for seed in range(seeds)]
+            agg = {k: (float(np.mean([r[k] for r in runs])),
+                       float(np.std([r[k] for r in runs])))
+                   for k in runs[0]}
+            results[(label.strip(), weighted)] = (agg, runs)
+            recipe = "weighted" if weighted else "unweighted"
+            print(f"  {label:<40}{recipe:>10}"
+                  f"{agg['f1_tuned'][0]:>8.2f} +/-{agg['f1_tuned'][1]:>4.2f}"
+                  f"{agg['f1_05'][0]:>12.2f}{agg['pr_auc'][0]:>9.3f}"
+                  f"{agg['roc_auc'][0]:>9.3f}")
+
+    print("\n  published on the same split (minority-class F1 %, arXiv:2402.08593):")
+    for name, f1, sd in PUBLISHED_F1:
+        print(f"    {name:<38}{f1:>8.2f} +/-{sd:>5.2f}")
+
+    print("\n  receiver aggregation, paired by seed (full minus without):")
+    for weighted in (True, False):
+        full = results[("this project, all it can compute", weighted)][1]
+        less = results[("without receiver aggregation", weighted)][1]
+        for k in ("f1_tuned", "pr_auc"):
+            d = [f[k] - l[k] for f, l in zip(full, less)]
+            print(f"    {'weighted' if weighted else 'unweighted':<11}{k:<9}"
+                  f"{np.mean(d):+.3f}  (per seed: {', '.join(f'{x:+.3f}' for x in d)})")
+    return results
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--file", required=True,
@@ -203,6 +351,16 @@ def main():
                          "label. The per-format rates are printed instead.")
     ap.add_argument("--limit", type=int, default=None,
                     help="first N rows after sorting (the full file is 5.1M)")
+    ap.add_argument("--extract-only", dest="extract_only", action="store_true",
+                    help="run the deployed extractor over the whole file and cache "
+                         "the feature matrix to --cache, for the model fits")
+    ap.add_argument("--cache", default="ibm_features.npz",
+                    help="where --extract-only writes the feature matrix")
+    ap.add_argument("--our-model", dest="our_model", action="store_true",
+                    help="fit this project's recipe on the cached features and "
+                         "score it on the published 60/20/20 temporal split")
+    ap.add_argument("--seeds", type=int, default=3,
+                    help="fits per configuration, for the spread")
     args = ap.parse_args()
 
     if not os.path.exists(args.file):
@@ -213,6 +371,13 @@ def main():
     # the released files carry no account-opening date.
     RP.capability_profile("receiver_age", "myid_kinship", "device_telemetry",
                           "geo_telemetry", "session_telemetry")
+
+    if args.extract_only:
+        return extract_matrix(args.file, args.cache, args.limit)
+    if args.our_model:
+        if not os.path.exists(args.cache):
+            raise SystemExit(f"{args.cache} not found - run --extract-only first")
+        return our_model(args.cache, args.seeds)
 
     formats = ([f.strip() for f in args.formats.split(",")]
                if args.formats else None)

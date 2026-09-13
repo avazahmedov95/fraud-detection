@@ -113,7 +113,7 @@ def our_model(path, limit=None):
     foreign data" but "how does this system score on it". 14 of the 20 features
     survive - PaySim carries identifiers on both sides, so the per-sender history
     and the receiver-side aggregation both compute; what it cannot supply is
-    device, geo, session, channel, receiver age and kinship, and those
+    device, geo, session, receiver age and kinship, and those
     capabilities are switched off rather than defaulted.
 
     Trained on the SAME split as the published baseline (24 days / 7 days, a cut
@@ -127,10 +127,7 @@ def our_model(path, limit=None):
     training use of foreign data, per validation/README.md 1.
     """
     import numpy as np
-    from collections import defaultdict
-    sys.path.insert(0, _SP)
-    import features as F                       # noqa: E402
-    from rules import SenderState, ReceiverState   # noqa: E402
+    import features as F
 
     df = pd.read_csv(path)
     if limit:
@@ -138,20 +135,11 @@ def our_model(path, limit=None):
     df = df.sort_values("step", kind="stable").reset_index(drop=True)
     scale = scale_factor(df.amount)
 
-    # features.FEATURE_NAMES is fixed at IMPORT from the capability registry, so
-    # switching modes in main() cannot shrink it - the contract was already built.
-    # Rather than require the caller to get environment variables right, extract
-    # the full 24 and drop the columns whose capability is unavailable here. Those
-    # columns are computed from data PaySim does not carry, so what is dropped is
-    # exactly what would otherwise be a fabricated zero.
-    off = {f for cap in CAP.REGISTRY if CAP.MODES.get(cap.key) == "off"
-           for f in cap.features}
-    # Intersect with the contract: a capability that was ALREADY off at import
-    # (myid_kinship, by default) contributed no column to drop, and listing it
-    # as dropped would make the arithmetic in the line below not add up.
-    unavailable = off & set(F.FEATURE_NAMES)
-    names = [n for n in F.FEATURE_NAMES if n not in unavailable]
-    keep_idx = [i for i, n in enumerate(F.FEATURE_NAMES) if n not in unavailable]
+    # features.FEATURE_NAMES is fixed at IMPORT, so switching modes in main() cannot
+    # shrink it: the full contract is extracted, and the columns whose capability is
+    # unavailable here - computed from data PaySim does not carry - are dropped.
+    keep_idx, names = RP.available_features()
+    unavailable = sorted(set(F.FEATURE_NAMES) - set(names))
 
     print(f"{len(df):,} PaySim rows, {int(df.isFraud.sum()):,} fraud "
           f"({df.isFraud.mean():.3%})")
@@ -160,20 +148,9 @@ def our_model(path, limit=None):
     print(f"  kept    : {', '.join(names)}")
     print(f"  dropped : {', '.join(sorted(unavailable))}\n")
 
-    X = np.zeros((len(df), len(F.FEATURE_NAMES)), dtype="float32")
-    y = df.isFraud.values.astype("int8")
     step = df.step.values
-    senders, receivers = defaultdict(SenderState), defaultdict(ReceiverState)
     t0 = time.time()
-    for i, ev in enumerate(to_events(df, scale)):
-        ev.pop("_label"); ts = ev.pop("_ts"); ev.pop("_type")
-        key = F.payee_key(ev)
-        sender = senders[ev["sender_pinfl"]]
-        X[i] = F.to_vector(F.extract(ev, None, sender, ts, receivers[key]))
-        F.update_state(sender, ev, ts)
-        F.update_receiver_state(receivers[key], ev, ts)
-        if i and i % 500_000 == 0:
-            print(f"  ... {i:,} rows ({time.time()-t0:.0f}s)", flush=True)
+    X, y, _ = RP.extract_features(to_events(df, scale), total=len(df))
     print(f"  extracted {len(df):,} rows in {time.time()-t0:.0f}s\n")
     X = X[:, keep_idx]
 
@@ -185,9 +162,8 @@ def our_model(path, limit=None):
             f"split and leaves nothing to score. Run without --limit.")
     # PaySim puts ALL of its fraud in TRANSFER and CASH_OUT, so the transaction
     # type carries much of the available signal - and this project's contract has
-    # no column for it. The channel one-hots are the nearest thing and PaySim has
-    # no channels, so they were dropped. Adding PaySim's own type tests whether
-    # the gap is the feature SET, rather than asserting it.
+    # no column for it. Adding PaySim's own type tests whether the gap is the
+    # feature SET, rather than asserting it.
     types = np.zeros((len(df), 5), dtype="float32")
     tnames = ["CASH_IN", "CASH_OUT", "DEBIT", "PAYMENT", "TRANSFER"]
     for j, t in enumerate(tnames):

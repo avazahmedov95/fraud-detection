@@ -289,3 +289,51 @@ def section_decision(res, hits, positive="fraud", width=70):
                   f"{positive}, {l_at:.2%} of legit ({lift:.1f}x lift).")
             print("  Reported to size the gap, NOT adopted - tuning a threshold on")
             print("  the validation set is what this exercise exists to avoid.")
+
+
+def available_features():
+    """(indices, names) of the contract columns the active capability profile can
+    supply. `features.FEATURE_NAMES` is fixed at import, so switching a capability
+    off at run time does not shrink it: the column is still computed, from data the
+    dataset does not carry, and has to be dropped here rather than fed to a model."""
+    import features as F
+    off = {f for cap in CAP.REGISTRY if CAP.MODES.get(cap.key) == "off"
+           for f in cap.features}
+    idx = [i for i, n in enumerate(F.FEATURE_NAMES) if n not in off]
+    return idx, [F.FEATURE_NAMES[i] for i in idx]
+
+
+def extract_features(events, total):
+    """This project's model inputs over translated events, computed by the deployed
+    extractor exactly as fraud_job computes them: extract, then advance both states.
+
+    Returns (X, y, ts) with one column per `features.FEATURE_NAMES`; pass
+    `available_features()` to keep only what the profile supplies.
+
+    One copy for every adapter, for the reason `replay` has one: PaySim's model mode
+    carried its own loop, and when `to_events` changed shape that loop was not
+    changed with it - it still unpacked dict events and would have failed on its
+    first row, with no test to say so.
+    """
+    import numpy as np
+    import features as F
+    X = np.zeros((total, len(F.FEATURE_NAMES)), dtype="float32")
+    y = np.zeros(total, dtype="int8")
+    ts = np.zeros(total, dtype="int64")
+    senders, receivers = defaultdict(SenderState), defaultdict(ReceiverState)
+    started, n = time.time(), 0
+    for n, e in enumerate(events, 1):
+        if n == 1:
+            _require_a_payee_key(e.ev)
+        key = F.payee_key(e.ev)
+        sender = senders[e.ev["sender_pinfl"]]
+        X[n - 1] = F.to_vector(F.extract(e.ev, e.receiver_age, sender, e.ts,
+                                         receivers[key]))
+        F.update_state(sender, e.ev, e.ts)
+        F.update_receiver_state(receivers[key], e.ev, e.ts)
+        y[n - 1], ts[n - 1] = e.label, e.ts
+        if n % PROGRESS_EVERY == 0:
+            _progress(n, total, started)
+    _progress(n, total, started, final=True)
+    return X[:n], y[:n], ts[:n]
+
