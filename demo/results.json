@@ -1,0 +1,151 @@
+{
+  "_about": "What the demo's results tab says about the public datasets. Every figure in the text is carried in `quotes` with the exact line of the document it came from, and tools/boundary_audit.py fails when a quoted line is gone - so a document that moves a figure cannot leave this page showing the old one.",
+  "datasets": [
+    {
+      "key": "paysim",
+      "status": "used",
+      "name": {"ru": "PaySim", "en": "PaySim"},
+      "what": {
+        "ru": "Искусственные мобильные переводы, собранные по образцу африканского сервиса: 6,4 млн операций. Проверяли на 500 тыс. переводов, из них 2 520 мошеннических.",
+        "en": "Synthetic mobile-money transfers modelled on an African service: 6.4M operations. Checked on 500,000 transfers, 2,520 of them fraud."
+      },
+      "how": {
+        "ru": "Наши правила — как есть, без переобучения. Копию модели переобучили на наших признаках и оценили на опубликованном разбиении: 24 дня обучения, 7 дней проверки.",
+        "en": "Our rules as deployed, no retraining. A copy of the model retrained on our features and scored on the published split: 24 days to train, 7 to test."
+      },
+      "findings": {
+        "ru": [
+          "Правило «новый получатель + крупная сумма» срабатывает на мошенничестве в 4 раза чаще, чем на честных переводах.",
+          "Правило «много отправителей на один счёт» молчит — так и должно быть: схемы сбора денег в PaySim нет.",
+          "Модель на наших признаках: 0,267 (качество ранжирования, PR-AUC). С колонкой «тип операции» из самого PaySim — 0,373 против 0,380 у опубликованной работы.",
+          "Наши пороги не переносятся: с ними поймано 0% мошенничества, с пересчитанными — 6%.",
+          "Обучение с большим весом мошенническим примерам ломается при такой редкости мошенничества: 0,032 вместо 0,267. Теперь обучение в таком случае останавливается и предупреждает."
+        ],
+        "en": [
+          "The rule \"new payee + large amount\" fires on fraud 4 times as often as on honest transfers.",
+          "The rule \"many senders into one account\" stays silent, as it should: PaySim has no collection scheme.",
+          "The model on our features: 0.267 (ranking quality, PR-AUC). With PaySim's own transaction type: 0.373, against 0.380 for the published work.",
+          "Our thresholds do not transfer: they catch 0% of the fraud, rescaled ones 6%.",
+          "Training with a heavy weight on fraud collapses at this rarity: 0.032 instead of 0.267. Training now stops and warns in that case."
+        ]
+      },
+      "verdict": {
+        "ru": "Признаки по истории отправителя работают на чужих данных. Пороги нужно настраивать под каждый банк.",
+        "en": "The sender-history features work on foreign data. Thresholds have to be set per bank."
+      },
+      "source": "validation/README.md, section 1",
+      "quotes": [
+        {"file": "validation/README.md", "text": "| `NEW_PAYEE_HIGH_AMOUNT` | 5.95% | 1.49% | **4.0x** |"},
+        {"file": "validation/README.md", "text": "| `MULE_FAN_IN` | 0.00% | 0.07% | 0.0x |"},
+        {"file": "validation/README.md", "text": "| this project, all it can compute | 14 | **0.267** |"},
+        {"file": "validation/README.md", "text": "| — plus PaySim's own transaction type | 19 | **0.373** |"},
+        {"file": "validation/README.md", "text": "| published generic baseline (§6 of `related-work.md`) | ~24 | 0.380 |"},
+        {"file": "validation/README.md", "text": "| fraud flagged | 0 / 2,520 (0.0%) | **150 / 2,520 (6.0%)** |"},
+        {"file": "validation/README.md", "text": "**0.032 weighted against 0.267 unweighted**"}
+      ]
+    },
+    {
+      "key": "ibm-aml",
+      "status": "used",
+      "name": {"ru": "IBM AML (HI-Small)", "en": "IBM AML (HI-Small)"},
+      "what": {
+        "ru": "Искусственные банковские переводы с отмыванием денег: около 5 млн операций, 0,1% отмывания, время с точностью до минуты. Самый ценный набор: в нём есть схема сбора денег на один счёт.",
+        "en": "Synthetic bank transfers with money laundering: about 5M operations, 0.1% laundering, a clock to the minute. The most valuable set: it contains the collection-into-one-account scheme."
+      },
+      "how": {
+        "ru": "Правила — на всём файле (4,49 млн операций, 5 166 случаев отмывания). Копию модели переобучили на опубликованном разбиении по времени: 60% обучение, 20% подбор порога, 20% проверка.",
+        "en": "The rules on the whole file (4.49M operations, 5,166 laundering). A copy of the model retrained on the published time split: 60% train, 20% threshold, 20% test."
+      },
+      "findings": {
+        "ru": [
+          "«Новый получатель + крупная сумма» срабатывает на отмывании в 9,3 раза чаще, «сумма необычна для отправителя» — в 6,9 раза, «много отправителей на один счёт» — в 2,8 раза.",
+          "Пороги не переносятся: система подняла бы тревогу на 39,1% отмывания, но и на 22% честных переводов — в данных есть банки и компании с тысячами переводов в день.",
+          "Модель (оценка из 100, F1): на наших признаках 17,5; с колонками «тип платежа» и «валюта» из файла — 35,7. Простые опубликованные модели — около 20–21, сильные графовые методы — 48–65.",
+          "Признаки про получателя доказаны и на уровне модели: 20 запусков, +2,5 балла, вторая независимая проверка это подтвердила."
+        ],
+        "en": [
+          "\"New payee + large amount\" fires on laundering 9.3 times as often, \"amount unusual for the sender\" 6.9 times, \"many senders into one account\" 2.8 times.",
+          "Thresholds do not transfer: the system would alert on 39.1% of the laundering, but also on 22% of honest transfers — the data holds banks and companies with thousands of transfers a day.",
+          "The model (score out of 100, F1): 17.5 on our features; 35.7 with the file's payment type and currency. Simple published models reach about 20-21, strong graph methods 48-65.",
+          "The receiver-side features are established at model level too: 20 runs, +2.5 points, confirmed by a second, independent check."
+        ]
+      },
+      "verdict": {
+        "ru": "Самое сильное подтверждение: идея «сбора денег на один счёт» работает на чужих данных и в правилах, и в модели. Графовые методы, которые видят цепочки переводов, сильнее — таких признаков у нас нет.",
+        "en": "The strongest confirmation: the collection-into-one-account idea works on foreign data, in the rules and in the model. Graph methods that see chains of transfers do better — we have no such features."
+      },
+      "source": "validation/README.md, section 4",
+      "quotes": [
+        {"file": "validation/README.md", "text": "| `NEW_PAYEE_HIGH_AMOUNT` | 17.15% | 1.84% | **9.3x** |"},
+        {"file": "validation/README.md", "text": "| `AMOUNT_DEVIATION` | 6.08% | 0.88% | **6.9x** |"},
+        {"file": "validation/README.md", "text": "| `MULE_FAN_IN` | 3.17% | 1.12% | **2.8x** |"},
+        {"file": "validation/README.md", "text": "The decision layer flags 39.1% of laundering"},
+        {"file": "validation/README.md", "text": "| this project, 14 features | 17.5 +/- 3.9 |"},
+        {"file": "validation/README.md", "text": "| - plus the file's payment format and currency | **35.7 +/- 4.1** |"},
+        {"file": "validation/README.md", "text": "file's own columns 21.3 +/- 0.3 (LightGBM)"},
+        {"file": "validation/README.md", "text": "GIN+EU 47.7 +/- 7.9"},
+        {"file": "validation/README.md", "text": "graph features 62.9 +/- 0.3 and 64.8 +/- 0.5"},
+        {"file": "validation/README.md", "text": "| 14 features - F1 points | **+2.46 [+0.52, +4.40]**"}
+      ]
+    },
+    {
+      "key": "amlsim",
+      "status": "inconclusive",
+      "name": {"ru": "AMLSim", "en": "AMLSim"},
+      "what": {
+        "ru": "Симулятор отмывания от IBM, запускали сами. Время в нём — только по дням.",
+        "en": "IBM's laundering simulator, run here. Its clock counts days only."
+      },
+      "how": {
+        "ru": "Правила как есть и сравнение модели с признаками про получателя и без них.",
+        "en": "The rules as deployed, and the model with and without the receiver-side features."
+      },
+      "findings": {
+        "ru": [
+          "По дням нельзя увидеть схему в окне одного часа: правило про сбор денег поймало 0 из 199 таких случаев.",
+          "Мошенничество размечено так, что его выдаёт сам способ разметки: результат модели менялся в 60 раз от одной настройки."
+        ],
+        "en": [
+          "Days cannot show a scheme inside a one-hour window: the collection rule caught 0 of 199 such cases.",
+          "The fraud is labelled in a way the labelling method itself gives away: the model's result swung sixty-fold with one setting."
+        ]
+      },
+      "verdict": {
+        "ru": "Для выводов не использован. Польза — в коде появились две проверки чужих данных на такие ловушки.",
+        "en": "Not used for conclusions. What it left: two screens in the code that catch such traps in foreign data."
+      },
+      "source": "validation/README.md, section 3",
+      "quotes": [
+        {"file": "validation/README.md", "text": "| fan_in | **199** | **0** | **0.0%** |"},
+        {"file": "validation/README.md", "text": "**A sixty-fold swing in PR-AUC from a bagging parameter.**"},
+        {"file": "validation/README.md", "text": "`leakage_screen()`"}
+      ]
+    },
+    {
+      "key": "rejected",
+      "status": "rejected",
+      "name": {"ru": "Отброшены после проверки", "en": "Rejected after examination"},
+      "findings": {
+        "ru": [
+          "Zenodo 20030065: признаки сжаты в безымянные числа, поэтому решение нельзя объяснить, и есть подсказка ответа. Оставили только реальную долю мошенничества в картах — 0,17–0,19%.",
+          "Mendeley ktbthg777x: координаты случайные, у клиента около 10 операций в год, «кольца отмывания» без сбора денег.",
+          "IEEE-CIS: покупки в интернет-магазинах — получателя-человека нет, проверить главное нечем.",
+          "Kaggle, кредитные карты: признаки сжаты в безымянные числа."
+        ],
+        "en": [
+          "Zenodo 20030065: features compressed into nameless numbers, so no decision can be explained, and the answer leaks. Kept: the real fraud share in card traffic, 0.17-0.19%.",
+          "Mendeley ktbthg777x: random coordinates, about 10 operations per customer a year, laundering rings with no collection.",
+          "IEEE-CIS: online-shop purchases — there is no person on the receiving side, so the key idea cannot be tested.",
+          "Kaggle credit cards: features compressed into nameless numbers."
+        ]
+      },
+      "source": "validation/README.md, sections 2 and 5, and \"Rejected: IEEE-CIS\"",
+      "quotes": [
+        {"file": "validation/README.md", "text": "~0.17–0.19% is a real figure from real card traffic"},
+        {"file": "validation/README.md", "text": "**1. The coordinates are random, and the release says so.**"},
+        {"file": "validation/README.md", "text": "## Rejected: IEEE-CIS"},
+        {"file": "validation/README.md", "text": "PCA-anonymised into V1..V28"}
+      ]
+    }
+  ]
+}

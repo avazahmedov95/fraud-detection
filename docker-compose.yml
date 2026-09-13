@@ -237,6 +237,9 @@ services:
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
       GF_INSTALL_PLUGINS: grafana-clickhouse-datasource
+      # Lets demo/ show the dashboard in a frame; without it Grafana answers
+      # X-Frame-Options: deny. Login is still required.
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
       CLICKHOUSE_USER: ${CLICKHOUSE_USER}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
     volumes:

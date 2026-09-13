@@ -76,6 +76,9 @@ CLICKHOUSE = dict(host=ENV.get("DEMO_CLICKHOUSE_HOST", "localhost"),
                   password=ENV.get("CLICKHOUSE_PASSWORD", ""),
                   database=ENV.get("CLICKHOUSE_DB", "fraud"))
 PORT = int(ENV.get("DEMO_PORT", "8090"))
+GRAFANA = "http://localhost:" + ENV.get("GRAFANA_PORT", "3000")
+DASHBOARD = os.path.join(ROOT, "infra", "grafana", "provisioning", "dashboards",
+                         "json", "fraud-overview.json")
 
 
 def _is_fraud(row):
@@ -109,6 +112,18 @@ def mask(card):
     """8600 03** **** 2655 - enough to tell cards apart on screen, not to use one."""
     c = str(card or "")
     return f"{c[:4]} {c[4:6]}** **** {c[-4:]}" if len(c) >= 12 else c
+
+
+def _dashboard_url():
+    """The provisioned overview dashboard, in kiosk mode for the page's frame. Its
+    panels are keyed on event_time and the background replay keeps the dataset's
+    own times, so the range reaches back far enough to hold them."""
+    try:
+        with open(DASHBOARD, encoding="utf-8") as fh:
+            uid = json.load(fh)["uid"]
+    except (OSError, KeyError, ValueError):
+        return ""
+    return f"{GRAFANA}/d/{uid}?orgId=1&kiosk&refresh=10s&from=now-2y&to=now"
 
 
 class Episodes:
@@ -321,6 +336,7 @@ class App:
     def __init__(self, csv_path=CSV_PATH):
         self.decisions, self.background, self.sender = Decisions(), Background(), Sender()
         self.runs, self.started = OrderedDict(), time.time()
+        self.grafana = _dashboard_url()
         self._store, self._explainer = None, None
         try:
             self.library, self.library_error = Episodes(csv_path), ""
@@ -348,7 +364,8 @@ class App:
         return {"kafka": {"connected": d.connected, "error": d.error, "last": d.last_at},
                 "background": {"on": self.background.running(), "speed": self.background.speed},
                 "counts": counts, "median_ms": ms[len(ms) // 2] if ms else None,
-                "model": d.model, "scenarios_error": self.library_error}
+                "model": d.model, "scenarios_error": self.library_error,
+                "grafana": self.grafana}
 
     def stream(self, alerts_only=False, limit=60):
         with self.decisions.lock:
@@ -394,6 +411,31 @@ class App:
                          type=rec.get("predicted_type"), why=self._why(rec))
             rows.append(r)
         return {**run, "rows": rows}
+
+    def results(self):
+        """The model's test figures as ml/train.py wrote them to metrics.json, the
+        split they were measured on, and the public datasets from results.json."""
+        own = {}
+        try:
+            with open(os.path.join(ROOT, "ml", "models", "metrics.json"),
+                      encoding="utf-8") as fh:
+                m = json.load(fh)
+            own = {"roc_auc": m["roc_auc"], "pr_auc": m["pr_auc"],
+                   "precision": m["at_0_50"]["precision"],
+                   "recall": m["at_0_50"]["recall"],
+                   "rules_precision": m["cep_only"]["precision"],
+                   "rules_recall": m["cep_only"]["recall"],
+                   "by_type": {k: v["recall"] for k, v in m["by_fraud_type"].items()},
+                   "outage": m.get("graph_outage")}
+        except (OSError, KeyError, ValueError) as exc:
+            own = {"error": str(exc)[:200]}
+        if self.library is not None:
+            rows, cut = self.library.rows, self.library.cut
+            own.update(rows=len(rows), train=cut, test=len(rows) - cut,
+                       fraud_share=sum(map(_is_fraud, rows)) / len(rows),
+                       test_fraud=sum(map(_is_fraud, rows[cut:])))
+        with open(os.path.join(HERE, "results.json"), encoding="utf-8") as fh:
+            return {"own": own, "public": json.load(fh)["datasets"]}
 
     def store(self):
         if self._store is None:
@@ -465,6 +507,8 @@ class Handler(BaseHTTPRequestHandler):
         elif path.startswith("/api/episode/"):
             run = APP.run(path.rsplit("/", 1)[1])
             self._json(run if run else {"error": "unknown run"}, 200 if run else 404)
+        elif path == "/api/results":
+            self._json(APP.results())
         elif path == "/api/cases":
             self._json(APP.cases(new_only="new=1" in query))
         else:

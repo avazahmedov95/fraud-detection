@@ -1,8 +1,10 @@
 # demo
 
 One page for showing the system at work: the transfers streaming through, a
-fraud episode replayed on demand with the decision and the reasons for it, and
-the analyst queue those decisions fill. Russian and English, switched on the page.
+fraud episode replayed on demand with the decision and the reasons for it, the
+analyst queue those decisions fill, the Grafana dashboard, and what the model
+scored on its own data and on each public dataset. Russian and English, switched
+on the page.
 
 ```powershell
 .\run.ps1 up                                  # the stack
@@ -10,7 +12,7 @@ the analyst queue those decisions fill. Russian and English, switched on the pag
 .venv311\Scripts\python.exe demo\server.py    # then open http://localhost:8090
 ```
 
-## Three views, and where each comes from
+## Five views, and where each comes from
 
 It holds no detection logic. Everything on the page is the running system's own
 output, read where the rest of the project reads it:
@@ -20,6 +22,17 @@ output, read where the rest of the project reads it:
 | Stream | every decision since the server started - amount, route, decision, risk, rules fired - with counts and the median decision time | `transactions.scored` | the background replay: `data-generator/kafka_producer.py`, unchanged, at 100-500x the dataset's own pacing, into `transactions.raw` |
 | Scenarios | one episode row by row - the sender's usual transfers, then the fraud - with what was caught, what was falsely flagged, and why | `transactions.scored`; case-manager's `Explainer` for the reasons | the episode's rows, into `transactions.raw` |
 | Analyst | the case queue in case-manager's own order, with the reasons; by default only the cases opened since the server started | `fraud.cases`, through case-manager's `CaseStore` | a verdict, through the same store (`resolved_by = demo`) |
+| Grafana | the provisioned overview dashboard, in a frame | ClickHouse, through Grafana | - |
+| Data & results | the model's test figures and split, and what each public dataset showed | `ml/models/metrics.json` as `ml/train.py` wrote it; `results.json` | - |
+
+The analyst does not release or block a payment. The system has already decided,
+and the prototype records the decision without enforcing it
+(`case-manager/README.md`), so the analyst's two buttons are a verdict - the only
+real label the system gets.
+
+The public-dataset figures are not computed here. `results.json` summarises
+`validation/README.md` and carries each figure with the line it came from; the
+audit fails when that line is gone.
 
 ## The scenarios are real episodes, not scripts
 

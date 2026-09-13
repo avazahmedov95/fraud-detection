@@ -748,6 +748,27 @@ def b_external_baseline_matches_the_docs():
     return "; ".join(problems) or None
 
 
+def b_demo_results_quote_their_sources():
+    """demo/results.json - what the demo page says about the public datasets -
+    against the documents it summarises. Each figure there is carried with the
+    exact line it came from: a document that changes the figure loses the line,
+    and this fails where the page would otherwise go on showing the old number."""
+    import json
+    path = os.path.join(ROOT, "demo", "results.json")
+    if not os.path.exists(path):
+        return "SKIP demo/results.json absent"
+    with open(path, encoding="utf-8") as fh:
+        datasets = json.load(fh)["datasets"]
+    problems = []
+    for ds in datasets:
+        if not ds.get("quotes"):
+            problems.append(f"{ds['key']} quotes nothing")
+        for q in ds.get("quotes", []):
+            if q["text"] not in _read(*q["file"].split("/")):
+                problems.append(f"{ds['key']}: {q['file']} no longer says {q['text'][:60]!r}")
+    return "; ".join(problems) or None
+
+
 CHECKS = [
     ("generator CSV -> producer message (types)", b_producer_types),
     ("producer message -> feature extractor (equivalence)", b_wire_extracts_like_typed),
@@ -773,6 +794,7 @@ CHECKS = [
     ("generated CSV -> no new constant columns", b_no_new_constant_columns),
     ("generated artefacts -> every document that quotes them", b_documents_match_the_generated_figures),
     ("paysim_adapter.BASELINE -> related-work 6", b_external_baseline_matches_the_docs),
+    ("demo/results.json -> the documents it quotes", b_demo_results_quote_their_sources),
 ]
 
 

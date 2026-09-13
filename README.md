@@ -81,7 +81,7 @@ python -m pytest sink-writer      -q     #  23
 python -m pytest validation       -q     #  29
 python -m pytest case-manager     -q     #  45
 python -m pytest ml               -q     #   5
-python -m pytest demo             -q     #   6
+python -m pytest demo             -q     #   7
 ```
 
 Not all seven in one invocation: five module names recur across packages
@@ -96,7 +96,7 @@ copies of one module drifting, `test_bins.py` after a bank that closed. They are
 regression evidence, not coverage.
 
 ```bash
-python tools/boundary_audit.py           # 22 joins between components
+python tools/boundary_audit.py           # 25 joins between components
 ```
 
 checks what the tests cannot: that what one component *produces* is what the

@@ -56,6 +56,9 @@ tr.hist td{color:var(--muted)}
 .split{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px;align-items:start}
 tr.pick{cursor:pointer}tr.pick:hover td{background:#f7f9fd}tr.sel td{background:#eaf1ff}
 .muted{color:var(--muted)}
+.st-used{background:var(--allow)}.st-inconclusive{background:var(--review)}.st-rejected{background:#98a2b3}
+.facts{margin:6px 0 10px;padding-left:20px}.facts li{margin:4px 0}
+.frame{width:100%;height:78vh;border:1px solid var(--line);border-radius:10px;background:#fff}
 @media (max-width:900px){.split{grid-template-columns:1fr}}
 </style>
 </head>
@@ -69,6 +72,8 @@ tr.pick{cursor:pointer}tr.pick:hover td{background:#f7f9fd}tr.sel td{background:
   <button data-tab="live" data-t="tab_live"></button>
   <button data-tab="scn" data-t="tab_scn"></button>
   <button data-tab="cases" data-t="tab_cases"></button>
+  <button data-tab="grafana" data-t="tab_grafana"></button>
+  <button data-tab="results" data-t="tab_results"></button>
 </nav>
 <main>
   <div id="banner" class="banner" hidden></div>
@@ -106,6 +111,18 @@ tr.pick{cursor:pointer}tr.pick:hover td{background:#f7f9fd}tr.sel td{background:
       <div class="panel" id="case-detail"></div>
     </div>
   </section>
+
+  <section id="grafana" hidden>
+    <p class="hint" data-t="grafana_hint"></p>
+    <div class="row"><a id="grafana-link" target="_blank" rel="noopener" data-t="grafana_open"></a></div>
+    <iframe id="grafana-frame" class="frame" title="Grafana"></iframe>
+  </section>
+
+  <section id="results" hidden>
+    <p class="hint" data-t="results_hint"></p>
+    <div id="own"></div>
+    <div id="public"></div>
+  </section>
 </main>
 
 <script>
@@ -113,6 +130,7 @@ const T = {
 ru: {
   title: "Обнаружение мошенничества в P2P-переводах — живое демо",
   tab_live: "Поток", tab_scn: "Сценарии", tab_cases: "Аналитик",
+  tab_grafana: "Grafana", tab_results: "Данные и результаты",
   kafka_on: "Kafka: подключено", kafka_off: "Kafka: нет связи",
   bg_on: "Фоновый поток: идёт", bg_off: "Фоновый поток: выключен", model: "Модель",
   bg_start: "Запустить фоновый поток", bg_stop: "Остановить фоновый поток",
@@ -130,12 +148,23 @@ ru: {
   caught: "Поймано мошеннических переводов: {a} из {b}",
   false_alarms: "Ложных тревог на обычных переводах: {a} из {b}",
   why: "Почему модель насторожилась", why_status: {NO_MODEL: "файл модели для объяснений не найден", MODEL_MISMATCH: "модель объяснений не совпадает с рабочей — объяснение не показано", NO_FEATURES: "решение принято без признаков модели", FAILED: "объяснение не удалось посчитать"},
-  cases_hint: "Тревоги, попавшие в очередь аналитика: самые срочные сверху. Решение аналитика — единственная настоящая метка, которую система может получить; из них считается точность.",
+  cases_hint: "Тревоги, по которым система уже приняла решение за доли секунды: «Заблокирован» или «На проверку». В настоящем банке это решение останавливало бы или откладывало перевод; прототип решение записывает, но сам платёж не трогает. Аналитик здесь не пропускает и не блокирует платёж — он отмечает, было ли это мошенничество на самом деле. Эти отметки — единственные настоящие метки в системе: по ним считается точность, и на них банк переобучал бы модель. Самые срочные — сверху.",
   confirm: "Подтвердить мошенничество", fp: "Ложная тревога",
   st_open: "Открыто дел", st_conf: "Подтверждено", st_fp: "Ложных тревог", st_prec: "Точность по разобранным",
   empty_cases: "Открытых дел нет. Проиграйте сценарий — тревоги появятся здесь через несколько секунд.",
   pick_case: "Выберите дело в списке.",
   new_only: "Только новые — открытые с начала показа",
+  grafana_hint: "Панель мониторинга Grafana из этого же стека: те же решения, собранные в хранилище, — число переводов и тревог, типы, распределение риска, регионы, последние тревоги с причинами. Если в рамке появится вход: логин admin, пароль из файла .env.",
+  grafana_open: "Открыть Grafana в отдельной вкладке",
+  results_hint: "Рабочая модель обучена только на наших искусственных данных. Публичные наборы использовались для проверки: правила запускали как есть, а копию модели переобучали на каждом наборе и сравнивали с опубликованными результатами.",
+  own_title: "Наши данные — генератор переводов под Узбекистан",
+  own_split: "{rows} переводов, мошенничества {share}. Обучение — первые {train} по времени, проверка — последние {test}, среди них {tf} мошеннических; эту часть модель не видела.",
+  m_prec: "Точность: доля настоящего мошенничества среди тревог", m_rec: "Полнота: доля пойманного мошенничества",
+  m_prauc: "Качество ранжирования (PR-AUC, 0–1)", m_rocauc: "ROC-AUC (0–1)", m_rules: "Только правила: точность / полнота",
+  by_type: "Поймано по типам", outage: "Если база связей (Neo4j) недоступна, модель ловит {rec} мошенничества, качество ранжирования {pr}.",
+  own_caveat: "Искусственные данные почти идеально разделимы, поэтому эти цифры — ориентир для проекта, а не ожидаемая точность в настоящем банке.",
+  st_used: "использован", st_inconclusive: "не смог ответить", st_rejected: "отброшены",
+  what: "Что это", how: "Что проверяли", verdict: "Вывод", source: "Подробно",
   no_kafka: "Нет связи с Kafka. Запустите стек (.\\run.ps1 up) и задачу (.\\run.ps1 submit-job), страница подключится сама.",
   no_decisions: "Переводы отправлены, но решений нет. Проверьте, что задача Flink запущена: http://localhost:8081",
   no_store: "Очередь недоступна: ",
@@ -167,6 +196,7 @@ ru: {
 en: {
   title: "P2P transfer fraud detection — live demo",
   tab_live: "Stream", tab_scn: "Scenarios", tab_cases: "Analyst",
+  tab_grafana: "Grafana", tab_results: "Data & results",
   kafka_on: "Kafka: connected", kafka_off: "Kafka: unreachable",
   bg_on: "Background stream: on", bg_off: "Background stream: off", model: "Model",
   bg_start: "Start background stream", bg_stop: "Stop background stream",
@@ -184,12 +214,23 @@ en: {
   caught: "Fraudulent transfers caught: {a} of {b}",
   false_alarms: "False alarms on ordinary transfers: {a} of {b}",
   why: "Why the model was suspicious", why_status: {NO_MODEL: "no model file for explanations", MODEL_MISMATCH: "the explanation model disagrees with the scorer — not shown", NO_FEATURES: "decided without model features", FAILED: "the explanation could not be computed"},
-  cases_hint: "Alerts in the analyst's queue, most urgent first. The analyst's verdict is the only real label this system can ever get; precision is computed from those.",
+  cases_hint: "Alerts the system has already decided in a fraction of a second: Blocked or Review. In a real bank that decision would stop or hold the transfer; the prototype records it and does not touch the payment. The analyst does not release or block anything here — they mark whether it really was fraud. Those marks are the only real labels the system gets: precision is computed from them, and a bank would retrain the model on them. Most urgent first.",
   confirm: "Confirm fraud", fp: "False alarm",
   st_open: "Open cases", st_conf: "Confirmed", st_fp: "False alarms", st_prec: "Precision on resolved",
   empty_cases: "No open cases. Replay a scenario — its alerts appear here within seconds.",
   pick_case: "Pick a case from the list.",
   new_only: "Only new — opened since this demo started",
+  grafana_hint: "The Grafana monitoring dashboard from the same stack: the same decisions as stored in the warehouse — transfer and alert counts, types, the risk distribution, regions, the latest alerts with their reasons. If a login appears in the frame: user admin, password from the .env file.",
+  grafana_open: "Open Grafana in its own tab",
+  results_hint: "The deployed model is trained on our synthetic data only. The public datasets were used to check it: the rules ran as deployed, and a copy of the model was retrained on each set and compared with published results.",
+  own_title: "Our data — the transfer generator calibrated to Uzbekistan",
+  own_split: "{rows} transfers, {share} of them fraud. Trained on the first {train} in time, tested on the last {test}, {tf} of them fraud; the model never saw that part.",
+  m_prec: "Precision: share of alerts that are real fraud", m_rec: "Recall: share of fraud caught",
+  m_prauc: "Ranking quality (PR-AUC, 0-1)", m_rocauc: "ROC-AUC (0-1)", m_rules: "Rules alone: precision / recall",
+  by_type: "Caught by type", outage: "With the relationship graph (Neo4j) down, the model catches {rec} of the fraud, ranking quality {pr}.",
+  own_caveat: "Synthetic data is close to perfectly separable, so these are the project's design targets, not the accuracy to expect in a real bank.",
+  st_used: "used", st_inconclusive: "could not answer", st_rejected: "rejected",
+  what: "What it is", how: "What was checked", verdict: "Verdict", source: "In full",
   no_kafka: "Kafka is unreachable. Start the stack (.\\run.ps1 up) and the job (.\\run.ps1 submit-job); the page reconnects by itself.",
   no_decisions: "The transfers were sent but no decision came back. Check that the Flink job is running: http://localhost:8081",
   no_store: "Queue unavailable: ",
@@ -352,9 +393,44 @@ function renderCase() {
     `<button class="ghost" data-res="FALSE_POSITIVE">${t("fp")}</button></div>`;
 }
 
+const fmtInt = n => Number(n).toLocaleString(lang === "ru" ? "ru-RU" : "en-GB");
+const dec = (v, d) => v == null ? "—" : Number(v).toFixed(d).replace(".", lang === "ru" ? "," : ".");
+const pct = v => v == null ? "—" : dec(v * 100, 1) + "%";
+
+function showGrafana() {
+  const url = status && status.grafana;
+  $("#grafana-link").href = url || "#";
+  if (url && !$("#grafana-frame").getAttribute("src")) $("#grafana-frame").src = url;
+}
+
+let results = null;
+async function refreshResults() {
+  if (!results) results = await api("/api/results");
+  const o = results.own || {}, L = lang;
+  let h = `<div class="panel"><h2>${t("own_title")}</h2>`;
+  if (o.error) h += `<div class="banner">${esc(o.error)}</div>`;
+  if (o.rows) h += `<p>${t("own_split").replace("{rows}", fmtInt(o.rows)).replace("{share}", pct(o.fraud_share))
+    .replace("{train}", fmtInt(o.train)).replace("{test}", fmtInt(o.test)).replace("{tf}", fmtInt(o.test_fraud))}</p>`;
+  h += `<div class="tiles">` + [["m_prec", pct(o.precision)], ["m_rec", pct(o.recall)], ["m_prauc", dec(o.pr_auc, 3)],
+    ["m_rocauc", dec(o.roc_auc, 3)], ["m_rules", pct(o.rules_precision) + " / " + pct(o.rules_recall)]]
+    .map(([k, v]) => `<div class="tile"><span>${t(k)}</span><b>${esc(v)}</b></div>`).join("") + `</div>`;
+  if (o.by_type) h += `<p>${t("by_type")}: ` + Object.entries(o.by_type).map(([k, v]) => `${esc(kindName(k))} ${pct(v)}`).join(" · ") + `</p>`;
+  if (o.outage) h += `<p>${t("outage").replace("{rec}", pct(o.outage.at_0_50.recall)).replace("{pr}", dec(o.outage.pr_auc, 3))}</p>`;
+  $("#own").innerHTML = h + `<p class="muted">${t("own_caveat")}</p></div>`;
+  $("#public").innerHTML = (results.public || []).map(d => `<div class="panel"><h2>${esc(d.name[L])} ` +
+    `<span class="badge st-${esc(d.status)}">${t("st_" + d.status)}</span></h2>` +
+    (d.what ? `<p><b>${t("what")}:</b> ${esc(d.what[L])}</p>` : "") +
+    (d.how ? `<p><b>${t("how")}:</b> ${esc(d.how[L])}</p>` : "") +
+    `<ul class="facts">` + d.findings[L].map(f => `<li>${esc(f)}</li>`).join("") + `</ul>` +
+    (d.verdict ? `<p><b>${t("verdict")}:</b> ${esc(d.verdict[L])}</p>` : "") +
+    `<div class="muted">${t("source")}: ${esc(d.source)}</div></div>`).join("");
+}
+
 function refreshTab() {
   if (tab === "live") refreshLive().catch(() => {});
   if (tab === "cases") refreshCases().catch(() => {});
+  if (tab === "grafana") showGrafana();
+  if (tab === "results") refreshResults().catch(() => {});
 }
 
 document.addEventListener("click", async e => {

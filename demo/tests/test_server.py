@@ -97,3 +97,18 @@ def test_case_manager_phrases_split_back_into_feature_value_weight():
 
 def test_a_masked_card_shows_the_bin_head_and_the_last_four():
     assert S.mask("8600031234562655") == "8600 03** **** 2655"
+
+
+def test_the_results_file_says_everything_in_both_languages():
+    import json
+    import os
+    with open(os.path.join(os.path.dirname(S.__file__), "results.json"), encoding="utf-8") as fh:
+        datasets = json.load(fh)["datasets"]
+    for ds in datasets:
+        assert ds["status"] in ("used", "inconclusive", "rejected"), ds["key"]
+        assert ds["quotes"], ds["key"]
+        fields = ("name", "findings") + (() if ds["status"] == "rejected"
+                                         else ("what", "how", "verdict"))
+        for field in fields:
+            assert set(ds[field]) == {"ru", "en"}, (ds["key"], field)
+        assert len(ds["findings"]["ru"]) == len(ds["findings"]["en"]), ds["key"]

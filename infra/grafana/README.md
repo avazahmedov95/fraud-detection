@@ -29,3 +29,9 @@ regardless of when it was generated — narrow it once live.
 > versions. If a provisioned panel shows a datasource/query error, re-pick the
 > ClickHouse datasource on the panel (the SQL itself is correct); see the note in
 > `datasources/clickhouse.yml`.
+
+## Embedded in the demo
+
+`demo/` shows this dashboard in a frame, in kiosk mode, which is why
+`GF_SECURITY_ALLOW_EMBEDDING` is set in docker-compose.yml: without it Grafana
+refuses to be framed. It changes nothing else - the frame asks for the same login.
