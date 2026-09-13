@@ -244,6 +244,20 @@ PUBLISHED_F1 = (
 RCV = ("rcv_distinct_senders_1h", "rcv_inflow_1h")
 
 
+def _ci95(xs):
+    """Half-width of the t-based 95% interval for a mean: the convention
+    ml/experiments/ablate_seeds.py uses for paired ablation deltas. NaN below two
+    observations, where no interval exists."""
+    import math
+    from scipy import stats
+    n = len(xs)
+    if n < 2:
+        return float("nan")
+    m = sum(xs) / n
+    sd = math.sqrt(sum((x - m) ** 2 for x in xs) / (n - 1))
+    return float(stats.t.ppf(0.975, n - 1) * sd / math.sqrt(n))
+
+
 def _fit_score(Xtr, ytr, Xva, yva, Xte, yte, weighted, seed):
     """One fit of train.py's recipe; test metrics at a threshold chosen on validation.
 
@@ -287,7 +301,11 @@ def our_model(cache, seeds=3):
     aggregation is this project's largest measured effect, PaySim could not test it
     (no collection stage, and the sign reversed), and this dataset has one.
     """
+    import warnings
     import numpy as np
+    # sklearn warns once per fit that LightGBM was fitted without feature names;
+    # sixty identical warnings bury the table they interrupt.
+    warnings.filterwarnings("ignore", message="X does not have valid feature names")
     z = np.load(cache, allow_pickle=False)
     X, y = z["X"], z["y"].astype("int8")
     names = [str(n) for n in z["names"]]
@@ -332,8 +350,11 @@ def our_model(cache, seeds=3):
         less = results[("without receiver aggregation", weighted)][1]
         for k in ("f1_tuned", "pr_auc"):
             d = [f[k] - l[k] for f, l in zip(full, less)]
+            h = _ci95(d)
+            verdict = ("" if h != h else "  - excludes zero" if abs(np.mean(d)) > h
+                       else "  - includes zero")
             print(f"    {'weighted' if weighted else 'unweighted':<11}{k:<9}"
-                  f"{np.mean(d):+.3f}  (per seed: {', '.join(f'{x:+.3f}' for x in d)})")
+                  f"{np.mean(d):+.3f} +/- {h:.3f} (95% CI, n={len(d)}){verdict}")
     return results
 
 

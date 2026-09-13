@@ -134,11 +134,16 @@ The rules replay above asks whether the rules fire on foreign data. This asks th
 blunter question — *how does this system actually score on it* — and the answer
 is worth having in full, including the part that goes against the project.
 
-14 of the 20 features compute here: PaySim carries identifiers on both sides, so
-per-sender history and receiver-side aggregation both work. What it cannot supply
-is device, geo, session, receiver age and kinship, and those capabilities
-are switched off rather than defaulted. Trained on the published baseline's own
-split (24 days / 7 days, a cut at step 576).
+14 of the 20 features are computed here, and 13 of them carry information.
+PaySim carries identifiers on both sides, so per-sender history and receiver-side
+aggregation both work; but it names no bank on either side, so `cross_network` -
+which compares the issuers behind the two cards - is a constant zero. It belongs to
+the core contract and cannot be switched off the way a capability can. A tree never
+splits on a constant, so the figures below do not move, but the count is 13, and
+the same gap was found on IBM AML before its extraction ran (section 4). What
+PaySim cannot supply at all is device, geo, session, receiver age and kinship, and
+those capabilities are switched off rather than defaulted. Trained on the published
+baseline's own split (24 days / 7 days, a cut at step 576).
 
 | configuration | feat | PR-AUC | ROC-AUC | rec@2% | lift |
 |---|---|---|---|---|---|
@@ -208,6 +213,11 @@ here with **no external validation whatsoever**, because the only foreign datase
 run so far cannot express the pattern. Saying "the rule has nothing to detect" is
 true and is also the most convenient possible outcome, which is a reason to
 distrust it.
+
+> **Since then (section 4).** IBM AML has a collection stage, and it gives
+> rule-level evidence - `MULE_FAN_IN` separates the classes 2.8:1 - and a
+> model-level ablation that points the right way but cannot be told from zero at
+> ten seeds: +2.1 F1 points, 95% CI [-1.5, +5.6].
 
 **IBM AMLSim** (open source, agent-based, run locally) generates **fan-in** as an
 explicit typology — "multiple accounts send substantial funds to a single main
@@ -772,6 +782,76 @@ python ibm_aml_adapter.py --file HI-Small_Trans.csv
 
 Progress is printed to stderr, so a redirected report stays clean and a five-hour
 run can be told apart from a hung one.
+
+### Result (`--our-model`): this project's model on the published split
+
+The rule replay above says whether the rules fire on this data. This says how the
+model scores - fitted with `train.py`'s hyperparameters on the features the
+deployed extractor computes, and scored the way the IBM benchmark scores: the
+earliest 60% of transactions train, the next 20% validate, the last 20% test
+(897,427 rows, 1,653 laundering), minority-class F1. Ten seeds per
+configuration; the +/- is the spread across them.
+
+Fourteen features compute here, all informative: device, geo, session, receiver
+age and kinship are off as for the rule replay, and `cross_network` reads the bank
+on each side - it was a constant zero until the smoke run before this extraction
+caught it (98% of transfers are interbank).
+
+| configuration | F1 %, threshold from validation | F1 % at 0.5 | PR-AUC | ROC-AUC |
+|---|---|---|---|---|
+| this project, 14 features | 17.5 +/- 3.9 | 6.5 | 0.065 | 0.927 |
+| - without receiver aggregation | 15.4 +/- 3.5 | 4.7 | 0.057 | 0.917 |
+| - plus the file's payment format and currency | **35.7 +/- 4.1** | 18.7 | 0.200 | 0.931 |
+| *any of the three, with `train.py`'s class weighting* | *1.5 - 2.2* | *1.5 - 2.1* | *0.009 at most* | |
+
+Published on the same split (arXiv:2402.08593, Table 4): gradient boosting on the
+file's own columns 21.3 +/- 0.3 (LightGBM) and 19.8 +/- 0.9 (XGBoost), GIN
+28.7 +/- 1.1, GIN+EU 47.7 +/- 7.9, PNA 56.8 +/- 2.4, and gradient boosting with
+graph features 62.9 +/- 0.3 and 64.8 +/- 0.5.
+
+**1. With the file's own columns, this feature set sits between the tabular
+baselines and the graph methods.** 35.7 against about 20 for gradient boosting on
+the raw columns and 28.7 for GIN; well short of the 57-65 reached by methods that
+see cycles and multi-hop scatter-gather, which nothing in this contract describes.
+The fourteen features alone reach 17.5 - below the raw-column baselines, which
+have the payment format this contract has no column for, and which carries most
+of the signal here: ACH holds 87% of the laundering.
+
+**2. The comparison hinges on a threshold the paper does not state.** At a
+threshold chosen on validation - the rule used here - 35.7 is clearly above the
+tabular baselines; at a fixed 0.5 the same model scores 18.7, slightly below them.
+The paper does not say which rule its F1 used, so the honest reading lies between
+"clearly better" and "slightly worse", and this section does not pick the kinder
+one.
+
+**3. Receiver aggregation points the right way and cannot be told from zero.**
+Paired by seed, removing the two receiver-side features costs 2.1 F1 points, 95%
+CI [-1.5, +5.6], and 0.009 PR-AUC, CI [-0.006, +0.023]; seven seeds of ten go the
+way the design predicts. On PaySim, which has no collection stage, the same
+removal *improved* PR-AUC by 0.049, so the sign has turned as predicted - but at
+this spread ten seeds do not establish it. The rule-level evidence above stands on
+its own; the model-level effect is not measured to the standard this project
+applies to its own data.
+
+**4. The training recipe does not survive a 0.1% base rate - now on two
+datasets.** `scale_pos_weight` from the class ratio is about 870 here, and every
+weighted fit collapses to an F1 of 1.5 - 2.2%. PaySim showed the same, less
+severely. It is a deployment caveat, not a feature result.
+
+**5. The spread is wide, and it misled once already.** +/-4 F1 points across
+seeds, against the published +/-0.3 for LightGBM: F1 at a tuned threshold on 1,653
+positives moves with every tree the column sampling changes. The first attempt,
+at three seeds, put the fourteen features at 21.3 - level with the published
+baseline. Ten put them at 17.5.
+
+The extraction took 1 h 47 min over 4,487,133 rows - against 5.5 hours for the
+rule replay over the same rows, a difference not diagnosed further - and is
+cached, so every fit reads it rather than repeating it:
+
+```bash
+python ibm_aml_adapter.py --file HI-Small_Trans.csv --extract-only --cache ibm_features.npz
+python ibm_aml_adapter.py --file HI-Small_Trans.csv --our-model --cache ibm_features.npz --seeds 10
+```
 
 ---
 
