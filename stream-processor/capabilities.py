@@ -122,6 +122,21 @@ REGISTRY = (
                   "back to the card and says so once. The harnesses that read "
                   "the generated CSV can run it.",
     ),
+    Capability(
+        key="money_chains",
+        requires="the receiver-keyed store holding a day of inbound transfers, "
+                 "read for the sender as well as for the payee",
+        modes=("off", "on"),            # off until ml/experiments/chains.py passes
+        features=("rcv_distinct_senders_24h", "sender_inflow_24h",
+                  "sender_distinct_payers_24h"),
+        rules=(),
+        rationale="A mule collects over hours and pays on what came in; the "
+                  "one-hour receiver window sees a slice of the collection and "
+                  "nothing of the payout. Reading the store a day back, and for "
+                  "the sender too, follows the money one hop further. Last in "
+                  "the registry, so switching it on appends to the vector "
+                  "instead of shifting every trained model's columns.",
+    ),
 )
 
 BY_KEY = {c.key: c for c in REGISTRY}

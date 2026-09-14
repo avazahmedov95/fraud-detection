@@ -80,6 +80,7 @@ MIN_TRAVEL_DISTANCE_KM = 100.0
 # Above the fan-OUT threshold: receiving from several people in an hour is
 # ordinary, paying out to several unrelated new payees is not.
 RECEIVER_WINDOW_S = 3600
+CHAIN_WINDOW_S = 86400      # how far back money_chains reads the same store
 MULE_FAN_IN_MIN_SENDERS = 6
 
 # "relative" replaces the constant with a quantile of the population's own live

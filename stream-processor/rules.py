@@ -17,6 +17,13 @@ class ReceiverState:
     """Inbound history for ONE receiver, keyed by payee: the stream is partitioned
     by sender, so this lives in a shared Redis store, not Flink keyed state."""
     inbound: deque = field(default_factory=deque)     # (ts, sender_pinfl, amount)
+    # Running totals over `inbound`, kept by features.update_receiver_state, so a
+    # day-long read costs the stale head and not the whole day: an IBM AML hub
+    # receives thousands of transfers a day. `n` says whether they are current - a
+    # state built without update_receiver_state (a store read) is scanned instead.
+    senders: Counter = field(default_factory=Counter)
+    total: float = 0.0
+    n: int = 0
 
 
 #: Below this a "receiver with many senders" is not a claim anyone would make.
@@ -124,10 +131,12 @@ def _thresholds():
 
 def evaluate(event: dict, receiver_age_days, state: SenderState, now: float,
              receiver_state: "ReceiverState | None" = None,
-             population: "PopulationBaseline | None" = None) -> dict:
+             population: "PopulationBaseline | None" = None,
+             sender_inbound: "ReceiverState | None" = None) -> dict:
     """Score one event from the shared features. Mutates state (after extraction).
-    `receiver_state` is optional: an unreachable shared store fails open here."""
-    f = F.extract(event, receiver_age_days, state, now, receiver_state)
+    `receiver_state` is optional: an unreachable shared store fails open here.
+    `sender_inbound` is the sender's own inbound window, read by money_chains."""
+    f = F.extract(event, receiver_age_days, state, now, receiver_state, sender_inbound)
 
     hits = []
     score = 0.0

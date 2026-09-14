@@ -328,7 +328,7 @@ def extract_features(events, total):
         key = F.payee_key(e.ev)
         sender = senders[e.ev["sender_pinfl"]]
         X[n - 1] = F.to_vector(F.extract(e.ev, e.receiver_age, sender, e.ts,
-                                         receivers[key]))
+                                         receivers[key], receivers[F.payer_key(e.ev)]))
         F.update_state(sender, e.ev, e.ts)
         F.update_receiver_state(receivers[key], e.ev, e.ts)
         y[n - 1], ts[n - 1] = e.label, e.ts

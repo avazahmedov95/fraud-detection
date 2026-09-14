@@ -27,6 +27,7 @@ experiments/      harnesses - each produces a NUMBER, not an artefact the
   recipe.py       row bagging and averaged fits, on this data and IBM AML
   class_weight.py which class weight at a realistic base rate (IBM AML)
   realism.py      the deployed and a retrained model on the realistic profile
+  chains.py       money_chains - the money followed a hop further - and its gates
 
 models/           artifacts: model.joblib, model.onnx, thresholds.json, feature_names.json,
                   metrics.json, shap_summary.png, shap_importance.png
@@ -126,6 +127,32 @@ money past one hop would help and this project has none yet. With Neo4j down for
 the whole slice, alerts go from 160 to 156 and recall from 0.505 to 0.376, while
 false alarms rise from 58 to 80 - a larger cost than the baseline profile's +4
 below, because a payee's age tells more when fraud is this rare.
+
+### Following the money a hop further (`money_chains`: off until both gates pass)
+
+Three features read the receiver-keyed store a day back instead of an hour, and
+read it for the sender as well as for the payee (`stream-processor/capabilities.py`,
+`experiments/chains.py`): how many people paid this payee in a day, how much the
+sender itself received in a day, and from how many people. A mule collects over
+hours and pays on what came in; the hour window saw a slice of the first and
+nothing of the second.
+
+On the realistic profile, five seeds, decided on the validation rows by a rule
+fixed before the run - the owner's: adopt only if it does not get worse:
+validation PR-AUC 0.515 -> 0.561, paired +0.046 [+0.016, +0.076]; test 0.424 ->
+0.494; the committee 0.488 -> 0.544 on test, catching 54.5% of the fraud instead
+of 45.0% at the same precision (66%) - MULE 35% -> 52%, APP 35% -> 45%. The
+caveat is the generator's: its mules are built to collect and then pay on, so
+part of the gain is the features finding what the generator put there. That is
+why IBM AML, which this project did not write, is the second gate.
+
+Reading a day rather than an hour is cheap offline only with running totals on
+the receiver state (`rules.ReceiverState`): an IBM AML hub receives thousands of
+transfers a day, and a scan per event would have taken days. The totals were
+checked against the scan on the full realistic replay - identical, to the last
+value. Live, the job reads the sender's window only when the capability is on -
+one more store read per transfer - and the store then keeps a day, which a hub
+would make expensive; the realistic profile has no such hub.
 
 **Since 2026-09-13 the recipe withholds the payee's age on a tenth of the
 training rows**, as the live job sees every event while Neo4j is down. Until then
