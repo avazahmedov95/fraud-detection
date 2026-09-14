@@ -126,7 +126,7 @@ REGISTRY = (
         key="money_chains",
         requires="the receiver-keyed store holding a day of inbound transfers, "
                  "read for the sender as well as for the payee",
-        modes=("off", "on"),            # off until ml/experiments/chains.py passes
+        modes=("off", "on"),            # off: did not pass IBM AML's gate (ml/README)
         features=("rcv_distinct_senders_24h", "sender_inflow_24h",
                   "sender_distinct_payers_24h"),
         rules=(),

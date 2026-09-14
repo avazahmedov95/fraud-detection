@@ -128,7 +128,7 @@ the whole slice, alerts go from 160 to 156 and recall from 0.505 to 0.376, while
 false alarms rise from 58 to 80 - a larger cost than the baseline profile's +4
 below, because a payee's age tells more when fraud is this rare.
 
-### Following the money a hop further (`money_chains`: off until both gates pass)
+### Following the money a hop further (`money_chains`: off - the second gate did not pass)
 
 Three features read the receiver-keyed store a day back instead of an hour, and
 read it for the sender as well as for the payee (`stream-processor/capabilities.py`,
@@ -145,6 +145,16 @@ of 45.0% at the same precision (66%) - MULE 35% -> 52%, APP 35% -> 45%. The
 caveat is the generator's: its mules are built to collect and then pay on, so
 part of the gain is the features finding what the generator put there. That is
 why IBM AML, which this project did not write, is the second gate.
+
+On IBM AML, by the rule in `chains.py --ibm-cache` fixed before the run - "not
+worse" on the validation rows of the published 60/20/20 split, five seeds,
+unweighted: validation PR-AUC 0.0413 -> 0.0408, paired -0.0005 [-0.0106,
++0.0097]. Below zero on the mean, so **not adopted**. The test rows, which decide
+nothing, went the other way: 0.0698 -> 0.0811, paired +0.0112 [+0.0021, +0.0203];
+the committee 0.185 -> 0.195 on test, 0.100 -> 0.096 on validation. On the rows
+that decide it is a tie, and this gate's rule has no margin for one. The
+capability stays in the tree, off, for a rerun when the generator or the IBM
+extraction changes; re-extracting IBM AML with it took 157 minutes.
 
 Reading a day rather than an hour is cheap offline only with running totals on
 the receiver state (`rules.ReceiverState`): an IBM AML hub receives thousands of

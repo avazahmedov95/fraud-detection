@@ -23,6 +23,7 @@ from pyflink.datastream.connectors.kafka import (
     DeliveryGuarantee, KafkaOffsetResetStrategy,
 )
 
+import capabilities as CAP
 import config as C
 from rules import SenderState, evaluate
 import features as F
@@ -145,9 +146,13 @@ class FraudDetector(KeyedProcessFunction):
         # wall-clock stamps below measure the pipeline and never enter a feature.
         event_epoch = _event_epoch(event)
         receiver_state = self._receivers.load(F.payee_key(event), event_epoch)
+        # money_chains: what reached the SENDER before they paid it on - one more
+        # read of the same store, under the key they were paid to.
+        sender_inbound = (self._receivers.load(F.payer_key(event), event_epoch)
+                          if CAP.enabled("money_chains") else None)
 
         result = evaluate(event, receiver_age, state, event_epoch, receiver_state,
-                          population=self._population)
+                          population=self._population, sender_inbound=sender_inbound)
         self._state.update(state)
         self._receivers.record(event, event_epoch)
 

@@ -5,6 +5,7 @@ Fails open."""
 
 import logging
 
+import capabilities as CAP
 import config as C
 import features as F
 from rules import ReceiverState, quantile_threshold
@@ -15,7 +16,11 @@ log = logging.getLogger("receiver_store")
 class ReceiverStore:
     def __init__(self, host, port, window_s=None):
         self._host, self._port = host, port
-        self._window_s = window_s or C.RECEIVER_WINDOW_S
+        # A day when money_chains reads that far back; the hour MULE_FAN_IN needs
+        # otherwise. A day is also what a hub costs: one load returns every
+        # member in the window.
+        self._window_s = window_s or (C.CHAIN_WINDOW_S if CAP.enabled("money_chains")
+                                      else C.RECEIVER_WINDOW_S)
         self._redis = None
 
     def open(self):
