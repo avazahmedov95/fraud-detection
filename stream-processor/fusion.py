@@ -37,7 +37,10 @@ def cutoffs(cep_only: bool):
     At full capability both branches return the constants unchanged, so the
     validated operating point does not move.
     """
-    if not cep_only or not C.SCALE_THRESHOLDS_BY_CAPABILITY:
+    if not cep_only:
+        # The model's own cutoffs, shipped with it (config._model_thresholds).
+        return C.MODEL_REVIEW_THRESHOLD, C.MODEL_BLOCK_THRESHOLD
+    if not C.SCALE_THRESHOLDS_BY_CAPABILITY:
         return C.FINAL_REVIEW_THRESHOLD, C.FINAL_BLOCK_THRESHOLD
     key = tuple(sorted(CAP.MODES.items()))
     if key not in _CUTOFF_CACHE:

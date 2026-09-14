@@ -319,7 +319,7 @@ Ordered by what blocks what.
    **Relational fraud detection cannot be validated end-to-end on public real
    data, because the account identifiers that make it relational are exactly
    what cannot be published.** 14 of 20 features here are relational; removing
-   them costs 0.937 → 0.761 PR-AUC and 0.928 → 0.563 precision. Every public
+   them costs 0.937 → 0.761 PR-AUC and 0.928 → 0.563 precision on the baseline profile. Every public
    real dataset examined is identifier-free.
 
    The response is to split the question:

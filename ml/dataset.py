@@ -20,14 +20,16 @@ import rules as R             # noqa: E402
 FEATURE_NAMES = F.FEATURE_NAMES
 
 
-def build_matrix(csv_path: str, age_unknown=None) -> pd.DataFrame:
+def build_matrix(csv_path: str, age_unknown=None, nrows=None) -> pd.DataFrame:
     """`age_unknown`, if given, is called with the row count and returns a boolean
     array over the rows in time order. A True row is replayed with no payee age,
     as the live job replays every event while Neo4j cannot be read - withheld
     before the rules run, not blanked after, so FRESH_RECEIVER cannot fire and
     cep_score agrees with the missing age as it does live.
     """
-    df = pd.read_csv(csv_path).sort_values("event_time").reset_index(drop=True)
+    # nrows: the first rows only - the file is written in time order - for a caller
+    # that needs valid feature vectors rather than the whole replay.
+    df = pd.read_csv(csv_path, nrows=nrows).sort_values("event_time").reset_index(drop=True)
     unknown = None if age_unknown is None else age_unknown(len(df))
     states = defaultdict(R.SenderState)
     # Keyed by payee, mirroring the shared store the live job reads.

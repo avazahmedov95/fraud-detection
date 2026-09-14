@@ -623,14 +623,15 @@ _TRACKED_FIGURES = [
     # --- ml/README.md: the metrics table and the calibration block -----------
     ("ml/README.md", r"^\| ROC-AUC\s+\|\s+([\d.]+)", ("metrics", "roc_auc"), _f3),
     ("ml/README.md", r"^\| PR-AUC\s+\|\s+([\d.]+)", ("metrics", "pr_auc"), _f3),
-    ("ml/README.md", r"^\| precision @0\.50\s+\|\s+([\d.]+)", ("metrics", "at_0_50", "precision"), _f3),
-    ("ml/README.md", r"^\| precision @0\.50\s+\|\s+[\d.]+\s+\|\s+([\d.]+)", ("metrics", "cep_only", "precision"), _f3),
-    ("ml/README.md", r"^\| recall @0\.50\s+\|\s+([\d.]+)", ("metrics", "at_0_50", "recall"), _f3),
-    ("ml/README.md", r"^\| recall @0\.50\s+\|\s+[\d.]+\s+\|\s+([\d.]+)", ("metrics", "cep_only", "recall"), _f3),
+    ("ml/README.md", r"^\| precision at REVIEW\s+\|\s+([\d.]+)", ("metrics", "at_review", "precision"), _f3),
+    ("ml/README.md", r"^\| precision at REVIEW\s+\|\s+[\d.]+\s+\|\s+([\d.]+)", ("metrics", "cep_only", "precision"), _f3),
+    ("ml/README.md", r"^\| recall at REVIEW\s+\|\s+([\d.]+)", ("metrics", "at_review", "recall"), _f3),
+    ("ml/README.md", r"^\| recall at REVIEW\s+\|\s+[\d.]+\s+\|\s+([\d.]+)", ("metrics", "cep_only", "recall"), _f3),
     ("ml/README.md", r"STRUCTURING ([\d.]+)%", ("metrics", "by_fraud_type", "STRUCTURING", "recall"), _pct1),
-    ("ml/README.md", r"fraud type \(ML @0\.50\):.*?APP ([\d.]+)%", ("metrics", "by_fraud_type", "APP", "recall"), _pct1),
-    ("ml/README.md", r"fraud type \(ML @0\.50\):.*?ATO ([\d.]+)%", ("metrics", "by_fraud_type", "ATO", "recall"), _pct1),
-    ("ml/README.md", r"fraud type \(ML @0\.50\):.*?MULE ([\d.]+)%", ("metrics", "by_fraud_type", "MULE", "recall"), _pct1),
+    ("ml/README.md", r"fraud type \(ML at REVIEW\):.*?APP ([\d.]+)%", ("metrics", "by_fraud_type", "APP", "recall"), _pct1),
+    ("ml/README.md", r"fraud type \(ML at REVIEW\):.*?ATO ([\d.]+)%", ("metrics", "by_fraud_type", "ATO", "recall"), _pct1),
+    ("ml/README.md", r"fraud type \(ML at REVIEW\):.*?MULE ([\d.]+)%", ("metrics", "by_fraud_type", "MULE", "recall"), _pct1),
+    ("ml/README.md", r"cut at REVIEW = ([\d.]+)", ("metrics", "thresholds", "review"), lambda v: f"{v:.4f}"),
     ("ml/README.md", r"^brier\s+([\d.]+)", ("metrics", "calibration", "brier"), lambda v: f"{v:.5f}"),
     ("ml/README.md", r"^n_alerts\s+(\d+)", ("metrics", "calibration", "n_alerts"), str),
     ("ml/README.md", r"^saturated_share\s+([\d.]+)%", ("metrics", "calibration", "saturated_share"), _pct1),
@@ -645,13 +646,13 @@ _TRACKED_FIGURES = [
     ("docs/generator-spec.md", r"\([\d.]+ ± ([\d.]+) across seeds\)", ("seeds", "sd"), _f3),
     ("docs/irp-framing.md", r"Baseline ([\d.]+) ±", ("seeds", "mean"), _f3),
     ("docs/irp-framing.md", r"Baseline [\d.]+ ± ([\d.]+)\.", ("seeds", "sd"), _f3),
-    ("docs/related-work.md", r"\| PR-AUC \| ([\d.]+) \(", ("metrics", "pr_auc"), _f3),
     ("docs/related-work.md", r"\| PR-AUC \| [\d.]+ \(([\d.]+) ±", ("seeds", "mean"), _f3),
     ("docs/related-work.md", r"\| PR-AUC \| [\d.]+ \([\d.]+ ± ([\d.]+) across", ("seeds", "sd"), _f3),
-    ("docs/related-work.md", r"\| all 20 \| ([\d.]+) \|", ("metrics", "pr_auc"), _f3),
-    ("validation/README.md", r"\| full system \| ([\d.]+) \|", ("metrics", "pr_auc"), _f3),
-    ("validation/README.md", r"\| full system \| [\d.]+ \| ([\d.]+) \|", ("metrics", "at_0_50", "precision"), _f3),
-    ("validation/README.md", r"\| full system \| [\d.]+ \| [\d.]+ \| ([\d.]+) \|", ("metrics", "at_0_50", "recall"), _f3),
+    # The baseline-profile rows these two documents carry are dated history since
+    # 2026-09-14 and quote nothing current; the sentences giving the realistic
+    # profile's figure do, and are what is checked.
+    ("docs/related-work.md", r"the committee scores ([\d.]+) PR-AUC", ("metrics", "pr_auc"), _f3),
+    ("validation/README.md", r"On the realistic profile the full system scores PR-AUC ([\d.]+)", ("metrics", "pr_auc"), _f3),
 ]
 
 

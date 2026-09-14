@@ -40,6 +40,7 @@ ml/models/_pre_ablation/
 # deployed model artifacts (copied from ml/models at deploy)
 stream-processor/model.onnx
 stream-processor/feature_names.json
+stream-processor/thresholds.json
 stream-processor/banks.csv
 
 # TLS material for the mutual-TLS arm (regenerate with `run.ps1 make-certs`).

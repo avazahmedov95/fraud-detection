@@ -4,6 +4,7 @@ Legitimate journeys must never be constructible as physically impossible, or
 IMPOSSIBLE_TRAVEL would be validated against data guaranteeing its own success.
 """
 
+import importlib.util
 import os
 import sys
 from datetime import datetime, timedelta
@@ -12,10 +13,24 @@ import numpy as np
 
 import travel as T
 
-sys.path.insert(0, os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "..", "stream-processor"))
-import config as SC          # noqa: E402  — the detector's thresholds
+_SP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "stream-processor")
+sys.path.insert(0, _SP)
 import geo as G              # noqa: E402
+
+
+def _detector_config():
+    """stream-processor's config, loaded under a name of its own. `import config`
+    returns whichever `config` reached sys.modules first - this package's, as soon
+    as any test has imported the generator - and every threshold read here would
+    silently be the other module's."""
+    spec = importlib.util.spec_from_file_location("detector_config",
+                                                  os.path.join(_SP, "config.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+SC = _detector_config()      # the detector's thresholds
 
 
 class _P:

@@ -25,6 +25,10 @@ age on a tenth of its rows - `ml/README.md`):
 | no account identifiers | 0.761 | 0.563 | 0.745 |
 | amount + hour only | 0.653 | 0.272 | 0.819 |
 
+All three rows are the baseline profile, the dataset of record until 2026-09-14.
+On the realistic profile the full system scores PR-AUC 0.472 (`ml/README.md`); the
+stripped configurations have not been re-run there.
+
 Public transaction datasets do not carry account identifiers, because those are
 precisely what cannot be published. So:
 

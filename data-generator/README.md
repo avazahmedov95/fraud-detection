@@ -104,7 +104,8 @@ The fraud mix is weighted toward **APP** (the central research target) by
 
 ```bash
 pip install -r requirements.txt
-python generator.py --persons 5000 --transactions 50000 --fraud-rate 0.015 --out ./out
+python generator.py --profile realistic --out ./out    # the dataset of record: 500k rows, 0.2% fraud
+python generator.py --persons 5000 --transactions 50000 --fraud-rate 0.015 --out ./out  # the baseline profile
 ```
 
 Stream into Kafka for the Flink job (keyed by sender → ordered per-sender stream):
@@ -155,7 +156,8 @@ payload_crypto.py  AES-256-GCM envelope for the security-overhead arm. Also
                    duplicated by design, in stream-processor/
 
 harnesses - produce a NUMBER, not part of the generator
-verify_spec.py     re-checks docs/generator-spec.md against the output (16/16).
+verify_spec.py     re-checks docs/generator-spec.md against the output (15/15 on the
+                   realistic profile, the default; 16/16 on the baseline).
                    The spec is a claim; this is what makes it falsifiable
 handshake_bench.py one mutual-TLS handshake against one plaintext connection,
                    measured directly - docs/irp-framing.md 7.5a

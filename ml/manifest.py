@@ -15,7 +15,8 @@ PATH = os.path.join(MODELS, "manifest.json")
 
 #: Artefacts whose content identifies the model. Absent ones are recorded as absent,
 #: not skipped: "model.txt was not exported" is a fact a later check needs.
-ARTEFACTS = ("model.onnx", "model.txt", "model.joblib", "feature_names.json")
+ARTEFACTS = ("model.onnx", "model.txt", "model.joblib", "feature_names.json",
+             "thresholds.json")
 DATASET = (("transactions.csv", "data-generator/out/transactions.csv"),
            ("persons.csv", "data-generator/out/persons.csv"))
 

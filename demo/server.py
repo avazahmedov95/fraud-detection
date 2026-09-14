@@ -18,8 +18,6 @@ card would read as "unknown".
 
     python demo/server.py        # then open http://localhost:8090
 """
-import bisect
-import csv
 import json
 import os
 import random
@@ -32,6 +30,9 @@ import uuid
 from collections import Counter, OrderedDict, deque
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+import numpy as np
+import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -127,57 +128,75 @@ def _dashboard_url():
 
 
 class Episodes:
-    """The dataset, indexed for picking one episode of a kind."""
+    """The dataset, indexed for picking one episode of a kind. Held as typed
+    columns, not a dict per row: the realistic profile is 500,000 rows, and a dict
+    per row cost over a gigabyte. A row becomes a dict of strings - what
+    kafka_producer builds its message from - only when it is replayed."""
+
+    _CATEGORIES = ("sender_pinfl", "sender_card", "sender_network", "receiver_card",
+                   "receiver_network", "device_id", "sender_region", "active_call",
+                   "label_fraud_type")
 
     def __init__(self, path=CSV_PATH, held_out_from=HELD_OUT_FROM):
-        with open(path, newline="", encoding="utf-8") as fh:
-            self.rows = sorted(csv.DictReader(fh), key=lambda r: r["event_time"])
-        self.t = [_epoch(r) for r in self.rows]
-        self.cut = int(len(self.rows) * held_out_from)
-        self.by_sender = {}
-        for i, r in enumerate(self.rows):
-            self.by_sender.setdefault(r["sender_card"], []).append(i)
-        self.fraud = {k: [i for i in range(self.cut, len(self.rows))
-                          if _is_fraud(self.rows[i])
-                          and self.rows[i]["label_fraud_type"] == k]
+        keep = set(KP.RAW_FIELDS) | {"label_is_fraud", "label_fraud_type"}
+        keep.discard("transaction_id")                     # a replay gets new ids
+        df = pd.read_csv(path, usecols=lambda c: c in keep,
+                         dtype={c: "category" for c in self._CATEGORIES})
+        # Naive, as the CSV writes it; only differences between rows are used.
+        df["t"] = pd.to_datetime(df.pop("event_time")).astype("int64") / 1e9
+        self.df = df.sort_values("t", kind="stable").reset_index(drop=True)
+        self.t = self.df["t"].to_numpy()
+        self.cut = int(len(self.df) * held_out_from)
+        self.is_fraud = self.df["label_is_fraud"].to_numpy().astype(bool)
+        self.kind = self.df["label_fraud_type"].astype(str).to_numpy()
+        self.sender = self.df["sender_card"].astype(str).to_numpy()
+        self.receiver = self.df["receiver_card"].astype(str).to_numpy()
+        self.by_sender = self.df.groupby("sender_card", observed=True).indices
+        held = np.arange(len(self.df)) >= self.cut
+        self.fraud = {k: np.flatnonzero(held & self.is_fraud & (self.kind == k))
                       for k in KINDS if k != "NORMAL"}
 
+    def row(self, i):
+        r = {c: str(v) for c, v in self.df.iloc[i].items() if c != "t"}
+        r["event_time"] = _utc_iso(float(self.t[i]))
+        r["transaction_id"] = ""
+        return r
+
     def _prior(self, i):
-        return [j for j in self.by_sender[self.rows[i]["sender_card"]] if j < i]
+        idx = self.by_sender[self.sender[i]]
+        return idx[idx < i]
 
     def _near(self, i, kind):
         span = EPISODE_HOURS * 3600
-        lo = bisect.bisect_left(self.t, self.t[i] - span)
-        hi = bisect.bisect_right(self.t, self.t[i] + span)
-        return [j for j in range(lo, hi) if _is_fraud(self.rows[j])
-                and self.rows[j]["label_fraud_type"] == kind]
+        lo = int(np.searchsorted(self.t, self.t[i] - span, side="left"))
+        hi = int(np.searchsorted(self.t, self.t[i] + span, side="right"))
+        j = np.arange(lo, hi)
+        return j[self.is_fraud[lo:hi] & (self.kind[lo:hi] == kind)]
 
     def _with_history(self, idx):
-        return ([(self.rows[j], "history") for j in self._prior(idx[0])[-HISTORY_ROWS:]]
-                + [(self.rows[j], "episode") for j in idx])
+        return ([(self.row(j), "history") for j in self._prior(idx[0])[-HISTORY_ROWS:]]
+                + [(self.row(j), "episode") for j in idx])
 
     def pick(self, kind, rng=random):
         """[(row, role)] in time order; role is "history" or "episode"."""
         if kind == "NORMAL":
             for _ in range(2000):
-                i = rng.randrange(self.cut, len(self.rows))
-                if not _is_fraud(self.rows[i]) and len(self._prior(i)) >= HISTORY_ROWS:
+                i = rng.randrange(self.cut, len(self.df))
+                if not self.is_fraud[i] and len(self._prior(i)) >= HISTORY_ROWS:
                     return self._with_history([i])
             raise LookupError("no ordinary transfer with enough sender history")
-        if not self.fraud.get(kind):
+        if not len(self.fraud.get(kind, ())):
             raise LookupError(f"no {kind} episode in the held-out slice")
-        i = rng.choice(self.fraud[kind])
-        row, near = self.rows[i], self._near(i, kind)
+        i = int(rng.choice(list(self.fraud[kind])))
+        near = self._near(i, kind)
         if kind == "MULE":
             # The mule is the account the pattern turns on - paid by many, then
             # paying out - so its card is whichever side of the picked row recurs.
-            rcv = row["receiver_card"]
-            mule = (rcv if sum(self.rows[j]["receiver_card"] == rcv for j in near) > 1
-                    else row["sender_card"])
-            return [(self.rows[j], "episode") for j in near
-                    if mule in (self.rows[j]["sender_card"], self.rows[j]["receiver_card"])]
-        return self._with_history([j for j in near
-                                   if self.rows[j]["sender_card"] == row["sender_card"]])
+            rcv = self.receiver[i]
+            mule = rcv if (self.receiver[near] == rcv).sum() > 1 else self.sender[i]
+            return [(self.row(j), "episode") for j in near
+                    if mule in (self.sender[j], self.receiver[j])]
+        return self._with_history([j for j in near if self.sender[j] == self.sender[i]])
 
 
 def replay_messages(items, now, rng=random):
@@ -421,8 +440,9 @@ class App:
                       encoding="utf-8") as fh:
                 m = json.load(fh)
             own = {"roc_auc": m["roc_auc"], "pr_auc": m["pr_auc"],
-                   "precision": m["at_0_50"]["precision"],
-                   "recall": m["at_0_50"]["recall"],
+                   "precision": m["at_review"]["precision"],
+                   "recall": m["at_review"]["recall"],
+                   "review": m["thresholds"]["review"],
                    "rules_precision": m["cep_only"]["precision"],
                    "rules_recall": m["cep_only"]["recall"],
                    "by_type": {k: v["recall"] for k, v in m["by_fraud_type"].items()},
@@ -430,10 +450,12 @@ class App:
         except (OSError, KeyError, ValueError) as exc:
             own = {"error": str(exc)[:200]}
         if self.library is not None:
-            rows, cut = self.library.rows, self.library.cut
-            own.update(rows=len(rows), train=cut, test=len(rows) - cut,
-                       fraud_share=sum(map(_is_fraud, rows)) / len(rows),
-                       test_fraud=sum(map(_is_fraud, rows[cut:])))
+            lib = self.library
+            n, cut = len(lib.df), lib.cut
+            fit = int(cut * 0.80)                  # ml/train.py's FIT_SHARE
+            own.update(rows=n, fit=fit, val=cut - fit, test=n - cut,
+                       fraud_share=float(lib.is_fraud.mean()),
+                       test_fraud=int(lib.is_fraud[cut:].sum()))
         with open(os.path.join(HERE, "results.json"), encoding="utf-8") as fh:
             return {"own": own, "public": json.load(fh)["datasets"]}
 

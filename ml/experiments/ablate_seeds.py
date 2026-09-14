@@ -86,9 +86,9 @@ def _train(csv, env_overrides):
     with open(os.path.join(models, "feature_names.json")) as fh:
         n_feats = len(json.load(fh))
     return {"pr_auc": metrics["pr_auc"], "roc_auc": metrics["roc_auc"],
-            "precision": metrics["at_0_50"]["precision"],
-            "recall": metrics["at_0_50"]["recall"],
-            "f1": metrics["at_0_50"]["f1"], "n_features": n_feats}
+            "precision": metrics["at_review"]["precision"],
+            "recall": metrics["at_review"]["recall"],
+            "f1": metrics["at_review"]["f1"], "n_features": n_feats}
 
 
 # Two-sided 95% t critical values by df (n-1) - honest at the small n here.

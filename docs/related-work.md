@@ -203,6 +203,13 @@ Two independent prevalence-robust measures both say **about 2×**, which
 corroborates the 2.5× the AUPRC ratio gives. So the headline claim survives
 verification; only its justification was unsound.
 
+> **Since 2026-09-14 (`generator-spec.md` 10).** The rows above are the baseline
+> profile. On the realistic profile - fraud at 0.18%, legitimate look-alikes of
+> every pattern, a tenth of fraud unreported - the committee scores 0.472 PR-AUC.
+> The gap to PaySim's 0.380 has mostly closed, which is what the next paragraph's
+> reading predicted: much of the old distance was a generator whose classes
+> separated by construction.
+
 **How much of the gap is the data, and how much is the feature set.** Not all of
 it is separability. `validation/README.md` measures what this project's own model
 does when stripped to what a public dataset can carry:

@@ -764,7 +764,7 @@ switch ($Target.ToLower()) {
 
     "generate" {
         Push-Location $GenDir
-        try { python generator.py --out ./out } finally { Pop-Location }
+        try { python generator.py --profile realistic --out ./out } finally { Pop-Location }
     }
 
     "produce" {
@@ -1058,6 +1058,9 @@ switch ($Target.ToLower()) {
     "serve-prep" {
         Copy-Item "ml/models/model.onnx" "stream-processor/" -Force
         Copy-Item "ml/models/feature_names.json" "stream-processor/" -Force
+        # The model's REVIEW / BLOCK cutoffs: an unweighted committee's scale
+        # belongs to it, and config._model_thresholds reads them from here.
+        Copy-Item "ml/models/thresholds.json" "stream-processor/" -Force
         # The BIN table. bins.py resolves the card issuer from it, and the job
         # dir is what gets mounted into the cluster - without this the job dies
         # at import with FileNotFoundError instead of scoring.

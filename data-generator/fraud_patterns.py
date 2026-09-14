@@ -5,9 +5,8 @@ import numpy as np
 from datetime import datetime, timedelta
 
 from config import (AMOUNT_MIN, AMOUNT_MAX, STRUCTURING_THRESHOLD,
-                    REGIONS, FAMILY_FRAUD_SHARE, MULE_RECRUITED_SHARE,
-                    SEEDED_PAYEE_SHARE)
-from events import make_event
+                    REGIONS, FAMILY_FRAUD_SHARE, SEEDED_PAYEE_SHARE)
+from events import make_event, round_like_a_person
 from persons import households, relatives_of
 from travel import hijack_origin
 
@@ -92,10 +91,12 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
             fraudster = maybe_relative(victim, pick(fraud_accounts))
             balance = float(np.exp(rng.normal(15.5, 0.6)))          # larger-than-usual balance
             # A portion of amounts are moderate, so APP overlaps ordinary large transfers.
-            if rng.random() < 0.40:
+            if rng.random() < config.app_moderate_share:
                 amount = float(np.clip(np.exp(rng.normal(14.0, 0.5)), AMOUNT_MIN, AMOUNT_MAX))
             else:
                 amount = float(np.clip(balance * rng.uniform(0.5, 0.95), AMOUNT_MIN, AMOUNT_MAX))
+            if config.round_amount_share > 0 and rng.random() < config.round_amount_share:
+                amount = round_like_a_person(amount)       # "send me five million"
             ts = rand_time()
             maybe_seed_payee(victim, fraudster, ts, balance)
             events.append(make_event(
@@ -108,7 +109,7 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
             victim = pick(persons)
             # 40% "stealth" takeover: fraudster operates from the victim's own device and
             # region (on-device malware), leaving only behavioural signals - harder to catch.
-            stealth = rng.random() < 0.40
+            stealth = rng.random() < config.ato_stealth_share
             device = f"dev-{victim.pinfl[-8:]}" if stealth else f"dev-NEW-{int(rng.integers(10**6))}"
             region, base = victim.region, rand_time()
 
@@ -155,10 +156,12 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
         elif kind == "STRUCTURING":
             actor = pick(persons)
             base = rand_time()
-            for i in range(int(rng.integers(5, 12))):
+            for i in range(int(rng.integers(*config.structuring_events))):
                 fraudster = pick(fraud_accounts)
-                amount = float(STRUCTURING_THRESHOLD * rng.uniform(0.85, 0.99))  # just under limit
-                ts = base + timedelta(minutes=float(i * rng.uniform(3, 15)))
+                amount = float(STRUCTURING_THRESHOLD
+                               * rng.uniform(*config.structuring_fraction))  # just under
+                ts = base + timedelta(
+                    minutes=float(i * rng.uniform(*config.structuring_gap_minutes)))
                 events.append(make_event(
                     actor, fraudster, amount, ts,
                     device_id=f"dev-{actor.pinfl[-8:]}",
@@ -169,17 +172,17 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
         else:  # MULE — fan-in then fan-out
             # A share of mules are ordinary people recruited into the network, not
             # purpose-made accounts. Only those have relatives / family fan-in.
-            recruited = rng.random() < MULE_RECRUITED_SHARE
+            recruited = rng.random() < config.mule_recruited_share
             mule = pick(persons) if recruited else pick(fraud_accounts)
             base = rand_time()
-            n_in = int(rng.integers(4, 9))
+            n_in = int(rng.integers(*config.mule_senders))
             collected = 0.0
             for i in range(n_in):
                 # Recruitment runs through personal networks: some senders are relatives.
                 sender = maybe_relative(mule, pick(persons))
                 amount = float(np.clip(np.exp(rng.normal(13.5, 0.6)), AMOUNT_MIN, AMOUNT_MAX))
                 collected += amount
-                ts = base + timedelta(minutes=float(i * rng.uniform(1, 6)))
+                ts = base + timedelta(minutes=float(i * rng.uniform(*config.mule_gap_minutes)))
                 events.append(make_event(
                     sender, mule, amount, ts,
                     device_id=f"dev-{sender.pinfl[-8:]}",
@@ -190,7 +193,7 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
             for j in range(n_out):
                 dest = pick(fraud_accounts)
                 amount = float(collected / n_out * rng.uniform(0.80, 0.98))
-                ts = base + timedelta(minutes=float((n_in + j) * rng.uniform(1, 6)))
+                ts = base + timedelta(minutes=float((n_in + j) * rng.uniform(*config.mule_gap_minutes)))
                 events.append(make_event(
                     mule, dest, amount, ts,
                     device_id=f"dev-{mule.pinfl[-8:]}",
@@ -198,6 +201,12 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
                     balance_before=collected,
                     is_fraud=1, fraud_type="MULE", rng=rng))
 
+        if config.unreported_fraud_share > 0 and rng.random() < config.unreported_fraud_share:
+            # Never reported: the victim did not notice, or did not complain. The
+            # behaviour stays fraud's and the label does not - real labels are
+            # incomplete (generator-spec.md 8, item 7). The budget still counts it.
+            for ev in events[before:]:
+                ev["label_is_fraud"], ev["label_fraud_type"] = 0, "NONE"
         produced[kind] += len(events) - before
 
     return events + seeds

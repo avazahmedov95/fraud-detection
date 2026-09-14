@@ -23,6 +23,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--file", default="out/transactions.csv")
     ap.add_argument("--persons", default="out/persons.csv")
+    ap.add_argument("--profile", choices=("baseline", "realistic"), default="realistic",
+                    help="the dataset of record is the realistic profile")
     args = ap.parse_args()
 
     if not os.path.exists(args.file):
@@ -30,7 +32,7 @@ def main():
 
     d = pd.read_csv(args.file)
     p = pd.read_csv(args.persons) if os.path.exists(args.persons) else None
-    cfg = C.GeneratorConfig()
+    cfg = C.realistic() if args.profile == "realistic" else C.GeneratorConfig()
     ok = []
 
     print(f"\nchecking {len(d):,} events against docs/generator-spec.md\n")
@@ -46,24 +48,25 @@ def main():
                          (legit.account_age_days < 30).mean(),
                          cfg.new_account_share, 0.03))
         ok.append(_check("aged fraud accounts",
-                         (fraud.account_age_days >= 100).mean(), 0.30, 0.06))
+                         (fraud.account_age_days >= 100).mean(),
+                         cfg.aged_fraud_share, 0.06))
 
     print("\nsession signals")
     legit_ev = d[d.label_is_fraud == 0]
     app = d[d.label_fraud_type == "APP"]
     ok.append(_check("active_call, legitimate", legit_ev.active_call.mean(),
-                     C.ACTIVE_CALL_BASE_RATE, 0.01))
+                     cfg.active_call_base_rate, 0.01))
     if len(app):
         ok.append(_check("active_call, APP", app.active_call.mean(),
-                         C.ACTIVE_CALL_APP_RATE, 0.08))
+                         cfg.active_call_app_rate, 0.08))
 
     print("\nfraud pattern shapes")
     st = d[d.label_fraud_type == "STRUCTURING"].amount_uzs / C.STRUCTURING_THRESHOLD
     if len(st):
         ok.append(_check("STRUCTURING min fraction of threshold",
-                         st.min(), 0.85, 0.02))
+                         st.min(), cfg.structuring_fraction[0], 0.02))
         ok.append(_check("STRUCTURING max fraction of threshold",
-                         st.max(), 0.99, 0.02))
+                         st.max(), cfg.structuring_fraction[1], 0.02))
     # Group by EPISODE, not by victim. `pick(persons)` can select the same victim
     # for two takeovers, and grouping by pinfl then reports 2+4 as a single
     # six-event episode and fails a spec the generator did not violate. Found when

@@ -17,6 +17,7 @@ MODELS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
 CSV = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                    "..", "data-generator", "out", "transactions.csv")
 ONNX_PATH = os.path.join(MODELS_DIR, "model.onnx")
+PARITY_ROWS = 60_000
 
 #: Plain-text booster for case-manager/explain.py. Not model.joblib: unpickling an
 #: LGBMClassifier drags in scikit-learn, ~30 MB of training dependency in a service
@@ -58,7 +59,9 @@ def main():
           f"({os.path.getsize(BOOSTER_PATH) / 1024:.0f} KB, "
           f"{booster.num_trees()} trees)")
 
-    df = D.build_matrix(CSV)
+    # A parity check needs valid inputs, not the whole replay: the first rows of the
+    # file, ten minutes shorter at the realistic profile's size.
+    df = D.build_matrix(CSV, nrows=PARITY_ROWS)
     sample = df.iloc[int(len(df) * 0.80):][feats].astype("float32").values[:2000]
     # The same rows again with the payee age unknown, as the live job sends them
     # while Neo4j is down. NaN routing is where a converter can part from the
@@ -69,7 +72,10 @@ def main():
         unknown[:, age_cols] = np.nan
         sample = np.vstack([sample, unknown])
 
-    native = model.predict_proba(sample)[:, 1]
+    # The committee is a merged lgb.Booster (committee.py); a model trained before
+    # it is an LGBMClassifier. Both are scored here the way each predicts.
+    native = (model.predict_proba(sample)[:, 1] if hasattr(model, "predict_proba")
+              else model.predict(sample))
     sess = ort.InferenceSession(ONNX_PATH, providers=["CPUExecutionProvider"])
     onnx_proba = _onnx_positive_proba(sess.run(None, {sess.get_inputs()[0].name: sample}))
 

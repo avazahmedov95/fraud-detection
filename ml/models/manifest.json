@@ -1,19 +1,20 @@
 {
-  "exported_at": "2026-09-13T10:41:30+00:00",
-  "commit": "64c5782d72f5285d0e30b9b8d52ae5d518ff8600",
+  "exported_at": "2026-09-14T16:32:49+00:00",
+  "commit": "272aa8925554b6c9167bd2c9a6fb47167c632a76",
   "artefacts": {
-    "model.onnx": "7915d0d03e4909f03d699e03ce5df7b3a1f67077cd2612390eaabdd635948be6",
-    "model.txt": "67f6e22c284461463959da312655d9d1c177e6fffbccdf334a535211b9b0274c",
-    "model.joblib": "bd66845a519a31e7dbfcc9d2dc5d47301cb9c41a5c28191f785dea867f9849e9",
-    "feature_names.json": "2be31d614cfdc46d133ad0701742ab0c0a0c949d92734468ac543d3ddfa70b44"
+    "model.onnx": "b867813b5c4897650408a4bb878b46842a4646c33c2320bb586c3f1da3211c98",
+    "model.txt": "14814ce2f608c483235224cef5bd145dedc10430699b1079ea79312ac929d9a9",
+    "model.joblib": "0eb7811dfa12a68740cab534c38c3543e676a2f88cf55270df9bfc8f1989c66e",
+    "feature_names.json": "2be31d614cfdc46d133ad0701742ab0c0a0c949d92734468ac543d3ddfa70b44",
+    "thresholds.json": "b57716a96980f842242c41fb51e6bd9b811f1650224ebffbd349c30a52c5bbcd"
   },
   "dataset": {
     "transactions.csv": {
-      "sha256": "ca8a3dcd48bf586be144e6c7b96c78f27d0a7edfe57bfe1282994d6ab53f7899",
+      "sha256": "0338db95c10a264c5154605811a890be9eeb55f212665344642a0477c2c7380f",
       "path": "data-generator/out/transactions.csv"
     },
     "persons.csv": {
-      "sha256": "dbe01edd7626def3c8ce50a343915d80fe309c97895342476d9c22a01be37cb6",
+      "sha256": "c80f44e2e7403d803f51275c1e854f1cd7ae5cb20c12ad60e713873c457414bc",
       "path": "data-generator/out/persons.csv"
     }
   },
@@ -53,7 +54,7 @@
     }
   },
   "metrics": {
-    "roc_auc": 0.9986496788729248,
-    "pr_auc": 0.9370586256471342
+    "roc_auc": 0.9913191974521206,
+    "pr_auc": 0.4721840633906771
   }
 }

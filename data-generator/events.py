@@ -24,20 +24,29 @@ import config as C
 
 
 def gen_session_signals(sender, fraud_type, rng):
-    """Behavioural session signals: active call + login→confirm latency."""
+    """Behavioural session signals: active call + login→confirm latency, at the
+    rates of the profile being generated (config.PROFILE)."""
+    prof = C.PROFILE
     if fraud_type == "APP":
-        stretch = float(rng.uniform(*C.APP_TIME_STRETCH))
-        call = bool(rng.random() < C.ACTIVE_CALL_APP_RATE)
+        stretch = float(rng.uniform(*prof.app_time_stretch))
+        call = bool(rng.random() < prof.active_call_app_rate)
     elif fraud_type == "ATO":
         stretch = float(rng.uniform(*C.ATO_TIME_COMPRESS))
-        call = bool(rng.random() < C.ACTIVE_CALL_BASE_RATE)
+        call = bool(rng.random() < prof.active_call_base_rate)
     else:                      # NONE / MULE / STRUCTURING — actor acts unpressured
         stretch = 1.0
-        call = bool(rng.random() < C.ACTIVE_CALL_BASE_RATE)
+        call = bool(rng.random() < prof.active_call_base_rate)
 
     median = getattr(sender, "decision_time_median", C.DECISION_TIME_MEDIAN_SEC)
-    secs = median * stretch * float(np.exp(rng.normal(0, C.DECISION_TIME_SIGMA)))
+    secs = median * stretch * float(np.exp(rng.normal(0, prof.decision_time_sigma)))
     return call, round(max(C.SECS_LOGIN_FLOOR, secs), 1)
+
+
+def round_like_a_person(amount):
+    """People send round sums - to 10,000, 50,000 or 100,000 UZS, the step growing
+    with the amount (generator-spec.md 8, item 6)."""
+    step = 10_000 if amount < 500_000 else 50_000 if amount < 5_000_000 else 100_000
+    return float(max(step, round(amount / step) * step))
 
 def _payee_card(receiver, rng):
     """Which of the payee's cards this transfer lands on.

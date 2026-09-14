@@ -121,7 +121,7 @@ def _report(results):
     print(f"\n{'configuration':<24}{'feats':>6}{'PR-AUC':>9}{'delta':>8}"
           f"{'prec@0.50':>11}{'recall':>9}{'F1':>8}")
     for label, metrics, feats, _ in results:
-        a = metrics["at_0_50"]
+        a = metrics["at_review"]
         print(f"{label:<24}{len(feats):>6}{metrics['pr_auc']:>9.3f}"
               f"{metrics['pr_auc'] - base_pr:>+8.3f}"
               f"{a['precision']:>11.3f}{a['recall']:>9.3f}{a['f1']:>8.3f}")

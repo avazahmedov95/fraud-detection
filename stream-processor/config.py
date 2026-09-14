@@ -1,6 +1,7 @@
 """Every tunable of the stream processor. Thresholds mirrored from the generator
 are marked as such and MUST match it."""
 
+import json
 import os
 
 # --- Connections ------------------------------------------------------------
@@ -157,7 +158,7 @@ RESTART_WINDOW_MS = int(os.getenv("RESTART_WINDOW_MS", "300000"))   # 5 min
 # Observed 6,890 rows over 1,714 transactions - each scored about four times.
 CHECKPOINT_DIR = os.getenv("CHECKPOINT_DIR", "file:///opt/flink/checkpoints")
 
-MODEL_VERSION = os.getenv("MODEL_VERSION", "cep+ml-fusion-v1")
+MODEL_VERSION = os.getenv("MODEL_VERSION", "cep+ml-fusion-v2")
 # Distinct value, or a degraded run is stored as a fused one and no later query
 # can separate them.
 MODEL_VERSION_CEP_ONLY = os.getenv("MODEL_VERSION_CEP_ONLY", "cep-only-fallback")
@@ -190,6 +191,7 @@ def _resolve_artefact(env_var, filename, extra_dirs=()):
 
 MODEL_ONNX_PATH = _resolve_artefact("MODEL_ONNX_PATH", "model.onnx")
 FEATURE_NAMES_PATH = _resolve_artefact("FEATURE_NAMES_PATH", "feature_names.json")
+THRESHOLDS_PATH = _resolve_artefact("THRESHOLDS_PATH", "thresholds.json")
 # bins.py derived this from its own __file__ once and failed the job at import -
 # the trap above, walked into twice. data-generator/ is a last resort so tests
 # and offline replay work without serve-prep.
@@ -200,6 +202,26 @@ BANKS_CSV_PATH = _resolve_artefact(
 # Fusion happens at the DECISION layer - fusion.py says why every blend degraded.
 FINAL_REVIEW_THRESHOLD = 0.40
 FINAL_BLOCK_THRESHOLD = 0.80
+
+
+def _model_thresholds(path):
+    """The model's REVIEW / BLOCK cutoffs, chosen on validation rows by ml/train.py
+    and shipped beside model.onnx. A probability's scale belongs to the model that
+    produced it - an unweighted model on 0.2% fraud seldom says 0.40 - so its
+    cutoffs travel with it. A null BLOCK means the model never blocks on its own.
+    Without the file (a model exported before 2026-09-14) the fixed ones stand;
+    they also stay the base of the CEP-only fallback, which is an additive rule
+    score and not a probability (fusion.cutoffs)."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            t = json.load(fh)
+        block = t["block"]
+        return float(t["review"]), (float("inf") if block is None else float(block))
+    except (OSError, KeyError, TypeError, ValueError):
+        return FINAL_REVIEW_THRESHOLD, FINAL_BLOCK_THRESHOLD
+
+
+MODEL_REVIEW_THRESHOLD, MODEL_BLOCK_THRESHOLD = _model_thresholds(THRESHOLDS_PATH)
 
 # Force at least REVIEW regardless of the model score (AML / Regulation 3759).
 # High-precision on the synthetic slice: 38 fraud vs 2 legit.

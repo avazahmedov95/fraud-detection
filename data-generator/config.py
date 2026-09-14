@@ -114,6 +114,56 @@ class GeneratorConfig:
     hard_negative_share: float = 0.03  # legit transfers that look suspicious
     start_date: str = "2025-01-01"
 
+    # Everything below defaults to the behaviour the dataset of record was made
+    # with, and every knob that ADDS behaviour is off at 0 - tested before any
+    # random draw, so this profile reproduces that dataset draw for draw. The
+    # realistic values, and the case for each: docs/generator-spec.md 10.
+    profile: str = "baseline"
+    active_call_base_rate: float = ACTIVE_CALL_BASE_RATE
+    active_call_app_rate: float = ACTIVE_CALL_APP_RATE
+    app_time_stretch: tuple = APP_TIME_STRETCH
+    decision_time_sigma: float = DECISION_TIME_SIGMA
+    app_moderate_share: float = 0.40
+    aged_fraud_share: float = 0.30
+    ato_stealth_share: float = 0.40
+    mule_recruited_share: float = MULE_RECRUITED_SHARE
+    mule_senders: tuple = (4, 9)             # integers(lo, hi): 4..8
+    mule_gap_minutes: tuple = (1, 6)
+    structuring_events: tuple = (5, 12)      # 5..11
+    structuring_gap_minutes: tuple = (3, 15)
+    structuring_fraction: tuple = (0.85, 0.99)
+    phone_change_share: float = 0.0
+    collector_share: float = 0.0
+    split_payment_share: float = 0.0
+    round_amount_share: float = 0.0
+    unreported_fraud_share: float = 0.0
+
+
+def realistic(**overrides):
+    """The profile generator-spec.md 10 argues for: fraud at the rate real card
+    traffic runs at, legitimate transfers that share fraud's shapes, fraud that
+    shares legitimate ones, and labels as incomplete as real ones."""
+    values = dict(
+        profile="realistic",
+        n_persons=50_000, n_transactions=500_000, fraud_rate=0.002,
+        hard_negative_share=0.08,
+        active_call_base_rate=0.10, active_call_app_rate=0.45,
+        app_time_stretch=(1.0, 3.5), decision_time_sigma=0.75,
+        app_moderate_share=0.60, aged_fraud_share=0.50, ato_stealth_share=0.60,
+        mule_recruited_share=0.50, mule_senders=(3, 11), mule_gap_minutes=(5, 60),
+        structuring_events=(3, 9), structuring_gap_minutes=(10, 90),
+        structuring_fraction=(0.70, 0.99),
+        phone_change_share=0.04, collector_share=0.01, split_payment_share=0.003,
+        round_amount_share=0.40, unreported_fraud_share=0.10)
+    values.update(overrides)
+    return GeneratorConfig(**values)
+
+
+#: The profile being generated. Session signals are drawn inside make_event, which
+#: every pattern calls; reading them here keeps the knobs out of every call site.
+#: generator.build_dataset sets it.
+PROFILE = GeneratorConfig()
+
 
 # --- Issuing banks ------------------------------------------------------------
 # Header `bin,code,name,cards_mln`; one row per BIN, cards_mln repeated. No

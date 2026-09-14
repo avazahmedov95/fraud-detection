@@ -504,8 +504,20 @@ and every comparison above was taken with it removed.
 ### The dataset of record
 
 `data-generator/out/` is gitignored, so the files every reported figure was
-computed on are pinned here instead. **Regenerated 2026-09-07** on seed 42 with defaults,
-to fix the device defect in §4 and the single-card defect in §2.
+computed on are pinned here instead. **Since 2026-09-14 it is the realistic
+profile** (§10), seed 42, `generator.py --profile realistic`:
+
+```
+transactions.csv  500,000 rows  157,241,920 bytes
+  sha256  0338db95c10a264c5154605811a890be9eeb55f212665344642a0477c2c7380f
+persons.csv        52,000 rows    5,782,987 bytes
+  sha256  c80f44e2e7403d803f51275c1e854f1cd7ae5cb20c12ad60e713873c457414bc
+```
+
+It replaced the baseline dataset below, **regenerated 2026-09-07** on seed 42 with
+the baseline defaults to fix the device defect in §4 and the single-card defect in
+§2, and now kept at `data-generator/out_frozen_2026-09-07/`. Every figure dated
+before 2026-09-14 was measured on it:
 
 ```
 transactions.csv   50,000 rows   15,730,392 bytes
@@ -563,3 +575,52 @@ output is a wish list, so these are the numbers a reader can reproduce.
 | receivers on >1 card | $\kappa$ = 0.20 hold one (§2) | 892 of 5,078, 9,826 rows |
 
 `verify_spec.py` regenerates these comparisons.
+
+---
+
+## 10. The realistic profile
+
+`generator.py --profile realistic` - the dataset of record since 2026-09-14.
+
+The baseline profile separates too easily. Its fraud is 1.5% of traffic, about ten
+times what real card traffic carries (0.17-0.19%, `validation/README.md` 2); every
+legitimate transfer looks legitimate; and the labels are exact. The model it
+trained scored 0.937 PR-AUC on it and 0.42 on data shaped like the profile below
+(`ml/experiments/realism.py`) - a number that high describes the generator. This
+profile keeps every mechanism and moves each parameter toward overlap:
+
+| knob | baseline | realistic | why |
+|---|---|---|---|
+| transactions / persons | 50,000 / 5,000 | 500,000 / 50,000 | enough fraud to measure at a real rate |
+| fraud rate | 1.5% | 0.2% | real card traffic, IBM AML and PaySim all sit near 0.1-0.2% |
+| unreported fraud | 0 | 10% of episodes | real labels are incomplete (§8, item 7): the behaviour stays, the label does not |
+| legitimate hard negatives | 3% | 8% | a new payee and a large one-off - rent, a car, a deposit |
+| legitimate active call | 3% | 10% | people send money while talking to the payee |
+| APP active call | 70% | 45% | much coaching happens in messengers, or before the transfer |
+| APP confirmation stretch | 2.5-5x | 1.0-3.5x | a coached victim is not always slower |
+| confirmation-time spread | 0.55 | 0.75 | personal habits vary more |
+| APP moderate amounts | 40% | 60% | fewer drains, more amounts in the ordinary range |
+| aged fraud accounts | 30% | 50% | bought and rented accounts, not only fresh ones |
+| ATO stealth | 40% | 60% | more takeovers from the victim's own device |
+| MULE recruited people | 30% | 50% | ordinary histories, not purpose-made accounts |
+| MULE senders, spacing | 4-8, 1-6 min | 3-10, 5-60 min | collection spread over hours, as in IBM AML |
+| STRUCTURING events, spacing, band | 5-11, 3-15 min, 85-99% | 3-8, 10-90 min, 70-99% | pieces spread through the day |
+| legitimate collections | 0 | 1% of persons | 5-15 senders within hours: a wedding, a gift, a joint purchase |
+| legitimate split payments | 0 | 0.3% of persons | 3-5 large parts to one payee |
+| phone changes | 0 | 4% of persons | a new phone, kept from then on |
+| round sums | 0 | 40% | people send round amounts (§8, item 6) |
+
+What it is: a harder benchmark on the same machinery. What it is not: a
+calibration. No row of the table comes from Uzbek data; each moves a parameter the
+baseline set at its easiest, in the direction the public datasets and §8 point.
+The realistic figures are therefore more believable, not measured.
+
+Every knob that adds behaviour is off at 0 and tested before any random draw, so
+`--profile baseline` still reproduces the 2026-09-07 dataset draw for draw -
+checked on the file itself: 0 of 50,000 rows differ ignoring `transaction_id`, and
+`persons.csv` is identical. `verify_spec.py` checks the realistic profile's own
+values by default (15/15).
+
+Realised on seed 42: 500,000 transactions, 878 labelled fraud (0.176%) - APP 315,
+MULE 216, STRUCTURING 181, ATO 166; 39.6% of legitimate amounts are round sums,
+and 9,712 legitimate transfers come from a changed phone.

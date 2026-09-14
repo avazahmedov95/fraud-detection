@@ -10,6 +10,15 @@ import fusion
 from fusion import final_score, decide, classify_type
 
 
+@pytest.fixture(autouse=True)
+def _fixed_model_cutoffs(monkeypatch):
+    """These tests describe the decision layer, not whichever model serve-prep
+    last copied beside the job: the model's cutoffs are pinned to the fixed ones.
+    The two tests at the end read the shipped file through its loader instead."""
+    monkeypatch.setattr(C, "MODEL_REVIEW_THRESHOLD", C.FINAL_REVIEW_THRESHOLD)
+    monkeypatch.setattr(C, "MODEL_BLOCK_THRESHOLD", C.FINAL_BLOCK_THRESHOLD)
+
+
 def test_final_score_is_model_with_cep_fallback():
     # model present -> graded risk is the model probability (not blended)
     assert final_score(0.9, 0.2) == 0.2
@@ -66,7 +75,7 @@ def _reduced(profile):
 def test_full_capability_does_not_move_either_operating_point(profile):
     _full(profile)
     assert fusion.cutoffs(cep_only=False) == (
-        C.FINAL_REVIEW_THRESHOLD, C.FINAL_BLOCK_THRESHOLD)
+        C.MODEL_REVIEW_THRESHOLD, C.MODEL_BLOCK_THRESHOLD)
     assert fusion.cutoffs(cep_only=True) == pytest.approx(
         (C.FINAL_REVIEW_THRESHOLD, C.FINAL_BLOCK_THRESHOLD), abs=1e-6)
 
@@ -75,7 +84,7 @@ def test_a_probability_is_never_rescaled(profile):
     """Retraining recalibrates the model, so the fused cutoff must stay put."""
     _reduced(profile)
     assert fusion.cutoffs(cep_only=False) == (
-        C.FINAL_REVIEW_THRESHOLD, C.FINAL_BLOCK_THRESHOLD)
+        C.MODEL_REVIEW_THRESHOLD, C.MODEL_BLOCK_THRESHOLD)
 
 
 def test_reduced_capability_lowers_the_fallback_cutoff(profile):
@@ -240,3 +249,14 @@ def test_every_label_is_reachable_by_some_rule_that_can_fire():
         assert set(triggers) & emitted, (
             f"the {label} label is unreachable: none of {triggers} is a rule "
             f"the engine emits")
+
+
+def test_the_model_cutoffs_come_from_the_file_shipped_with_it(tmp_path):
+    path = tmp_path / "thresholds.json"
+    path.write_text('{"review": 0.061, "block": null}', encoding="utf-8")
+    assert C._model_thresholds(str(path)) == (0.061, float("inf"))
+
+
+def test_without_that_file_the_fixed_cutoffs_stand(tmp_path):
+    assert C._model_thresholds(str(tmp_path / "absent.json")) == (
+        C.FINAL_REVIEW_THRESHOLD, C.FINAL_BLOCK_THRESHOLD)

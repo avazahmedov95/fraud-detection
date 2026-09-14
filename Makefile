@@ -40,7 +40,7 @@ topics: ## list Kafka topics
 	$(COMPOSE) exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list
 
 generate: ## generate the synthetic dataset into data-generator/out
-	cd $(GEN_DIR) && python generator.py --out ./out
+	cd $(GEN_DIR) && python generator.py --profile realistic --out ./out
 
 produce: ## replay the dataset into Kafka (batch)
 	cd $(GEN_DIR) && python kafka_producer.py --file out/transactions.csv --bootstrap localhost:29092 --topic transactions.raw
@@ -66,7 +66,7 @@ load-graph: ## load the account population into Neo4j
 	$(COMPOSE) exec -T neo4j cypher-shell -u neo4j -p $${NEO4J_PASSWORD:-fraud_neo4j} < infra/neo4j/import.cypher
 
 serve-prep: ## copy the trained ONNX model + feature spec next to the Flink job
-	cp ml/models/model.onnx ml/models/feature_names.json stream-processor/
+	cp ml/models/model.onnx ml/models/feature_names.json ml/models/thresholds.json stream-processor/
 
 # Every module fraud_job.py imports, transitively. bins.py was missing here while
 # present in run.ps1's $JobModules, and this target was simply BROKEN: the job

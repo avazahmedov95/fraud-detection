@@ -157,12 +157,12 @@ ru: {
   grafana_hint: "Панель мониторинга Grafana из этого же стека: те же решения, собранные в хранилище, — число переводов и тревог, типы, распределение риска, регионы, последние тревоги с причинами. Если в рамке появится вход: логин admin, пароль из файла .env.",
   grafana_open: "Открыть Grafana в отдельной вкладке",
   results_hint: "На публичных данных модель тоже обучали — отдельно на каждом наборе и только для проверки подхода: обучили на одной части набора, проверили на другой, сравнили с опубликованными работами, и эта модель на этом закончилась. Модель, которая работает в системе, обучена на наших искусственных данных: в публичных наборах нет половины наших признаков (устройство, сессия, возраст счёта получателя), в них другие деньги и суммы, а обучившись на данных, по которым себя проверяем, мы потеряли бы независимую проверку.",
-  own_title: "Наши данные — генератор переводов под Узбекистан",
-  own_split: "{rows} переводов, мошенничества {share}. Обучение — первые {train} по времени, проверка — последние {test}, среди них {tf} мошеннических; эту часть модель не видела.",
+  own_title: "Наши данные — реалистичный генератор переводов под Узбекистан",
+  own_split: "{rows} переводов, мошенничества {share}. Модель учится на первых {fit} по времени, порог тревоги подбирается на следующих {val}, проверка — на последних {test}, среди них {tf} мошеннических; эту часть модель не видела.",
   m_prec: "Точность: доля настоящего мошенничества среди тревог", m_rec: "Полнота: доля пойманного мошенничества",
   m_prauc: "Качество ранжирования (PR-AUC, 0–1)", m_rocauc: "ROC-AUC (0–1)", m_rules: "Только правила: точность / полнота",
   by_type: "Поймано по типам", outage: "Если база связей (Neo4j) недоступна, модель ловит {rec} мошенничества, качество ранжирования {pr}.",
-  own_caveat: "Искусственные данные почти идеально разделимы, поэтому эти цифры — ориентир для проекта, а не ожидаемая точность в настоящем банке.",
+  own_caveat: "Данные искусственные, но сделаны похожими на жизнь: мошенничества 0,2%, честные люди иногда ведут себя «подозрительно», часть мошенничества никто не заявил. Прежние 93% точности были на слишком простых данных.",
   st_used: "использован", st_inconclusive: "не смог ответить", st_rejected: "отброшены",
   what: "Что это", how: "Что проверяли", verdict: "Вывод", source: "Подробно",
   no_kafka: "Нет связи с Kafka. Запустите стек (.\\run.ps1 up) и задачу (.\\run.ps1 submit-job), страница подключится сама.",
@@ -223,12 +223,12 @@ en: {
   grafana_hint: "The Grafana monitoring dashboard from the same stack: the same decisions as stored in the warehouse — transfer and alert counts, types, the risk distribution, regions, the latest alerts with their reasons. If a login appears in the frame: user admin, password from the .env file.",
   grafana_open: "Open Grafana in its own tab",
   results_hint: "Models were trained on the public data too — separately on each set, and only to check the approach: trained on one part of the set, tested on another, compared with published work, and that was the end of that model. The model running in the system is trained on our synthetic data: the public sets lack half of our features (device, session, the payee's account age), use other money and amounts, and training on the data we check ourselves against would have cost the independent check.",
-  own_title: "Our data — the transfer generator calibrated to Uzbekistan",
-  own_split: "{rows} transfers, {share} of them fraud. Trained on the first {train} in time, tested on the last {test}, {tf} of them fraud; the model never saw that part.",
+  own_title: "Our data — the realistic transfer generator calibrated to Uzbekistan",
+  own_split: "{rows} transfers, {share} of them fraud. The model learns on the first {fit} in time, the alert cutoff is chosen on the next {val}, and it is tested on the last {test}, {tf} of them fraud; the model never saw that part.",
   m_prec: "Precision: share of alerts that are real fraud", m_rec: "Recall: share of fraud caught",
   m_prauc: "Ranking quality (PR-AUC, 0-1)", m_rocauc: "ROC-AUC (0-1)", m_rules: "Rules alone: precision / recall",
   by_type: "Caught by type", outage: "With the relationship graph (Neo4j) down, the model catches {rec} of the fraud, ranking quality {pr}.",
-  own_caveat: "Synthetic data is close to perfectly separable, so these are the project's design targets, not the accuracy to expect in a real bank.",
+  own_caveat: "Synthetic, but shaped like life: 0.2% fraud, honest people who sometimes look suspicious, fraud nobody reported. The earlier 93% precision was measured on data that was too easy.",
   st_used: "used", st_inconclusive: "could not answer", st_rejected: "rejected",
   what: "What it is", how: "What was checked", verdict: "Verdict", source: "In full",
   no_kafka: "Kafka is unreachable. Start the stack (.\\run.ps1 up) and the job (.\\run.ps1 submit-job); the page reconnects by itself.",
@@ -410,12 +410,13 @@ async function refreshResults() {
   let h = `<div class="panel"><h2>${t("own_title")}</h2>`;
   if (o.error) h += `<div class="banner">${esc(o.error)}</div>`;
   if (o.rows) h += `<p>${t("own_split").replace("{rows}", fmtInt(o.rows)).replace("{share}", pct(o.fraud_share))
-    .replace("{train}", fmtInt(o.train)).replace("{test}", fmtInt(o.test)).replace("{tf}", fmtInt(o.test_fraud))}</p>`;
+    .replace("{fit}", fmtInt(o.fit)).replace("{val}", fmtInt(o.val)).replace("{test}", fmtInt(o.test))
+    .replace("{tf}", fmtInt(o.test_fraud))}</p>`;
   h += `<div class="tiles">` + [["m_prec", pct(o.precision)], ["m_rec", pct(o.recall)], ["m_prauc", dec(o.pr_auc, 3)],
     ["m_rocauc", dec(o.roc_auc, 3)], ["m_rules", pct(o.rules_precision) + " / " + pct(o.rules_recall)]]
     .map(([k, v]) => `<div class="tile"><span>${t(k)}</span><b>${esc(v)}</b></div>`).join("") + `</div>`;
   if (o.by_type) h += `<p>${t("by_type")}: ` + Object.entries(o.by_type).map(([k, v]) => `${esc(kindName(k))} ${pct(v)}`).join(" · ") + `</p>`;
-  if (o.outage) h += `<p>${t("outage").replace("{rec}", pct(o.outage.at_0_50.recall)).replace("{pr}", dec(o.outage.pr_auc, 3))}</p>`;
+  if (o.outage) h += `<p>${t("outage").replace("{rec}", pct(o.outage.at_review.recall)).replace("{pr}", dec(o.outage.pr_auc, 3))}</p>`;
   $("#own").innerHTML = h + `<p class="muted">${t("own_caveat")}</p></div>`;
   $("#public").innerHTML = (results.public || []).map(d => `<div class="panel"><h2>${esc(d.name[L])} ` +
     `<span class="badge st-${esc(d.status)}">${t("st_" + d.status)}</span></h2>` +

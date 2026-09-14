@@ -9,9 +9,10 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 
-from config import (GeneratorConfig, AMOUNT_MIN, AMOUNT_MAX,
+import config as C
+from config import (GeneratorConfig, AMOUNT_MIN, AMOUNT_MAX, STRUCTURING_THRESHOLD,
                     FAMILY_PAYEE_SHARE, SECOND_DEVICE_USE_RATE)
-from events import EVENT_FIELDS, make_event
+from events import EVENT_FIELDS, make_event, round_like_a_person
 import persons as P
 import travel as T
 from persons import build_population, build_fraud_accounts, _normalise
@@ -50,18 +51,64 @@ def _assign_payees(persons, rng):
     return payees
 
 
+def _lookalikes(config, persons, known, rng, start_dt, trips):
+    """Legitimate transfers with fraud's shapes (generator-spec.md 10): collections
+    - many people paying one person within hours, for a wedding, a gift, a joint
+    purchase - and large payments split into parts, a car or a deposit paid in
+    instalments. Without them MULE_FAN_IN and STRUCTURING can fire only on fraud,
+    which is the label under another name. Off in the baseline profile."""
+    events = []
+    span = max(1, config.days - 2) * 24 * 3600
+
+    def one(sender, receiver, amount, ts):
+        is_new = receiver.pinfl not in known[sender.pinfl]
+        known[sender.pinfl].add(receiver.pinfl)
+        ev = make_event(sender, receiver, amount, ts,
+                        device_id=f"dev-{sender.pinfl[-8:]}", is_new_payee=is_new,
+                        balance_before=amount * float(rng.uniform(1.5, 6.0)), rng=rng)
+        ev["sender_region"] = T.locate(sender, trips, ts)[0]
+        events.append(ev)
+
+    for p in persons:
+        if config.collector_share > 0 and rng.random() < config.collector_share:
+            t0 = start_dt + timedelta(seconds=float(rng.random() * span))
+            for i in range(int(rng.integers(5, 16))):
+                s = persons[int(rng.integers(len(persons)))]
+                if s.pinfl != p.pinfl:
+                    one(s, p, float(np.clip(np.exp(rng.normal(12.3, 0.6)),
+                                            AMOUNT_MIN, AMOUNT_MAX)),
+                        t0 + timedelta(minutes=float(i * rng.uniform(5, 120))))
+        if config.split_payment_share > 0 and rng.random() < config.split_payment_share:
+            q = persons[int(rng.integers(len(persons)))]
+            t0 = start_dt + timedelta(seconds=float(rng.random() * span))
+            if q.pinfl != p.pinfl:
+                for i in range(int(rng.integers(3, 6))):
+                    one(p, q, float(STRUCTURING_THRESHOLD * rng.uniform(0.60, 0.99)),
+                        t0 + timedelta(minutes=float(i * rng.uniform(10, 120))))
+    return events
+
+
 def generate_normal(config, persons, by_pinfl, n_normal, rng, start_dt, trips):
     """Behaviourally-consistent legitimate traffic."""
     payees = _assign_payees(persons, rng)
     known = {p.pinfl: set(payees[p.pinfl]) for p in persons}  # already-seen payees
+    span_seconds = config.days * 24 * 3600
+    # Drawn first and taken out of the same budget; empty, without a draw, in the
+    # baseline profile.
+    events = _lookalikes(config, persons, known, rng, start_dt, trips)
+    phone_changed = {}
+    if config.phone_change_share > 0:
+        for p in persons:
+            if rng.random() < config.phone_change_share:
+                phone_changed[p.pinfl] = start_dt + timedelta(
+                    seconds=float(rng.random() * span_seconds))
+    n_regular = n_normal - len(events)
 
     # Heavy-tailed activity: a few very active senders.
     activity = _normalise(rng.random(len(persons)) ** 3)
-    sender_idx = rng.choice(len(persons), size=n_normal, p=activity)
-    span_seconds = config.days * 24 * 3600
+    sender_idx = rng.choice(len(persons), size=n_regular, p=activity)
 
-    events = []
-    for i in range(n_normal):
+    for i in range(n_regular):
         sender = persons[int(sender_idx[i])]
 
         rp = str(rng.choice(payees[sender.pinfl]))
@@ -91,6 +138,8 @@ def generate_normal(config, persons, by_pinfl, n_normal, rng, start_dt, trips):
             AMOUNT_MIN, AMOUNT_MAX))
         if hard_neg and rng.random() < 0.5:          # a large legitimate one-off
             amount = float(np.clip(np.exp(rng.normal(15.0, 0.5)), AMOUNT_MIN, AMOUNT_MAX))
+        if config.round_amount_share > 0 and rng.random() < config.round_amount_share:
+            amount = round_like_a_person(amount)
 
         ts = start_dt + timedelta(seconds=float(rng.random() * span_seconds))
         ts = ts.replace(
@@ -106,6 +155,8 @@ def generate_normal(config, persons, by_pinfl, n_normal, rng, start_dt, trips):
         # device forever and device_is_new became a fraud-only signal - see the
         # SECOND_DEVICE_* note in config.py.
         device_id = f"dev-{sender.pinfl[-8:]}"
+        if sender.pinfl in phone_changed and ts >= phone_changed[sender.pinfl]:
+            device_id = f"dev-{sender.pinfl[-8:]}-n"          # a new phone, kept
         if sender.has_second_device and rng.random() < SECOND_DEVICE_USE_RATE:
             device_id = f"dev-{sender.pinfl[-8:]}-b"
 
@@ -120,9 +171,11 @@ def generate_normal(config, persons, by_pinfl, n_normal, rng, start_dt, trips):
 
 
 def build_dataset(config):
+    C.PROFILE = config                    # the session knobs make_event reads
     rng = np.random.default_rng(config.seed)
     persons, by_pinfl = build_population(config, rng)
-    fraud_accounts = build_fraud_accounts(max(50, config.n_persons // 25), rng)
+    fraud_accounts = build_fraud_accounts(max(50, config.n_persons // 25), rng,
+                                          aged_share=config.aged_fraud_share)
     start_dt = datetime.fromisoformat(config.start_date)
 
     n_fraud = int(config.fraud_rate * config.n_transactions)
@@ -204,22 +257,27 @@ def _signal_check(df):
 
 
 def parse_args():
-    cfg = GeneratorConfig()
     ap = argparse.ArgumentParser(description="Uzbekistan P2P synthetic data generator")
-    ap.add_argument("--persons", type=int, default=cfg.n_persons)
-    ap.add_argument("--transactions", type=int, default=cfg.n_transactions)
-    ap.add_argument("--fraud-rate", type=float, default=cfg.fraud_rate)
-    ap.add_argument("--days", type=int, default=cfg.days)
-    ap.add_argument("--seed", type=int, default=cfg.seed)
+    ap.add_argument("--profile", choices=("baseline", "realistic"), default="baseline",
+                    help="realistic: docs/generator-spec.md 10")
+    # No defaults here: an unset size comes from the profile, not from baseline.
+    ap.add_argument("--persons", type=int)
+    ap.add_argument("--transactions", type=int)
+    ap.add_argument("--fraud-rate", type=float)
+    ap.add_argument("--days", type=int)
+    ap.add_argument("--seed", type=int)
     ap.add_argument("--out", type=str, default="./out")
     return ap.parse_args()
 
 
 def main():
     args = parse_args()
-    config = GeneratorConfig(
-        n_persons=args.persons, n_transactions=args.transactions,
-        fraud_rate=args.fraud_rate, days=args.days, seed=args.seed)
+    given = {k: v for k, v in (("n_persons", args.persons),
+                               ("n_transactions", args.transactions),
+                               ("fraud_rate", args.fraud_rate), ("days", args.days),
+                               ("seed", args.seed)) if v is not None}
+    config = (C.realistic(**given) if args.profile == "realistic"
+              else GeneratorConfig(**given))
 
     df, persons_df = build_dataset(config)
 
