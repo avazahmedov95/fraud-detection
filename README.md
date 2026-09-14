@@ -81,7 +81,7 @@ python -m pytest sink-writer      -q     #  23
 python -m pytest validation       -q     #  29
 python -m pytest case-manager     -q     #  45
 python -m pytest ml               -q     #  10
-python -m pytest demo             -q     #   7
+python -m pytest demo             -q     #   8
 ```
 
 Not all seven in one invocation: five module names recur across packages

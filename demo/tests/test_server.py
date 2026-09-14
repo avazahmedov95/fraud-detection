@@ -95,6 +95,14 @@ def test_case_manager_phrases_split_back_into_feature_value_weight():
         {"feature": "hour", "label_en": "hour of day (UTC)", "shown": "14:00", "weight": 0.1}]
 
 
+def test_times_with_and_without_a_fraction_both_load(tmp_path):
+    # isoformat() drops a zero fraction, so the generated file mixes both forms;
+    # the realistic dataset failed to load on exactly this.
+    rows = _filler(12) + [_row(k, k * 1440, VICTIM, "8600330000000100") for k in range(10)]
+    rows[5]["event_time"] = rows[5]["event_time"] + ".742039"
+    assert len(_library(tmp_path, rows).df) == len(rows)
+
+
 def test_a_masked_card_shows_the_bin_head_and_the_last_four():
     assert S.mask("8600031234562655") == "8600 03** **** 2655"
 

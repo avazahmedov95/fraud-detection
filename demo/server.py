@@ -143,7 +143,10 @@ class Episodes:
         df = pd.read_csv(path, usecols=lambda c: c in keep,
                          dtype={c: "category" for c in self._CATEGORIES})
         # Naive, as the CSV writes it; only differences between rows are used.
-        df["t"] = pd.to_datetime(df.pop("event_time")).astype("int64") / 1e9
+        # ISO8601 explicitly: isoformat() drops the fraction when it is zero, so the
+        # file mixes "...T11:18:38" with "...T11:18:38.742039", and a format
+        # inferred from the first row fails on the other kind.
+        df["t"] = pd.to_datetime(df.pop("event_time"), format="ISO8601").astype("int64") / 1e9
         self.df = df.sort_values("t", kind="stable").reset_index(drop=True)
         self.t = self.df["t"].to_numpy()
         self.cut = int(len(self.df) * held_out_from)
