@@ -16,7 +16,6 @@ fraud-detection/
 ├── .env                    image versions, ports, dev credentials
 ├── Makefile                make up / generate / produce / load-graph ...
 ├── run.ps1                 the experiment driver: every measured run starts here
-├── run-kill-series.ps1     repeated fault injection (irp-framing.md 6)
 │
 ├── infra/                  infrastructure configuration
 │   ├── kafka/              topic creation
@@ -29,7 +28,7 @@ fraud-detection/
 │
 ├── data-generator/         synthetic population + transactions   (phase 1)
 │   ├── config.py  events.py  persons.py  travel.py  fraud_patterns.py
-│   ├── generator.py  kafka_producer.py  handshake_bench.py
+│   ├── generator.py  kafka_producer.py  verify_spec.py
 │   └── out/                generated CSVs (gitignored)
 │
 ├── stream-processor/       PyFlink: enrich + CEP + ONNX + fusion   (phases 4,6)
@@ -42,8 +41,8 @@ fraud-detection/
 ├── validation/             the deployed rules run on FOREIGN datasets
 │   ├── paysim_adapter.py   PaySim, and what transfers from it
 │   ├── amlsim_adapter.py   IBM AMLSim + amlsim.Dockerfile toolchain
-│   ├── amlsim_ablation.py  leakage and drift screens
-│   └── zenodo.py           why one published dataset was rejected
+│   ├── ibm_aml_adapter.py  IBM AML: the rules and the model on a foreign benchmark
+│   └── harness.py          the replay loop every adapter shares
 ├── tools/
 │   └── boundary_audit.py   what one component produces vs what the next expects
 ├── demo/                   one page to show it working: stream, replayed episodes, queue
@@ -75,7 +74,7 @@ run **one at a time**:
 
 ```bash
 python -m pytest stream-processor -q     # 186
-python -m pytest data-generator   -q     #  46
+python -m pytest data-generator   -q     #  25
 python -m pytest sink-writer      -q     #  23
 python -m pytest validation       -q     #  29
 python -m pytest case-manager     -q     #  45

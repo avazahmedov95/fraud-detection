@@ -12,9 +12,7 @@ import subprocess
 import sys
 import time
 
-# A harness lives one level down. _PKG is the ml package it drives - where
-# train.py and models/ are - and ROOT is the repository. Everything this
-# writes belongs to the package, not to this directory.
+# _PKG: the ml package driven (train.py, models/); ROOT: the repository.
 _PKG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT = os.path.dirname(_PKG)
 GEN_DIR = os.path.join(ROOT, "data-generator")
@@ -29,28 +27,22 @@ DEFAULT_SEEDS = (42, 7, 13, 99, 2026)
 
 def _alternative(cap):
     """The mode to compare the active one against: the POOREST the capability
-    declares, since the question is what losing it costs.
-
-    Not the literal string "off". Two capabilities do not have one - receiver_age
-    is (always, on_us, off) and payee_identity is (card, pinfl) - and assuming it
-    made `ablate.py` with no argument die on the payee_identity arm, because
-    capabilities._configured rejects a mode outside the declared set. It died
-    loudly, which is why this is a bug rather than an entry in the silent-failure
-    catalogue.
-    """
+    declares - not "off", which receiver_age and payee_identity do not have."""
     poorest = cap.modes[-1]
     return poorest if poorest != CAP.MODES[cap.key] else cap.modes[0]
 
 
 def _configurations(only=None):
     """Baseline plus each capability flipped away from its default, one at a time.
-    `only` restricts the sweep - resolving one borderline delta needs many seeds."""
+    `only` restricts the sweep, and sweeps each capability it names across all of
+    its declared modes."""
     plan = [("baseline", {})]
     for cap in CAP.REGISTRY:
         if cap.always_on or (only and cap.key not in only):
             continue
-        other = _alternative(cap)
-        plan.append((f"{cap.key}={other}", {f"CAP_{cap.key.upper()}": other}))
+        others = ([m for m in cap.modes if m != CAP.MODES[cap.key]] if only
+                  else [_alternative(cap)])
+        plan += [(f"{cap.key}={m}", {f"CAP_{cap.key.upper()}": m}) for m in others]
     return plan
 
 

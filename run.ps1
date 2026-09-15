@@ -961,22 +961,6 @@ switch ($Target.ToLower()) {
             "apache/kafka:$($DotEnv.KAFKA_IMAGE -replace '.*:', '')" /make-truststore.sh
     }
 
-    "handshake-bench" {
-        # What ONE connection costs, plaintext against mutual TLS. The transport
-        # arms hold a single connection each, so this is the figure they cannot
-        # resolve - the same relationship the AES-GCM microbenchmark has to the
-        # payload arms in 7.4. Runs inside the network for the certificates and
-        # for one clock. `-Count` sets the number of pairs, default 30.
-        $genPath = (Resolve-Path "data-generator").Path
-        $certPath = (Resolve-Path "infra\kafka\certs").Path
-        $pairs = if ($Count -gt 0) { $Count } else { 30 }
-        docker run --rm -i `
-            --network fraud-detection_fraudnet `
-            -v "${genPath}:/gen" -v "${certPath}:/certs:ro" -w /gen `
-            fraud-sink-writer:latest `
-            python handshake_bench.py --n $pairs
-    }
-
     "produce-stream-tls" {
         if (-not (Assert-JobRunning)) { break }
         # Transport arm: same producer, same pacing, same payload - only the

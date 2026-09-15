@@ -1,8 +1,7 @@
 """Unit tests for the audit integrity chain.
 
-The known-answer vectors keep the two copies of integrity.py (here and in
-data-generator/) in step: both carry this test and must produce the same fixed
-hex, so a drifting copy fails a vector instead of leaving the chain unverifiable.
+The known-answer vectors pin integrity.py; data-generator/'s copy must match this
+one byte for byte (data-generator/tests/test_shared_copies.py).
 """
 
 
@@ -22,9 +21,8 @@ EVENT = {
 
 # --- known-answer vectors (pin the two copies together) ---------------------
 
-# Frozen vectors; these exact strings must also appear in
-# data-generator/test_integrity.py. Changed when receiver_pinfl left the wire:
-# the hash binds only fields the event carries.
+# Frozen vectors, re-anchored whenever a field leaves the wire: the hash binds
+# only fields the event carries.
 INGRESS_VECTOR = "2a1db4b7be624d44b152ad0eb1dc41d293db2a0955057477304ed6dd9173fb43"
 RECORD_VECTOR = "0b78fd33b284062eb5b9f6dc32f1c4507ed4fbb4c1d00c2a48cc4b885c964cad"
 

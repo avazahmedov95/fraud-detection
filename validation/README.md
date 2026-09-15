@@ -274,8 +274,6 @@ the rules, and it makes this a **conservative** test.
 
 ## 2. Zenodo 20030065 — examined and NOT used as claimed
 
-`zenodo.py` - `--only provenance` and `--only profile`, or both
-
 DOI [10.5281/zenodo.20030065](https://doi.org/10.5281/zenodo.20030065),
 published as *"A Production-Collected Online Banking Fraud Detection Dataset
 from a Live Cloud-Based Deep Learning System"*.
@@ -346,12 +344,7 @@ The PCA finding below is unaffected and remains the reason the file is not used.
 mean, and ~0.17–0.19% is a real figure from real card traffic. So the finding is
 kept and **cited to the ULB dataset directly** rather than through this record.
 
-```bash
-python zenodo.py --file fraud_tests_export_20260501_080333.csv
-```
-
-Kept in the repository because the investigation is itself a result — see
-`docs/irp-framing.md`.
+The investigation is itself a result — see `docs/irp-framing.md`.
 
 ---
 
@@ -516,7 +509,7 @@ baseline, and that gap is now measured rather than suspected.
 
 ### The ablation was run, and AMLSim cannot answer the question
 
-`amlsim_ablation.py`, 10K profile. The conclusion is negative about the
+Run on AMLSim's 10K profile. The conclusion is negative about the
 **dataset**, not about the hypothesis, and it took three independent findings to
 establish - any one of which alone would have compromised the measurement.
 
@@ -562,10 +555,9 @@ method of placement is itself the strongest predictor**: `is_family` here,
 balance columns in PaySim and Zenodo, `is_new_payee` in AMLSim. That is not four
 coincidences. It is a property of how synthetic fraud data gets made, and it
 means **the first step in using a foreign dataset is a screen for it, not the
-last.** `amlsim_ablation.py` now carries two such screens - `leakage_screen()`
-for near-deterministic single features and `drift_screen()` for
-non-stationarity - and both were written after being caught by what they now
-detect.
+last.** Two such screens were written - one for near-deterministic single
+features, one for non-stationarity - each after being caught by what it
+detects; they left with the AMLSim ablation script (git history).
 
 **Still owed for the receiver-side claim.** It has no external corroboration and
 this run did not provide one. What would: a dataset whose positive class is

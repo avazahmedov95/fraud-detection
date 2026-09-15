@@ -65,7 +65,7 @@ input stream itself.
 ```
 
 `python capabilities.py` prints the active profile. Changing any of these
-changes the feature contract — retrain and re-export; `ml/experiments/ablate.py` sweeps
+changes the feature contract — retrain and re-export; `ml/experiments/ablate_seeds.py` sweeps
 configurations and measures what each integration is worth.
 
 ## How CEP and ML combine (decision-layer fusion)

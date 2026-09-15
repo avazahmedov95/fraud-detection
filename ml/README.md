@@ -16,10 +16,8 @@ explain.py        SHAP global (beeswarm + bar) and per-alert reason codes
 
 experiments/      harnesses - each produces a NUMBER, not an artefact the
                   system uses, and none is imported by the pipeline above
-  ablate.py       what each capability is worth, one dataset. Name one
-                  (`ablate.py receiver_age`) to sweep all its modes
-  ablate_seeds.py the same across generator seeds, with intervals.
-                  Quote figures from this one, not from ablate.py
+  ablate_seeds.py what each capability is worth, across generator seeds, with
+                  intervals; --only <capability> sweeps all of its modes
   layers.py       CEP-only vs ML-only vs fused on the held-out slice
   recall.py       per-type recall across seeds (budgeted; resumes)
                   One-off experiments are deleted once their decision is
@@ -277,23 +275,11 @@ What each integration is worth, measured rather than assumed. See
 was measured on the baseline profile, the dataset of record until 2026-09-14; the
 realistic profile has not been swept yet.
 
-- `experiments/ablate.py` — one sweep on the current dataset. Fast, but a single dataset
-  cannot separate a small effect from sampling noise. With a capability named
-  (`python experiments/ablate.py receiver_age`) it sweeps that one across **all** its
-  declared modes rather than on/off.
-- `experiments/ablate_seeds.py` — the same sweep across several generator seeds, reporting
-  each delta as mean +/- sd with a verdict. **Quote figures from this one.**
-
-There used to be a third, `ablation_receiver_age.py`, and it is worth knowing why
-it is gone rather than merely that it is. It set `RECEIVER_AGE_MODE` — the switch
-this project used before `capabilities.py` existed — and nothing has read that
-name from the environment since. Run today it would have trained the default
-configuration three times and reported the differences between three training
-runs as the cost of an integration, without failing. Its function is now
-`experiments/ablate.py receiver_age`, driving `CAP_RECEIVER_AGE`, which works. The
-`always/on_us/off.json` files under `models/ablation/` are its output from before
-the migration: valid when taken, and against a 22-feature vector that has since
-grown to 24, so they are history rather than current figures.
+`experiments/ablate_seeds.py` sweeps the capabilities across several generator
+seeds and reports each delta as mean +/- sd with a verdict; `--only receiver_age`
+sweeps one capability across **all** its declared modes rather than on/off. The
+`always/on_us/off.json` files under `models/ablation/` predate the capability
+registry and a 24-feature vector: history rather than current figures.
 
 Deltas are paired within each seed; the interval is a 95% CI for the mean delta.
 Measured before `train.py` began withholding the payee age on a tenth of its

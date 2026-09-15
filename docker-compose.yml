@@ -201,8 +201,7 @@ services:
     # with no restart policy the cluster sat with zero TaskManagers while every
     # other container read Up (irp-framing.md 8, twenty-first). unless-stopped,
     # not always: an operator who runs docker compose stop is left alone, and so
-    # is docker compose kill - checked - so run-kill-series.ps1, which injects its
-    # fault that way and starts the TaskManager by hand, measures what it did.
+    # is docker compose kill - checked.
     restart: unless-stopped
     environment:
       # Present permanently; it only enables DEcryption. Records without the

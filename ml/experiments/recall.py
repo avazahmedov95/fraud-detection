@@ -1,12 +1,6 @@
-"""Recall per fraud type, with counts beside the rates: a per-type figure on a few
-dozen events carries a wide interval.
-
-Results accumulate across invocations, so they are guarded by the same contract
-fingerprint `ablate_seeds.py` uses: adding a feature or changing the generator
-makes earlier rows describe a different experiment. This harness lacked that
-guard while its twin had it, and the evidence that it mattered is sitting beside
-the state file - `recall_by_type_pre_receiver_velocity.json` is a set of results
-rescued by hand when exactly this happened.
+"""Recall per fraud type across seeds, with counts beside the rates - a per-type
+figure on a few dozen events carries a wide interval. Results accumulate across
+runs, guarded by the contract fingerprint ablate_seeds.py uses.
 """
 
 import argparse
@@ -17,37 +11,16 @@ import subprocess
 import sys
 import time
 
-from ablate_seeds import _contract_fingerprint
+from ablate_seeds import _contract_fingerprint, _dataset
 
-# A harness lives one level down. _PKG is the ml package it drives - where
-# train.py and models/ are - and ROOT is the repository. Everything this
-# writes belongs to the package, not to this directory.
+# _PKG: the ml package driven (train.py, models/); ROOT: the repository.
 _PKG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT = os.path.dirname(_PKG)
-GEN_DIR = os.path.join(ROOT, "data-generator")
 STATE = os.path.join(_PKG, "models", "ablation", "recall_by_type.json")
 SCRATCH = "/tmp/ablation_seeds"
 
 DEFAULT_SEEDS = (42, 7, 13, 99, 2026, 1, 2, 3, 5, 8,
                  11, 17, 23, 31, 44, 58, 77, 101, 123, 777)
-
-
-def _dataset(seed):
-    # Keyed by the generator fingerprint, as in ablate_seeds: an unversioned
-    # scratch path silently reuses a dataset built by a superseded generator.
-    tag = _contract_fingerprint().split("gen-")[-1]
-    out = os.path.join(SCRATCH, f"gen{tag}", f"seed{seed}")
-    csv = os.path.join(out, "transactions.csv")
-    if os.path.exists(csv):
-        return csv
-    os.makedirs(out, exist_ok=True)
-    proc = subprocess.run(
-        [sys.executable, "generator.py", "--seed", str(seed), "--out", out],
-        cwd=GEN_DIR, capture_output=True, text=True)
-    if proc.returncode != 0:
-        sys.stderr.write(proc.stdout[-1500:] + proc.stderr[-1500:])
-        raise SystemExit(f"generation failed for seed={seed}")
-    return csv
 
 
 def _train(csv):

@@ -111,14 +111,14 @@
         ]
       },
       "verdict": {
-        "ru": "Для выводов не использован. Польза — в коде появились две проверки чужих данных на такие ловушки.",
-        "en": "Not used for conclusions. What it left: two screens in the code that catch such traps in foreign data."
+        "ru": "Для выводов не использован. Польза — урок: чужие данные сначала проверять на такие ловушки.",
+        "en": "Not used for conclusions. What it left: a lesson - screen foreign data for such traps first."
       },
       "source": "validation/README.md, section 3",
       "quotes": [
         {"file": "validation/README.md", "text": "| fan_in | **199** | **0** | **0.0%** |"},
         {"file": "validation/README.md", "text": "**A sixty-fold swing in PR-AUC from a bagging parameter.**"},
-        {"file": "validation/README.md", "text": "`leakage_screen()`"}
+        {"file": "validation/README.md", "text": "the first step in using a foreign dataset is a screen for it"}
       ]
     },
     {

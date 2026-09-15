@@ -203,7 +203,7 @@ Ordered by what blocks what.
 
    Method: baseline row count, paced stream, `docker compose kill taskmanager`
    mid-stream, recount after recovery. 500 transactions per round, six rounds
-   (`run-kill-series.ps1`), against a warehouse emptied beforehand.
+   against a warehouse emptied beforehand.
 
    **Nothing lost — 500 of 500 in every round.** Across eighteen kills in three
    series, not one transaction was lost. Checkpointing plus committed offsets
@@ -474,7 +474,7 @@ cannot and should not repair a sign flip between two different phenomena.
    Reported not to accuse anyone but because **the checks are cheap and the
    failure mode is severe**: a thesis citing this as real-world validation would
    be asked, correctly, how it differs from the PCA-anonymised dataset rejected
-   two pages earlier. `validation/zenodo.py` runs the check.
+   two pages earlier.
 
 ---
 
@@ -658,7 +658,7 @@ this measurement, and the resolution is set by that drift.**
 
 ### 7.5a Connection churn, and what one connection costs
 
-Measured directly (`data-generator/handshake_bench.py`, forty alternating pairs),
+Measured directly by a microbenchmark over forty alternating pairs,
 a mutual-TLS handshake costs **+11.2 ms** at the median over plaintext (14.5
 against 3.3 ms). Four churn arms, reconnecting every 20 messages, met the target
 at p99 in every arm (worst 210 ms) and put TLS 4 ms *faster* - read as a
@@ -817,8 +817,8 @@ restarts the TaskManager first, so the leak never accumulates. And the TaskManag
 has `restart: unless-stopped`: its JVM was made to exit on its own, Docker brought
 it back, a new TaskManager registered, and the running job restored from
 checkpoint 35 and completed checkpoint 37 without anyone touching it. A deliberate
-`docker compose kill` is still left down - also checked - so `run-kill-series.ps1`,
-which injects its fault that way and restarts by hand, measures exactly what it did
+`docker compose kill` is still left down - also checked - so a fault injected
+that way and restarted by hand measures exactly what it did
 before. Neither mitigation fixes the leak itself: the production answer remains a
 per-job cluster (application mode), and the `Makefile` submit path does neither.
 

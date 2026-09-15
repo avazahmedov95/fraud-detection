@@ -159,8 +159,6 @@ harnesses - produce a NUMBER, not part of the generator
 verify_spec.py     re-checks docs/generator-spec.md against the output (15/15 on the
                    realistic profile, the default; 16/16 on the baseline).
                    The spec is a claim; this is what makes it falsifiable
-handshake_bench.py one mutual-TLS handshake against one plaintext connection,
-                   measured directly - docs/irp-framing.md 7.5a
 ```
 
 Four of these were absent from this list for months, `integrity.py` and
