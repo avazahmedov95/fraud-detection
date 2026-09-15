@@ -46,7 +46,7 @@ AGE_UNKNOWN_SEED = 42
 #: profile's 1.5% fraud (a weight near 65). Below this line it collapses the
 #: ranking: on IBM AML (0.10%) every weight from 65 up, on the realistic profile
 #: (0.18%) every weight from 10 up, with unweighted the best on the realistic
-#: validation rows (experiments/class_weight.py, realism.py). There the default
+#: validation rows (ml/README.md). There the default
 #: fits unweighted, and because an unweighted model's probabilities sit near the
 #: base rate, the cutoffs are chosen on validation rows and shipped with the model
 #: (thresholds.json) instead of being fixed at 0.40 / 0.80.

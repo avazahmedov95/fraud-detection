@@ -22,12 +22,8 @@ experiments/      harnesses - each produces a NUMBER, not an artefact the
                   Quote figures from this one, not from ablate.py
   layers.py       CEP-only vs ML-only vs fused on the held-out slice
   recall.py       per-type recall across seeds (budgeted; resumes)
-  calibration.py  are the probabilities usable as magnitudes, or only as a
-                  ranking? Merges its block into metrics.json
-  recipe.py       row bagging and averaged fits, on this data and IBM AML
-  class_weight.py which class weight at a realistic base rate (IBM AML)
-  realism.py      the deployed and a retrained model on the realistic profile
-  chains.py       money_chains - the money followed a hop further - and its gates
+                  One-off experiments are deleted once their decision is
+                  written below: git log --diff-filter=D -- ml/experiments
 
 models/           artifacts: model.joblib, model.onnx, thresholds.json, feature_names.json,
                   metrics.json, shap_summary.png, shap_importance.png
@@ -89,8 +85,8 @@ The five fits alone scored 0.316-0.473 PR-AUC on the same slice; their committee
 Everything below this subsection is the baseline profile, the dataset of record
 until 2026-09-14. That profile separated too easily - fraud at 1.5%, every
 legitimate transfer plainly legitimate, exact labels - and the model it trained
-scored 0.937 PR-AUC there and 0.42 on data shaped like the realistic profile
-(`experiments/realism.py`). The dataset of record is now that profile
+scored 0.937 PR-AUC there and 0.42 on data shaped like the realistic profile.
+The dataset of record is now that profile
 (`docs/generator-spec.md` 10): 500,000 transfers, 0.18% labelled fraud,
 legitimate look-alikes of every pattern, a tenth of fraud never reported.
 
@@ -99,16 +95,15 @@ Three things changed in the recipe, each measured before it was adopted:
 - **No class weight at a realistic base rate.** Below 0.5% fraud the default now
   fits unweighted. On IBM AML every weight from 65 up collapsed; on the realistic
   profile every weight tried did worse than none - validation PR-AUC 0.515
-  unweighted, 0.344 at 10, 0.155 at 30 (`experiments/class_weight.py`,
-  `realism.py`). `class_weight.py`'s own rule, fixed before its IBM run, chose 30;
-  the realistic validation rows overruled it, and that is recorded rather than
-  smoothed over.
+  unweighted, 0.344 at 10, 0.155 at 30. The rule of the IBM run, fixed before it,
+  chose 30; the realistic validation rows overruled it, and that is recorded
+  rather than smoothed over.
 - **A committee of five fits, served as one booster** (`committee.py`). The mean
   of several fits' log-odds beat a single fit on IBM AML (0.180 against 0.066)
   and on the realistic profile (0.488 against 0.422). Row bagging, which the
   recipe had set without switching on (`subsample` needs `subsample_freq`), was
   tested the same way and not adopted: +0.004 on the baseline profile, nothing on
-  IBM AML (`experiments/recipe.py`).
+  IBM AML.
 - **Cutoffs chosen on data and shipped with the model.** An unweighted model's
   probabilities sit near the base rate, so a fixed 0.40 / 0.80 means nothing.
   `train.py` fits on the earliest 64% of rows, puts REVIEW where F1 peaks on the
@@ -122,54 +117,39 @@ Three things changed in the recipe, each measured before it was adopted:
 Read plainly, the table says the committee finds half the fraud in the held-out
 month and about two alerts in three are fraud. The rules alone, on data where
 legitimate traffic also collects, splits and changes phones, reach 2.4%
-precision. By pattern the weak ones are APP and MULE, where features that follow
-money past one hop would help and this project has none yet. With Neo4j down for
+precision. By pattern the weak ones are APP and MULE; the features tried for them
+are the next subsection. With Neo4j down for
 the whole slice, alerts go from 160 to 156 and recall from 0.505 to 0.376, while
 false alarms rise from 58 to 80 - a larger cost than the baseline profile's +4
 below, because a payee's age tells more when fraud is this rare.
 
-### Following the money a hop further (`money_chains`: off - the second gate did not pass)
+### Following the money a hop further: tried, not adopted, removed
 
 Three features read the receiver-keyed store a day back instead of an hour, and
-read it for the sender as well as for the payee (`stream-processor/capabilities.py`,
-`experiments/chains.py`): how many people paid this payee in a day, how much the
-sender itself received in a day, and from how many people. A mule collects over
-hours and pays on what came in; the hour window saw a slice of the first and
-nothing of the second.
+for the sender as well as the payee: how many people paid this payee in a day,
+how much the sender itself received in a day, and from how many people. Two
+gates, each fixed before its run as the owner's "adopt only if it does not get
+worse", decided on validation rows over five seeds:
 
-On the realistic profile, five seeds, decided on the validation rows by a rule
-fixed before the run - the owner's: adopt only if it does not get worse:
-validation PR-AUC 0.515 -> 0.561, paired +0.046 [+0.016, +0.076]; test 0.424 ->
-0.494; the committee 0.488 -> 0.544 on test, catching 54.5% of the fraud instead
-of 45.0% at the same precision (66%) - MULE 35% -> 52%, APP 35% -> 45%. The
-caveat is the generator's: its mules are built to collect and then pay on, so
-part of the gain is the features finding what the generator put there. That is
-why IBM AML, which this project did not write, is the second gate.
+- realistic profile: validation PR-AUC 0.515 -> 0.561, paired +0.046 [+0.016,
+  +0.076]; the committee caught 54.5% of the test fraud instead of 45.0% at the
+  same precision. Passed - but the generator builds its mules to collect and then
+  pay on, so part of that is the features finding what the generator put there.
+- IBM AML, which this project did not write: validation 0.0413 -> 0.0408, paired
+  -0.0005 [-0.0106, +0.0097] - a tie on the rows that decide, below zero on the
+  mean, so **not adopted**. The test rows, which decide nothing, improved from
+  0.0698 to 0.0811.
 
-On IBM AML, by the rule in `chains.py --ibm-cache` fixed before the run - "not
-worse" on the validation rows of the published 60/20/20 split, five seeds,
-unweighted: validation PR-AUC 0.0413 -> 0.0408, paired -0.0005 [-0.0106,
-+0.0097]. Below zero on the mean, so **not adopted**. The test rows, which decide
-nothing, went the other way: 0.0698 -> 0.0811, paired +0.0112 [+0.0021, +0.0203];
-the committee 0.185 -> 0.195 on test, 0.100 -> 0.096 on validation. On the rows
-that decide it is a tie, and this gate's rule has no margin for one. The
-capability stays in the tree, off, for a rerun when the generator or the IBM
-extraction changes; re-extracting IBM AML with it took 157 minutes.
-
-Reading a day rather than an hour is cheap offline only with running totals on
-the receiver state (`rules.ReceiverState`): an IBM AML hub receives thousands of
-transfers a day, and a scan per event would have taken days. The totals were
-checked against the scan on the full realistic replay - identical, to the last
-value. Live, the job reads the sender's window only when the capability is on -
-one more store read per transfer - and the store then keeps a day, which a hub
-would make expensive; the realistic profile has no such hub.
+The code - a capability, running totals on the receiver state, a second store
+read per transfer - was then removed rather than kept switched off. Commit
+`bfe556f` holds all of it, with `experiments/chains.py` and both gates.
 
 **Since 2026-09-13 the recipe withholds the payee's age on a tenth of the
 training rows**, as the live job sees every event while Neo4j is down. Until then
 an age the graph could not supply was encoded as -1, which sorts below every real
 age, and a model that had never seen an unknown age read it as the newest account
-there is. `experiments/receiver_age_outage.py` replays the held-out slice with
-every age withheld, for both recipes, five seeds (docs/irp-framing.md 7.7a):
+there is. A replay of the held-out slice with every age withheld, for both
+recipes, five seeds (docs/irp-framing.md 7.7c), gave:
 
 | recipe | payee ages | alerts | false alarms | recall | PR-AUC |
 |---|---|---|---|---|---|
@@ -580,13 +560,5 @@ to sort by score; see `docs/irp-framing.md` §9.1.
 
 This is a property of near-separable synthetic data, not of gradient boosting.
 
-**Two ways to produce it.** `train.py` computes it as part of a training run.
-`experiments/calibration.py` computes it for a model that is already trained and
-merges it into `metrics.json` without touching any other key - which is what to
-run when the aim is to measure the deployed model rather than to replace it:
-
-```bash
-python experiments/calibration.py            # score through model.onnx (what serves)
-python experiments/calibration.py --native   # score through model.joblib
-python experiments/calibration.py --dry-run  # print only
-```
+**How it is produced.** `train.py` computes it on every training run, into the
+`calibration` block of `metrics.json`.

@@ -4,7 +4,6 @@ was not trained on. Pure."""
 
 import logging
 import math
-from collections import Counter
 import datetime
 
 import config as C
@@ -155,17 +154,6 @@ def payee_key(event: dict) -> str:
     return card
 
 
-def payer_key(event: dict) -> str:
-    """The SENDER in payee-key space: the key their own inbound transfers were
-    recorded under, so money_chains can read what reached them before they paid
-    it on. Card or PINFL by the same payee_identity mode as payee_key."""
-    if CAP.mode("payee_identity") == "pinfl":
-        pinfl = str(event.get("sender_pinfl", "") or "")
-        if pinfl:
-            return pinfl
-    return str(event.get("sender_card", "") or "")
-
-
 def visible_receiver_age(event: dict, receiver_age_days):
     """Apply the receiver_age capability mode (CAP_RECEIVER_AGE); None means
     "not obtainable", never a value."""
@@ -178,7 +166,7 @@ def visible_receiver_age(event: dict, receiver_age_days):
 
 
 def extract(event: dict, receiver_age_days, state, now: float,
-            receiver_state=None, sender_inbound=None) -> dict:
+            receiver_state=None) -> dict:
     """Read-only feature extraction; does NOT mutate either state. `receiver_state`
     may be None when the shared store is down - inbound features then read as zero,
     the fail-open behaviour used elsewhere."""
@@ -252,23 +240,10 @@ def extract(event: dict, receiver_age_days, state, now: float,
     # cannot see. Distinct senders, not transfers: ten from one person is a habit.
     rcv_senders, rcv_inflow = 0, 0.0
     if receiver_state is not None:
-        recent = []
-        for e in reversed(receiver_state.inbound):      # newest first, to the hour
-            if now - e[0] > C.RECEIVER_WINDOW_S:
-                break
-            recent.append(e)
+        recent = [e for e in receiver_state.inbound
+                  if now - e[0] <= C.RECEIVER_WINDOW_S]
         rcv_senders = len({e[1] for e in recent} | {event.get("sender_pinfl", "")})
         rcv_inflow = sum(e[2] for e in recent) + amount
-
-    # money_chains: the same store read a day back, and read for the SENDER - what
-    # reached them before they paid it on. Zero when a store is unreachable, as
-    # above; in the vector only when the capability is on.
-    rcv_senders_24h, sender_inflow, sender_payers = 0, 0.0, 0
-    if CAP.enabled("money_chains"):
-        if receiver_state is not None:
-            rcv_senders_24h = _day(receiver_state, now, event.get("sender_pinfl", ""))[0]
-        if sender_inbound is not None:
-            sender_payers, sender_inflow = _day(sender_inbound, now)
 
     active_call = truthy(event.get("active_call"))
     secs_login = float(event.get("secs_login_to_confirm") or 0.0)
@@ -289,9 +264,6 @@ def extract(event: dict, receiver_age_days, state, now: float,
         "is_new_payee": 0 if payee in state.seen_payees else 1,
         "rcv_distinct_senders_1h": rcv_senders,
         "rcv_inflow_1h": math.log1p(rcv_inflow),
-        "rcv_distinct_senders_24h": rcv_senders_24h,
-        "sender_inflow_24h": math.log1p(sender_inflow),
-        "sender_distinct_payers_24h": sender_payers,
         "receiver_age": receiver_age,
         "receiver_is_fresh": receiver_is_fresh,
         "receiver_age_known": age_known,
@@ -324,50 +296,15 @@ def to_vector(feat: dict) -> list:
     return [float(feat[name]) for name in FEATURE_NAMES]
 
 
-def _day(state, now, plus=""):
-    """(distinct senders, amount) in `state` within CHAIN_WINDOW_S of `now`, and
-    `plus` counted as a sender: the running totals less the stale head, which is
-    O(stale) rather than O(day). A state whose totals are not current - built by a
-    store read, not by update_receiver_state - is scanned instead."""
-    if state.n != len(state.inbound):
-        day = [e for e in state.inbound if now - e[0] <= C.CHAIN_WINDOW_S]
-        return len({e[1] for e in day} | ({plus} if plus else set())), sum(e[2] for e in day)
-    stale, stale_sum = Counter(), 0.0
-    for e in state.inbound:                              # oldest first, to the day
-        if now - e[0] <= C.CHAIN_WINDOW_S:
-            break
-        stale[e[1]] += 1
-        stale_sum += e[2]
-    distinct = len(state.senders) - sum(1 for s, c in stale.items() if state.senders[s] == c)
-    if plus and state.senders.get(plus, 0) == stale.get(plus, 0):
-        distinct += 1
-    return distinct, state.total - stale_sum
-
-
 def update_receiver_state(receiver_state, event: dict, now: float) -> None:
-    """Advance the payee's inbound history and its running totals (call AFTER
-    extract)."""
+    """Advance the payee's inbound history (call AFTER extract)."""
     if receiver_state is None:
         return
-    sender, amount = event.get("sender_pinfl", ""), float(event["amount_uzs"])
-    current = receiver_state.n == len(receiver_state.inbound)
-    receiver_state.inbound.append((now, sender, amount))
-    # A day when money_chains reads that far back; the hour MULE_FAN_IN needs otherwise.
-    keep = C.CHAIN_WINDOW_S if CAP.enabled("money_chains") else C.RECEIVER_WINDOW_S
-    dropped = []
-    while receiver_state.inbound and now - receiver_state.inbound[0][0] > keep:
-        dropped.append(receiver_state.inbound.popleft())
-    if not current:                   # totals never kept for this state: leave them off
-        return
-    receiver_state.senders[sender] += 1
-    receiver_state.total += amount
-    receiver_state.n += 1
-    for _, s, a in dropped:
-        receiver_state.senders[s] -= 1
-        if not receiver_state.senders[s]:
-            del receiver_state.senders[s]
-        receiver_state.total -= a
-        receiver_state.n -= 1
+    receiver_state.inbound.append(
+        (now, event.get("sender_pinfl", ""), float(event["amount_uzs"])))
+    while (receiver_state.inbound
+           and now - receiver_state.inbound[0][0] > C.RECEIVER_WINDOW_S):
+        receiver_state.inbound.popleft()
 
 
 def update_state(state, event: dict, now: float) -> None:

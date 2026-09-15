@@ -51,8 +51,7 @@ def build_matrix(csv_path: str, age_unknown=None, nrows=None) -> pd.DataFrame:
                          F.age_or_none(d.get("receiver_account_age_days")),
                          states[d["sender_card"]], now,
                          receiver_states[F.payee_key(event)],
-                         population=population,
-                         sender_inbound=receiver_states[F.payer_key(event)])
+                         population=population)
         row = dict(zip(FEATURE_NAMES, res["features"]))
         row["cep_score"] = res["cep_score"]
         row["label"] = int(d["label_is_fraud"])

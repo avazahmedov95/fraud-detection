@@ -585,8 +585,8 @@ output is a wish list, so these are the numbers a reader can reproduce.
 The baseline profile separates too easily. Its fraud is 1.5% of traffic, about ten
 times what real card traffic carries (0.17-0.19%, `validation/README.md` 2); every
 legitimate transfer looks legitimate; and the labels are exact. The model it
-trained scored 0.937 PR-AUC on it and 0.42 on data shaped like the profile below
-(`ml/experiments/realism.py`) - a number that high describes the generator. This
+trained scored 0.937 PR-AUC on it and 0.42 on data shaped like the profile
+below - a number that high describes the generator. This
 profile keeps every mechanism and moves each parameter toward overlap:
 
 | knob | baseline | realistic | why |
