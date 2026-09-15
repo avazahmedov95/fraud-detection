@@ -65,7 +65,6 @@ reader:
 | `ml/README.md` | model, SHAP, and the capability ablation |
 | `case-manager/README.md` | the alert consumer: the analyst queue, the disposition as the only real label this system can produce, and why the model's reasons are computed off the scoring path |
 | `docs/audit-anchors.md` | the head hash of each audit chain, pinned to a commit — the one gap a self-verifying chain cannot close on its own |
-| `docs/Разбор антифрод-системы.html` | a Russian walkthrough of the whole system, module by module. A reader aid, subordinate to everything above it |
 
 Numbers quoted anywhere else in this repository are subordinate to those files.
 
