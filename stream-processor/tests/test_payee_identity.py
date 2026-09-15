@@ -1,10 +1,5 @@
-"""What the payee is, and what follows from not being able to know.
-
-A card-to-card transfer reaches the sending bank as a destination PAN; the person
-behind it is a lookup the bank can only do for its own clients, so receiver-side
-state is keyed by CARD by default. These tests pin that default, the symmetry it
-depends on, and the limitation it carries.
-"""
+"""What the payee is: receiver-side state is keyed by CARD by default (the bank
+sees a destination PAN); these pin that default, its symmetry and its limit."""
 
 import pytest
 
@@ -121,17 +116,8 @@ def test_switching_mode_does_not_change_the_feature_vector(mode):
 # --- a source that carries neither identity ---------------------------------
 
 def test_a_missing_card_collapses_every_payee_into_one(mode, caplog):
-    """Found running this extractor on PaySim, which names accounts and issues
-    no PANs at all.
-
-    The pinfl branch already warned when its identity was absent. The card
-    branch returned "" silently, and the consequence is worse than the one that
-    was guarded: an empty key does not make fan-in vanish, it makes every payee
-    share ONE ReceiverState. The store then reports the whole stream's inflow as
-    arriving at a single receiver - fabricating the pattern MULE_FAN_IN looks
-    for - and the shared window grows without bound, which is how it surfaced:
-    the replay went quadratic before producing a number.
-    """
+    """An empty card key puts every payee into ONE ReceiverState and fabricates the
+    fan-in MULE_FAN_IN looks for - found on PaySim, which issues no PANs."""
     mode("card")
     F._warned_no_key = False
     a = {"amount_uzs": 100_000, "receiver_pinfl": "P1", "sender_pinfl": "S1"}

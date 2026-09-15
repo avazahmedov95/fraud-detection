@@ -37,13 +37,8 @@ def _train(csv):
 
 
 def _load(extending=True):
-    """Stored results, refusing to be EXTENDED across a contract change.
-
-    `extending=False` reads them anyway, with a warning, because reporting what
-    was recorded is legitimate - the file predates this check and its rows are
-    still what they were. Adding rows to it is the unsafe half: two contracts in
-    one file, with nothing saying which row came from which.
-    """
+    """Stored results, refusing to be EXTENDED across a contract change;
+    `extending=False` reads them anyway, with a warning."""
     if not os.path.exists(STATE):
         return {}
     with open(STATE) as fh:

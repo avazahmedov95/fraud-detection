@@ -1,10 +1,6 @@
-"""Tests for the Redis-backed population baseline.
-
-Three decisions matter: writes are batched so the 300 ms path pays no round trip
-per event, reads are cached for the same reason, and the absence of Redis falls
-back to the ABSOLUTE constant rather than to this worker's own slice - a
-partition baseline masquerading as a population one. A fake client is used so
-these run in CI and so the call COUNTS can be asserted.
+"""Tests for the Redis-backed population baseline: writes batched and reads cached
+(no round trip per event), and no Redis falls back to the ABSOLUTE constant. A
+fake client, so the call counts can be asserted.
 """
 
 import sys

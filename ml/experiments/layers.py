@@ -8,9 +8,7 @@ import onnxruntime as ort
 from sklearn.metrics import (precision_recall_fscore_support, roc_auc_score,
                              average_precision_score, confusion_matrix)
 
-# A harness lives one level down. _PKG is the ml package it drives - where
-# train.py and models/ are - and ROOT is the repository. Everything this
-# writes belongs to the package, not to this directory.
+# _PKG: the ml package driven (train.py, models/); ROOT: the repository.
 _PKG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _PKG)
 

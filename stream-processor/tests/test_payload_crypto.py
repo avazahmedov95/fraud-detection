@@ -1,12 +1,6 @@
-"""Known-answer test pinning the encrypted wire format.
-
-payload_crypto.py is duplicated between data-generator/ and stream-processor/,
-which deploy separately. On drift the producer writes records the job cannot
-read, and because the decoder falls back to plaintext JSON without the magic
-prefix, drift could surface as mangled events, not an error. A DECRYPT vector:
-AES-GCM uses a fresh random nonce per record, so encryption is non-deterministic;
-fixing key, nonce and envelope pins magic, routing-key placement, base64 framing,
-plaintext serialisation and the associated data.
+"""Known-answer test pinning the encrypted wire format, which data-generator/'s
+copy must match. A DECRYPT vector, since AES-GCM encryption is non-deterministic:
+fixed key, nonce and envelope pin the magic, routing key, framing and AAD.
 """
 
 import base64

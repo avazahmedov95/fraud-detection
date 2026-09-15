@@ -1,10 +1,5 @@
-"""What the producer actually puts on the wire.
-
-csv.DictReader returns every column as a string. Numbers were cast from the
-start, booleans were not, and `"active_call": "False"` reads as TRUE to every
-consumer testing truthiness. The live job scored active_call = 1 on 100% of
-events against a model trained on 3.5%.
-"""
+"""What the producer actually puts on the wire: typed values, not the strings
+csv.DictReader returns ("False" is truthy)."""
 
 import csv
 import os
@@ -59,12 +54,8 @@ def test_no_field_leaves_as_a_stringified_bool():
 
 
 def test_the_payee_identity_is_not_on_the_wire():
-    """receiver_pinfl must not travel: a card-to-card transfer reaches the sending
-    bank as a destination PAN, and the person behind it is a core-banking lookup
-    for the bank's own clients only — 6.85% of transfers at the measured market
-    concentration — so carrying it asserts knowledge no deployment has, and every
-    receiver-side signal built on it inherits that claim. sender_pinfl stays: the
-    sender IS the bank's client."""
+    """receiver_pinfl must not travel: the sending bank sees a destination PAN, and
+    the person behind it only for its own clients. sender_pinfl stays."""
     msg = P._row_to_message(dict(_ROW), include_labels=False)
     assert "receiver_pinfl" not in msg
     assert msg["sender_pinfl"] == "S1"

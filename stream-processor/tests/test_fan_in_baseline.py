@@ -1,11 +1,5 @@
-"""Tests for the population-relative MULE_FAN_IN threshold.
-
-The threshold adapts to the traffic it sees, so these test the ADAPTATION, not a
-number. Why it exists: running the deployed rules on IBM AMLSim showed
-MULE_FAN_IN firing on 3.12% of legitimate traffic and 0.0% of the fan_in
-typology, because the constant 6 encodes the in-degree density of this project's
-own generator. See validation/README.md 3 and MULE_FAN_IN_MODE in config.py.
-"""
+"""Tests for the population-relative MULE_FAN_IN threshold: they test the
+ADAPTATION to the traffic seen, not a number (validation/README.md 3)."""
 
 import sys
 

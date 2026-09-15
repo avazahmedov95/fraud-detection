@@ -1,11 +1,7 @@
-"""The deployed artefacts must agree with each other and with the code.
-
-Three files describe the same 20 columns in the same order: the capability
-registry (which generates FEATURE_NAMES), feature_names.json (which labels the
-model's contributions in case-manager/explain.py), and the model itself. The
-vector is passed positionally, so a reordered registry trains and serves happily
-while every SHAP contribution is attributed to the wrong feature - not a crash,
-but a confident, specific, wrong reason. Skipped when the artefacts are absent.
+"""The deployed artefacts must agree with each other and with the code: the
+capability registry (FEATURE_NAMES), feature_names.json and the model describe
+the same columns in the same order, and the vector is positional. Skipped when
+the artefacts are absent.
 """
 
 import json

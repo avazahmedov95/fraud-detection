@@ -128,13 +128,7 @@ def test_minimal_deployment_still_has_a_usable_contract(set_mode):
     assert len(names) == 12
 
 
-# --- a write that configures nothing --------------------------------------
-#
-# MODES was a plain dict until 08.09.2026, so setting a key it did not have was a
-# successful write that switched nothing off. Twelve such writes across five files
-# survived the removal of the `channel` capability, and every one of those runs used
-# the FULL profile while printing a reduced one - including two external-validation
-# adapters. Nothing failed, because nothing looked.
+# --- a write that configures nothing must fail -----------------------------
 
 def test_an_unknown_capability_cannot_be_set(set_mode):
     with pytest.raises(KeyError):
@@ -144,15 +138,7 @@ def test_an_unknown_capability_cannot_be_set(set_mode):
 
 
 def test_a_mode_outside_the_declared_set_cannot_be_set(set_mode):
-    """The same silence in the other direction, and the one that had teeth.
-
-    payee_identity selects BETWEEN two data sources and declares no "off"; two tests
-    switched it off anyway while describing "every optional integration off". The
-    write landed, `enabled()` read it and returned False for a capability the
-    registry says is always enabled, and both tests asserted against a deployment
-    that cannot exist. No published figure moved - payee_identity contributes no
-    features and no rules - which is exactly why it went unnoticed.
-    """
+    """A mode outside the declared set must fail too: payee_identity has no "off"."""
     assert "off" not in CAP.BY_KEY["payee_identity"].modes
     with pytest.raises(ValueError):
         set_mode(payee_identity="off")

@@ -1,9 +1,5 @@
-"""Unit tests for the Redis-backed receiver store.
-
-The store lives OUTSIDE Flink's checkpoint, so under AT_LEAST_ONCE every event
-between the last checkpoint and a failure is recorded twice; these tests pin the
-two properties that make that acceptable.
-"""
+"""Unit tests for the Redis-backed receiver store, which lives outside Flink's
+checkpoint: replays record events twice, and these pin why that is acceptable."""
 
 import pytest
 

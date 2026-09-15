@@ -44,12 +44,6 @@ def test_mandatory_floor_forces_review():
 
 
 # --- the fallback path scales with capability, the fused path does not -------
-#
-# `scaled_threshold` used to be reachable only through rules._thresholds(), whose
-# verdict fraud_job discards - so the fix for the PaySim silent-layer finding ran
-# in the offline adapters and nowhere in the deployed job. These pin both halves:
-# the fallback obeys the scaling, and the validated fused operating point does not
-# move.
 
 @pytest.fixture
 def profile():
@@ -129,18 +123,8 @@ def test_type_priority():
 
 
 def test_a_sender_side_burst_is_not_evidence_of_a_mule():
-    """Changed 08.09.2026; this line used to assert MULE and was wrong.
-
-    VELOCITY and DISTINCT_PAYEE_BURST fire when one account pays out fast, and a
-    drained account looks exactly like a mule paying out - the tempo does not say
-    which. Measured once both rules could fire at all: 7 of 28 MULE alerts were
-    account takeovers.
-
-    They belong to ATO because that is where threat-model.md 3 puts the short
-    window: A2 cannot slow down, credentials get revoked. MULE keeps only
-    MULE_FAN_IN, which is money CONVERGING - the one thing a mule does that a
-    takeover does not.
-    """
+    """VELOCITY and DISTINCT_PAYEE_BURST name ATO, not MULE: a drained account paying
+    out looks exactly like a mule; MULE is named by money converging (MULE_FAN_IN)."""
     assert classify_type(["VELOCITY", "DISTINCT_PAYEE_BURST"]) == "ATO"
     assert classify_type(["MULE_FAN_IN"]) == "MULE"
     # And a burst alongside fan-in is still the takeover, by priority order.
@@ -148,13 +132,7 @@ def test_a_sender_side_burst_is_not_evidence_of_a_mule():
 
 
 # --- the deployed call site, which no other test can reach -------------------
-#
-# fraud_job.py cannot be imported here: it needs PyFlink, which is not installed
-# on the host. So these read its SOURCE. That is a weak form of test and it is
-# used deliberately, because the alternative is no coverage at all of the one
-# call that matters - `decide`'s cep_only default is safe, so a caller that stops
-# passing it goes back to the pre-fix behaviour with nothing failing, and at full
-# capability the two behaviours are identical (docs/irp-framing.md 8, fifteenth).
+# fraud_job.py needs PyFlink, absent on the host, so these read its SOURCE.
 
 def _fraud_job_ast():
     import ast
@@ -215,18 +193,8 @@ def test_no_model_reaches_the_scaled_cutoffs(profile):
 # --- the alert label, and a category that could never be assigned ------------
 
 def test_fan_in_names_the_mule_pattern():
-    """MULE_FAN_IN must reach the MULE label, and until 08.09.2026 it did not.
-
-    The label was named by DISTINCT_PAYEE_BURST and VELOCITY alone. Both need
-    more than five events in ten minutes from one sender; the generator's fastest
-    burst reaches exactly five, so neither fires and the MULE category was
-    unreachable - 0 alerts across 50,000 rows, while real mule transfers were
-    labelled "(none)" 65% of the time and APP 33%.
-
-    Fan-in is the collection stage, which is the thing that makes a mule a mule,
-    and MULE_FAN_IN detects it at 100% precision on this data. It was the one
-    rule the table did not consult.
-    """
+    """MULE_FAN_IN must reach the MULE label: fan-in is the collection stage, the
+    thing that makes a mule a mule."""
     assert classify_type(["MULE_FAN_IN"]) == "MULE"
 
 

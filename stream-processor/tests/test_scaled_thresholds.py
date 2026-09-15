@@ -1,10 +1,5 @@
-"""Unit tests for capability-scaled decision thresholds.
-
-Found empirically: on PaySim with two rules available, the highest CEP score any
-fraud reached was 0.35 against a 0.40 review cutoff, so nothing was ever flagged
-— while the same rules separated the classes 4:1. A fixed additive threshold
-turns a reduced deployment into a silent one, not a degraded one.
-"""
+"""Unit tests for capability-scaled decision thresholds: a fixed additive
+threshold turns a reduced deployment into a silent one (on PaySim, nothing flagged)."""
 
 import pytest
 

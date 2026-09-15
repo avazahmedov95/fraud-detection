@@ -1,9 +1,5 @@
-"""Tests for the external-dataset adapters.
-
-Small fixtures shaped like the real files, so the harness is known to work
-before anyone downloads 470 MB. They test the ADAPTER — the mapping from a
-foreign schema onto this project's event contract — not the detection result.
-"""
+"""Tests for the external-dataset adapters, on small fixtures shaped like the
+real files: the mapping onto this project's event contract, not the result."""
 
 import os
 import sys
@@ -121,10 +117,7 @@ def test_capabilities_without_data_are_off_in_the_run(paysim_df, tmp_path):
 
 
 # --- AMLSim ----------------------------------------------------------------
-# Fixtures shaped like its three output files, so the harness works before
-# anyone builds a Java simulator. AMLSim supports one capability PaySim does
-# not — receiver_age, from accounts.open_dt — so the "capabilities without
-# data" test differs from PaySim's by exactly that entry.
+# Fixtures shaped like its output files; AMLSim also supplies receiver_age.
 
 @pytest.fixture
 def amlsim_dir(tmp_path):
@@ -238,12 +231,7 @@ def test_amlsim_capabilities_without_data_are_off(amlsim_dir):
 
 
 # --- IBM AML ---------------------------------------------------------------
-#
-# The dataset fetched to retest MULE_FAN_IN on a clock finer than the deployed
-# window. These pin the translation, not the result: which rows are dropped, how
-# amounts in fifteen currencies are made comparable, and that the minute timestamps
-# survive - the last being the entire reason this dataset was chosen over the two
-# already here.
+# The translation, not the result: dropped rows, currencies, minute timestamps.
 
 IBM_HEADER = ["Timestamp", "From Bank", "Account", "To Bank", "Account",
               "Amount Received", "Receiving Currency", "Amount Paid",
@@ -395,17 +383,8 @@ def test_ibm_window_stats_measure_the_span(ibm_file):
 
 
 def test_replay_refuses_a_stream_with_no_payee_key():
-    """The defect this guard exists for, and it shipped a published number.
-
-    features.payee_key falls back to the destination PAN; none of these datasets
-    issues one. Under the deployed `card` default the key is "" on every row, so
-    `seen_payees` holds one element forever: is_new_payee is true once per sender and
-    never again, DISTINCT_PAYEE_BURST cannot fire, and NEW_PAYEE_HIGH_AMOUNT inverts.
-    Measured at 0.2x on IBM AML against 4.0x for the same rule on PaySim.
-
-    features.py warned on stderr throughout, and the AMLSim table in README.md 3 was
-    published anyway - a warning inside an eighty-line report is not a failure.
-    """
+    """With no payee key every row shares one key: is_new_payee, DISTINCT_PAYEE_BURST
+    and NEW_PAYEE_HIGH_AMOUNT would measure the adapter, so the replay refuses."""
     saved = dict(CAP.MODES)
     try:
         CAP.MODES["payee_identity"] = "card"      # the deployed default

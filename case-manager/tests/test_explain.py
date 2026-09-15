@@ -1,9 +1,5 @@
-"""Tests for the model's own reasons.
-
-The risk is not a missing explanation but a WRONG one given confidently - a
-contribution labelled with the wrong feature, or from a model other than the one
-that decided. Most of these tests refuse to speak.
-"""
+"""Tests for the model's own reasons: the risk is a WRONG explanation given
+confidently, so most of these check that it refuses to speak."""
 
 
 import explain as E

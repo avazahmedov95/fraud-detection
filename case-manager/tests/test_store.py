@@ -1,9 +1,5 @@
-"""Store behaviour, against a fake ClickHouse.
-
-The cluster is unreachable from the test runner, and what is most likely to go
-wrong is ours: the schema that never gets applied, the read that forgets FINAL,
-the resolution that has to find its case first.
-"""
+"""Store behaviour against a fake ClickHouse: the schema applied, FINAL on every
+read, a resolution that finds its case first."""
 
 import pytest
 

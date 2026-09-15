@@ -91,15 +91,8 @@ T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447,
 
 
 def ci95(values):
-    """Half-width of the 95% confidence interval for the MEAN.
-    Governed by the standard error (sd/sqrt(n)), not the spread of individual deltas:
-    an earlier revision compared a mean against a standard deviation, understating
-    the evidence and calling established effects unresolved.
-
-    Module level, not nested in report(): the feature sweep needs the same
-    interval, and a second copy of an interval calculation is how two numbers in
-    one document come to mean different things.
-    """
+    """Half-width of the 95% confidence interval for the MEAN delta (standard error,
+    not the spread of individual deltas); shared by both sweeps."""
     n = len(values)
     if n < 2:
         return float("inf")
@@ -110,29 +103,10 @@ def ci95(values):
 
 
 def sweep_features(seeds):
-    """What each COLUMN contributes, which the capability sweep cannot ask.
-
-    A capability is something a deployment can lack, so `core_history` is
-    always_on - it is the bank's own transaction stream and no bank runs without
-    it. That is correct as a deployment statement and it left **eleven of the
-    twenty features unmeasured**, permanently: no toggle removes them, so nothing
-    ever asked what they were worth. Splitting the capability to make them
-    switchable would fix the measurement by asserting something false. This asks
-    the question directly instead.
-
-    Two results are reported because one of them alone misleads.
-
-    ONE AT A TIME gives the MARGINAL value: what is lost if this column goes and
-    every other stays. Redundant columns score zero here - two similar features
-    each look worthless because the other covers the gap.
-
-    TOGETHER gives the joint value of everything the first pass called
-    negligible. Measured 08.09.2026: twelve features were individually
-    indistinguishable from zero and dropping all twelve cost -0.027, twice the
-    largest single-feature effect in the contract. "Contributes nothing on its
-    own" and "can be removed" are different claims, and only the second one is a
-    decision.
-    """
+    """What each COLUMN contributes, which the capability sweep cannot ask: eleven
+    features are always on, so no toggle removes them. Reported one at a time (the
+    marginal value - redundant columns score zero) and together (the joint value of
+    everything the first pass called negligible), because either alone misleads."""
     import numpy as np
     import lightgbm as lgb
     from sklearn.metrics import average_precision_score
@@ -315,23 +289,10 @@ def report(results, only=None):
         half = ci95(pairs)
         agree = sum(1 for p in pairs if (p < 0) == (dm < 0))
 
-        # Four outcomes. "nothing was measured" is the one that has to come first,
-        # because it is indistinguishable from "no effect" in the summary columns
-        # and means the opposite thing: not that the capability is worthless, but
-        # that this run never tested it.
-        #
-        # A delta of EXACTLY zero on every seed is not a small effect. Floating
-        # point does not land on 0.000000 five times by chance, so the two
-        # configurations trained the same model on the same input, and the number
-        # in the delta column is about the harness rather than the capability.
-        # Both ways this has happened were real: device_telemetry, where the
-        # generator produced only 25 device changes and all of them fraud
-        # (generator-spec.md 4); and payee_identity, where each person carries
-        # exactly one card, so keying the receiver store by card or by PINFL
-        # induces the same partition and no ablation on this data can separate
-        # them. The first was a defect and is fixed. The second is a limit of the
-        # dataset, and saying "no effect" about it would be a claim the data
-        # cannot support.
+        # Four outcomes, "nothing was measured" first - it reads like "no effect" and
+        # means the opposite. A delta of EXACTLY zero on every seed means both arms
+        # trained the same model: a statement about the harness or the dataset, not the
+        # capability.
         untested = all(p == 0.0 for p in pairs) and len(pairs) > 1
 
         excludes_zero = abs(dm) > half

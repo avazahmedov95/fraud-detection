@@ -132,12 +132,8 @@ def test_missing_or_malformed_score_does_not_crash_the_queue():
 # --- drift guard -------------------------------------------------------------
 
 def test_columns_match_the_clickhouse_schema():
-    """CASE_COLUMNS is passed to insert() as column_names, so a column added to
-    the DDL and not here lands in the wrong position - silently, since ClickHouse
-    coerces a String into a String. The DDL is a migration: columns added after
-    the table existed arrive via ALTER ... ADD COLUMN, because the file is
-    re-applied on every connect and a widened CREATE would do nothing on a
-    cluster that already has the table. Both forms are read here."""
+    """CASE_COLUMNS must match the DDL - the CREATE and the later ALTER ... ADD
+    COLUMN migrations alike - because insert() takes the columns positionally."""
     ddl = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
                        "infra", "clickhouse", "init", "02-cases.sql")
     with open(ddl, encoding="utf-8") as fh:

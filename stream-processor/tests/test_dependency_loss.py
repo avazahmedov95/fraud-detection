@@ -1,10 +1,5 @@
-"""Loss accounting for the dependency matrix: offered minus stored, not expected
-minus stored. Getting it wrong hid the single real data-loss finding in the
-whole matrix - see offered_count.
-
-The dependency arms live in experiments/outage.py; they were a separate
-dependency_failure.py until the two harnesses were merged.
-"""
+"""Loss accounting for the dependency matrix (experiments/outage.py): offered
+minus stored, not expected minus stored."""
 
 import types
 
