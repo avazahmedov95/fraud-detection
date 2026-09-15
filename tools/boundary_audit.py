@@ -13,12 +13,8 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Three module names occur twice across the deploying packages (config.py,
-# integrity.py, payload_crypto.py), so a flat sys.path resolves `import config` to
-# whichever directory comes first - which is how this audit's first run reported
-# three false failures. Each package is imported in isolation instead. (The same
-# collision is why pytest cannot collect all five packages in one invocation; run
-# them one directory at a time.)
+# config.py, integrity.py and payload_crypto.py exist in more than one package, so
+# each package is imported in isolation rather than from one flat sys.path.
 _PKG_CACHE = {}
 
 
@@ -137,13 +133,8 @@ def b_hash_covers_only_sent_fields():
 
 
 def b_duplicated_modules_are_identical():
-    """Modules that DECLARE themselves duplicates must be byte-identical.
-
-    Duplicated because the packages deploy as separate units with no shared library,
-    and drift is silent. The set is not hard-coded - it is whatever says
-    "byte-identical" in its own docstring, because a hard-coded pair went stale once:
-    the check covered integrity.py, payload_crypto.py drifted, nothing complained.
-    """
+    """Modules that DECLARE themselves duplicates must be byte-identical. The set is
+    whatever says "byte-identical" in its own docstring, not a hard-coded pair."""
     declared = {}
     for pkg in ("stream-processor", "data-generator", "sink-writer",
                 "case-manager", "validation", "ml"):
@@ -265,11 +256,8 @@ def b_case_row_matches_the_schema():
 
 
 def _job_import_closure():
-    """Every stream-processor module `fraud_job.py` reaches, transitively.
-
-    Fixed-point rather than two passes: a module added three hops down is exactly
-    the one nobody remembers to list.
-    """
+    """Every stream-processor module fraud_job.py reaches, transitively (to a fixed
+    point, so a module three hops down is not missed)."""
     here = os.path.join(ROOT, "stream-processor")
 
     def local_imports(mod):
@@ -297,14 +285,8 @@ def _job_import_closure():
 
 
 def b_job_modules_cover_every_import():
-    """Both submitters must ship the whole closure.
-
-    This check once read run.ps1 only, and the Makefile silently fell a module
-    behind it: bins.py was in $JobModules and not in PYFILES, and the job kept
-    working because ./stream-processor is ALSO mounted at /opt/flink/usrjobs, so
-    sys.path found it without --pyFiles. One submitter was correct, the other was
-    relying on the mount, and nothing could tell them apart.
-    """
+    """Both submitters (Makefile PYFILES and run.ps1) must ship the whole closure -
+    the mounted directory can hide a module missing from one of them."""
     needed = _job_import_closure()
 
     ps1 = _read("run.ps1")
@@ -341,20 +323,9 @@ def b_serve_prep_ships_every_artefact():
 
 
 def b_served_copy_is_not_stale():
-    """The serve-prep copy of the feature contract must match the exported one.
-
-    `make serve-prep` copies model.onnx and feature_names.json into
-    stream-processor/ for the job to mount. Both are gitignored, so a stale copy
-    never ships - but it does sit on the machine that runs the job, and the
-    vector is positional. Retraining without re-copying serves the new model
-    against the old names: every SHAP contribution attributed to the wrong
-    feature, confidently, with no error anywhere.
-
-    Found when removing the channel capability took the contract from 24 columns
-    to 20 and left a 24-name copy dated six days earlier. The consistency test in
-    stream-processor/tests only compares ml/models/feature_names.json against the
-    registry; nothing looked at the copy the job actually mounts.
-    """
+    """The serve-prep copy of the feature contract must match the exported one: the
+    vector is positional, so a stale feature_names.json beside the job attributes
+    every SHAP contribution to the wrong feature without any error."""
     served = os.path.join(ROOT, "stream-processor", "feature_names.json")
     exported = os.path.join(ROOT, "ml", "models", "feature_names.json")
     if not os.path.exists(served):
@@ -392,11 +363,8 @@ def b_no_artefact_path_derived_from_file():
 
 
 def b_manifest_matches_the_deployment():
-    """The served artefacts, dataset and feature contract must be the manifest's.
-
-    Nothing else notices when they drift: each leaves a system that runs, reports
-    itself healthy, and describes something other than what it is doing.
-    """
+    """The served artefacts, dataset and feature contract must be the manifest's - a
+    drift in any of them leaves a system that runs and reports itself healthy."""
     m = pkg("ml", "manifest")
     if not os.path.exists(m.PATH):
         return "SKIP: no manifest - run ml/export_onnx.py"
@@ -436,12 +404,7 @@ def b_receiver_store_round_trips():
 
 def b_latency_query_matches_its_parser():
     """The SELECT list and the row parser must agree on the column count, and every
-    index the report reads must exist.
-
-    Silent: add a column, forget the parser, and `fetch()` drops every row on a length
-    check - the report says "no instrumented rows found" and looks like a data problem
-    rather than a code one. Get the ORDER wrong and it prints scoring time as end-to-end.
-    """
+    index the report reads must exist - otherwise rows drop silently or columns swap."""
     L = pkg(os.path.join("stream-processor", "experiments"), "latency")
     body = L.QUERY.split("SELECT", 1)[1].split("FROM", 1)[0]
     depth, cols = 0, 1
@@ -465,15 +428,8 @@ def b_latency_query_matches_its_parser():
 
 
 def b_event_mapping_matches_the_csv():
-    """`features.event_from` must be satisfiable by a real generated row.
-
-    Exercised rather than name-matched: the mapping subscripts the columns it
-    requires and `.get`s the ones it can default, so calling it on an actual row
-    tests the real contract instead of a list that has to be kept in step with it.
-    This check used to read `ml/dataset._EVENT_KEYS`, a fourth copy of that
-    mapping, and it broke the moment the copy was removed - which is the check
-    working, not the removal failing.
-    """
+    """`features.event_from` must be satisfiable by a real generated row - exercised
+    on one, rather than checked against a list of names."""
     F = pkg("stream-processor", "features")
     row = _sample_row()
     if row is None:
@@ -505,20 +461,7 @@ def b_compose_env_names_are_read():
 
 
 def b_every_module_is_documented():
-    """Each package's README must mention every .py file beside it.
-
-    A documentation boundary rather than a data one, and it earns its place the
-    way the others did - by having failed. `ml/README.md` listed four modules of
-    ten, `data-generator/README.md` omitted `integrity.py` and
-    `payload_crypto.py` - the two modules that exist as the answer to a reviewer's
-    point about cryptographic guarantees - and `stream-processor/README.md`
-    described a test layout the repository had moved away from.
-
-    None of that breaks anything, which is exactly the failure mode: a reader
-    forms a picture of the package from a list that is quietly short, and the
-    modules missing from it are not the unimportant ones. They are the ones added
-    last, which is to say the ones answering the most recent question.
-    """
+    """Each package's README must mention every .py file beside it."""
     problems = []
     for pkg in ("stream-processor", "data-generator", "ml", "sink-writer",
                 "case-manager", "validation", "tools", "demo"):
@@ -527,9 +470,7 @@ def b_every_module_is_documented():
         if not os.path.isdir(d) or not os.path.exists(readme):
             continue
         text = _read(pkg, "README.md")
-        # One level down as well: the harnesses moved into experiments/ and would
-        # otherwise have fallen out of this check by being moved, which is the
-        # opposite of what a completeness check is for.
+        # One level down as well, so experiments/ stays covered.
         names = [fn for fn in os.listdir(d) if fn.endswith(".py")]
         for sub in sorted(os.listdir(d)):
             subdir = os.path.join(d, sub)
@@ -541,33 +482,13 @@ def b_every_module_is_documented():
     return "; ".join(problems) or None
 
 
-#: Columns that are constant in the dataset of record and known to be so.
-#:
-#: Empty, and it took a regeneration to empty it. It used to hold the three
-#: `bank_code` columns, constant at "00000" because banks.csv shipped that column
-#: as a placeholder and the 2026-07-19 dataset of record was generated while it
-#: was. Commit 538dc22 filled in the real codes the same day, so the fix long
-#: predated the regeneration - the columns stayed stale only because the dataset
-#: was frozen, and this entry existed to say so.
-#:
-#: The exemption is gone rather than updated, which is the outcome worth noting:
-#: the check reports a KNOWN_CONSTANT column that has STOPPED being constant, so
-#: emptying this dict was something the audit demanded rather than something
-#: anyone remembered to do. An exemption that cannot expire is a second way to be
-#: silently wrong, and this one expired on its own.
-#:
-#: Keep the mapping. A future placeholder gets named here rather than ignored,
-#: the way bins.RETIRED_BINS is, so a NEW constant column still fails.
+#: Columns known to be constant in the dataset of record, each named here so a NEW
+#: constant column still fails; an entry that stops being constant fails too.
 KNOWN_CONSTANT = {}
 
 
 def b_no_new_constant_columns():
-    """A column with one value everywhere is a feature that was never wired.
-
-    This is how three warehouse columns were found writing constant zero, and the
-    same shape exists on the generator's side. Cheap to check and invisible
-    otherwise: nothing fails, the column is simply always the same.
-    """
+    """A column with one value everywhere is a feature that was never wired."""
     out = os.path.join(ROOT, "data-generator", "out")
     if not os.path.isdir(out):
         return "SKIP: dataset not generated"
@@ -594,28 +515,10 @@ def b_no_new_constant_columns():
     return "; ".join(problems) or None
 
 
-#: Every figure ml/README.md quotes from metrics.json, with the pattern that
-#: finds it and how metrics.json's raw value is rendered to match. A missing
-#: pattern fails as loudly as a wrong number: a check that quietly stops finding
-#: what it verifies is the seventeenth entry in irp-framing.md 8.
-#: Every figure a DOCUMENT quotes from a GENERATED artefact, wherever it lives.
-#:
-#: Merged on 08.09.2026 from two checks that each covered part of the problem:
-#: one read sixteen values but only in ml/README, the other read one value across
-#: four documents. Nine figures went stale in the gap between them - a
-#: regeneration updated ml/README, and the check that would have caught the rest
-#: was pointed at the file that happened to be right.
-#:
-#: The figures are duplicated on purpose and stay duplicated: irp-framing is a
-#: working note for a thesis, related-work is a literature review, and a document
-#: that says "see ml/README 3" instead of the number reads worse for the person
-#: it is written for. So the copies remain and drift is what fails - the same
-#: bargain b_duplicated_modules_are_identical makes for source files.
-#:
-#: (document, pattern with ONE capture group, source, how the raw value renders)
-#: `source` is ("metrics", *keys) into metrics.json, or ("seeds", "mean"|"sd").
-#: A pattern that stops matching fails as loudly as a wrong number: a check that
-#: quietly stops finding what it verifies is this document's seventeenth entry.
+#: Every figure a DOCUMENT quotes from a GENERATED artefact: (document, pattern with
+#: ONE capture group, source, how the raw value renders). `source` is ("metrics",
+#: *keys) into metrics.json, or ("seeds", "mean"|"sd"). A pattern that stops
+#: matching fails as loudly as a wrong number.
 _f3 = lambda v: f"{v:.3f}"
 _pct1 = lambda v: f"{v*100:.1f}"
 
@@ -648,27 +551,15 @@ _TRACKED_FIGURES = [
     ("docs/irp-framing.md", r"Baseline [\d.]+ ± ([\d.]+)\.", ("seeds", "sd"), _f3),
     ("docs/related-work.md", r"\| PR-AUC \| [\d.]+ \(([\d.]+) ±", ("seeds", "mean"), _f3),
     ("docs/related-work.md", r"\| PR-AUC \| [\d.]+ \([\d.]+ ± ([\d.]+) across", ("seeds", "sd"), _f3),
-    # The baseline-profile rows these two documents carry are dated history since
-    # 2026-09-14 and quote nothing current; the sentences giving the realistic
-    # profile's figure do, and are what is checked.
+    # Only the realistic profile's figures are current here; baseline rows are history.
     ("docs/related-work.md", r"the committee scores ([\d.]+) PR-AUC", ("metrics", "pr_auc"), _f3),
     ("validation/README.md", r"On the realistic profile the full system scores PR-AUC ([\d.]+)", ("metrics", "pr_auc"), _f3),
 ]
 
 
 def b_documents_match_the_generated_figures():
-    """Every figure a document quotes must still be the one that was measured.
-
-    One check over every (document, figure) pair, replacing two that each covered
-    part of it: sixteen values in ml/README, and one value across four documents.
-    Nine figures went stale in the gap - a regeneration updated ml/README and
-    nothing looked at the rest.
-
-    It does not say the numbers are good. It says the text describes the system
-    that exists, which is the weaker claim and the one a reader depends on: a
-    figure describing a model that no longer exists is worse than no figure,
-    because it still looks like a measurement.
-    """
+    """Every figure a document quotes must still be the one that was measured - not
+    that the numbers are good, but that the text describes the system that exists."""
     mpath = os.path.join(ROOT, "ml", "models", "metrics.json")
     spath = os.path.join(ROOT, "ml", "models", "ablation", "seeds.json")
     if not os.path.exists(mpath):
@@ -711,15 +602,9 @@ def b_documents_match_the_generated_figures():
 
 
 def b_external_baseline_matches_the_docs():
-    """related-work.md 6 calibrates this project against a published PaySim
-    baseline; paysim_adapter.BASELINE holds the same figures for the code that
-    reproduces them. Two copies of an external number drift the way ml/README
-    drifted from metrics.json.
-
-    Only the REPORTED column is pinned. The reproduced column moves with the
-    library versions and belongs to whoever last ran `--baseline`, whereas what
-    the source says it measured is fixed and citable.
-    """
+    """related-work.md 6 and paysim_adapter.BASELINE quote the same published PaySim
+    baseline; only the REPORTED column is pinned (the reproduced one moves with
+    library versions)."""
     sys.path.insert(0, os.path.join(ROOT, "validation"))
     try:
         import paysim_adapter as PA
@@ -750,10 +635,8 @@ def b_external_baseline_matches_the_docs():
 
 
 def b_demo_results_quote_their_sources():
-    """demo/results.json - what the demo page says about the public datasets -
-    against the documents it summarises. Each figure there is carried with the
-    exact line it came from: a document that changes the figure loses the line,
-    and this fails where the page would otherwise go on showing the old number."""
+    """demo/results.json against the documents it summarises: each figure carries
+    the exact line it came from, so a changed document fails here."""
     import json
     path = os.path.join(ROOT, "demo", "results.json")
     if not os.path.exists(path):

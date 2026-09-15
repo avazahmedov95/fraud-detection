@@ -1,15 +1,9 @@
 """End-to-end latency against the 300 ms target, from the three wall-clock
-stamps a scored record carries.
-
-Nearest-rank order statistics and a distribution-free CI for the median, because
-the distribution is not normal. Figures: docs/irp-framing.md 7.
+stamps a scored record carries: nearest-rank order statistics and a
+distribution-free CI for the median. Figures: docs/irp-framing.md 7.
 
     python latency.py [--since-minutes N]   one run
     python latency.py throughput            one row per rate in a sweep
-
-The sweep was a second file that imported this one for `fetch`, `quantile` and
-`is_saturated` - every part of it except the per-arm table. Two files sharing one
-query and disagreeing about nothing.
 """
 
 import argparse
@@ -82,11 +76,8 @@ def quantile(sorted_values, q):
 
 
 def median_ci(sorted_values, conf=0.95):
-    """Distribution-free CI for the median (order-statistic / sign-test based).
-
-    Valid for any continuous distribution, which matters here: latency is not
-    normal, and a CI derived from a standard error would assume it is.
-    """
+    """Distribution-free CI for the median (order statistics), since latency is not
+    normal."""
     n = len(sorted_values)
     if n < 2:
         return float("nan"), float("nan")
@@ -116,27 +107,14 @@ def describe(name, values, target_ms=None):
               f"over ({share:.2%}) -> {verdict} at the 99th percentile")
 
 
-# The longest wait any configured buffer can impose before the scorer: Kafka
-# fetch wait (~500 ms) plus Flink's network buffer timeout (~100 ms), with room
-# to spare. Anything beyond this is a queue, not a timer.
+# The longest wait a configured buffer can impose (fetch wait + buffer timeout,
+# with room to spare); anything beyond it is a queue.
 MAX_BUFFER_MS = 5_000.0
 
 
 def is_saturated(rows):
-    """Was the job falling behind, or merely buffering?
-
-    Both look like waiting, and this check has now been wrong twice:
-
-    1. Comparing waiting against scoring time - a ratio that is large whenever
-       the pipeline buffers at all. It called a run at 2% of capacity saturated.
-    2. Testing only for an upward trend - which misses a window opened in the
-       middle of a long backlog, where latency is already high and merely
-       creeping. It called a 180-second queue healthy.
-
-    So both tests, and an absolute bound first: buffer intervals are bounded by
-    configuration, and no legitimate timer holds a message for minutes. A queue
-    is the only thing that can.
-    """
+    """Was the job falling behind, or merely buffering? An absolute bound first - no
+    configured timer holds a message for minutes - then the ratio and trend tests."""
     if len(rows) < 20:
         return False
     waiting = sorted(r[1] for r in rows)
@@ -150,17 +128,9 @@ def is_saturated(rows):
 
 
 def clock_skew_ms():
-    """Offset between this machine's clock and the container's.
-
-    `ingested_at` is stamped by the producer on the host; `scored_at_job` and
-    `scored_at` come from inside Docker. On Windows and macOS those containers
-    run in a virtual machine with its own clock, which drifts from the host -
-    noticeably after the machine sleeps. Any offset lands directly in the
-    ingest->decision figure, and would be invisible without checking.
-
-    Returns (skew_ms, round_trip_ms). A skew well inside the round trip is
-    indistinguishable from measurement noise.
-    """
+    """Offset between this machine's clock and the container's, which drifts on
+    Windows and macOS and lands directly in ingest -> decision. Returns (skew_ms,
+    round_trip_ms); a skew well inside the round trip is noise."""
     import time as _t
     import urllib.parse
     import urllib.request
@@ -200,15 +170,9 @@ def cmd_single_run(args):
              if args.since_minutes else "")
     print(f"\n{len(rows):,} scored transactions with latency stamps{scope}\n")
 
-    # The design target is about blocking a transfer before settlement, so it
-    # applies to when the DECISION exists - not to when the row is durable in
-    # the analytical warehouse. Those are different paths: the decision is
-    # published to fraud.alerts, while ClickHouse is where it is later queried.
-    # Holding the warehouse write to the same target would be measuring the
-    # reporting stack against a real-time requirement.
-    #
-    # SCOPE: publishing is not enforcement. Nothing here declines a transfer.
-    # This is the latency of REACHING a decision, not evidence anything acted.
+    # The target applies to when the DECISION exists (published to fraud.alerts), not
+    # to the warehouse write. Publishing is not enforcement: nothing here declines a
+    # transfer.
     print("DECISION PATH - what the <%.0f ms target is about" % args.target_ms)
     print(f"{'stage':<22}{'n':>8}{'median':>10}{'95% CI':>13}"
           f"{'p95':>10}{'p99':>10}{'max':>10}   (ms)")
@@ -296,18 +260,11 @@ def arm(w, target_ms):
     rows = fetch(epoch_from=w["from"], epoch_to=w["to"])
     if not rows:
         return None
-    # r[1], ingest -> DECISION, is the headline. r[0] is end-to-end and includes
-    # the sink's batching - SINK_BATCH_SIZE=500 / FLUSH_INTERVAL_S=5, so up to
-    # five seconds of a row's life is a warehouse write that has no real-time
-    # requirement at all. latency.py splits these for exactly this reason
-    # and the first version of this report headlined the wrong one, which is why
-    # every arm read as 4-10 SECONDS.
+    # r[1], ingest -> DECISION, is the headline; r[0] includes up to 5 s of sink batching.
     decision = sorted(r[1] for r in rows)
     e2e = sorted(r[0] for r in rows)
-    # The split that makes the curve mean something. r[1] is ingest -> decision
-    # (queueing plus work) and r[3] is the work inside process_element. If the
-    # first grows while the second stays flat, the pipeline is queueing at a
-    # rate the worker cannot drain; if both grow, the work itself is the limit.
+    # r[1] is queueing plus work, r[3] the work alone: if only r[1] grows, the pipeline
+    # queues faster than it drains; if both grow, the work is the limit.
     work = sorted(r[3] for r in rows)
     ingest = sorted(r[5] for r in rows)          # ingest stamps, ms
     span_s = (ingest[-1] - ingest[0]) / 1000.0
@@ -330,10 +287,7 @@ def arm(w, target_ms):
 def cmd_throughput(args):
     if not os.path.exists(args.windows):
         raise SystemExit(f"{args.windows} not found - run `.\\run.ps1 measure-throughput` first")
-    # utf-8-sig, not utf-8: Windows PowerShell 5.1 writes `-Encoding utf8` WITH
-    # a byte-order mark, and json.load rejects it. Same family as the CRLF rule
-    # in .gitattributes - Windows tooling adds invisible bytes, and the reader
-    # is the cheaper place to be tolerant. utf-8-sig also parses a plain file.
+    # utf-8-sig: PowerShell 5.1 writes a byte-order mark, which json.load rejects.
     with open(args.windows, encoding="utf-8-sig") as fh:
         windows = json.load(fh)
     # ConvertTo-Json collapses a one-element array into an object, so a sweep of
@@ -354,9 +308,8 @@ def cmd_throughput(args):
         if a is None:
             print(f"{w['rate']:>9,.0f}{'no rows':>10}")
             continue
-        # Two different failures, and they must not be conflated. Falling short
-        # of the offered rate means the CLIENT could not generate it; a rising
-        # tail at a rate that WAS achieved means the pipeline is the constraint.
+        # Falling short of the offered rate is the CLIENT; a rising tail at an achieved
+        # rate is the pipeline.
         short = a["achieved"] < a["requested"] * 0.95
         breach = a["p99"] > args.target_ms
         state = ("client-limited" if short else

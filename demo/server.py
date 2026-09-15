@@ -1,20 +1,14 @@
 """Live demo: one page that shows the pipeline deciding.
 
 Three views over the running stack - the transfers streaming through, a fraud
-episode replayed on demand with the decision and its reasons, and the analyst
-queue those decisions fill. It adds no detection logic of its own:
+episode replayed on demand with its decision and reasons, and the analyst queue.
+It adds no detection logic: transfers are built by data-generator's
+`kafka_producer._row_to_message`, decisions come back from `transactions.scored`,
+reasons and queue from case-manager's `Explainer` and `CaseStore`.
 
-- transfers enter through `transactions.raw`, built by data-generator's own
-  `kafka_producer._row_to_message`, as the replay tools send them;
-- decisions come back from `transactions.scored`, as the Flink job emits them;
-- the reasons are case-manager's `Explainer`, the queue is its `CaseStore`.
-
-The scenarios are not scripted. Each is a real episode from the held-out 20% of
-the dataset - rows the model never trained on - replayed under a fresh sender
-card, so the job's state for that sender starts empty and fills from the
-episode's own history, and moved in time so that it ends now. Receivers keep
-their cards: the payee's account age is looked up in Neo4j by card, and a new
-card would read as "unknown".
+Scenarios are real episodes from the held-out 20% of the dataset, replayed under
+a fresh sender card and moved in time to end now; receivers keep their cards so
+Neo4j still knows their account age.
 
     python demo/server.py        # then open http://localhost:8090
 """
@@ -128,10 +122,8 @@ def _dashboard_url():
 
 
 class Episodes:
-    """The dataset, indexed for picking one episode of a kind. Held as typed
-    columns, not a dict per row: the realistic profile is 500,000 rows, and a dict
-    per row cost over a gigabyte. A row becomes a dict of strings - what
-    kafka_producer builds its message from - only when it is replayed."""
+    """The dataset, indexed for picking one episode of a kind, held as typed
+    columns (a dict per row of 500,000 cost over a gigabyte)."""
 
     _CATEGORIES = ("sender_pinfl", "sender_card", "sender_network", "receiver_card",
                    "receiver_network", "device_id", "sender_region", "active_call",
@@ -142,10 +134,8 @@ class Episodes:
         keep.discard("transaction_id")                     # a replay gets new ids
         df = pd.read_csv(path, usecols=lambda c: c in keep,
                          dtype={c: "category" for c in self._CATEGORIES})
-        # Naive, as the CSV writes it; only differences between rows are used.
-        # ISO8601 explicitly: isoformat() drops the fraction when it is zero, so the
-        # file mixes "...T11:18:38" with "...T11:18:38.742039", and a format
-        # inferred from the first row fails on the other kind.
+        # Naive, as written; ISO8601 explicitly, since the file mixes times with and
+        # without fractional seconds.
         df["t"] = pd.to_datetime(df.pop("event_time"), format="ISO8601").astype("int64") / 1e9
         self.df = df.sort_values("t", kind="stable").reset_index(drop=True)
         self.t = self.df["t"].to_numpy()
@@ -203,14 +193,10 @@ class Episodes:
 
 
 def replay_messages(items, now, rng=random):
-    """The rows as kafka_producer sends them, re-identified and moved in time.
-
-    Senders get new cards with the same six-digit BIN - so the issuer, and with it
-    the network and the on-us test, is unchanged - and new PINFLs. Every receiver
-    keeps its card, and so does a sender that is also paid inside the episode (the
-    mule). Event times shift so the last row lands at `now`, keeping every gap:
-    the job's windows are measured in event time, not in arrival order.
-    """
+    """The rows as kafka_producer sends them, re-identified and moved in time:
+    senders get new PINFLs and new cards with the same BIN (so issuer and on-us are
+    unchanged); receivers, and a sender also paid in the episode, keep their cards.
+    Times shift so the last row lands at `now`, keeping every gap."""
     keep = {row["receiver_card"] for row, _ in items}
     cards, pinfls = {}, {}
     last = _epoch(items[-1][0])

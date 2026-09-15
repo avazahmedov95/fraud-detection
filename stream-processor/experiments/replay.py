@@ -1,20 +1,12 @@
-"""Replays a generated CSV through the deployed rule engine, offline.
-
-Three questions, one replay loop. They were three files, and the loop was
-written out once per file; the copies had already drifted, two of them extracting
-a dataset name with different and one of them broken path handling.
-
-The event dict that feeds `rules.evaluate` is no longer here at all. It had a
-fourth copy in ml/dataset.py, on the path to the deployed model, so it now lives
-in `features.event_from` beside `truthy` - one mapping, for the same reason there
-is one coercion.
+"""Replays a generated CSV through the deployed rule engine, offline: three
+questions over one loop, with rows mapped by `features.event_from`.
 
     python replay.py                                  what the CEP layer alone does
     python replay.py fan-in-mode --files 'out_seed*/transactions.csv'
     python replay.py payee-seeding --files 'out_seed*/transactions.csv'
 
-Results: fan-in-mode is docs/irp-framing.md 6, third RQ3 result; payee-seeding
-bounds how much is_new_payee owes to the generator rather than to behaviour.
+fan-in-mode is docs/irp-framing.md 6, third RQ3 result; payee-seeding bounds how
+much is_new_payee owes to the generator rather than to behaviour.
 """
 
 import argparse
@@ -27,10 +19,7 @@ from collections import defaultdict, Counter
 
 import pandas as pd
 
-# A harness lives one level down and reaches back into the package it measures.
-# Anything it PERSISTS is anchored to the package directory too, not to this one:
-# the state files are named in .gitignore at stream-processor/, and a run's
-# scratch belongs to the component, not to the script that happened to write it.
+# A harness one level down; what it persists is anchored to the package directory.
 _PKG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _PKG)
 
@@ -41,14 +30,9 @@ from rules import SenderState, ReceiverState, PopulationBaseline, evaluate
 
 
 def replay(path, population=None, count_hits=False):
-    """Score every row through the deployed `rules.evaluate`.
-
-    `population` is passed straight through: None means MULE_FAN_IN falls back to
-    its absolute threshold, which is what the payee-seeding arm wants and what
-    the other two must NOT get by accident.
-
-    Returns (frame with `decision` and `flagged`, rule-hit counter or None).
-    """
+    """Score every row through the deployed `rules.evaluate`; `population` None means
+    MULE_FAN_IN uses its absolute threshold. Returns (frame with `decision` and
+    `flagged`, rule-hit counter or None)."""
     df = pd.read_csv(path).sort_values("event_time").reset_index(drop=True)
     has_labels = "label_is_fraud" in df.columns
     states, rstates = defaultdict(SenderState), defaultdict(ReceiverState)
@@ -217,16 +201,10 @@ MAX_SEED_LAG_DAYS = 21     # must match maybe_seed_payee in fraud_patterns.py
 
 
 def _with_stream_new(path):
-    """Replay, plus a per-row flag for whether the payee was new to the stream.
-
-    No population baseline: this arm measures the new-payee control, and letting
-    MULE_FAN_IN move underneath it would confound the two.
-    """
+    """Replay, plus whether each row's payee was new to the stream - with no
+    population baseline, so MULE_FAN_IN cannot move underneath the measurement."""
     df, _ = replay(path)
-    # Resolved through features.payee_key rather than by naming a column: this
-    # recomputation exists to be compared against what the RULE layer sees, and
-    # a cross-check keyed on a different identity than the thing it checks is
-    # not a cross-check.
+    # Keyed through features.payee_key, the identity the rule layer uses.
     payees = [F.payee_key({"receiver_pinfl": p, "receiver_card": c})
               for p, c in zip(df["receiver_pinfl"], df["receiver_card"])]
     seen, stream_new = defaultdict(set), []

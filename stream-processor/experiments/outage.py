@@ -1,33 +1,17 @@
 """Break one thing, and measure what the pipeline silently stops doing.
 
-Two arms of one experiment, and they were two files that shared their ClickHouse
-access, their before/after state machinery, and a `query()` identical down to its
-comment:
-
-  --service scorer   kills the SCORER mid-stream: how many transactions are lost,
-                     how many duplicated, and where the duplicates disagree.
-                     docs/irp-framing.md 5, point 6.
+  --service scorer   kills the scorer mid-stream: transactions lost and duplicated
+                     (docs/irp-framing.md 5, point 6).
   --service redis | neo4j | clickhouse | kafka
-                     kills what the scorer LEANS ON, and asks the question that
-                     matters for each: not "did it crash" but "what did it
-                     silently stop doing". docs/irp-framing.md 7.7.
-  --service control  breaks nothing. It is the reference the other arms are
-                     measured against.
+                     stops what the scorer leans on (docs/irp-framing.md 7.7).
+  --service control  breaks nothing: the reference for the other arms.
 
-Every dependency here fails open by design, which means every one of them
-degrades without an error. The point of the measurement is to say what each
-degradation costs, in rules that stop firing and rows that stop arriving.
+  python outage.py [--service S] --phase before
+  #   ... produce traffic, break S, let it recover ...
+  python outage.py [--service S] --phase after --expect 1000
 
-  python outage.py --phase before
-  #   ... produce traffic, kill the taskmanager, let it recover ...
-  python outage.py --phase after --expect 1000
-
-  python outage.py --service redis --phase before
-  #   ... stop the container, produce traffic, start it again ...
-  python outage.py --service redis --phase after --expect 1000
-
-Loss is what was OFFERED to the topic minus what the warehouse holds. For the
-kafka arm the outage stops the producer too, so that arm also needs --sent.
+Loss is what was OFFERED to the topic minus what the warehouse holds; the kafka
+arm stops the producer too, so it also needs --sent.
 """
 
 import argparse
@@ -43,19 +27,13 @@ CH_USER = os.getenv("CLICKHOUSE_USER", "fraud")
 CH_PASSWORD = os.getenv("CLICKHOUSE_PASSWORD", "fraud_ch")
 CH_DB = os.getenv("CLICKHOUSE_DB", "fraud")
 
-# Anchored to the package: .gitignore names both state files at
-# stream-processor/, and an experiment half-finished before this move must
-# still find the baseline it wrote.
+# Anchored to the package: .gitignore names both state files at stream-processor/.
 _PKG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATE = os.path.join(_PKG, "fault_injection_state.json")
-#: Where the dependency arms kept their baselines while they were a second
-#: script. Read if present, never written: a half-finished experiment must not
-#: lose its `before` pass because the two harnesses were merged underneath it.
+#: Where the dependency arms kept baselines as a separate script; read, never written.
 LEGACY_STATE = os.path.join(_PKG, "dependency_failure_state.json")
 
-#: What each dependency is expected to take away. Written down BEFORE the run so
-#: the result is a test of a prediction rather than a description of whatever
-#: happened - and so a degradation nobody predicted stands out.
+#: What each dependency is expected to take away, written before the run.
 EXPECTED = {
     "scorer": (
         "the scorer itself, killed mid-stream. Expect NOTHING lost - "
@@ -103,10 +81,7 @@ def query(sql):
             body = resp.read().decode()
     except Exception as exc:                           # noqa: BLE001
         raise SystemExit(f"ClickHouse unreachable at {CH_HOST}:{CH_PORT} - {exc}")
-    # strip("\n"), not strip(): a bare .strip() eats the LEADING TAB of the first
-    # row when its first column is empty - and predicted_type is empty for every
-    # alert no rule explains. The row then parses as one field and the caller
-    # gets an IndexError on a query that returned perfectly good data.
+    # strip("\n"), not strip(): a row whose first column is empty starts with a tab.
     return [line.split("\t") for line in body.strip("\n").splitlines() if line]
 
 
@@ -134,12 +109,7 @@ def pass_mix(before, snap):
 def report_mix(mix, ref):
     """Print this arm's alert types beside the healthy pass's, and name what
     the outage silenced."""
-    # Comparing a degraded pass against the reference pass over the SAME
-    # transactions is the whole point. The first version compared each arm's
-    # delta against the whole-table baseline, so what it actually reported was
-    # "which types occur in rows 0-1000 of the CSV" - identical for every arm,
-    # including the arm that predicted no degradation at all. An effect that
-    # shows up in the control is not an effect.
+    # A degraded pass is compared with the reference pass over the SAME transactions.
     types = sorted(set(mix) | set(ref), key=lambda t: -max(ref.get(t, 0), mix.get(t, 0)))
     print("\n  alert types, this arm vs the healthy pass on the same slice:")
     print(f"    {'type':<16}{'healthy':>9}{'this arm':>10}{'change':>9}")
@@ -166,18 +136,10 @@ def report_mix(mix, ref):
 
 
 def offered_count(args):
-    """How many messages actually reached the topic - the denominator for loss.
-
-    Returns (count, how it is known), or (None, why it cannot be).
-    """
-    # --expect is what the producer was ASKED to send, which is not what was
-    # offered for exactly one arm. Redis, Neo4j and ClickHouse sit downstream of
-    # the topic - the producer talks to Kafka and to nothing else - so stopping
-    # them leaves the offer intact, and a missing row is a row the pipeline
-    # dropped. Stopping KAFKA stops the offer itself, and counting unsent
-    # messages as lost would invent a failure the system never had. The first
-    # version of this branch refused to call EITHER case a loss, which hid the
-    # one arm that loses data by design.
+    """How many messages reached the topic - the denominator for loss. Returns
+    (count, how it is known), or (None, why it cannot be)."""
+    # --expect is what the producer was ASKED to send - what was offered, except when
+    # Kafka itself is stopped: then unsent messages are not a loss.
     if args.sent is not None and args.sent >= 0:
         return args.sent, "the producer reported delivering this many"
     if args.service == "kafka":
@@ -195,14 +157,8 @@ def offered_count(args):
 
 
 def _load_state():
-    """Baselines, keyed by service.
-
-    The scorer arm kept a bare {"total", "distinct"} while it was a separate
-    script with one arm. A file in that shape is read as the scorer's baseline
-    rather than rejected: it is gitignored run state, and failing an experiment
-    over the format of its own scratch file would be a small silent failure of
-    exactly the kind this script exists to find.
-    """
+    """Baselines, keyed by service; a bare {"total", "distinct"} from the old
+    single-arm script is read as the scorer's."""
     state = {}
     if os.path.exists(LEGACY_STATE):
         with open(LEGACY_STATE, encoding="utf-8") as fh:
@@ -224,9 +180,7 @@ def _report_scorer(base, snap, expect):
     unique = snap["distinct"] - base["distinct"]
     dupes = written - unique
 
-    # Nothing arrived between the two phases. Reporting that as "100% lost"
-    # would be a false alarm about the most serious property the script checks,
-    # so it is caught before anything else is claimed.
+    # Nothing arrived between the phases: not a 100% loss, so say so first.
     if written <= 0:
         print("=" * 66)
         print("NO DATA - the experiment did not run")
@@ -260,10 +214,8 @@ def _report_scorer(base, snap, expect):
     print(f"  duplicate rows      : {dupes:,}"
           f"  ({dupes/max(written,1):.2%} of what was written)")
 
-    # Rows arriving that add no new transaction ids means the job is re-reading
-    # the topic, not processing new traffic. Duplicates from reprocessing are
-    # indistinguishable from duplicates caused by the fault, so the measurement
-    # is void - say so rather than reporting a number that means nothing.
+    # Rows that add no new transaction ids mean the job is re-reading the topic: the
+    # duplicates cannot be told from the fault's, so the measurement is void.
     if unique == 0 and written > 0:
         ratio = snap["total"] / max(snap["distinct"], 1)
         print("\n" + "!" * 66)
@@ -338,9 +290,7 @@ def _report_scorer(base, snap, expect):
         print("     BLOCK   - a second alert on an already-blocked transfer."
               "\n               Safe: blocking twice does not double-block, but"
               "\n               it does inflate the reported fraud count.")
-        # Whether the copies agree is not assumed - it is queried. Replay is
-        # NOT a pure function of the event (see section 3), so copies of one
-        # transaction can carry different scores.
+        # Queried, not assumed: replay is not a pure function of the event.
         rows = query(f"""
             SELECT count() AS n,
                    countIf(smax - smin > 0.00005) AS differing,
@@ -380,12 +330,8 @@ def _report_scorer(base, snap, expect):
 
 
 def _report_dependency(args, before, snap):
-    # ROWS, not distinct transaction ids. The producer replays the same CSV
-    # from the top every run, so the ids repeat and uniqExact does not move at
-    # all - the first version of this reported "1000 LOST" for four services in
-    # a row, including two that were never touched, because it was counting a
-    # quantity that cannot grow. The row delta is the loss measurement; the
-    # distinct delta is only a duplication indicator.
+    # ROWS, not distinct ids: the producer replays one CSV, so ids repeat; the distinct
+    # delta only indicates duplication.
     stored = snap["total"] - before["total"]
     dup = stored - (snap["distinct"] - before["distinct"])
     heading = "after the pass" if args.service == "control" else "after the outage"
