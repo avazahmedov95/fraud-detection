@@ -1,17 +1,9 @@
 # Convenience commands for the local stack and data pipeline.
 # Usage: make <target>
 #
-# SCOPE. This is a SUBSET, not the full command set. run.ps1 additionally
-# carries every measurement: measure-plain / measure-tls / measure-crypto,
-# latency-setup, pipeline, kill-worker, make-certs, status, and the TLS and
-# encrypted producer arms. Each of those is a sequenced protocol - warm-up
-# discarded, drain, settle, cache flush, measured arm, report - rather than a
-# single command, and every seam between those steps has lost a run at least
-# once. Reproducing any figure in docs/ therefore goes through run.ps1.
-#
-# An earlier version of both files claimed they were kept in step as
-# equivalents. They were not, and this note replaces the claim rather than
-# repairing it.
+# A SUBSET of run.ps1: the measurements (measure-*, latency-setup, pipeline,
+# kill-worker, make-certs and the TLS / encrypted producer arms) are sequenced
+# protocols and live only there. Reproducing a figure in docs/ goes through run.ps1.
 
 COMPOSE = docker compose
 GEN_DIR = data-generator
@@ -48,14 +40,9 @@ produce: ## replay the dataset into Kafka (batch)
 produce-stream: ## paced replay (200x) FROM THE HOST - convenience only, never for latency
 	cd $(GEN_DIR) && python kafka_producer.py --file out/transactions.csv --realtime --speed 200 --bootstrap localhost:29092 --topic transactions.raw
 
-# Use this, not produce-stream, for anything that ends in a latency figure.
-# ingested_at is stamped by the producer and scored_at_job by Flink. Run from the
-# host those are two clocks: containers live in a VM whose clock drifts from the
-# host's and is resynced periodically. Measured offsets of +205 ms and -279 ms
-# minutes apart land straight in the decision-path figure, and once produced a
-# stable 640 ms tail that responded to no amount of tuning because it was never
-# latency at all. Inside the network the producer, Flink and ClickHouse share one
-# clock. Optional length:  make produce-stream-docker COUNT=7000
+# Use this, not produce-stream, for any latency figure: inside the Docker network
+# the producer, Flink and ClickHouse share one clock.
+# Optional length:  make produce-stream-docker COUNT=7000
 produce-stream-docker: ## paced replay from INSIDE the network - required for latency work
 	docker run --rm -i --network fraud-detection_fraudnet \
 	  -v "$(CURDIR)/$(GEN_DIR):/gen" -w /gen fraud-sink-writer:latest \
@@ -68,18 +55,12 @@ load-graph: ## load the account population into Neo4j
 serve-prep: ## copy the trained ONNX model + feature spec next to the Flink job
 	cp ml/models/model.onnx ml/models/feature_names.json ml/models/thresholds.json stream-processor/
 
-# Every module fraud_job.py imports, transitively. bins.py was missing here while
-# present in run.ps1's $JobModules, and this target was simply BROKEN: the job
-# submits, reports RUNNING, and dies on the first record with ModuleNotFoundError,
-# because PyFlink starts its Python process lazily. The mount does not save it -
-# --pyFiles unpacks to a Beam temp dir and that, not /opt/flink/usrjobs, is what
-# lands on sys.path. boundary_audit.py now derives this closure from fraud_job.py
-# and fails if either submitter drifts from it.
+# Every module fraud_job.py imports, transitively - boundary_audit.py checks both
+# submitters against it (--pyFiles, not the mount, is what reaches sys.path).
 PYFILES = /opt/flink/usrjobs/config.py,/opt/flink/usrjobs/capabilities.py,/opt/flink/usrjobs/features.py,/opt/flink/usrjobs/geo.py,/opt/flink/usrjobs/bins.py,/opt/flink/usrjobs/rules.py,/opt/flink/usrjobs/enrichment.py,/opt/flink/usrjobs/receiver_store.py,/opt/flink/usrjobs/fusion.py,/opt/flink/usrjobs/payload_crypto.py
 
-# Refuse to start a second job beside a running one. `flink run` adds a job, it
-# does not replace one, and a Flink KafkaSource assigns itself every partition,
-# so two jobs score every event twice. run.ps1's Assert-NoActiveJob, in sh.
+# Refuse a second job beside a running one: two KafkaSources score every event
+# twice. run.ps1's Assert-NoActiveJob, in sh.
 no-active-job:
 	@ACTIVE=$$(curl -s --max-time 10 http://localhost:8081/jobs/overview | \
 	  grep -o '"state":"[A-Z_]*"' | grep -v -E 'FAILED|CANCELED|FINISHED'); \
@@ -88,11 +69,8 @@ no-active-job:
 	  echo "  curl -X PATCH 'http://localhost:8081/jobs/<jid>?mode=cancel'"; exit 1; \
 	fi
 
-# A fresh TaskManager JVM before every submission. Each job loads its own
-# user-code classloader and a cancelled job does not give the Metaspace back: the
-# eighth job on one TaskManager process killed it (docs/irp-framing.md 8,
-# twenty-first). run.ps1's Restart-TaskManager, in sh - including waiting for a
-# NEW registration rather than accepting the old one while it lingers.
+# A fresh TaskManager JVM before every submission: cancelled jobs do not return
+# Metaspace (docs/irp-framing.md 8, twenty-first). run.ps1's Restart-TaskManager, in sh.
 fresh-taskmanager: no-active-job
 	@OLD=$$(curl -s --max-time 10 http://localhost:8081/taskmanagers | \
 	  grep -o '"id":"[^"]*"' | tr '\n' ' '); \

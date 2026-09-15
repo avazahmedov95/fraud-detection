@@ -33,26 +33,19 @@ param(
     [Parameter(Position = 0)]
     [string]$Target = "help",
 
-    # Message count for the produce-stream targets. Zero means "until Ctrl+C".
-    # For an A/B comparison always set it: stopping two arms by hand gives them
-    # different lengths and different amounts of enrichment-cache warming, and
-    # that difference is larger than the effect such comparisons measure.
+    # Message count for the produce-stream targets; 0 means "until Ctrl+C". Set it for
+    # A/B comparisons, so both arms get the same length and cache warming.
     #   .\run.ps1 produce-stream-docker 400
     #   .\run.ps1 produce-stream-secure 400
     [Parameter(Position = 1)]
     [int]$Count = 0,
 
-    # Close and reopen the producer every N messages. The transport arms hold
-    # ONE connection each, so the handshake is amortised over the whole arm and
-    # what they measure is mostly TLS record framing. A switch reconnects; this
-    # is the only condition under which the mutual-TLS answer could change.
+    # Close and reopen the producer every N messages, so the TLS handshake recurs
+    # instead of being amortised over one connection.
     #   .\run.ps1 measure-tls 1200 -Reconnect 20
     [int]$Reconnect = 0,
 
-    # The analyst queue (`cases`). Named rather than positional: position 1 is
-    # already an [int] for the produce/measure targets, so a bare
-    # `.\run.ps1 cases list` would fail binding "list" to a count before this
-    # script ever ran.
+    # The analyst queue (`cases`); named, since position 1 is already the [int] count.
     #   .\run.ps1 cases
     #   .\run.ps1 cases -Case t_0041237
     #   .\run.ps1 cases -Case t_0041237 -Verdict CONFIRMED_FRAUD -By analyst.k
@@ -144,9 +137,7 @@ function Wait-Ready {
     throw "$Name did not become ready within $TimeoutSeconds s. Check: docker compose logs $Name"
 }
 
-# The PyFlink job needs every module it imports shipped with it. Missing one
-# fails at submit time with an ImportError inside the cluster, a long way from
-# where the mistake was made - so the list lives in one place.
+# Every module the PyFlink job imports, shipped with it; kept in one place.
 $JobModules = @(
     "config.py", "capabilities.py", "features.py", "geo.py", "rules.py",
     "enrichment.py", "receiver_store.py", "fusion.py", "payload_crypto.py",
@@ -169,11 +160,7 @@ function Assert-JobRunning {
     #>
     param([int]$TimeoutSeconds = 60)
 
-    # Poll rather than sample once. A freshly submitted job spends several
-    # seconds in CREATED/INITIALIZING while it restores state and starts the
-    # Python worker, so an instantaneous check right after `resume-job` reports
-    # "no running job" for a job that is about to run perfectly well - which is
-    # a guard that blocks correct work, the worst kind.
+    # Poll: a freshly submitted job spends seconds in CREATED/INITIALIZING.
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     $last = @()
     while ((Get-Date) -lt $deadline) {
@@ -227,10 +214,7 @@ function Assert-NoActiveJob {
     #>
     param([int]$TimeoutSeconds = 60)
 
-    # Poll for the API rather than sampling once. latency-setup and pipeline reach
-    # this seconds after `up` recreated the jobmanager, and a guard that aborts the
-    # whole setup because the REST endpoint was not listening yet is the kind
-    # Assert-JobRunning already warns against: one that blocks correct work.
+    # Poll: the REST endpoint may not be listening yet right after `up`.
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     while ($true) {
         try {
@@ -416,20 +400,14 @@ function Invoke-DependencyOutage {
             Write-Host "==> stop kafka" -ForegroundColor Red
             docker compose stop kafka | Out-Null
             Start-Sleep -Seconds 20
-            # Back up WHILE the producer is still running - that is the whole
-            # experiment. A restart deferred to the finally below would land
-            # after the producer had already given up.
+            # Back up while the producer is still running - that is the experiment.
             Write-Host "==> start kafka (20 s outage)" -ForegroundColor Cyan
             docker compose start kafka | Out-Null
             Wait-Job $job | Out-Null
             $out = (Receive-Job $job 2>&1 | Out-String)
             Remove-Job $job
             Write-Host $out
-            # The broker is already back - it had to be, for the producer to
-            # finish - so this drain is the ordinary one, not a degraded one.
-            # The transport arm cannot be drained WHILE it is down, which is
-            # exactly why it reads as the control for the transport rather
-            # than as a treatment.
+            # The broker is back, so this is an ordinary drain.
             [void](Wait-Drained "arm kafka")
         } elseif ($Service -eq "control") {
             # Nothing is stopped. This pass exists to produce the reference
@@ -446,16 +424,9 @@ function Invoke-DependencyOutage {
             # Tee, not capture: four minutes of silence looks like a hang.
             & $produce $genPath $Count 2>&1 | Tee-Object -Variable lines | Out-Host
             $out = ($lines | Out-String)
-            # DRAIN WHILE IT IS STILL DOWN. Restarting first and draining after
-            # lets the tail of the queue be scored with the dependency healthy,
-            # so the arm mixes degraded and healthy records in a ratio nobody
-            # measured. The finally below is what brings the service back.
-            #
-            # TIME IT. The first run of this shape treated a drain that did not
-            # finish as a warning and moved on - and that warning was the whole
-            # result: the healthy pass drained in seconds, redis and neo4j did
-            # not drain in five minutes. Failing OPEN is not the same as failing
-            # FAST, and the difference only shows on the clock.
+            # Drain WHILE the dependency is still down (the finally restarts it),
+            # and time it: failing open is not failing fast, and only the clock
+            # shows the difference.
             Write-Host "==> draining with $Service still down" -ForegroundColor Cyan
             $sw = [Diagnostics.Stopwatch]::StartNew()
             $drained = Wait-Drained "arm $Service (degraded)"
@@ -471,11 +442,7 @@ function Invoke-DependencyOutage {
             }
         }
     } finally {
-        # THE RESTART BELONGS HERE. It used to sit in the happy path, so a
-        # producer that died - or a Ctrl+C - left the service stopped, and the
-        # NEXT run could not read its baseline from a warehouse that was still
-        # down. A harness that leaves the cluster broken costs more than the
-        # measurement it was taking.
+        # The restart belongs in finally, so a failed run never leaves the service down.
         # "control" is an arm, not a container - nothing was stopped for it.
         $running = if ($Service -eq "control") { @($Service) }
                    else { @(docker compose ps --status running --services 2>$null) }
@@ -512,21 +479,15 @@ function Invoke-Measurement {
     param(
         [ValidateSet("plain", "tls", "crypto")] [string]$Arm,
         [int]$Messages,
-        # Declared rather than inherited. Without it PowerShell would still find
-        # the script-level $Reconnect by dynamic scoping and the arm would run
-        # correctly - until someone moved this function, at which point churn
-        # would silently become 0 and the arm would report a no-churn result
-        # under a churn label. The banner below prints what was actually bound.
+        # Declared, not inherited by dynamic scope; the banner shows the value bound.
         [int]$Reconnect = 0
     )
     if ($Messages -le 0) { $Messages = 400 }
 
     if (-not (Assert-JobRunning)) { return }
 
-    # The transport is fixed when the job graph is built, so a `tls` arm run
-    # against a job that connected in plaintext measures nothing. Check the
-    # container's own environment rather than trusting that the right variables
-    # were exported before the last resubmit.
+    # The transport is fixed when the job graph is built: check the container's own
+    # environment before a `tls` arm.
     $jobProto = (Invoke-Native { docker compose exec -T taskmanager sh -c 'echo $KAFKA_SECURITY_PROTOCOL' }) -join ""
     $jobProto = $jobProto.Trim()
     if (-not $jobProto) { $jobProto = "PLAINTEXT" }
@@ -552,15 +513,9 @@ function Invoke-Measurement {
     $churn = if ($Reconnect -gt 0) { ", reconnecting every $Reconnect" } else { ", one connection" }
     Write-Host "=== ARM '$Arm' : $Messages messages, job transport $jobProto$churn ===" -ForegroundColor Cyan
 
-    # Warm-up, discarded. Switching transports REQUIRES recreating the Flink
-    # containers, so whichever arm runs first after that recreate meets a cold
-    # JVM, an unwarmed JIT and fresh connections. Measured without this, the
-    # mutual-TLS arm came out 41 ms FASTER at the median than plaintext with
-    # non-overlapping confidence intervals - a clean, impossible result, and a
-    # sign that the deployment's age was dominating the transport being tested.
-    #
-    # These records are produced before the drain and the settle below, so they
-    # are outside the reporting window by construction.
+    # Warm-up, discarded: switching transports recreates the Flink containers, and a
+    # cold JVM once made TLS look 41 ms faster. Produced before the drain and settle,
+    # so outside the reporting window.
     $warm = [Math]::Max(100, [int]($Messages / 4))
     Write-Host "==> warm-up: $warm messages, discarded" -ForegroundColor Cyan
     switch ($Arm) {
@@ -684,10 +639,8 @@ function Invoke-SubmitJob {
         $bundleSize = python -c "import config; print(config.PY_BUNDLE_SIZE)"
     } finally { Pop-Location }
 
-    # Built as an array and splatted. Written inline, PowerShell 5.1 splits
-    # "-Dpython.fn-execution.bundle.time=50" at the first dot and passes the
-    # remainder as a positional argument, which Flink then reads as a JAR
-    # path. Array elements are passed through untouched.
+    # Built as an array and splatted: written inline, PowerShell 5.1 splits
+    # "-Dpython.fn-execution.bundle.time=50" at the first dot.
     $dockerArgs = @(
         "compose", "exec", "jobmanager",
         "flink", "run", "-d",
@@ -784,18 +737,9 @@ switch ($Target.ToLower()) {
 
     "produce-stream-docker" {
         if (-not (Assert-JobRunning)) { break }
-        # Runs the producer INSIDE the Docker network, which is the only way to
-        # get a trustworthy latency figure on Windows or macOS.
-        #
-        # `ingested_at` is stamped by the producer and `scored_at_job` by Flink.
-        # Run from the host, those are two different clocks: containers live in
-        # a VM whose clock drifts from the host and is resynced periodically.
-        # A measured +205 ms offset - and the jumps when it resyncs - land
-        # straight in the decision-path figure, and produced a stable-looking
-        # 640 ms tail that responded to no amount of tuning because it was not
-        # latency at all.
-        #
-        # Inside the network, producer, Flink and ClickHouse share one clock.
+        # Runs the producer INSIDE the Docker network: from the host, ingested_at and
+        # scored_at_job come from two clocks (the containers' VM drifts), which once
+        # produced a steady 640 ms tail that was not latency at all.
         $genPath = (Resolve-Path "data-generator").Path
         $limit = if ($Count -gt 0) { @("--limit", "$Count") } else { @() }
         docker run --rm -i `
@@ -820,30 +764,19 @@ switch ($Target.ToLower()) {
                 --bootstrap kafka:9092 --topic transactions.raw @limit
     }
 
-    # Latency against offered load. One arm per rate, each with its own ingest
-    # window, so the arms can run back to back without the 90 s settle the
-    # transport comparison needs - those arms are separated by WRITE time, these
-    # by INGEST time, which is exact.
+    # Latency against offered load: one arm per rate, each with its own ingest
+    # window, so the arms can run back to back.
     "measure-throughput" {
         if (-not (Assert-JobRunning)) { break }
-        # The knee is BELOW 100. Measured at 3 ev/s the decision path sits at
-        # 88 ms; at 100 ev/s it is already 1286 ms. Sweeping 100..5000 samples
-        # nothing but the saturated regime - every arm reads the same because
-        # they are all past the limit.
+        # The knee is below 100 ev/s (88 ms at 3 ev/s, 1286 ms at 100).
         $rates = if ($Rates) { $Rates } else { @(5, 10, 25, 50, 100, 250) }
         $n = if ($Count -gt 0) { $Count } else { 3000 }
 
         Write-Host ""
         Write-Host "=== THROUGHPUT SWEEP: $($rates -join ', ') ev/s, $n messages each ===" -ForegroundColor Cyan
 
-        # One warm-up, discarded. A cold JVM and unwarmed JIT would be charged
-        # to whichever rate happens to run first, and the sweep would report a
-        # knee that is really the deployment's age.
-        # Flush BEFORE the warm-up, not after. Flushing after threw the warm-up
-        # away and charged every cold Neo4j lookup to whichever arm ran first -
-        # which made the 100 ev/s arm look worse than the 1000 ev/s one. All
-        # arms have to meet the cache in the same state, and the state worth
-        # reporting is the warm one, because that is steady operation.
+        # One warm-up, discarded, AFTER the cache flush: every arm must meet a warm
+        # cache and a warm JVM, or the first rate is charged for the deployment's age.
         docker compose exec -T redis sh -c "redis-cli --scan --pattern 'age:*' | xargs -r redis-cli DEL" | Out-Null
         Write-Host "==> warm-up: 500 messages, discarded (also warms the cache)" -ForegroundColor Cyan
         & $PSCommandPath produce-at-rate 500 -Rate 200
@@ -873,15 +806,8 @@ switch ($Target.ToLower()) {
     }
 
     # One dependency at a time: take it out, produce the SAME slice through the
-    # outage, bring it back, and report what the pipeline silently stopped
-    # doing. -Service picks one; with none, all four run in sequence.
-    #
-    # A healthy CONTROL pass always runs first and is not optional. Every arm
-    # replays the same transactions, so the alert mix an arm produces means
-    # something only against the mix those same transactions produce with
-    # nothing stopped. Measured against the whole table instead, all four arms
-    # report the same "degradation" - including the arm that predicts none -
-    # because what is really being reported is the contents of the slice.
+    # outage, bring it back. -Service picks one; with none, all four run. A healthy
+    # CONTROL pass runs first: an arm's alert mix means something only against it.
     "kill-dependency" {
         if (-not (Assert-JobRunning)) { break }
         $svcs = if ($Service) { @($Service) } else { @("redis", "neo4j", "clickhouse", "kafka") }
@@ -889,11 +815,7 @@ switch ($Target.ToLower()) {
         # the same error this control exists to remove.
         $svcs = @("control") + $svcs
         $n = if ($Count -gt 0) { $Count } else { 1000 }
-        # Every arm reads its baseline FROM ClickHouse, the clickhouse arm
-        # included, so the warehouse has to be up before the matrix starts.
-        # Without this the before-phase exits 1, PowerShell ignores a native
-        # exit code, and the arm spends five minutes producing traffic it has
-        # nothing to compare against.
+        # Every arm reads its baseline from ClickHouse, so it must be up first.
         docker compose start clickhouse | Out-Null
         Wait-Ready "clickhouse" {
             $r = docker compose exec -T clickhouse clickhouse-client -u $ChUser --password $ChPassword -q "SELECT 1" 2>&1
@@ -909,13 +831,9 @@ switch ($Target.ToLower()) {
                 Write-Host "no baseline for $svc - skipping the arm rather than measuring against nothing" -ForegroundColor Red
                 continue
             }
-            # -Last 1: a PowerShell function returns everything it emitted, not
-            # just the value after `return`. An array here would become several
-            # --sent arguments and argparse would reject the call.
+            # -Last 1: a function returns all it emitted, not just `return`.
             $sent = [int]((Invoke-DependencyOutage -Service $svc -Count $n) | Select-Object -Last 1)
-            # The topic drained inside the call, while the service was still
-            # down. What is left is the sink batch - 500 rows or 5 s - plus
-            # room for the restarted service to accept connections again.
+            # Left: the sink batch (500 rows or 5 s) and the service coming back.
             Write-Host "==> letting the sink flush" -ForegroundColor Cyan
             Start-Sleep -Seconds 30
             python stream-processor/experiments/outage.py --service $svc --phase after --expect $n --sent $sent
@@ -931,16 +849,12 @@ switch ($Target.ToLower()) {
     "measure-crypto" { Invoke-Measurement -Arm crypto -Messages $Count -Reconnect $Reconnect }
 
     "make-certs" {
-        # Private CA, broker certificate and client certificate for the mutual
-        # TLS arm. Must run BEFORE the first `up`: docker-compose mounts
-        # infra/kafka/certs into the broker, and a missing directory is created
-        # empty, which the broker then fails to start against.
+        # CA and certificates for the mutual-TLS arm. Run BEFORE the first `up`: a
+        # missing certs directory is mounted empty and the broker fails to start.
         $certs = Join-Path (Get-Location) "infra\kafka\certs"
         New-Item -ItemType Directory -Force -Path $certs | Out-Null
         $script = Join-Path (Get-Location) "infra\kafka\make-certs.sh"
-        # --entrypoint sh is required: the alpine/openssl image sets ENTRYPOINT
-        # to `openssl`, so a shell command appended to it is read as an openssl
-        # subcommand ("Invalid command 'sh'").
+        # --entrypoint sh: the image's ENTRYPOINT is `openssl`.
         docker run --rm `
             --entrypoint sh `
             -v "${certs}:/certs" `
@@ -948,10 +862,8 @@ switch ($Target.ToLower()) {
             -e CERTS=/certs `
             alpine/openssl:latest /make-certs.sh
 
-        # Second stage in the Kafka image, which ships a JDK. keytool is
-        # required for the truststore: a PKCS12 written by `openssl pkcs12
-        # -export -nokeys` reads back as ZERO entries in Java, so the broker
-        # would come up trusting nothing and reject every client certificate.
+        # keytool from the Kafka image's JDK: an openssl-made PKCS12 truststore
+        # reads back as zero entries in Java.
         $ts = Join-Path (Get-Location) "infra\kafka\make-truststore.sh"
         docker run --rm `
             --entrypoint sh `
@@ -963,9 +875,8 @@ switch ($Target.ToLower()) {
 
     "produce-stream-tls" {
         if (-not (Assert-JobRunning)) { break }
-        # Transport arm: same producer, same pacing, same payload - only the
-        # listener differs (9094, mutual TLS, instead of 9092 plaintext).
-        # Combine with `-Count` so both arms are the same length.
+        # Transport arm: only the listener differs (9094, mutual TLS). Use -Count so
+        # both arms are the same length.
         $genPath = (Resolve-Path "data-generator").Path
         $certPath = (Resolve-Path "infra\kafka\certs").Path
         $limit = if ($Count -gt 0) { @("--limit", "$Count") } else { @() }
@@ -979,13 +890,8 @@ switch ($Target.ToLower()) {
 
     "produce-stream-secure" {
         if (-not (Assert-JobRunning)) { break }
-        # Identical to produce-stream-docker except that payloads are encrypted:
-        # the two are the arms of the security-overhead measurement (reviewer
-        # point 3), so everything else about them must stay the same - same
-        # image, same network, same pacing, same clock.
-        #
-        # The cluster already holds the key, and it decrypts per record based on
-        # the envelope prefix, so no restart is needed to switch arms.
+        # Identical to produce-stream-docker except that payloads are encrypted; the
+        # cluster decrypts per record by envelope prefix, so no restart between arms.
         $genPath = (Resolve-Path "data-generator").Path
         if (-not $DotEnv.PAYLOAD_KEY_HEX) {
             Write-Host "PAYLOAD_KEY_HEX is not set in .env" -ForegroundColor Red
@@ -1002,23 +908,16 @@ switch ($Target.ToLower()) {
     }
 
     "load-graph" {
-        # Copied into the container and read with -f - never piped. Piped, the
-        # script reached cypher-shell starting with U+FEFF and was rejected at
-        # line 1, column 1: in a session whose [Console]::OutputEncoding is UTF-8
-        # with a preamble, Windows PowerShell 5.1 put a BOM in front of the text it
-        # wrote to the native command's stdin. The file has none. So the same
-        # target worked from an ordinary terminal and failed from one configured
-        # for UTF-8; copying the bytes takes the encoding step out entirely.
+        # Copied into the container and read with -f, never piped: PowerShell 5.1 can
+        # prepend a BOM to a native command's stdin.
         docker compose cp "infra/neo4j/import.cypher" neo4j:/tmp/import.cypher
         if ($LASTEXITCODE -eq 0) {
             docker compose exec -T neo4j cypher-shell -u neo4j -p $Neo4jPassword -f /tmp/import.cypher
         }
     }
 
-    # Reading a file says a component is right; it does not say that what it
-    # PRODUCES is what the next one EXPECTS. Three defects in one day lived in
-    # that gap. Run this before a walkthrough, and after touching any record,
-    # schema or wire format.
+    # What one component produces against what the next expects. Run before a
+    # walkthrough and after touching any record, schema or wire format.
     "boundaries" { python tools/boundary_audit.py -v }
 
     # The analyst surface. One target, four shapes, chosen by which parameters
@@ -1045,17 +944,13 @@ switch ($Target.ToLower()) {
         # The model's REVIEW / BLOCK cutoffs: an unweighted committee's scale
         # belongs to it, and config._model_thresholds reads them from here.
         Copy-Item "ml/models/thresholds.json" "stream-processor/" -Force
-        # The BIN table. bins.py resolves the card issuer from it, and the job
-        # dir is what gets mounted into the cluster - without this the job dies
-        # at import with FileNotFoundError instead of scoring.
+        # The BIN table: bins.py reads it, and the job dies at import without it.
         Copy-Item "data-generator/banks.csv" "stream-processor/" -Force
         Write-Host "model + feature spec copied to stream-processor/"
     }
 
-    # The latency knobs go to the client as -D. The job sets them itself via
-    # env.configure(), but options read during job-graph translation are safest
-    # given to the client directly. Values come from config.py, so there is
-    # still one source of truth. See Invoke-SubmitJob.
+    # The latency knobs go to the client as -D too (read during job-graph
+    # translation); the values come from config.py.
     "submit-job" { Invoke-SubmitJob }
 
     "resume-job" {
@@ -1115,10 +1010,7 @@ switch ($Target.ToLower()) {
 
         Write-Host ""
         Write-Host "== Kafka topic offsets ==" -ForegroundColor Cyan
-        # kafka-get-offsets.sh, not kafka-run-class kafka.tools.GetOffsetShell:
-        # the class moved to org.apache.kafka.tools in Kafka 3.x and the old
-        # path fails with ClassNotFoundException. The wrapper script is stable
-        # across versions.
+        # kafka-get-offsets.sh: stable across Kafka versions, unlike GetOffsetShell.
         docker compose exec kafka /opt/kafka/bin/kafka-get-offsets.sh `
             --bootstrap-server kafka:9092 --topic transactions.raw
 
@@ -1130,9 +1022,7 @@ switch ($Target.ToLower()) {
     }
 
     "kill-worker" {
-        # Deliberate fault for the exactly-once investigation. `kill` rather
-        # than `stop`: a graceful stop checkpoints on the way out, which would
-        # test nothing.
+        # `kill`, not `stop`: a graceful stop checkpoints on the way out.
         docker compose kill taskmanager
         Start-Sleep -Seconds 2
         docker compose start taskmanager
@@ -1167,11 +1057,8 @@ switch ($Target.ToLower()) {
     }
 
     "latency-setup" {
-        # Same as `pipeline` but WITHOUT `produce`. The batch dump puts 50k
-        # messages into the topic at once, and the resulting backlog takes
-        # minutes to drain - every latency figure measured against it is queue
-        # depth. For a latency run the topic has to start empty and be fed at a
-        # rate the job can keep up with, which is what produce-stream does.
+        # Same as `pipeline` without `produce`: a latency run needs an empty topic fed
+        # at a rate the job keeps up with, not a 50k backlog.
         Invoke-Step "removing old containers and volumes" { & $PSCommandPath clean }
         Invoke-Step "starting the stack (first run builds Flink, takes minutes)" { & $PSCommandPath up }
         Wait-Ready "neo4j" {
