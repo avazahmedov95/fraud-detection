@@ -5,37 +5,24 @@ Working note addressing reviewer point 2. Not thesis text.
 Every distribution, parameter and dependency used to produce the dataset, stated
 formally enough to reimplement from this document alone. Constants are quoted
 from `data-generator/config.py`; where the code and this document disagree, the
-code is authoritative and this document is a bug.
+code is authoritative and this document is a bug. Condensed on 2026-09-15; the
+history of each change is in git history.
 
 ---
 
 ## 0. Why generate data at all
 
-No public dataset of Uzbek P2P card transactions exists — confirmed by search,
-and unsurprising: the data is bank-confidential and the market is small enough
-that anonymisation would not protect participants.
-
-The alternatives were considered and rejected:
+No public dataset of Uzbek P2P card transactions exists: the data is
+bank-confidential, and the market is small enough that anonymisation would not
+protect participants. The alternatives, assessed in full in `docs/related-work.md`:
 
 | Option | Why not |
 |---|---|
-| IEEE-CIS (590k txns) | Real, but e-commerce card-not-present, not P2P. Different fraud shapes, no counterparty, no session signals. |
-| CCF / Kaggle credit card | PCA-anonymised into V1..V28. Features have no meaning, so SHAP explanations — a hard requirement under CBU 3759 — are meaningless. |
-| Zenodo 20030065 (57k txns) | Closest match: 30 days of production online banking, includes response latency. Retained as a **validation** set (§7), not as a source for the design. |
-| IBM Synthetic Data Sets (SynDS) | Since Oct 2025 includes P2P payment data modelled on Venmo/Zelle, fully labelled. Closest off-the-shelf substitute, and rejected mainly because it is a **commercial product**: a thesis built on it is not reproducible by a reader who has not bought it. The Apache-2.0 repo publishes schemas and DDL only. US consumer-app semantics, no session signals. |
-| Kaggle UPI sets (several) | India's UPI is the closest real instant-payment rail. But every set found is **itself synthetic and published without a generating specification** — strictly worse than a documented generator, by the argument in §7. |
-
-Assessed in full, with what each does and does not support, in
-`docs/related-work.md`.
-
-The V1..V28 objection above is not hypothetical, and the Zenodo file in the row
-above demonstrates it. 432 of its rows carry a completely different feature
-schema in the same `v1..v28` slots — a PaySim-shaped record with 81.6% of the
-cells zero and `v2 == amount` throughout — and nothing in the file marks the
-change, because a column named `v14` asserts nothing that could be violated.
-Anonymised features do not only cost explainability, which is the objection
-above; they remove the reader's ability to notice that the wrong quantity is in
-the column.
+| IEEE-CIS (590k txns) | Real, but e-commerce card-not-present: no counterparty, no session signals. |
+| CCF / Kaggle credit card | PCA-anonymised into V1..V28, so SHAP explanations - a hard requirement under CBU 3759 - are meaningless. |
+| Zenodo 20030065 (57k txns) | Published as production data; examined and rejected (`validation/README.md` §2). |
+| IBM Synthetic Data Sets (SynDS) | Labelled P2P payment data, but a **commercial product**, not reproducible by a reader who has not bought it; US consumer-app semantics, no session signals. |
+| Kaggle UPI sets (several) | **Themselves synthetic and published without a generating specification** - strictly worse than a documented generator (§7). |
 
 So the generator produces a **design fixture**: a dataset whose statistical
 structure is stated up front, used to develop and instrument the pipeline. Every
@@ -53,7 +40,9 @@ metric derived from it is a design target, not a finding.
 - $\text{clip}(x,a,b) = \min(\max(x,a),b)$
 
 All randomness comes from one `numpy.random.default_rng(seed)` stream (PCG64),
-default seed 42. The dataset is a deterministic function of the seed.
+default seed 42. The dataset is a deterministic function of the seed. Sizes and
+rates below are the baseline profile's; §10 lists what the realistic profile
+changes.
 
 ---
 
@@ -79,48 +68,27 @@ A \sim \begin{cases}
 $$
 
 **Spend baseline.** $T \sim \text{LogN}(11.8, 0.6)$ UZS, median
-$e^{11.8} \approx 133{,}000$ UZS. Lognormal because income and spend are
-multiplicative processes; the parameters put the bulk in the 50k–350k range with
-a right tail into the millions.
+$e^{11.8} \approx 133{,}000$ UZS - lognormal, because income and spend are
+multiplicative processes.
 
 **Active hours.** $H_{\text{start}} \sim \mathcal{U}\{6,\dots,10\}$,
 $H_{\text{end}} \sim \mathcal{U}\{18,\dots,23\}$, per person.
 
 **Personal confirmation-time median.**
-$m_i = 40 \cdot \exp(\mathcal{N}(0, 0.35^2))$ seconds. This is what makes
-`secs_login_z` a *personal* baseline: a deliberate pensioner and a fast
-20-year-old are both normal relative to themselves.
+$m_i = 40 \cdot \exp(\mathcal{N}(0, 0.35^2))$ seconds, which makes `secs_login_z`
+a *personal* baseline: a deliberate pensioner and a fast 20-year-old are both
+normal relative to themselves.
 
 **Card and issuer.** Issuer sampled $\propto$ cards in circulation (CBU figures
-as at 1 April 2026, via Kursiv; `banks.csv`), *not* uniformly — uniform
-assignment would make the on-us rate an artefact of the number of banks in the
-list. PAN = 6-digit BIN + 9 uniform digits + Luhn check digit. PINFL = 14 uniform
-digits. Both synthetic.
+as at 1 April 2026, `banks.csv`), not uniformly, so the on-us rate is not an
+artefact of the length of the bank list. PAN = 6-digit BIN + 9 uniform digits +
+Luhn check digit; PINFL = 14 uniform digits. Both synthetic.
 
 **Second card.** A person holds a card at a *second* bank w.p. $\kappa = 0.20$,
-and transfers to them arrive on it w.p. $0.40$. The second issuer is redrawn
-until it differs from the first: two PANs at one bank would still be one on-us
-relationship.
-
-> **Added 2026-09-07, and it is what makes `payee_identity` measurable at all.**
-> That capability chooses whether receiver-side state is keyed by PAN or by the
-> person behind it. With one card each, the two keys partition the stream
-> identically — so the ablation compared a configuration against itself and
-> returned a delta of exactly zero on all five seeds, printed as "no effect".
-> The honest reading was *not measured*. 892 of 5,078 receivers are now reachable
-> on two cards, 9,826 rows land on them, and the two modes train genuinely
-> different models.
->
-> **Receiving only, deliberately.** A sender drawing from two cards would
-> fragment the per-sender history every other feature is built on — the stream is
-> keyed by sender — and would confound this question with that one. What is
-> modelled is the payee's card choice, because the payee key is what is under
-> test.
->
-> It also makes the data harder, which is the point: splitting fan-in across two
-> cards is a blind spot every card-keyed bank really has. Baseline PR-AUC falls
-> from 0.981 to 0.967, and `receiver_velocity` becomes the largest effect in the
-> ablation at −0.040.
+and transfers to them arrive on it w.p. $0.40$; the second issuer is redrawn until
+it differs from the first. This is what makes `payee_identity` measurable - with
+one card each, PAN and PINFL keys partition the stream identically. Receiving
+only: a sender drawing from two cards would fragment the per-sender history.
 
 **Fraud accounts.** $N_f = \max(50, N_p/25) = 200$, each its own household (so
 mules are not "relatives" of each other). Age:
@@ -140,11 +108,8 @@ The aged 30% is what stops `receiver_age` from being a perfect separator.
 
 Each person is assigned $K \sim \mathcal{U}\{3,\dots,8\}$ frequent payees. Each
 draw is a relative with probability $\phi = 0.35$ (if the household has any),
-otherwise uniform over the population.
-
-$\phi > 0$ is load-bearing: an earlier revision had **no** fraud routed to
-relatives, which made `is_family` separate the classes by construction and rank
-first in SHAP. See §5.2 and `docs/threat-model.md`.
+otherwise uniform over the population. $\phi > 0$ is load-bearing: with no fraud
+routed to relatives, `is_family` separated the classes by construction.
 
 ---
 
@@ -154,8 +119,8 @@ $n_{\text{legit}} = (1 - 0.015) \cdot 50{,}000 = 49{,}250$ events.
 
 **Sender.** Heavy-tailed activity: draw $u_i \sim \mathcal{U}(0,1)$ per person,
 set activity weight $\propto u_i^3$, sample senders from
-$\text{Cat}(\mathbf{u}^3 / \sum \mathbf{u}^3)$. The cube is a crude power-law
-stand-in: a few very active senders, most rarely transacting.
+$\text{Cat}(\mathbf{u}^3 / \sum \mathbf{u}^3)$ - a crude power law: a few very
+active senders, most rarely transacting.
 
 **Payee.** Frequent payee w.p. 0.95; a fresh uniform draw w.p. 0.05.
 
@@ -170,35 +135,14 @@ centred on the sender's own baseline, so deviation is meaningful per person.
 **Timestamp.** Uniform over the 30-day span, then the hour is replaced by
 $\mathcal{U}\{H_{\text{start}}, H_{\text{end}}\}$ and minute/second uniform.
 
-> **Known limitation.** This makes the hour marginal per-person plausible but
-> destroys within-day autocorrelation and any weekday/weekend or payday
-> structure. Real P2P traffic has strong periodicity. A model could not learn
-> temporal seasonality from this data, and `hour` should be read as a weak
-> feature rather than a meaningful one.
+> **Known limitation.** No weekday, payday or within-day structure, so `hour` is a
+> weak feature rather than a meaningful one.
 
 **Device.** A person owns a second device w.p. $\sigma = 0.25$, drawn once in
-`persons.py`, and each of their events comes from it w.p. $\rho = 0.15$;
-everyone else transacts from one device forever. Device identity is
-`dev-<pinfl tail>` and `dev-<pinfl tail>-b`.
-
-> **Added 2026-09-07, fixing the same defect §3 records for kinship.** Every
-> legitimate event used to carry the sender's single device, so `device_is_new`
-> — which `features.py` computes as *first event from a device this sender has
-> not used before* — fired on **25 of 50,000 rows and all 25 were fraud.** Both
-> halves of that are wrong. It was a perfect predictor, which is the label under
-> another name; and 25 rows is below `min_child_samples = 30` in `ml/train.py`,
-> so no split could be formed on it and the model never used the feature at all.
-> That is why `device_telemetry=off` measured a delta of exactly $0.0000$ across
-> five seeds — not a small effect, no effect, and the ablation table read as a
-> statement about the model when it was a statement about this generator.
->
-> With $\sigma, \rho$ as above it fires on 581 rows, 570 of them legitimate:
-> precision 1.9% against a 1.5% base rate. A device change is now mostly an
-> ordinary event, which is what it is in life and what makes it usable as one
-> signal among several rather than a giveaway.
->
-> `verify_spec.py` checks both halves separately, because they fail
-> independently: enough rows to split on, and both classes producing it.
+`persons.py`, and each of their events comes from it w.p. $\rho = 0.15$; everyone
+else transacts from one device. With a single device each, `device_is_new` fired
+only on fraud - the label under another name; now it fires on both classes, and
+`verify_spec.py` checks that it does, on enough rows to split on.
 
 **Region.** The sender's home region, unless travelling (§6).
 
@@ -254,29 +198,11 @@ The 40% moderate branch exists so APP is not trivially "the largest transfers".
 
 ### 5.3 ATO — account takeover
 
-$\mathcal{U}\{2,\dots,8\}$ events per episode, spaced
-$i \cdot \mathcal{U}(1,4)$ minutes. Stealth w.p. 0.40: victim's own device and
-region (on-device malware), leaving only behavioural signals.
-
-> **Widened from 2-4 on 08.09.2026, to stop contradicting the threat model.**
-> `threat-model.md` §4 rates `VELOCITY` and `DISTINCT_PAYEE_BURST` as costly for
-> A2 to evade - "A2's window is short by nature", credentials get revoked and the
-> victim notices, so the takeover operator cannot slow down. Both rules need more
-> than five events in ten minutes. At 2-4 events the generator had A2 evading
-> both for free on **every** episode, and **neither rule fired once in 50,000
-> rows**: the document said the attacker cannot slow down, the data said he
-> always does.
->
-> The thresholds were NOT touched, which is the point. Tuning a cutoff until a
-> rule fires on synthetic data turns a detection claim into a tautology; the
-> change is to the modelled behaviour, justified by a document written before the
-> measurement. Both rules now fire at 100% precision (10 and 9 hits, no false
-> positives).
->
-> **STRUCTURING's 3-15 minute spacing is deliberately left alone.** The same
-> table rates those rules as *cheap* for A1 and A3 to evade, and a smurfing run
-> that paces itself is the modelled behaviour rather than a gap. Making both
-> patterns fast would have been the tautology this avoids.
+$\mathcal{U}\{2,\dots,8\}$ events per episode, spaced $i \cdot \mathcal{U}(1,4)$
+minutes - enough to trip `VELOCITY`, since `threat-model.md` §4 has the takeover
+operator unable to slow down; the thresholds were not touched. Stealth w.p. 0.40:
+victim's own device and region (on-device malware), leaving only behavioural
+signals.
 
 Non-stealth (0.60) anchors to the victim's real history: pick a random prior
 legitimate event $(t_j, r_j)$, set the session $\Delta \sim \mathcal{U}(3,45)$
@@ -289,11 +215,9 @@ $$
 If no such region exists, the session stays at $r_j$ rather than inventing a
 journey.
 
-> **This makes the injected impossible-travel pattern detectable by
-> construction** — the generator and detector share the reachability threshold.
-> The detection rate on it is therefore **not a result**. The reportable result
-> is the false-positive rate on the independently-generated legitimate journeys
-> of §6: **0 of 775**.
+> The generator and detector share the reachability threshold, so the detection
+> rate on these hijacks is **not a result**. The false-positive rate on the
+> independently generated legitimate journeys of §6 is: **0 of 775**.
 
 Amount $\text{clip}(\text{LogN}(14.5, 0.5), \cdot)$ per event.
 
@@ -301,7 +225,8 @@ Amount $\text{clip}(\text{LogN}(14.5, 0.5), \cdot)$ per event.
 
 $\mathcal{U}\{5,\dots,11\}$ events, spaced $i \cdot \mathcal{U}(3,15)$ minutes,
 each $X = 10^7 \cdot \mathcal{U}(0.85, 0.99)$ — deliberately just under the
-reporting threshold.
+reporting threshold. The slow spacing is deliberate: a smurfing run that paces
+itself is the modelled behaviour.
 
 ### 5.5 MULE — fan-in then fan-out
 
@@ -316,14 +241,10 @@ minutes.
 Fan-out: $n_{\text{out}} \sim \mathcal{U}\{1,2\}$ transfers of
 $\frac{1}{n_{\text{out}}} \sum X_{\text{in}} \cdot \mathcal{U}(0.80, 0.98)$.
 
-> Counting inbound transfers per payee in the output gives values outside
-> $[4,8]$: low counts are fan-**out** destinations (which receive 1–2 transfers,
-> not 4–8), and counts above 8 are accounts that served as the mule in more than
-> one episode, since the pool of 200 fraud accounts is sampled with replacement.
-
-The concentration is the pattern, and §RQ3 of the framing note shows it is
-invisible to sender-keyed state — 80% of mule events are fan-in legs, and recall
-on them was 57.8% until receiver-keyed state was added.
+Inbound counts per payee outside $[4,8]$ are fan-out destinations (1–2 transfers)
+or accounts that served as the mule in more than one episode - the 200 fraud
+accounts are sampled with replacement. 80% of mule events are fan-in legs,
+invisible to sender-keyed state (`irp-framing.md` §4).
 
 ---
 
@@ -333,113 +254,60 @@ Each person is selected for travel w.p. $\tau = 0.18$ and then attempts
 $\mathcal{U}\{1,2\}$ journeys. A journey to region $r'$ departs at a uniform
 time, takes $d(r, r')/70$ hours at road speed, stays $\mathcal{U}(12, 96)$ hours,
 and returns symmetrically. Transactions during the stay carry $r'$; transactions
-falling *in transit* are re-timed to $\mathcal{U}(5,180)$ minutes after arrival.
+falling *in transit* are re-timed to $\mathcal{U}(5,180)$ minutes after arrival -
+otherwise an event at the origin followed minutes later by one at the destination
+would manufacture impossible travel inside legitimate traffic.
 
-> **$\tau$ is the selection probability, not the observed traveller share.** A
-> journey whose randomly drawn destination equals the person's home region is
-> skipped, so a person selected for one journey who draws their own region ends
-> up with no plan. On the 2026-09-08 dataset, instrumented: **890 people pass
-> the $\tau$ gate (17.80%), 41 lose every journey to a self-region draw, 849
-> travel (16.98%)**.
->
-> Worth reading twice, because an earlier revision of this note drew the wrong
-> lesson from it. It reported "realised share is 16.7%, not 18%" and presented
-> the shortfall as the point. The loss is real but small - 41 of 890 gated, 4.6%
-> - and comparable to the noise in the gate itself: 5,000 Bernoulli draws at
-> $\tau = 0.18$ have a standard deviation of 27 people, and this stream drew 890
-> against an expected 900.
->
-> So the realised share can land either side of $\tau$, and has done both:
-> **18.04% on the 2026-09-07 dataset and 16.98% here**, same $\tau$, same code,
-> a regenerated stream. The distinction between selection probability and
-> observed share is the durable claim; the direction of the gap is not.
+$\tau$ is the selection probability, not the observed share: a journey that draws
+the person's own region is skipped, so the realised share lands near $\tau$ on
+either side (18.04% and 16.98% on two regenerations).
 
-That re-timing is essential: an event at the origin followed minutes later by one
-at the destination would manufacture impossible travel inside legitimate traffic.
-
-Distances use the detector's own coordinate table
-(`stream-processor/geo.py`, administrative centres, haversine) so simulation and
-detector cannot disagree about geography. Ground speed 70 km/h is deliberately
-conservative — slower travel means longer journeys, which makes the negative
-control *harder*, not easier.
+Distances use the detector's own coordinate table (`stream-processor/geo.py`,
+administrative centres, haversine), so simulation and detector cannot disagree
+about geography. 70 km/h is deliberately slow: longer journeys make the negative
+control *harder*.
 
 ---
 
 ## 7. Defence of the approach
 
-**Why parametric sampling rather than copulas or a GAN.**
+**Why parametric sampling rather than copulas or a GAN.** Both estimate a joint
+distribution **from data**, and there is no Uzbek P2P data to fit: a GAN trained
+on IEEE-CIS would produce e-commerce covariance under Uzbek field names. The
+precedent is PaySim, parametric and agent-based for the same reason, and the trade
+is the point: **a parametric generator's assumptions are legible and falsifiable,
+a fitted generator's are implicit in weights.** PaySim is also the cautionary
+precedent - its balance columns leak the label - and this project's equivalents
+are recorded in §8.
 
-Both alternatives estimate a joint distribution **from data**. There is no Uzbek
-P2P data to fit — that is the premise. Fitting a GAN to IEEE-CIS or the Kaggle
-credit-card set would produce synthetic *e-commerce card-not-present* data
-wearing Uzbek field names: the covariance structure learned would be that of a
-different payment system, and the resulting realism would be spurious. Copulas
-have the same problem one level down — a copula needs an empirical dependence
-structure to reproduce.
+**A second precedent, and a criterion this spec meets.** Tritscher et al. (2022)
+generate public ERP fraud data for the same reason, and reject generators whose
+data, code and parameters are unpublished - the criterion this document, the code
+and the pinned hashes (§9) meet. They also criticise injecting fraud into existing
+data "in post": §5 does exactly that, and the divergence it causes is measurable.
 
-The precedent is PaySim (Lopez-Rojas et al.), which is parametric and agent-based
-for the same reason: mobile-money transaction data was unavailable, so the
-generator encodes stated assumptions instead of fitted ones. That trade is the
-point — **a parametric generator's assumptions are legible and falsifiable,
-whereas a fitted generator's are implicit in weights.** Every number in §§2–6 can
-be argued with; a GAN's cannot.
-
-PaySim also supplies the cautionary precedent: its balance columns leak the label,
-and models trained on it report near-perfect scores that mean nothing. This
-project's equivalents are recorded rather than hidden — see §8.
-
-**A second, independent precedent, and a criterion this spec is written to meet.**
-Tritscher et al. (2022), *Open ERP System Data For Occupational Fraud Detection*,
-generate public ERP data for the same reason in a different domain: the real
-thing is withheld for trade-secret and privacy reasons, so the field either
-generates or stops. Two of their judgements about *other* generators apply here
-and are worth meeting explicitly rather than by accident.
-
-They reject one prior generator because "with no data, code, and chosen
-simulation parameters available, modeling realistic ERP system data through this
-approach is challenging". That is the criterion this document exists to satisfy —
-every parameter stated, the code published, the dataset pinned by SHA-256, and
-determinism demonstrated rather than assumed (§9). Meeting a criterion someone
-else published is a stronger claim than meeting one's own.
-
-They also criticise generating fraud by modelling it "into an existing database
-in post, potentially causing unwanted divergence between normal and fraudulent
-data characteristics". **§5 of this document injects fraud into already-generated
-legitimate traffic, so the criticism applies here directly.** The ROC-AUC of
-0.999 discussed below is not a vague "artefact of synthetic data": it is that
-divergence, measured. Naming the mechanism, and its source in the literature, is
-more useful than calling the number an artefact and moving on.
-
-**On the ROC-AUC ≈ 0.999 this data produces.** It is an artefact of a generator
-whose classes are separable by construction along several axes at once. PR-AUC
-(0.960 ± 0.018 across seeds) is the figure to read, and even that is a design
-target. Its floor is the **held-out slice's** 1.23% positive rate, not the
-dataset's overall 1.5% - AUPRC is scored where it is measured, and quoting it
-against the wrong rate is the error `related-work.md` §6 had to correct in the
-other direction about PaySim.
+**On the ROC-AUC ≈ 0.999 this data produces.** It is that divergence: classes
+separable by construction along several axes at once. On the baseline profile,
+PR-AUC (0.960 ± 0.018 across seeds) is the figure to read, and even that is a
+design target, measured on a held-out slice at 1.23% fraud.
 
 ---
 
 ## 8. What this generator does not model
 
-Stated because a specification that only lists what is included is not a
-specification.
-
 1. **Temporal structure.** No weekday/weekend effect, no payday spikes, no
    within-day autocorrelation (§4). `hour` is consequently a weak feature.
 2. **Merchant or biller flows.** P2P only; real card traffic is mostly neither.
-3. **Adaptive adversaries.** Fraud parameters are fixed. An attacker who observes
-   the detector and adapts is out of scope for the data and treated analytically
-   in `docs/threat-model.md`.
+3. **Adaptive adversaries.** Fraud parameters are fixed; an attacker who adapts
+   is treated analytically in `docs/threat-model.md`.
 4. **Network effects between fraud episodes.** Episodes are independent; real
    mule networks share infrastructure, devices and timing.
 5. **Legitimate account takeover-like behaviour.** A user genuinely switching
-   phone and city simultaneously is rare here and would be a false positive.
-6. **Amount rounding.** Real transfers cluster on round numbers (100k, 500k);
-   these are continuous lognormal draws. A model could not learn round-number
-   effects, which are a real signal.
-7. **Label noise.** Ground truth is exact. Real fraud labels arrive late, are
-   incomplete, and include disputed chargebacks that were not fraud.
+   phone and city at once is rare here and would be a false positive.
+6. **Amount rounding.** Real transfers cluster on round numbers; the baseline
+   profile's amounts are continuous (the realistic profile rounds 40%, §10).
+7. **Label noise.** The baseline profile's ground truth is exact; real labels
+   arrive late and incomplete (the realistic profile leaves 10% unreported, §10).
 
 Items 1, 6 and 7 are the ones most likely to make measured performance optimistic
 relative to production.
@@ -449,63 +317,31 @@ relative to production.
 ## 9. Reproduction
 
 ```bash
-cd data-generator && python generator.py --out ./out          # seed 42, defaults
-python generator.py --seed 7 --persons 5000 --transactions 50000
+cd data-generator
+python generator.py --profile realistic --out ./out   # the dataset of record, seed 42
+python generator.py --profile baseline --out ./out    # the baseline profile
 ```
 
-Output is a deterministic function of `(seed, n_persons, n_transactions,
-fraud_rate, days, start_date)` plus `banks.csv` - but only since the payee
-ordering was fixed on 2026-08-30; see "Determinism is not free" below. The
-multi-seed ablation
-(`ml/experiments/ablate_seeds.py`) regenerates across 20 seeds; between-seed variation in
-baseline PR-AUC is ±0.008–0.035 depending on configuration, which is why no
-single-dataset figure is quoted anywhere in this project.
+Output is a deterministic function of the seed, the sizes, the profile and
+`banks.csv`. `ml/experiments/ablate_seeds.py` regenerates across seeds; baseline
+PR-AUC varies by ±0.008–0.035 between seeds, which is why no single-dataset figure
+is quoted anywhere in this project.
 
 ### Determinism is not free, and the seed does not buy it
 
-Until 2026-08-30 the claim above was false, and the failure is worth recording
-because none of this project's guards could see it.
-
-`_assign_payees` collected each sender's frequent payees in a `set` and stored
-`list(chosen)`. Iterating a set of strings orders them by hash, and CPython
-randomises string hashing per process unless `PYTHONHASHSEED` is fixed. The
-payee list therefore came out in a different order in every interpreter, and the
-receiver is drawn from that list by index.
-
-Measured on two runs differing in nothing but `PYTHONHASHSEED` - same seed, same
-source, same pinned versions:
-
-| file | result |
-|---|---|
-| `persons.csv` | byte-identical |
-| `transactions.csv` | 36,072 of 50,000 rows differ |
-
-Every differing row carried the same sender, timestamp, amount, channel, device,
-region and session signals, and a different receiver. With
-`payees[p.pinfl] = sorted(chosen)` the output is byte-identical across
-`PYTHONHASHSEED` 1, 2 and 99.
-
-Two consequences outlast the one-line fix:
-
-- **Pinned dependencies are necessary and not sufficient.** Every declared
-  version matched across those runs; what differed was an undeclared property of
-  the interpreter process. `data-generator/requirements.txt` argues that pinning
-  numpy is what makes `seed = 42` mean the same dataset next year. That argument
-  is correct and incomplete.
-- **The ablation's version guard cannot catch this.** `ml/experiments/ablate_seeds.py`
-  fingerprints the feature set and the generator sources and refuses to mix
-  results across versions. The guard assumes identical sources imply identical
-  data. Two runs with the same fingerprint could stand on different datasets.
-
-`transaction_id` remains a bare `uuid.uuid4()`, drawn outside the seeded stream,
-so that column alone is still not reproducible. It carries no analytical content
-and every comparison above was taken with it removed.
+Until 2026-08-30 each sender's payees were collected in a `set`, and CPython
+randomises string hashing per process: the same seed and the same pinned versions
+gave a different receiver on 36,072 of 50,000 rows. `sorted(chosen)` fixed it.
+Two lessons: pinned dependencies are necessary and not sufficient, and a
+fingerprint over the sources cannot catch a difference in the interpreter.
+`transaction_id` is still a bare `uuid4()` outside the seeded stream; it carries
+no analytical content and is excluded from every comparison.
 
 ### The dataset of record
 
 `data-generator/out/` is gitignored, so the files every reported figure was
-computed on are pinned here instead. **Since 2026-09-14 it is the realistic
-profile** (§10), seed 42, `generator.py --profile realistic`:
+computed on are pinned here. **Since 2026-09-14 it is the realistic profile**
+(§10), seed 42, `generator.py --profile realistic`:
 
 ```
 transactions.csv  500,000 rows  157,241,920 bytes
@@ -514,10 +350,8 @@ persons.csv        52,000 rows    5,782,987 bytes
   sha256  c80f44e2e7403d803f51275c1e854f1cd7ae5cb20c12ad60e713873c457414bc
 ```
 
-It replaced the baseline dataset below, **regenerated 2026-09-07** on seed 42 with
-the baseline defaults to fix the device defect in §4 and the single-card defect in
-§2, and now kept at `data-generator/out_frozen_2026-09-07/`. Every figure dated
-before 2026-09-14 was measured on it:
+Every figure dated before 2026-09-14 was measured on the baseline dataset,
+regenerated 2026-09-07 and kept at `data-generator/out_frozen_2026-09-07/`:
 
 ```
 transactions.csv   50,000 rows   15,730,392 bytes
@@ -526,38 +360,16 @@ persons.csv         5,200 rows      578,549 bytes
   sha256  dbe01edd7626def3c8ce50a343915d80fe309c97895342476d9c22a01be37cb6
 ```
 
-**These hashes now hold on any host, which the previous pair did not.**
-`pandas.to_csv` takes its line terminator from `os.linesep`, so the same seed
-produced LF files on Linux and CRLF files on Windows — a different SHA-256 for
-every line in the file, before any content difference is considered. The
-previous entry recorded this as a property of the dataset ("they were not
-produced on the Windows host"). It is a property of the writer, and
-`generator.py` now passes `lineterminator="\n"` explicitly. A hash pin that only
-holds on one operating system is not a pin.
-
-Determinism re-checked after the change, since the generator moved: two runs at
-`PYTHONHASHSEED` 1 and 99 differ on **0 of 50,000 rows** ignoring
-`transaction_id`, and `persons.csv` is byte-identical.
-
-**The previous dataset of record**
-(`b767f38489ab…` / `010cddd6a60f…`, generated 2026-07-19) is kept at
-`data-generator/out_frozen_2026-07-19/`, also gitignored, and its hashes were
-verified against this document before it was replaced. Every figure in this
-repository dated before 2026-09-07 was measured on it. It is retained rather
-than described because the payee-sorting fix means it cannot be regenerated:
-same seed, same versions, 36,110 of 50,000 rows carry a different receiver, the
-same 72% signature as the `PYTHONHASHSEED` experiment above. The old file can be
-kept or recomputed against, but not reproduced.
-
-`out/relationships.csv` is *not* part of this dataset. It is a leftover from the
-design in which kinship edges were loaded into the graph - removed because the
-`is_family` signal it carried was an artefact (see `infra/neo4j/import.cypher`).
-Nothing in the current pipeline reads it.
+These hashes hold on any host: `generator.py` writes LF line endings explicitly,
+where `pandas.to_csv` would take them from the operating system. Figures dated
+before 2026-09-07 come from the 2026-07-19 dataset (`b767f38489ab…` /
+`010cddd6a60f…`, kept at `data-generator/out_frozen_2026-07-19/`), which the payee
+fix makes impossible to regenerate. `out/relationships.csv` is a leftover of the
+removed kinship graph, and nothing reads it.
 
 ### Specification against the produced dataset
 
-Checked on seed 42, 50,000 events. A specification nobody verified against the
-output is a wish list, so these are the numbers a reader can reproduce.
+Checked on seed 42, baseline profile, 50,000 events:
 
 | Quantity | Specified | Observed |
 |---|---|---|
@@ -582,12 +394,11 @@ output is a wish list, so these are the numbers a reader can reproduce.
 
 `generator.py --profile realistic` - the dataset of record since 2026-09-14.
 
-The baseline profile separates too easily. Its fraud is 1.5% of traffic, about ten
+The baseline profile separates too easily: fraud at 1.5% of traffic, about ten
 times what real card traffic carries (0.17-0.19%, `validation/README.md` 2); every
 legitimate transfer looks legitimate; and the labels are exact. The model it
-trained scored 0.937 PR-AUC on it and 0.42 on data shaped like the profile
-below - a number that high describes the generator. This
-profile keeps every mechanism and moves each parameter toward overlap:
+trained scored 0.937 PR-AUC on it and 0.42 on data shaped like the profile below.
+This profile keeps every mechanism and moves each parameter toward overlap:
 
 | knob | baseline | realistic | why |
 |---|---|---|---|
@@ -610,16 +421,12 @@ profile keeps every mechanism and moves each parameter toward overlap:
 | phone changes | 0 | 4% of persons | a new phone, kept from then on |
 | round sums | 0 | 40% | people send round amounts (§8, item 6) |
 
-What it is: a harder benchmark on the same machinery. What it is not: a
-calibration. No row of the table comes from Uzbek data; each moves a parameter the
-baseline set at its easiest, in the direction the public datasets and §8 point.
-The realistic figures are therefore more believable, not measured.
-
-Every knob that adds behaviour is off at 0 and tested before any random draw, so
-`--profile baseline` still reproduces the 2026-09-07 dataset draw for draw -
-checked on the file itself: 0 of 50,000 rows differ ignoring `transaction_id`, and
-`persons.csv` is identical. `verify_spec.py` checks the realistic profile's own
-values by default (15/15).
+A harder benchmark on the same machinery, not a calibration: no row comes from
+Uzbek data; each moves a parameter the baseline set at its easiest, in the
+direction the public datasets and §8 point. Every added knob is off at 0 and
+tested before any random draw, so `--profile baseline` still reproduces the
+2026-09-07 dataset draw for draw. `verify_spec.py` checks the realistic profile's
+own values by default (15/15).
 
 Realised on seed 42: 500,000 transactions, 878 labelled fraud (0.176%) - APP 315,
 MULE 216, STRUCTURING 181, ATO 166; 39.6% of legitimate amounts are round sums,

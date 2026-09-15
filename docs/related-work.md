@@ -1,23 +1,14 @@
 # Related work and external datasets
 
 Working note, not thesis text. Each entry says what the source is, what it
-supports in this project, and — the part that matters — what it does **not**
-support. Sources assessed 2026-08-31.
-
-The organising question is not "is this about fraud" but "does this constrain a
-claim this project makes". Several sources below are about something else
-entirely and are recorded so the same search is not run twice.
-
-**§9 is the answer to "how did the literature affect the system".** It maps each
-source to the file it actually reaches, and separates the five that changed code
-from the ones that changed only how results are reported. That separation is the
-honest answer, and it is not the flattering one.
+supports here, and - the part that matters - what it does **not** support.
+Sources assessed 2026-08-31; condensed on 2026-09-15 (the full version is in git
+history). **§9 answers "how did the literature affect the system"**: five sources
+changed code, the rest changed only how results are reported.
 
 ---
 
 ## 1. The term "P2P" is ambiguous, and the ambiguity is expensive
-
-Three unrelated literatures share the abbreviation:
 
 | Sense | Domain | Relevance here |
 |---|---|---|
@@ -25,87 +16,48 @@ Three unrelated literatures share the abbreviation:
 | P2P **lending** | marketplace credit, borrower↔lender matching | different fraud taxonomy; methodology transfers, findings do not |
 | P2P **networking** | peer-to-peer protocols, botnet C&C | none |
 
-This is worth one sentence in the methodology chapter, because it changes what a
-literature search returns. Two of the six documents assessed here turned out to
-be the second sense and one the third.
+Two of the first six documents assessed turned out to be about lending and one
+about networking - worth a sentence in the methodology chapter.
 
 ---
 
-## 2. Machado et al. (2026) — systematic review of P2P **lending** fraud
+## 2. Machado et al. (2026) - systematic review of P2P **lending** fraud
 
 *Anatomy of peer-to-peer (P2P) lending fraud: A review with managerial
-implications.* International Journal of Information Management Data Insights
-6, 100425. Twente / Oradea / Bern / Hamburg / Cambridge CCAF / Utrecht.
-53 studies, predefined eligibility criteria.
+implications.* International Journal of Information Management Data Insights 6,
+100425. 53 studies.
 
-**The most useful single source in this batch.** Its consolidated constraints
-read as an independent checklist against this system's design decisions:
+Its consolidated constraints read as an independent checklist: scarce labels
+(generated here, their construction specified in `docs/generator-spec.md` §5),
+severe imbalance (PR-AUC reported, not ROC-AUC), limited cross-platform
+transferability (**not addressed** - one generator, one market), evolving fraud
+(drift against evasion, `docs/threat-model.md` §5), relational modelling
+(receiver-side aggregation) and explainability (SHAP reason codes). Its
+evaluation-practice table is the citable part: study after study records
+**"Accuracy reported"** and *NR* everywhere else.
 
-| Review finding | This project |
-|---|---|
-| "scarce and heterogeneous fraud labels" | labels are generated, and the generator spec states their construction (`docs/generator-spec.md` §5) |
-| "severe class imbalance" | 1.5% positive rate; PR-AUC reported rather than ROC-AUC (`ml/README.md`) |
-| "limited cross-platform transferability" | **not addressed** — one generator, one market. An honest gap, see §7 below |
-| "temporally evolving fraud behaviour" | drift-vs-evasion test in `docs/threat-model.md` §5 |
-| relational modelling "that captures coordinated activity (graph-based features and network representations)" | receiver-side aggregation, `MULE_FAN_IN`, Neo4j |
-| explainability "to support auditability and user trust" | SHAP reason codes per alert |
-| "strong within-platform performance often degrades under temporal splits or platform shifts, underscoring the need for drift-aware validation" | time-ordered split in `train.py`; no platform-shift test exists |
-
-Its evaluation-practice table is the citable part: study after study is recorded
-as **"Accuracy reported"** with *NR* (not reported) in every other column. In a
-literature where accuracy on a 0.1–10% positive rate is the headline number,
-reporting PR-AUC with intervals and per-type recall is not a courtesy — it is the
-contribution being made about method.
-
-**What it does not support.** P2P *lending*, not payments. Its fraud taxonomy —
-identity abuse, misrepresentation, loan stacking, collusion, predatory lending,
-platform misconduct — does not contain APP, ATO or muling as this project defines
-them. Cite it for evaluation practice, data constraints and modelling trends.
-Do not cite it for fraud rates, feature choices, or anything about instant
-transfers.
+**Not supported:** anything about payments - its taxonomy (identity abuse, loan
+stacking, collusion) has no APP, ATO or muling. Cite it for evaluation practice and
+data constraints only.
 
 ---
 
-## 3. Wang (2018) — P2P lending fraud at HC Financial
+## 3. Wang (2018) - P2P lending fraud at HC Financial
 
-*Detection of fraudulent users in P2P financial market.* MATEC Web of
-Conferences 189, 06004 (MEAMT 2018). Random forest and GBDT, ~35 features,
-one Chinese lending platform.
-
-Value is as **contrast**, not support.
-
-- Reported **AUC 0.780 (test) / 0.797 (validation)** with tanh feature scaling.
-  No precision, no recall, no confusion matrix, no interval.
-- Its stated rationale — AUC "because it is insensitive to class balance ratio" —
-  is precisely the reasoning `ml/README.md` argues against. At their >10% fraud
-  rate the choice is defensible; carried into a 0.1–1.5% setting it is not, and
-  the paper offers no such caveat.
-- Their fraud rate ">10%, sometimes a lot higher" versus 1.5% here is the
-  cleanest single illustration that lending and payments are different problems.
-  They write that the high rate "saves the day for algorithm engineers"; a
-  payments system does not get that.
-
-Also note the knowledge graph they describe — phone logs, ID cards, addresses,
-kinship edges — is the same shape as the MyID kinship integration this project
-**measured and found worthless** (+0.001 PR-AUC, CI straddling zero). A source that asserts the value
-of graph identity data, next to a measurement that it adds nothing here, is a
-better citation than one that agrees.
+*Detection of fraudulent users in P2P financial market.* MATEC Web of Conferences
+189, 06004. Random forest and GBDT, ~35 features, one Chinese lending platform.
+Useful as **contrast**: AUC 0.780 with no precision or recall, justified as
+"insensitive to class balance" at a >10% fraud rate - the reasoning `ml/README.md`
+argues against at 0.1-1.5%. Its identity graph is the shape of the MyID kinship
+integration measured here as worthless (+0.001 PR-AUC, CI straddling zero).
 
 ---
 
-## 4. Hemel, Hallaji & Razavi-Far (2026) — TSAI-MetaFraud
+## 4. Hemel, Hallaji & Razavi-Far (2026) - TSAI-MetaFraud
 
-*A Benchmark Dataset for Financial Fraud Transaction and Behavioral Risk
-Detection in Metaverse Ecosystems.* arXiv:2607.09528v1, 10 July 2026. UNB.
-Dataset at `github.com/tsai-unb/MetaFraud`.
-
-Multimodal benchmark built on OpenSimulator: avatar behaviour, transactions,
-and interaction graph, with four tasks (transaction fraud detection, cross-modal
-node classification, temporal link prediction, weakly supervised detection).
-Strict **inductive** split — test avatars unseen in training.
-
-**The result worth taking is not about the metaverse.** Their Table VII, on
-transaction fraud detection:
+*A Benchmark Dataset for Financial Fraud Transaction and Behavioral Risk Detection
+in Metaverse Ecosystems.* arXiv:2607.09528v1. A multimodal OpenSimulator benchmark
+with a strict inductive split. Their Table VII, transaction fraud detection:
 
 | model | class | P | R | F1 |
 |---|---|---|---|---|
@@ -118,46 +70,28 @@ transaction fraud detection:
 | GraphSAGE (graph) | Financial fraud | 0.37 | 0.41 | **0.39** |
 | GraphSAGE (graph) | Both (hybrid) | 0.55 | 0.62 | **0.58** |
 
-A gradient-boosting model on tabular features — the same family as this
-project's LightGBM — scores 0.98 on the majority class and **exactly zero** on
-both financial-fraud classes. The graph model is worse on benign traffic and is
-the only one that finds financial fraud at all.
-
-That is structurally the same finding as this project's fan-in result
-(`ml/README.md`, "Fan-in: a blind spot in a sender-keyed stream"): a per-record
-tabular view cannot express a pattern defined over the relation between records,
-and no amount of tuning recovers it. Reached independently, in a different
-domain, with different models, in the same month. **Two independent arrivals at
-the same structural claim is worth more than either alone**, and it is the
-strongest external support in this batch for the receiver-side aggregation
-argument.
-
-**What it does not support.** Virtual currency in a simulated world; no
-regulator, no settlement finality, no card networks, no session-level banking
-telemetry. Cite the tabular-vs-graph contrast. Do not cite its absolute numbers
-as comparable to anything here.
+Gradient boosting on tabular features - this project's model family - scores
+**exactly zero** on both financial-fraud classes; only the graph model finds them.
+It is the same structural claim as this project's fan-in result (`ml/README.md`,
+"Fan-in"), reached independently: a per-record view cannot express a pattern
+defined over the relation between records. **Not supported:** its absolute numbers
+- virtual currency, no regulator, no card networks.
 
 ---
 
-## 5. Saad et al. (2011) — P2P botnets
+## 5. Saad et al. (2011) - P2P botnets
 
 *Detecting P2P Botnets through Network Behavior Analysis and Machine Learning.*
-PST 2011.
-
-**Not relevant.** "P2P" here is peer-to-peer *networking*: botnet command and
-control, detected from network flow behaviour. No financial transactions, no
-fraud in the payments sense. Recorded so the search is not repeated. Its only
-use is as the example in §1 above.
+PST 2011. **Not relevant** - peer-to-peer networking, no payments. Recorded so the
+search is not repeated.
 
 ---
 
-## 6. `ris3abh/aml-p2p-fraud-detection` (MIT) — the calibration point
+## 6. `ris3abh/aml-p2p-fraud-detection` (MIT) - the calibration point
 
-PaySim, 6.36M mobile-money transactions, CatBoost with `scale_pos_weight=974`,
-isotonic calibration. Reported by the repository, and **reproduced here on
-2026-09-07** — the full PaySim log had been sitting in `validation/` the whole
-time, so an earlier revision's "not independently reproduced here" was a choice
-rather than a limitation. `paysim_adapter.py --baseline` is the reproduction.
+PaySim, 6.36M mobile-money transactions, CatBoost with `scale_pos_weight=974`.
+Reported by the repository, and reproduced here with
+`paysim_adapter.py --baseline`:
 
 | metric | reported | reproduced | measured on |
 |---|---|---|---|
@@ -167,30 +101,11 @@ rather than a limitation. `paysim_adapter.py --baseline` is the reproduction.
 | top-decile lift | 7.0× | 7.25× | " |
 | AUPRC *before* removing balance leakage | 0.988 | **1.000** | same split |
 
-Their split is 24 days train / 7 days test, which on PaySim's hourly `step` is a
-cut at 576. That reproduces their stated rates closely enough to confirm it is
-the split: train 0.1028% against their 0.103%, test 1.1398% against their
-1.142%, 1,840 holdout frauds against their 1,854.
-
-**Two corrections to the earlier version of this section.**
-
-*The prevalence was wrong, and it is the number that matters most.* This section
-used to say the 0.380 was measured "at a 0.129% fraud rate". 0.129% is PaySim's
-rate over all 6.36M rows; the AUPRC belongs to a holdout slice at **1.142%**.
-AUPRC's random-classifier floor *is* the prevalence, so the two are not
-interchangeable — the old wording placed the number on a floor nine times too
-low. The correction happens to **strengthen** the comparison rather than weaken
-it: 1.142% there against 1.23% on this project's own held-out slice is a matched
-prevalence, so the ratio of the two AUPRCs is a like-for-like reading. Under the
-0.129% this section used to quote, it would not have been.
-
-*The recall had no operating point.* 49.4% is measured at a **2% alert budget**
-(threshold 0.987), which their README states and this section omitted. Recall
-without a budget is not comparable to anything.
-
-**The comparison, at the budget rather than by AUPRC.** Alert-budget recall and
-top-decile lift are evaluated at a fixed fraction of the population, so they
-survive the prevalence question that AUPRC raises:
+Their split is 24 days train / 7 days test, a cut at step 576 that reproduces
+their stated rates. The AUPRC belongs to a holdout at **1.142%** fraud, not
+PaySim's overall 0.129% - an earlier revision had the prevalence wrong
+(`irp-framing.md` 8, eighteenth). Against this project's held-out slice at 1.23%
+the prevalences match, so the comparison is like for like:
 
 | | this project | ris3abh / PaySim |
 |---|---|---|
@@ -199,20 +114,12 @@ survive the prevalence question that AUPRC raises:
 | lift @ top decile | 10.0× (capped) | 7.0× |
 | PR-AUC | 0.937 (0.960 ± 0.018 across seeds) | 0.380 |
 
-Two independent prevalence-robust measures both say **about 2×**, which
-corroborates the 2.5× the AUPRC ratio gives. So the headline claim survives
-verification; only its justification was unsound.
+Those rows are the baseline profile. On the realistic profile - fraud at 0.18%,
+legitimate look-alikes, a tenth of fraud unreported -
+the committee scores 0.472 PR-AUC, and most of the gap has closed: much of the
+old distance was a generator whose classes separated by construction.
 
-> **Since 2026-09-14 (`generator-spec.md` 10).** The rows above are the baseline
-> profile. On the realistic profile - fraud at 0.18%, legitimate look-alikes of
-> every pattern, a tenth of fraud unreported - the committee scores 0.472 PR-AUC.
-> The gap to PaySim's 0.380 has mostly closed, which is what the next paragraph's
-> reading predicted: much of the old distance was a generator whose classes
-> separated by construction.
-
-**How much of the gap is the data, and how much is the feature set.** Not all of
-it is separability. `validation/README.md` measures what this project's own model
-does when stripped to what a public dataset can carry:
+**How much of the gap is features, and how much is data** (`validation/README.md`):
 
 | features available | PR-AUC on THIS data |
 |---|---|
@@ -220,130 +127,59 @@ does when stripped to what a public dataset can carry:
 | amount + hour only | 0.653 |
 | — PaySim, leak-free, 6 raw columns | 0.380 |
 
-Feature poverty costs 0.937 → 0.653; the data itself accounts for 0.653 → 0.380.
-**Roughly half the gap is features public data cannot publish, and half is a
-generator whose classes are separable by construction.** That is a sharper answer
-than "2.5× easier" and a more defensible one, because the first half is a
-property of the field rather than of this generator.
+Roughly half the gap is features public data cannot publish, and half a generator
+whose classes separated by construction. And PaySim with its balance columns
+scores 1.000: **a PR-AUC in the high nineties is the range a known-broken model
+reaches on public data**, which is why `generator-spec.md` §7 calls this
+project's 0.960 a design target, not a result.
 
-**The most uncomfortable number is the one that was missing.** Their *pre*-leak-
-removal AUPRC was 0.988 — reproduced here at 1.000, so PaySim's balance columns
-are not merely leaky, they are the label. That figure sits **above** this
-project's 0.960. A PR-AUC in the high nineties is therefore not evidence of a
-working system: it is the range a known-broken model reaches on public data. The
-honest reading of 0.960 is not "better than the benchmark" but "the same class of
-number the benchmark produces when it is wrong", which is why
-`generator-spec.md` §7 calls it a design target rather than a result.
-
-**One caveat on their configuration.** `scale_pos_weight=974` and AUPRC 0.380 do
-not sit together comfortably. In reproduction that weighting costs almost
-everything — 0.397 → 0.022 on the same features — because heavy positive
-weighting flattens the top of the ranking, which is exactly what AUPRC reads.
-Either CatBoost's handling differs from LightGBM's here, or the weighting did not
-apply to the scored model. It does not affect the verification, since the
-unweighted leak-free run reproduces all four of their figures.
-
-**A PaySim artefact worth knowing, found while pinning the split.** Legitimate
-traffic stops at step 718, but fraud continues to 743: the last 296 rows are
-100% fraud, 3.6% of every positive in the dataset. Any temporal split reaching
-the tail inherits a region with no negatives in it at all.
-
-**What it does not support.** Batch, notebook-based, no streaming; mobile money,
-not card P2P. It is a comparison of *model difficulty on a dataset*, nothing else.
+Two notes: `scale_pos_weight=974` cost almost everything in reproduction (0.397 →
+0.022), so the weighting probably did not apply to their scored model; and
+PaySim's last 296 rows are 100% fraud, so a temporal split reaching the tail
+inherits a region with no negatives. **Not supported:** anything beyond model
+difficulty on a dataset - batch notebooks, mobile money.
 
 ---
 
-## 6a. Afriyie et al. (2023) — the evaluation failure, in a peer-reviewed journal
+## 6a. Afriyie et al. (2023) - the evaluation failure, in a peer-reviewed journal
 
 *A supervised machine learning algorithm for detecting and predicting fraud in
-credit card transactions.* Decision Analytics Journal 6, 100163. Elsevier.
-Logistic regression, decision tree and random forest on the Sparkov-generated
-Kaggle set (`kartik2112/fraud-detection`).
-
-Their abstract: random forest "produces a maximum accuracy of 96% (with an area
-under the curve value of 98.9%)", and they "recommend random forest as the most
-appropriate machine learning algorithm".
-
-Their own published confusion matrices say something else. Recomputed from
-Table 7 (random forest) and Table 5 (decision tree) — 96,961 test rows, 427 of
-them fraud, a prevalence of 0.44%:
+credit card transactions.* Decision Analytics Journal 6, 100163. Their abstract
+recommends random forest at "a maximum accuracy of 96%". Recomputed from their
+own confusion matrices (96,961 test rows, 0.44% fraud):
 
 | | random forest | decision tree |
 |---|---|---|
 | accuracy | 0.958 *(their headline)* | 0.916 |
 | recall / sensitivity | 0.958 *(reported)* | 0.930 *(reported)* |
-| specificity | 0.958 *(reported)* | 0.916 *(reported)* |
 | **precision** | **0.092** *(not reported)* | **0.047** *(not reported)* |
 | **F1** | **0.167** *(not reported)* | **0.089** *(not reported)* |
 | alerts per true catch | **10.9** | 21.4 |
 
 **A classifier that predicts "never fraud" scores 0.996 accuracy on this test
-set.** The recommended model scores 0.958. Judged by the metric the paper puts
-in its abstract, the recommended system is worse than doing nothing at all, and
-in operation it would raise eleven alerts per fraud caught.
-
-What makes it worth citing rather than merely wrong is that the authors write,
-in their own methods section: *"Our dataset is quite unbalanced, thus comparing
-the model's using accuracy as the only performance metric may not be appropriate
-in this context."* They state the objection, define precision and F1 in the text,
-publish the confusion matrices from which both are computable — and then headline
-accuracy anyway and never print either number.
-
-This is the concrete instance of the pattern the review in §2 reports across the
-corpus as "Accuracy reported / NR". It is the strongest available argument for
-this project's reporting discipline: PR-AUC as the primary figure at a 1.5%
-positive rate, precision and recall always together, per-type recall with
-intervals, and no headline metric whose trivial baseline beats the model.
-
-Note also which metrics *do* get reported. Accuracy, sensitivity and specificity
-are all majority-class-friendly at low prevalence; a 0.958 specificity sounds
-strong and is 4,052 false alerts. Precision is the one that exposes it, and it
-is the one absent.
+set.** The authors name the imbalance objection themselves and headline accuracy
+anyway - the concrete instance of §2's "Accuracy reported / NR", and the strongest
+argument for this project's reporting: precision and recall together, PR-AUC,
+per-type recall with intervals.
 
 ---
 
-## 6b. Tritscher et al. (2022) — the second precedent for generating data
+## 6b. Tritscher et al. (2022) - the second precedent for generating data
 
-*Open ERP System Data For Occupational Fraud Detection.* arXiv:2206.04460v2.
-University of Würzburg. Data generated by having human participants play a
-"serious game" on a real ERP system interface, with fraud scenarios modelled in
-cooperation with auditing experts.
-
-Different domain, different generation method, identical reasoning to
-`generator-spec.md` §0: the real data is unavailable — there, trade secrets and
-privacy; here, bank confidentiality — so the field either generates or stops.
-Currently that section rests on PaySim alone. This is a second, independent,
-peer-reviewed instance, and a stronger one for the argument about *openness*,
-because their stated motivation is that earlier ERP generators "did not provide
-data to the public, limiting open and reproducible research".
-
-Two of their criticisms of prior work land on this project and should be
-answered rather than ignored:
-
-- **On unverifiable generators.** They reject 3LSPG because "with no data, code,
-  and chosen simulation parameters available, modeling realistic ERP system data
-  through this approach is challenging". This is exactly the standard
-  `generator-spec.md` is written to meet — a full parameter specification, the
-  code, dataset SHA-256 hashes, and a determinism proof — and it is worth saying
-  so explicitly, because meeting a published criterion is a stronger claim than
-  meeting one's own.
-- **On post-hoc fraud injection.** They criticise the white-collar-hacking-contest
-  approach because frauds are "modeled into an existing database in post,
-  potentially causing unwanted divergence between normal and fraudulent data
-  characteristics". **This project injects fraud into generated legitimate
-  traffic (§5), so the criticism applies directly** — and the ROC-AUC of 0.999
-  is precisely that divergence, observed. The honest move is to cite Tritscher
-  for the mechanism rather than present the separability finding as an
-  unexplained artefact of synthetic data.
+*Open ERP System Data For Occupational Fraud Detection.* arXiv:2206.04460v2. Data
+generated by participants playing fraud scenarios on a real ERP interface - the
+same reasoning as `generator-spec.md` §0: real data is unavailable, so generate.
+Two of their criticisms land here. Generators without published parameters and
+code are unverifiable - `generator-spec.md` publishes both, with hashes. And
+**post-hoc fraud injection** makes fraud diverge from normal data - this project
+injects fraud into generated traffic (§5), and ROC-AUC 0.999 on the baseline
+profile is that divergence observed.
 
 ---
 
-## 6c. Wang, Liu, He & Du (2020) — graph attention on real P2P lending data
+## 6c. Wang, Liu, He & Du (2020) - graph attention on real P2P lending data
 
-*A Graph Attentive Network Model for P2P Lending Fraud Detection.* KSEM 2020,
-LNAI. Renmin University of China and Tsinghua. Model "FDNE": graph attention
-with a novel edge-feature attention and global normalisation, over user
-relationships plus loan-description text.
+*A Graph Attentive Network Model for P2P Lending Fraud Detection.* KSEM 2020.
 
 | model | precision | recall | F1 | accuracy | AUC |
 |---|---|---|---|---|---|
@@ -352,31 +188,17 @@ relationships plus loan-description text.
 | EGNN(A)-a | 0.736 | 0.916 | 0.816 | 0.796 | 0.829 |
 | **FDNE-f** | 0.740 | 0.919 | 0.820 | 0.800 | 0.830 |
 
-Two things to take. First, relational structure beats demographic attributes on
-*real* data, and attention supplies a per-decision explanation — the same pair of
-claims this project makes for receiver-side aggregation plus SHAP. Second, they
-report precision and recall together, which by the standard of §6a is worth
-noting.
-
-**The label definition is the caveat, and it is a large one.** They write that
-"P2P companies often regard overdue users as fraud users", and that is the label
-they train on. Delinquency is not fraud; a borrower who cannot pay and a borrower
-who never intended to are different people. This is a concrete instance of the
-"scarce and heterogeneous fraud labels" the review in §2 identifies, and it is
-worth contrasting with this project, where the label is what the generator
-injected and its definition is written down.
+Relational structure beats demographic attributes on *real* data, with a
+per-decision explanation - the pair of claims this project makes. **Caveat:**
+their label is delinquency ("overdue users as fraud users"), which is not fraud.
 
 ---
 
-## 6d. Cybersecurity Centre of Uzbekistan, 2025 annual report — the only national source
+## 6d. Cybersecurity Centre of Uzbekistan, 2025 annual report - the only national source
 
-State Institution "Cybersecurity Centre", Republic of Uzbekistan (csec.uz),
-annual analytical digest for 2025, in Uzbek. **The only source in this whole
-assessment that reports real Uzbek numbers**, which for a thesis about the Uzbek
-market makes it disproportionately valuable — for motivation and threat model,
-not for data.
-
-Load-bearing figures, used in `threat-model.md` §3a and `irp-framing.md` §7.5:
+State Institution "Cybersecurity Centre" (csec.uz), annual digest for 2025, in
+Uzbek - **the only source here with real Uzbek numbers**, used in
+`threat-model.md` §3a and `irp-framing.md` §7.5:
 
 | finding | figure |
 |---|---|
@@ -385,35 +207,21 @@ Load-bearing figures, used in `threat-model.md` §3a and `irp-framing.md` §7.5:
 | databases leaked to darknet | 37 organisations, **21M rows**, plus 1,697 login/password pairs |
 | personal records whose leak was prevented | **23M+**, "close to two-thirds of the population" |
 | banking/finance share of detected vulnerabilities | **22.84%**, second behind public administration (25.84%) |
-| "session retained" as a high-severity finding | 82 in information systems, 8 in mobile apps |
 | web-application attacks | 67M+ malicious requests, **+430%** year on year |
-| cyberthreat records collected | 2,002,904, 30% critical |
 
-Its own forward-looking conclusion states that the 122% rise in mobile
-examinations confirms attacker attention is moving to smartphones **and the
-financial applications on them**. That is a national authority asserting, in
-2025, the premise this project is built on.
-
-**The trap in it, and it is a real one.** Of 247 recorded incidents in 2025,
-**three** are phishing; the top entry is website defacement at 219. A reader who
-finds that number will conclude social-engineering fraud is marginal in
-Uzbekistan. The register counts incidents **against state web resources** —
-consumer APP fraud is outside both its remit and its visibility. The thesis
-should quote the number *and* the scope together, because quoting it without the
-scope argues against the thesis's own premise.
+**The trap:** of 247 recorded incidents only three are phishing - but the register
+counts incidents against *state web resources*, and consumer APP fraud is outside
+its view. Quote the number with its scope, or it argues against the thesis's own
+premise.
 
 ---
 
 ## 6e. Uzbek primary sources: scale, and a regulator that moved
 
-Three sources that are not literature at all — they are the subject. Assessed
-2026-08-31.
-
 ### The size of the thing (Central Bank of Uzbekistan)
 
-*Xalqaro migratsiya va jismoniy shaxslarning valyuta operatsiyalari sharhi*
-(Review of international migration and currency operations of individuals),
-Central Bank of Uzbekistan, March 2026.
+*Review of international migration and currency operations of individuals*,
+Central Bank of Uzbekistan, March 2026:
 
 | | 2024 | 2025 | change |
 |---|---|---|---|
@@ -422,262 +230,105 @@ Central Bank of Uzbekistan, March 2026.
 | — **P2P direct to bank cards** | $5,916mn | **$8,648mn (46%)** | **×1.4** |
 | — conventional bank transfers | $774mn | $397mn (2%) | **−49%** |
 
-P2P card-to-card went from 40% to 46% of inbound remittances in one year, while
-the bank-transfer channel it is replacing halved. This is an official national
-figure for the scale of the channel this project defends, and the introduction
-currently has no scale figure at all.
-
-The scoping consequence is worked out in `threat-model.md` §1: excluding
-cross-border traffic excludes ~46% of a $18.9bn flow arriving on the same cards,
-and on that portion receiver-side aggregation is not the best signal but the
-**only** one, because the sender is not the bank's customer.
+P2P to cards rose from 40% to 46% of inbound remittances in a year. On that
+cross-border share receiver-side aggregation is the **only** signal, because the
+sender is not the bank's customer (`threat-model.md` §1).
 
 ### The regulator moved, and the economics changed (from 16.11.2026)
 
-Amended Central Bank requirements for P2P transfers, reported by uzdaily.uz and
-fintech-retail.com:
-
-- P2P transfers through **websites are prohibited** for credit and payment
-  organisations.
-- Logging in from a **new device deactivates the linked cards**; biometric
-  identification is required to use an account from a different device, and all
-  affiliated cards go inactive after a password reset.
-- Organisations may **set their own limit** below which a transfer needs no
-  additional confirmation.
-- **Liability for fraudulent transactions performed without additional
-  confirmation, within that self-set limit, falls on the credit or payment
-  organisation.**
-- Counterparty names must be shown **partially masked** in mobile applications.
-
-The liability clause is the important one and is treated in `threat-model.md` §2:
-it moves the loss onto the institution's own balance sheet and makes detection
-quality the variable that sets a revenue-bearing limit. The device clauses are a
-second instance of the prevention/detection substitution, and a cleaner one than
-the `active_call` case, because they mandate as prevention exactly the capability
-this project's ablation measured at **+0.000**.
-
-The masking clause deserves one line of its own: it reduces what a victim can
-verify about a destination account at confirmation time, which is a mild argument
-*against* the APP victim's own defences and therefore *for* automated detection.
+Amended Central Bank requirements for P2P transfers: transfers through websites
+prohibited; a new device deactivates the linked cards; organisations set their own
+limit for transfers needing no extra confirmation - and **carry the liability for
+fraud within it**; counterparty names are masked. The liability clause moves the
+loss onto the institution and makes detection quality set a revenue-bearing limit
+(`threat-model.md` §2).
 
 ### P2P monitoring is also a tax programme, and that is a confound
 
-kun.uz, 13 May 2026. From April 2026 the **Tax Committee** — not the Central
-Bank — began monitoring individuals' P2P activity, with notices copied to the
-Department for Combating Economic Crimes. Reported details: a budget target of
-**30 trillion soum** in additional revenue for the year; cases built on
-individuals with ~2,500 P2P transactions over three years, or annual card
-turnover above 500mn soum; a **20% penalty** on the understated tax base; ten
-days to file corrected returns. The selection criteria are **not disclosed**, and
-neither is how data covered by banking secrecy was obtained.
-
-**Why this belongs in the thesis and not in a footnote.** This project's
-`STRUCTURING` rule detects transfers arranged to sit under a reporting threshold.
-That behaviour is *also* the signature of undeclared trading income, and in
-Uzbekistan in 2026 it is the tax authority, not the fraud function, that is
-acting on it. The same detector serves two purposes with different due-process
-requirements: a fraud alert protects the account holder, a tax referral is used
-against them. Chapter 9 should say plainly which one this system is for, and that
-the outputs are not interchangeable — an antifraud model whose alerts flow to
-revenue enforcement is a different system with a different consent basis, however
-identical the code.
-
-It is also a live confound for any future validation on real Uzbek traffic:
-between 2026 and whenever such data becomes available, the observable behaviour
-of P2P users is being changed by tax enforcement, not only by fraud.
+kun.uz, 13 May 2026: from April 2026 the **Tax Committee** monitors individuals'
+P2P activity, with a 30 trillion soum revenue target and undisclosed selection
+criteria. `STRUCTURING` detects transfers kept under a threshold - also the
+signature of undeclared trading income. A fraud alert protects the account
+holder; a tax referral is used against them. The thesis should say which one this
+system is for, and treat tax enforcement as a confound for any future validation
+on real Uzbek traffic.
 
 ---
 
 ## 7. Datasets considered and not adopted
 
-Extends the table in `generator-spec.md` §0.
+Extends the table in `generator-spec.md` §0; the datasets actually run are in
+`validation/README.md`.
 
-**IBM Synthetic Data Sets (SynDS).** As of October 2025 includes P2P payment
-data modelled on Venmo/Zelle-style platforms, with — per IBM's description —
-labelling of 100% of criminal activity, perpetrator identities, transaction
-purposes and money-laundering pathways. The closest thing to an off-the-shelf
-substitute for this project's generator.
-
-Rejected for three reasons, in order of weight: it is a **commercial product**,
-so a thesis built on it is not reproducible by a reader who does not buy it (the
-Apache-2.0 GitHub repository `IBM/IBM-Synthetic-Data-Sets` publishes **schemas
-and DDL only**, not the data); its transfer semantics are US consumer apps, not
-UzCard/HUMO card-to-card; and it carries no session-level signals of the kind
-CBU 3759 makes relevant. Worth **citing** as evidence that full-label synthetic
-P2P payment data is an accepted industry instrument — which is exactly the
-argument `generator-spec.md` §0 makes.
-
-The accompanying IBM community post reports a bank that "went from only scoring
-20% of their transactions to scoring 100%" after moving the model on-platform.
-Usable as motivation for why scoring must be cheap enough to run on everything —
-a coverage argument, adjacent to this project's latency budget. A figure of
-"4.5 µs decision latency" appears in the **comments** on that post, not in IBM's
-text; do not cite it as an IBM claim.
-
-**Kaggle UPI transaction datasets** (several, e.g. `skullagos5246/upi-transactions-2024`,
-`kalpitlabs/upi-fraud-detection-dataset-india-synthetic`). India's UPI is the
-closest real-world analogue to the setting here: a national instant-payment rail
-with per-transaction fraud pressure. All the ones found are **themselves
-synthetic**, uploaded without a generating specification. A synthetic dataset
-whose assumptions are undocumented is strictly worse than one whose assumptions
-are written down, which is the whole argument of `generator-spec.md` §7. Column
-lists and licences could not be confirmed from outside Kaggle and would need
-checking before any use.
-
-**AMLSim (IBM, open source) — the one worth actually running.** Agent-based
-generator of interbank transaction graphs with eight money-laundering
-typologies, and the list includes **fan-in** ("multiple accounts send substantial
-funds to a single main account"), **fan-out**, **scatter-gather** and
-**gather-scatter**. Records carry originator and beneficiary accounts and alert
-labels; the simulator is run locally, so the data is reproducible by a reader
-rather than downloaded on trust.
-
-This matters because of a specific gap. `MULE_FAN_IN` and the receiver-side
-aggregation behind it are this project's **largest measured effect** (−0.032
-PR-AUC) and its only structural design finding — and they have **no external
-validation at all**, because PaySim models fraud as a straight drain to cash-out
-and contains no collection stage for the rule to see (`validation/README.md` §1).
-AMLSim generates exactly that collection stage. It is the obvious next external
-run, and the first one that could falsify the project's headline claim rather
-than confirm a claim already made.
-
-Caveat before running it: AMLSim's fan-in is an interbank AML typology, not
-consumer card-to-card, so the amounts, cadence and account population differ.
-That makes it a test of the **rule's shape**, not of its thresholds — which is
-what the PaySim exercise established is the useful kind of transfer test anyway.
-
-**Other datasets from the AI4FCF catalogue** (`sites.google.com/view/ai4fcf/open-datasets`),
-recorded so the search is not repeated: **BankSim** (594,643 synthetic payments,
-7,200 fraud, customer→*merchant* identifiers — retail, so fan-in at a receiver is
-normal behaviour rather than signal); **IBM AML-Data / AMLworld** (multi-agent
-generated bank transfers with laundering labels); **Amaretto** (29.7M capital-markets
-transactions, 5 patterns); the **Czech financial dataset** (~1M real anonymised
-transactions, 4,500 accounts, **no fraud labels**); **Libra Bank transaction graph**
-(real, anonymised, with alerts); Paradise/Panama Papers (offshore records, no
-transaction labels).
-
-**`CiferAI/Cifer-Fraud-Detection-Dataset-AF`** (Hugging Face, Apache-2.0). 21M
-transactions across 14 CSVs, 1.84 GB, synthetic, with `nameOrig`/`nameDest`
-identifiers and two labels. Larger than PaySim and better licensed, and it is
-still **PaySim's phenomenology**: the same column set (type, amount, old/new
-balances both sides), the same lineage, and therefore the same missing collection
-stage that makes `MULE_FAN_IN` untestable. Three times the rows does not add a
-pattern that was never modelled. Two specific cautions if it is ever used: it
-carries the **balance columns**, which is PaySim's documented leakage surface;
-and `isFlaggedFraud` is a **system decision, not ground truth** — training or
-scoring against it would repeat exactly the defect that made the Zenodo file
-unusable (`validation/README.md` §2).
-
-**`ealaxi/banksim1`** (BankSim, Lopez-Rojas & Axelsson). 594,643 synthetic
-payments, 7,200 fraud, with identifiers — but customer→**merchant**. Concentration
-at a receiver is ordinary merchant behaviour there, not signal, so the
-receiver-side work has no meaning on it. Same disqualifier as IEEE-CIS.
-
-**`mlg-ulb/creditcardfraud` and OpenML id 42175** are the same ULB dataset from
-two hosts, already ruled out in `generator-spec.md` §0 for PCA anonymisation. Worth
-knowing that this is the set the Zenodo file in §2 of `validation/README.md` was
-assembled from.
-
-**`amazon-science/fraud-dataset-benchmark`** (MIT-0). Loaders, not data, for nine
-datasets: IEEE-CIS, ULB credit card, an e-commerce set, Sparkov, Twitter bots,
-malicious URLs, fake job postings, vehicle-loan default, IP blocklist. **Its
-value here is a negative result.** The most prominent attempt to standardise
-fraud-detection benchmarking spans bot detection, URL classification and content
-moderation, and contains **no P2P payment dataset at all**. That is direct
-evidence for the gap claim in §8 — not an oversight by its authors, but a
-consequence of the same confidentiality that keeps P2P transfer data private.
-
-**`northhavenanalytics.com/fraud-detection-guide`** is a vendor guide from a
-synthetic-data consultancy: no original data, no benchmarks, built around the ULB
-dataset to argue for buying synthetic data. Same category as the fraud.net page
-below — usable as an illustration of how claims are made in the commercial
-literature, not as a source.
-
-**Kaggle `sriharshaeedala/financial-fraud-detection-dataset`** is a re-upload of
-PaySim, already held locally in `validation/`. **Kaggle `kartik2112/fraud-detection`**
-is the Sparkov-generated card set used by Afriyie et al. (§6a); it carries a
-customer identifier and a *merchant*, not a P2P counterparty, so it has the same
-disqualifying shape as IEEE-CIS for the receiver-side work. Its value here is
-that it is the dataset behind §6a.
-
-**fraud.net P2P AI fraud automation** (vendor page). Claims: scoring "in under
-50 milliseconds", "97% Fewer False Positives", "88% Fraud Reduction", "600+
-fraud schemes", behavioural biometrics and device signals.
-
-None of it is verifiable — no denominator, no baseline, no dataset, no
-definition of a false positive. Its use in the thesis is as an **object lesson
-about evaluation**, alongside the review in §2: the commercial claims and much of
-the academic literature share the same defect, which is reporting a number
-without the conditions under which it was obtained. That is the gap the
-measurement discipline in `docs/irp-framing.md` is built against.
-
-The one figure worth engaging is the 50 ms. It is *scoring* latency, not
-end-to-end: the comparable figure here is 4.3–6.4 ms of scoring work
-(`irp-framing.md` §7.5a), inside a decision path of 62–87 ms whose remainder is
-framework buffering. Comparing their 50 ms to this project's 300 ms budget would
-be comparing different quantities.
+- **IBM Synthetic Data Sets (SynDS)** - P2P payment data with full labels, but a
+  commercial product (the public repository holds schemas only), US consumer-app
+  semantics and no session signals. Citable as evidence that full-label synthetic
+  P2P data is an accepted industry instrument.
+- **Kaggle UPI datasets** (e.g. `skullagos5246/upi-transactions-2024`) - themselves
+  synthetic, with no generating specification.
+- **AMLSim** (IBM, open source) - run: `validation/README.md` §3.
+- **The AI4FCF catalogue** (`sites.google.com/view/ai4fcf/open-datasets`): BankSim
+  (customer→merchant, so receiver concentration is normal), IBM AML-Data (run:
+  `validation/README.md` §4), Amaretto (capital markets), the Czech financial
+  dataset (no fraud labels), the Libra Bank graph, Paradise/Panama Papers.
+- **`CiferAI/Cifer-Fraud-Detection-Dataset-AF`** - 21M rows of PaySim's
+  phenomenology: no collection stage, balance-column leakage, and `isFlaggedFraud`
+  is a system decision, not ground truth.
+- **`ealaxi/banksim1`** - customer→merchant, the same disqualifier as IEEE-CIS.
+- **`mlg-ulb/creditcardfraud`** / OpenML 42175 - the ULB set, PCA-anonymised, and
+  the source the Zenodo file was sampled from.
+- **`amazon-science/fraud-dataset-benchmark`** - loaders for nine datasets and
+  **no P2P payment dataset at all**: evidence for the gap in §8.
+- **Kaggle `sriharshaeedala/financial-fraud-detection-dataset`** (a PaySim
+  re-upload) and **`kartik2112/fraud-detection`** (the Sparkov set behind §6a,
+  customer→merchant).
+- **Vendor material** (fraud.net, North Haven Analytics) - unverifiable claims, no
+  denominator or baseline. fraud.net's "under 50 ms" is *scoring* latency,
+  comparable to this project's few milliseconds of scoring work
+  (`irp-framing.md` §7), not to its 300 ms end-to-end budget.
 
 ---
 
 ## 8. What none of these sources supplies
 
-Stated so the gap is not mistaken for an oversight:
-
-- **No source of real Uzbek P2P card data.** Unchanged.
-- **No cross-platform validation.** The review in §2 names transferability as a
-  central constraint of the field, and this project has one generator and one
-  market. It cannot be closed with the sources above; it can only be declared.
-- **No external benchmark this system's numbers are directly comparable to.**
-  §6 gives a difficulty anchor for the *data*, not a comparison of *systems* —
-  different dataset, different task, batch versus streaming.
-- **The receiver-side finding is still unvalidated externally** — but that is now
-  a task rather than a limitation, since AMLSim (§7) generates the fan-in stage
-  PaySim lacks. Until it is run, the strongest claim in this project rests on one
-  generator, and that generator is this project's own.
+- **No source of real Uzbek P2P card data.**
+- **No cross-platform validation** - one generator, one market; declared, not
+  closable with these sources.
+- **No external benchmark this system's numbers are directly comparable to** - §6
+  anchors the difficulty of the *data*, not a comparison of *systems*.
+- **Receiver-side aggregation now has external evidence** from IBM AML
+  (`validation/README.md` §4), on synthetic data this project did not write; real
+  data would still be the stronger test.
 
 ---
 
 ## 9. Where each source is actually used
 
-Verified by searching the repository, not from memory. The question a reviewer
-asks is "how did the literature affect the system", and there are two truthful
-answers to it, not one.
-
 ### Sources that changed the code
 
 | Source | What was taken | Where it lands |
 |---|---|---|
-| **PaySim** (§6) | The rule layer went **mute** on foreign data: with two rules available the highest score any fraud reached was 0.35 against a 0.40 cutoff, while the rules separated the classes 4:1. | `capabilities.scaled_threshold` exists because of this, reached on the deployed fallback path through `fusion.cutoffs` and switchable at `config.SCALE_THRESHOLDS_BY_CAPABILITY`. Adapter: `validation/paysim_adapter.py`. Balance leakage as precedent: `generator-spec.md` §7. |
-| **PaySim, via `ris3abh`** (§6) | PR-AUC **0.380** on the standard public benchmark against 0.960 here — reproduced at 0.397, and their *pre*-leak-removal 0.988 reproduced at 1.000. | Turns "our data is probably easier" into a decomposition: half the gap is features public data cannot carry, half is separability — `generator-spec.md` §0, §7. The 0.988 is the sharper point: a PR-AUC in the high nineties is what a *broken* model scores. |
-| **IBM AMLSim** (§7) | `MULE_FAN_IN` at six senders fired on **3.12%** of legitimate traffic and caught **0.0%** of the fan-in typology: in a scale-free graph 2.69% of receivers exceed six as ordinary hub behaviour. The constant encoded the density of the population it was tuned on. | `rules.PopulationBaseline`, `MULE_FAN_IN_MODE=relative`, measured +6.9 pp — `irp-framing.md` §6, third RQ3 result. |
-| **CBU Regulation No. 3759** | The BRV-denominated threshold, and the fact that **the project's earlier citation of it was wrong**. | `data-generator/config.STRUCTURING_THRESHOLD`, mirrored at `stream-processor/config.STRUCTURING_THRESHOLD` and enforced through `config.MANDATORY_REVIEW_RULES`. The correction is left in the code as a comment: a citation that was checked and refuted. |
-| **Cybersecurity Centre of Uzbekistan, 2025** (§6d) | **54 of 157** high-severity mobile findings are transport security. | The motivation for measuring transport overhead at all — `irp-framing.md` §7.5, `threat-model.md` §3a. Not "interesting to measure" but "the national authority says this is the dominant defect class". |
-| **Tritscher et al. 2022** (§6b) | Two things: the published criterion a generator must meet (parameters, code, hashes, determinism proof), and the criticism of **post-hoc fraud injection**. | `generator-spec.md` §0 and §5. The second lands on this project directly, and ROC-AUC 0.999 is that divergence observed rather than an unexplained artefact. |
+| **PaySim** (§6) | The rule layer went **mute** on foreign data: the highest score any fraud reached was 0.35 against a 0.40 cutoff, while the rules separated the classes 4:1. | `capabilities.scaled_threshold`, reached through `fusion.cutoffs`; adapter `validation/paysim_adapter.py`. |
+| **PaySim, via `ris3abh`** (§6) | PR-AUC **0.380** on the public benchmark, reproduced at 0.397; the leaky 0.988 reproduced at 1.000. | The decomposition of the gap into features and separability - `generator-spec.md` §0, §7. |
+| **IBM AMLSim** (§7) | `MULE_FAN_IN` at six senders fired on **3.12%** of legitimate traffic and caught **0.0%** of the fan-in typology. | `rules.PopulationBaseline`, `MULE_FAN_IN_MODE=relative`, +6.9 pp - `irp-framing.md` §6, third RQ3 result. |
+| **CBU Regulation No. 3759** | The BRV-denominated threshold, and the fact that the project's earlier citation of it was wrong. | `data-generator/config.STRUCTURING_THRESHOLD`, mirrored in `stream-processor/config.py`. |
+| **Cybersecurity Centre of Uzbekistan, 2025** (§6d) | **54 of 157** high-severity mobile findings are transport security. | Why transport overhead was measured at all - `irp-framing.md` §7.5, `threat-model.md` §3a. |
+| **Tritscher et al. 2022** (§6b) | The published criterion a generator must meet, and the criticism of post-hoc fraud injection. | `generator-spec.md` §0 and §5. |
 
 ### Sources that changed how results are reported, and nothing else
 
 | Source | What was taken | Where it lands |
 |---|---|---|
-| **Machado et al. 2026** (§2) | The evaluation-practice table: study after study recorded as "Accuracy reported", *NR* everywhere else. | Why PR-AUC with intervals and per-type recall is a contribution about method, not a courtesy — `ml/README.md`, `irp-framing.md` §10. |
-| **Afriyie et al. 2023** (§6a) | The same failure in one peer-reviewed instance, recomputable from their own tables: precision **0.092**, F1 **0.167**, 10.9 alerts per catch, headline accuracy 0.958 against a 0.996 trivial baseline. | The strongest single argument for this project's reporting discipline. |
-| **Hemel et al. 2026** (§4) | XGBoost on tabular features: 0.98 on the majority class, **exactly 0.00** on both financial-fraud classes; the graph model is the only one that finds them. | Independent arrival at the fan-in argument — a per-record view cannot express a pattern defined over the relation between records. |
-| **Wang, Liu, He & Du 2020** (§6c) | Relational structure beats demographic attributes on *real* data (FDNE F1 0.820), with a per-decision explanation. Plus their label caveat: overdue borrowers counted as fraud. | Supports receiver-side aggregation + SHAP as a pair. The label caveat is the contrast: here the label's definition is written down. |
-| **Wang 2018** (§3) | AUC 0.780 at a >10% fraud rate, justified as "insensitive to class balance" — the reasoning this project argues against. Their identity graph is the shape of the MyID integration measured here as worthless (+0.001 PR-AUC, CI straddling zero). | Cited as contrast. A source asserting the value of graph identity data, beside a measurement that it adds nothing, is a better citation than one that agrees. |
+| **Machado et al. 2026** (§2) | The "Accuracy reported / NR" evaluation table. | PR-AUC with intervals and per-type recall - `ml/README.md`, `irp-framing.md` §10. |
+| **Afriyie et al. 2023** (§6a) | Precision **0.092** and F1 **0.167**, recomputed from their own tables. | The strongest single argument for this project's reporting discipline. |
+| **Hemel et al. 2026** (§4) | Tabular XGBoost at **0.00** on financial fraud; only the graph model finds it. | An independent arrival at the fan-in argument. |
+| **Wang, Liu, He & Du 2020** (§6c) | Relational structure beats demographics on real data, with explanations; delinquency as a label. | Receiver-side aggregation and SHAP as a pair; the label caveat as contrast. |
+| **Wang 2018** (§3) | AUC 0.780 at >10% fraud, "insensitive to class balance". | Cited as contrast. |
 
-### Sources that supply nothing, recorded so the search is not repeated
+**Saad et al. 2011** (§5) and **Zenodo 20030065** supply nothing; recorded so the
+search is not repeated.
 
-**Saad et al. 2011** (§5) — "P2P" in the networking sense, botnet C&C.
-**Zenodo 20030065** (§7) — rejected; the count discrepancy was resolved exactly
-and the fault was in the release, not the dataset.
-
-### The honest summary
-
-**Five sources reached the code. The rest shaped how results are reported.**
+**Five sources reached the code; the rest shaped how results are reported** -
 Machado, Afriyie, Hemel and both Wang papers appear nowhere in this repository
-outside this file — searched, not assumed.
-
-That is not a weakness to hide. Reporting discipline is a separate contribution
-from architecture, and it is defensible on its own: the alternative answer, that
-all fifteen sources shaped the design, would be false and is the kind of claim a
-committee is good at testing. What must not happen is the mapping above being
-guessed at under questioning; hence this section.
+outside this file. Reporting discipline is a contribution of its own, and
+claiming that all of them shaped the design would be false.
