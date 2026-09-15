@@ -95,7 +95,7 @@ cannot aggregate over the other**, whatever the engine.
 
 MyID kinship (`is_family`) once ranked first by SHAP (1.29) only because the
 generator routed no fraud to relatives. With both directions modelled it is worth
-+0.001 PR-AUC [-0.001, +0.003]. A feature that dominates SHAP on synthetic data
++0.002 PR-AUC [-0.000, +0.004]. A feature that dominates SHAP on synthetic data
 is a suspect until the generator models both classes of its behaviour - the same
 lesson as PaySim's balance-column leakage.
 

@@ -49,7 +49,7 @@ data constraints only.
 Useful as **contrast**: AUC 0.780 with no precision or recall, justified as
 "insensitive to class balance" at a >10% fraud rate - the reasoning `ml/README.md`
 argues against at 0.1-1.5%. Its identity graph is the shape of the MyID kinship
-integration measured here as worthless (+0.001 PR-AUC, CI straddling zero).
+integration measured here as worthless (+0.002 PR-AUC, CI straddling zero).
 
 ---
 
