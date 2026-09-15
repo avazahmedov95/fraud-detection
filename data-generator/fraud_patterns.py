@@ -19,10 +19,7 @@ FRAUD_MIX = {"APP": 0.35, "ATO": 0.20, "STRUCTURING": 0.20, "MULE": 0.25}
 def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_dt,
                  legit_activity=None):
     """Generate fraud episodes until each pattern hits its transaction budget.
-
-    `legit_activity` maps pinfl -> sorted [(event_time, region)]; ATO anchors a hijacked
-    session to a real moment in the victim's history, making the journey impossible.
-    """
+    `legit_activity` (pinfl -> sorted [(time, region)]) anchors ATO to a real moment."""
     legit_activity = legit_activity or {}
     events = []
     span_seconds = config.days * 24 * 3600
@@ -35,11 +32,8 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
         return start_dt + timedelta(seconds=float(rng.random() * span_seconds))
 
     def maybe_relative(person, fallback):
-        """Route a minority of fraud legs through a genuine relative.
-
-        Real fraud is not kinship-free (mules recruit inside families). Without this,
-        `is_family` separates fraud by construction and its importance is an artefact.
-        """
+        """Route a minority of fraud legs through a genuine relative, so is_family is
+        not a fraud-free signal by construction."""
         kin = relatives_of(person, by_household)
         if kin and rng.random() < FAMILY_FRAUD_SHARE:
             return kin[int(rng.integers(len(kin)))]
@@ -53,16 +47,9 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
     seeds = []
 
     def maybe_seed_payee(victim, payee, fraud_ts, balance):
-        """Establish the payee before the fraud, as the threat model says an adversary would.
-
-        docs/threat-model.md 4 rates NEW_PAYEE_HIGH_AMOUNT "low cost to evade - a prior
-        small transfer establishes the payee": this emits that transfer days earlier, so the
-        payee is no longer new to the stream. Labelled is_fraud=0 ON PURPOSE: no loss happens
-        on it, a detector firing on it is a false positive, and labelling it fraud would hand
-        the model a second positive per episode and inflate recall. Known unrealism, recorded
-        rather than modelled: receiver_account_age_days is static on the Person, so the
-        destination looks the same age at seed time as at fraud time.
-        """
+        """Establish the payee days before the fraud with a small transfer, the cheap
+        evasion threat-model.md 4 describes. Labelled is_fraud=0: nothing is lost
+        on it."""
         if SEEDED_PAYEE_SHARE <= 0 or rng.random() >= SEEDED_PAYEE_SHARE:
             return
         seed_ts = fraud_ts - timedelta(days=float(rng.uniform(1.0, 21.0)))
@@ -127,19 +114,9 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
                         region = where
                 else:
                     region = str(rng.choice(REGIONS))
-            # 2..8, widened from 2..4 on 08.09.2026 to stop contradicting the
-            # threat model. threat-model.md 4 rates VELOCITY and
-            # DISTINCT_PAYEE_BURST as costly for A2 to evade - "A2's window is
-            # short by nature", credentials get revoked and the victim notices,
-            # so the takeover operator cannot slow down. At 2..4 events the
-            # generator had A2 evading both rules for free on every episode, and
-            # neither rule fired once in 50,000 rows. The document said the
-            # attacker cannot slow down; the data said he always does.
-            #
-            # A1 and A3 are the ones the same table rates as cheap to evade, and
-            # STRUCTURING's 3-15 minute spacing below is left alone for exactly
-            # that reason - a smurfing run that paces itself IS the modelled
-            # behaviour, not a gap.
+            # 2..8 events: A2 cannot slow down (threat-model.md 4), so takeovers can trip
+            # VELOCITY. STRUCTURING's slow spacing below is left alone - a smurfing run
+            # that paces itself is the modelled behaviour.
             for i in range(int(rng.integers(2, 9))):
                 fraudster = pick(fraud_accounts)
                 amount = float(np.clip(np.exp(rng.normal(14.5, 0.5)), AMOUNT_MIN, AMOUNT_MAX))
@@ -202,9 +179,7 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
                     is_fraud=1, fraud_type="MULE", rng=rng))
 
         if config.unreported_fraud_share > 0 and rng.random() < config.unreported_fraud_share:
-            # Never reported: the victim did not notice, or did not complain. The
-            # behaviour stays fraud's and the label does not - real labels are
-            # incomplete (generator-spec.md 8, item 7). The budget still counts it.
+            # Never reported: fraud's behaviour, a legitimate label (spec 8, item 7).
             for ev in events[before:]:
                 ev["label_is_fraud"], ev["label_fraud_type"] = 0, "NONE"
         produced[kind] += len(events) - before

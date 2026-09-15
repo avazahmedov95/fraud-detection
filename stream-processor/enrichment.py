@@ -7,9 +7,8 @@ import capabilities as CAP
 
 log = logging.getLogger("enrichment")
 
-#: One query per payee identity, chosen by the payee_identity capability: the
-#: age lookup must key on the same identity as the rest of the receiver-side
-#: state. Two literals, not an f-string - Neo4j cannot bind a property name.
+#: One query per payee identity (the payee_identity capability); two literals,
+#: because Neo4j cannot bind a property name.
 _AGE_QUERY_BY_FIELD = {
     "card": """
 MATCH (r:Person {card: $payee})

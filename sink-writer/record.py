@@ -110,16 +110,10 @@ def audit_core(e: dict) -> list:
 
 
 def audit_signed_values(core: list) -> list:
-    """The values the chain hash actually binds: [ingress_hash, payload].
-
-    The payload is the authoritative JSON snapshot; the flat columns are a queryable
-    PROJECTION the verifier re-derives and checks, so editing a flat column without the
-    payload is caught. Only strings enter the hash: ClickHouse returns a String
-    byte-for-byte, whereas final_score is Float32 and comes back as 0.9300000071 -
-    hashing typed columns would fail every record after a read. Takes the audit ROW, not
-    the event, so the hash covers exactly the values written and read back. It had been
-    defined and called by nowhere while the writer indexed the same two columns itself
-    and the verifier looked them up by name: stated in three places, executed in two."""
+    """The values the chain hash binds: [ingress_hash, payload]. The payload is the
+    authoritative snapshot and the flat columns a projection the verifier checks
+    against it; only strings are hashed, since Float32 columns do not read back
+    byte-for-byte."""
     return [core[_INGRESS_IDX], core[_PAYLOAD_IDX]]
     return [e.get("ingress_hash", "") or "",
             json.dumps(e, ensure_ascii=False, separators=(",", ":"))]

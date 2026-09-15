@@ -25,9 +25,7 @@ class Person:
     active_end_hour: int
     household_id: int
     decision_time_median: float = 40.0   # personal login->confirm baseline (sec)
-    # A laptop beside the phone, or a replaced handset. Drawn per person rather
-    # than per event so a sender's device history is stable - see the
-    # SECOND_DEVICE_* note in config.py for why it exists at all.
+    # A laptop beside the phone, or a replaced handset (config.SECOND_DEVICE_*).
     has_second_device: bool = False
     # A card at a second bank, used only when RECEIVING - see SECOND_CARD_* in
     # config.py. Empty string means the person holds one card, which most do.
@@ -63,12 +61,8 @@ def gen_full_name(rng):
 
 
 def network_from_bin(bin6):
-    """Card network from the BIN's leading digits, per config.CARD_NETWORKS.
-
-    An earlier revision read `"UZCARD" if bin6.startswith("8600") else "HUMO"`: it
-    labelled ANY unknown BIN as HUMO without a word and left CARD_NETWORKS read by
-    nothing. Unknown BINs raise - a mislabel silently shifts `cross_network`.
-    """
+    """Card network from the BIN's leading digits (config.CARD_NETWORKS); unknown
+    BINs raise rather than being labelled silently."""
     for name, prefix in CARD_NETWORKS.items():
         if bin6.startswith(prefix):
             return name
@@ -110,9 +104,7 @@ def _make_person(rng, region, age, household_id, is_fraud=False,
                  typical_amount=0.0, active_start=0, active_end=23):
     network, card = gen_card(rng)
     bank_code, bank_name = bank_from_card(card)
-    # A second card only counts if it is at a DIFFERENT bank: two PANs from one
-    # issuer would still be one on-us relationship, and the point of the second
-    # card is that the payee key can disagree with the person.
+    # A second card counts only at a DIFFERENT bank, where the PAN key can disagree.
     card2 = network2 = code2 = name2 = ""
     if rng.random() < SECOND_CARD_SHARE:
         for _ in range(8):

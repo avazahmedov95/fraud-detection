@@ -43,14 +43,8 @@ def _event_epoch(event: dict) -> float:
 
 
 def _warn_cep_only(reason: str) -> None:
-    """Announce a degraded run loudly enough to be noticed in the logs.
-
-    One INFO line among thousands of Kafka config dumps once let a rules-only
-    run be reported as a fused one; such records also carry a distinct version.
-    """
-    # No `flush=True` on any print here: PyFlink's stdout shim rejects the
-    # keyword, and the TypeError fails the job with a Beam stack that names
-    # none of this.
+    """Announce a rules-only run loudly; its records carry a distinct version."""
+    # No flush=True: PyFlink's stdout shim rejects the keyword.
     bar = "!" * 72
     print(f"\n{bar}\n[fraud_job] RUNNING CEP-ONLY, NO ML SCORE - {reason}\n"
           f"[fraud_job] Rule scores only. Run `serve-prep` to place model.onnx\n"
@@ -83,9 +77,7 @@ class FraudDetector(KeyedProcessFunction):
         # Outside Flink state: keyed by sender, so a payee's inbound transfers
         # are spread across every partition (receiver_store.py).
         self._receivers = ReceiverStore(C.REDIS_HOST, C.REDIS_PORT)
-        # Population property, so also underivable inside a partition. Opened
-        # unconditionally - inert in "absolute" mode, and building it lazily
-        # would let the mode be switched on against nothing.
+        # Opened in every mode: inert in "absolute", never missing in "relative".
         self._population = PopulationStore(C.REDIS_HOST, C.REDIS_PORT)
         self._enrich.open()
         self._receivers.open()
@@ -153,9 +145,7 @@ class FraudDetector(KeyedProcessFunction):
 
         cep_score = result["cep_score"]
         ml_score = self._ml_score(result["features"])
-        # One call, not final_score + decide: whether the score is a probability
-        # or an additive CEP score decides which cutoffs apply, and deriving that
-        # here would be deriving it twice. fusion.score_and_decide.
+        # One call: score_and_decide knows whether the score is a probability.
         final, decision = fusion.score_and_decide(
             cep_score, ml_score, result["rule_hits"])
         predicted_type = fusion.classify_type(result["rule_hits"]) if decision != "ALLOW" else None
@@ -178,9 +168,6 @@ class FraudDetector(KeyedProcessFunction):
             "decision": decision,
             "predicted_type": predicted_type,
             "rule_hits": result["rule_hits"],
-            # `evaluate` always returned these; this dict never forwarded them, so
-            # every row written carried a constant zero for the second most valuable
-            # capability. Nothing failed - the columns exist, the writes succeed.
             "active_call": result["active_call"],
             "secs_login_z": result["secs_login_z"],
             # Raw, from the event: the job does not recompute what the app sent.
@@ -198,14 +185,8 @@ class FraudDetector(KeyedProcessFunction):
             # a substituted event.
             "ingress_hash": event.get("ingress_hash"),
         }
-        # The vector the decision was made on, republished on ALERTS ONLY. The
-        # case-manager cannot recompute it - these come from sender state that
-        # exists only in this operator - and on scored it would be ~24 numbers
-        # riding 98.5% of traffic that nothing reads.
-        #
-        # NaN -> None: a NaN receiver_age is meaningful (features.extract) but
-        # json.dumps writes a bare `NaN`, which is not valid JSON. Both ends here
-        # are Python and would round-trip it unnoticed.
+        # The feature vector, on alerts only: case-manager explains from it and cannot
+        # recompute sender state. NaN -> None, as a bare NaN is not valid JSON.
         if decision != "ALLOW":
             out["features"] = [None if v != v else round(float(v), 6)
                                for v in result["features"]]
@@ -224,10 +205,7 @@ class FraudDetector(KeyedProcessFunction):
 
 
 def _apply_security(builder):
-    """Add the transport-security properties, if any, to a Kafka builder.
-
-    Shared by source and sinks so an arm cannot be half-applied.
-    """
+    """Add the transport-security properties, if any, to a Kafka source or sink."""
     props = C.kafka_security_properties()
     for k, v in props.items():
         builder = builder.set_property(k, v)
@@ -242,17 +220,13 @@ def _kafka_source():
             .set_bootstrap_servers(C.KAFKA_BOOTSTRAP)
             .set_topics(C.TOPIC_RAW)
             .set_group_id(C.CONSUMER_GROUP)
-            # Committed offsets, falling back to the topic start only on the first
-            # run. `earliest()` replayed the whole topic on every restart - duplicate
-            # alerts on settled transfers, and latencies in the hundreds of seconds
-            # that were really the age of the data.
+            # Committed offsets, the topic start only on a first run;
+            # earliest() rescored the whole topic on every restart.
             .set_starting_offsets(KafkaOffsetsInitializer.committed_offsets(
                 KafkaOffsetResetStrategy.EARLIEST))
             .set_property("commit.offsets.on.checkpoint", "true")
             .set_value_only_deserializer(SimpleStringSchema())
-            # A fetch on an empty topic parks for up to fetch.max.wait.ms. At the
-            # 500 ms default a transaction landing just after one waits it out:
-            # p95 622 ms against a median of 81 ms.
+            # fetch.max.wait.ms bounds how long a fetch parks on an empty topic.
             .set_property("fetch.max.wait.ms", str(C.KAFKA_FETCH_MAX_WAIT_MS))
             .set_property("fetch.min.bytes", "1")
             .build())
@@ -271,11 +245,7 @@ def _kafka_sink(topic):
 
 
 def _tune_for_latency(env):
-    """Trade throughput for latency, which is what a pre-settlement decision needs.
-
-    Every value applied here is justified where it is defined, in config.py:
-    bundling, buffer timeout, restart strategy.
-    """
+    """Trade throughput for latency; each value is explained in config.py."""
     # Job-level options go through Configuration and env.configure();
     # env.get_config() is an ExecutionConfig with no string interface.
     conf = Configuration()
@@ -318,10 +288,7 @@ def main():
         _kafka_source(), WatermarkStrategy.no_watermarks(), "transactions.raw")
 
     scored = (raw
-              # Partitioning parses the record before scoring does, and must NOT
-              # decrypt: that would run AES twice per event and inflate the figure
-              # being measured. The routing field travels in clear inside the envelope,
-              # authenticated as GCM associated data.
+              # Partition on the clear routing field, without decrypting.
               .key_by(lambda v: payload_crypto.routing_key(v), key_type=Types.STRING())
               .process(FraudDetector(), output_type=Types.STRING()))
 

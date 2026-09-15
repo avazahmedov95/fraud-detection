@@ -49,17 +49,8 @@ def round_like_a_person(amount):
     return float(max(step, round(amount / step) * step))
 
 def _payee_card(receiver, rng):
-    """Which of the payee's cards this transfer lands on.
-
-    The reason the `payee_identity` capability can be measured at all. With one
-    card per person, keying receiver-side state by PAN and by PINFL produce the
-    same partition, and the ablation compared a configuration against itself -
-    an exactly-zero delta on every seed, reported as "no effect". See the
-    SECOND_CARD_* note in config.py.
-
-    rng is optional because some callers build events outside the seeded stream;
-    without it the payee's primary card is used, which is the old behaviour.
-    """
+    """Which of the payee's cards this transfer lands on - what lets PAN and PINFL
+    keys differ (config.SECOND_CARD_*). Without `rng`, the primary card."""
     second = getattr(receiver, "card2", "")
     if second and rng is not None and rng.random() < SECOND_CARD_USE_RATE:
         return {"receiver_card": second,

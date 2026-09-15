@@ -2,10 +2,8 @@
 
 Wire format:  "FDE1:" + routing_key + ":" + base64(nonce(12) || ct || tag(16))
 
-Two invariants: hash the plaintext BEFORE encrypting (integrity.py), and keep
-the copies in data-generator/ and stream-processor/ byte-identical - each
-package deploys separately and pins the same test vector. Measured cost:
-docs/irp-framing.md 7.4.
+Hash the plaintext BEFORE encrypting (integrity.py). The copies in
+data-generator/ and stream-processor/ must stay byte-identical.
 """
 import base64
 import json
@@ -18,9 +16,8 @@ NONCE_BYTES = 12          # GCM standard; 96-bit nonces avoid an internal rehash
 KEY_BYTES = 32            # AES-256
 ROUTING_FIELD = "sender_card"   # what the Flink job keys the stream by
 
-# For records whose routing field cannot be read. They are dropped rather than
-# raised: key_by has no error handling, so an exception there halts the job on
-# that record forever. One malformed event must not stop a payment pipeline.
+# For records whose routing field cannot be read: dropped, never raised, since
+# an exception in key_by would halt the job on that record forever.
 POISON_KEY = "__undecodable__"
 
 
@@ -88,14 +85,8 @@ def is_encrypted(blob) -> bool:
 
 
 def routing_key(blob, field=ROUTING_FIELD) -> str:
-    """The partitioning field, WITHOUT decrypting. Used by the job's key_by.
-
-    NEVER RAISES. key_by runs before the job's own error handling, so an
-    exception there fails the task, restarts it and meets the same record again
-    - a crash loop lasting as long as the record is in the topic. Unreadable
-    records go to POISON_KEY and are dropped by the scorer, which counts them.
-    This is the difference between losing one event and losing the stream.
-    """
+    """The partitioning field, WITHOUT decrypting; used by the job's key_by. Never
+    raises: unreadable records get POISON_KEY and the scorer drops them."""
     try:
         text = _as_text(blob)
         if text.startswith(PREFIX):
@@ -137,11 +128,7 @@ def decrypt(blob, key: bytes) -> dict:
 
 
 def loads_maybe_encrypted(blob, key=None) -> dict:
-    """Decode a record that may or may not be encrypted.
-
-    Keeps both arms of the measurement on one code path, so the difference
-    between them is the cost of the cryptography, not of a deserialiser.
-    """
+    """Decode a record that may or may not be encrypted - one path for both arms."""
     if is_encrypted(blob):
         if key is None:
             raise PayloadCryptoError(

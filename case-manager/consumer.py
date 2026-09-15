@@ -36,9 +36,7 @@ def main():
         bootstrap_servers=C.KAFKA_BOOTSTRAP,
         group_id=C.CONSUMER_GROUP,
         enable_auto_commit=True,
-        # From the beginning on first run: alerts raised before this service existed
-        # are still unworked. Replay is safe - case_row() is deterministic and the
-        # open version 0 can never outrank a resolution.
+        # From the start on first run - replay is safe, case_row() is deterministic.
         auto_offset_reset="earliest",
         value_deserializer=lambda v: json.loads(v.decode("utf-8")),
         consumer_timeout_ms=1000,

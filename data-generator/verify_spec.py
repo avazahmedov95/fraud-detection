@@ -67,12 +67,8 @@ def main():
                          st.min(), cfg.structuring_fraction[0], 0.02))
         ok.append(_check("STRUCTURING max fraction of threshold",
                          st.max(), cfg.structuring_fraction[1], 0.02))
-    # Group by EPISODE, not by victim. `pick(persons)` can select the same victim
-    # for two takeovers, and grouping by pinfl then reports 2+4 as a single
-    # six-event episode and fails a spec the generator did not violate. Found when
-    # a change to the RNG stream produced the first such collision; the check had
-    # been latently wrong until then. Events inside one episode are at most
-    # 3 x U(1,4) = 12 minutes apart, so an hour separates episodes unambiguously.
+    # Group by EPISODE, not by victim: one victim can suffer two takeovers, and events
+    # within an episode are at most 12 minutes apart, so an hour separates them.
     ato_rows = d[d.label_fraud_type == "ATO"].copy()
     if len(ato_rows):
         ato_rows["t"] = pd.to_datetime(ato_rows.event_time)
@@ -95,10 +91,7 @@ def main():
                      1.0, 0))
 
     print("\ndevices (legitimate senders must change device - see spec section 3)")
-    # Stream-derived, the way features.py computes device_is_new: the FIRST event
-    # from a device this sender has not used before. Counting distinct devices per
-    # sender would answer a different question and would pass while the model still
-    # saw nothing.
+    # Stream-derived, as features.py computes device_is_new: first use of a device.
     seen, legit_new, fraud_new = {}, 0, 0
     for pinfl, dev, lab in zip(d.sender_pinfl, d.device_id, d.label_is_fraud):
         known = seen.setdefault(pinfl, set())
@@ -115,9 +108,8 @@ def main():
           f"and {fraud_new} fraudulent")
     print(f"       as a fraud predictor: precision {precision:.1%} against a "
           f"{base:.1%} base rate ({precision/base if base else 0:.1f}x lift)")
-    # Two distinct ways this feature has been useless, and each needs its own test.
-    # Splittable: 30 is min_child_samples in ml/train.py, and it bounds the LEAF,
-    # so what has to clear it is the total - not either class on its own.
+    # Two ways this feature can be useless, one test each. Splittable: the total must
+    # clear min_child_samples (30, ml/train.py), which bounds the leaf.
     splittable = fires >= 30
     # Not the label: it fired on 25 rows once and every one was fraud, which is
     #100% precision and no information the label does not already carry.
@@ -130,10 +122,8 @@ def main():
     ok.append(not_a_proxy)
 
     print("\npayee identity (the two keys must be able to disagree - spec section 2)")
-    # Keying receiver state by PAN and by PINFL is the payee_identity capability.
-    # If every person receives on one card the two keys partition the stream
-    # identically, the ablation compares a configuration against itself, and the
-    # exactly-zero delta it reports says nothing about the capability.
+    # If everyone receives on one card, PAN and PINFL keys partition the stream
+    # identically and the payee_identity ablation compares a profile with itself.
     by_pinfl = d.groupby("receiver_pinfl").receiver_card.nunique()
     multi = int((by_pinfl > 1).sum())
     rows_to_multi = int(d.receiver_pinfl.isin(by_pinfl[by_pinfl > 1].index).sum())

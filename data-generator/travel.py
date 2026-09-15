@@ -12,12 +12,8 @@ _SP = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 
 
 def _load_from_detector(module_name):
-    """Load a stream-processor module by explicit path, under a private name.
-
-    NOT `sys.path.insert(_SP)`: both packages have a `config`, so the detector's dir on the
-    path shadows ours depending on import order. It did break - importing travel before
-    config made persons.py read the detector's config and fail on a missing constant.
-    """
+    """Load a stream-processor module by explicit path, under a private name: both
+    packages have a `config`, so putting the detector on sys.path would shadow ours."""
     spec = importlib.util.spec_from_file_location(
         f"_detector_{module_name}", os.path.join(_SP, f"{module_name}.py"))
     module = importlib.util.module_from_spec(spec)
@@ -76,11 +72,8 @@ def plan_trips(persons, rng, start_dt, days):
 
 
 def locate(person, trips, ts):
-    """Where the person is at `ts`, and whether they are mid-journey.
-
-    Returns (region, in_transit). In-transit events are re-timed by the caller: origin then
-    destination minutes later would manufacture an impossible journey in legitimate traffic.
-    """
+    """(region, in_transit) for the person at `ts`. The caller re-times in-transit
+    events, so legitimate traffic never makes an impossible journey."""
     for depart, arrive, dest, back_depart, back_arrive in trips.get(person.pinfl, ()):
         if depart <= ts < arrive or back_depart <= ts < back_arrive:
             return person.region, True
@@ -100,15 +93,9 @@ def settle_after_transit(person, trips, ts, rng):
 
 
 def hijack_origin(home_region, minutes_available, rng):
-    """A region the account holder could not be in, by any means of transport.
-
-    Judged with the DETECTOR's `MAX_PLAUSIBLE_KMH` / `MIN_TRAVEL_DISTANCE_KM` (jet cruise),
-    not road speed `TRAVEL_SPEED_KMH`: a hijack built against the slower figure would be
-    unreachable by car yet reachable by plane, and the rule would rightly ignore it. That
-    makes it detectable by construction, so its detection rate is NOT the result to quote -
-    the meaningful measurement is the false-positive rate on the legitimate journeys
-    generated alongside it. Returns None when no region is far enough.
-    """
+    """A region the account holder could not reach by any transport, judged with the
+    detector's jet-speed limits, so the rule can see it; the result to quote is the
+    false-positive rate on legitimate journeys. None when no region is far enough."""
     hours = max(minutes_available, 1) / 60.0
     candidates = []
     for r in G.REGION_COORDS:

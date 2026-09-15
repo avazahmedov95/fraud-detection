@@ -43,9 +43,7 @@ class ReceiverStore:
             return None
         for m in members:
             try:
-                # Split on the LEFT three separators; the trailing field is the
-                # transaction id, not window state. A plain split(2) silently dropped
-                # every entry, because the amount field then carried the id.
+                # Left three separators only: the last field is the transaction id.
                 parts = m.split("|", 3)
                 if len(parts) < 3:
                     continue
@@ -64,12 +62,8 @@ class ReceiverStore:
         if not payee:
             return
         key = f"rcv:{payee}"
-        # transaction_id in the member buys idempotence under replay - this store is
-        # external and does NOT roll back with a Flink checkpoint, so AT_LEAST_ONCE
-        # replays call record() again - and correctness for genuine repeats: the
-        # previous key was time|sender|amount, under which two DIFFERENT transfers
-        # sharing all three collapsed into one member and the second vanished from
-        # rcv_inflow_1h, the shape of a structuring or mule run.
+        # The transaction id makes replays idempotent - this store does not roll back
+        # with a checkpoint - and keeps two identical transfers distinct.
         txid = event.get("transaction_id") or ""
         member = (f"{now}|{event.get('sender_pinfl', '')}|"
                   f"{float(event['amount_uzs'])}|{txid}")
@@ -92,18 +86,10 @@ class ReceiverStore:
 
 
 class PopulationStore:
-    """Population-wide distribution of `rcv_distinct_senders_1h`, shared across
-    Flink partitions via Redis.
-
-        mule:fanin:hist  ->  HASH { sender-count -> times observed }
-
-    The THRESHOLD is a property of the whole population: a worker with its own
-    histogram would hold a partition baseline, and two workers would judge identical
-    transactions differently. WRITES ARE BATCHED and READS ARE CACHED - a HINCRBY or
-    HGETALL per event would be a Redis round trip on the 300 ms decision path, and
-    the threshold moves slowly enough that a stale one is the smaller error. Fails
-    CLOSED to the absolute constant, not a local histogram: this worker's own slice
-    is precisely the wrong quantity."""
+    """Population-wide distribution of `rcv_distinct_senders_1h`, shared across Flink
+    partitions via Redis (mule:fanin:hist -> {sender-count: times seen}). Writes are
+    batched and reads cached to keep Redis off the per-event path; fails closed to
+    the absolute constant."""
 
     KEY = "mule:fanin:hist"
     BINS = 257

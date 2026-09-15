@@ -24,11 +24,8 @@ FAN_IN_FLOOR = 2
 
 
 def quantile_threshold(counts, n, q):
-    """Smallest count k with P(X < k) >= q - the top (1-q) of the population now.
-    Shared by the in-process and Redis-backed baselines so the floor cannot drift.
-    If 99.9% of receivers see zero or one, the raw quantile lands at 1 and the rule
-    would fire on every ordinary transfer; FAN_IN_FLOOR states what the rule MEANS,
-    it is not a tuning constant."""
+    """Smallest count k with P(X < k) >= q, floored at FAN_IN_FLOOR so the rule
+    cannot fire on ordinary transfers. Shared by both baselines."""
     target = q * n
     cum = 0
     thr = len(counts) - 1
@@ -60,13 +57,8 @@ def _warn_relative_without_baseline():
 
 @dataclass
 class PopulationBaseline:
-    """Live empirical distribution of `rcv_distinct_senders_1h` across ALL receivers,
-    so MULE_FAN_IN can fire on a quantile instead of a constant.
-
-    A separate object rather than module state: a global counter would make results
-    depend on execution order across tests. Optional - if absent the rule falls back
-    to the absolute threshold rather than stalling. Values above the last bin land in
-    it; a receiver with 256+ distinct senders in an hour is beyond any threshold."""
+    """Live distribution of `rcv_distinct_senders_1h` across all receivers, so
+    MULE_FAN_IN can fire on a quantile; without it the rule uses the constant."""
     BINS: int = 257
     counts: list = field(default_factory=lambda: [0] * 257)
     n: int = 0

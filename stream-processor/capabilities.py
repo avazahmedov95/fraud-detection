@@ -142,19 +142,9 @@ def _configured(cap: Capability) -> str:
 
 
 class _Modes(dict):
-    """The live capability profile, with every write checked against the registry.
-
-    This was a plain dict, so `MODES["channel"] = "off"` for a capability that had
-    been DELETED was a successful write that switched nothing off: the key lands,
-    no reader looks at it, and the caller believes it configured something. Eleven
-    such writes survived the channel removal across five files and nothing failed -
-    each of those runs used the FULL profile while reporting a reduced one. A mode
-    outside a capability's declared set was silent the same way; `_configured`
-    validates the env var, and direct writes went around it.
-
-    `update` is overridden because dict.update is C code that does not route
-    through a subclass's __setitem__, and the test fixtures set profiles that way.
-    """
+    """The live capability profile. Every write is checked against the registry, so
+    a misspelt or deleted capability fails instead of silently switching nothing.
+    `update` is overridden because dict.update bypasses __setitem__."""
 
     def __setitem__(self, key, value):
         cap = BY_KEY.get(key)
@@ -256,10 +246,8 @@ def _full_modes() -> dict:
 
 
 def reachable_score(pattern: str, modes: dict = None) -> float:
-    """Highest CEP score this fraud pattern can reach. Under the active profile by
-    default; `modes` scores a hypothetical one WITHOUT installing it, because a
-    function that answers a question by mutating module state answers it for every
-    concurrent caller too."""
+    """Highest CEP score this fraud pattern can reach, under the active profile or
+    a hypothetical `modes` - answered without installing it."""
     m = MODES if modes is None else modes
     weights = _rule_weights()
     fired = [weights.get(r, 0.0) for r in PATTERN_SIGNATURES.get(pattern, ())
@@ -275,16 +263,13 @@ def weakest_reachable(modes: dict = None) -> float:
 
 
 def scaled_threshold(base_threshold: float, base_weakest: float = None) -> float:
-    """Re-express a hand-calibrated threshold for the current capability profile.
+    """Re-express a hand-calibrated threshold for the current capability profile:
 
         threshold = base_threshold x (weakest_now / weakest_at_full_capability)
 
-    An additive threshold implicitly states how many rules must agree; held fixed as
-    the available rules shrink, a reduced deployment gets a SILENT rule layer.
-    Measured on PaySim: with two rules available the highest score any fraud reached
-    was 0.35, against a 0.40 cutoff - nothing was ever flagged, while the rules
-    themselves separated the classes 4:1. At full capability this returns
-    base_threshold unchanged; it rescales sensitivity, it does not recover it."""
+    An additive threshold states how many rules must agree, so held fixed while rules
+    are switched off the rule layer goes silent - on PaySim it never flagged. At full
+    capability this returns base_threshold unchanged."""
     if base_weakest is None:
         base_weakest = weakest_reachable(_full_modes())
     if base_weakest <= 0:

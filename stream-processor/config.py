@@ -7,9 +7,7 @@ import os
 # --- Connections ------------------------------------------------------------
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
 
-# Plaintext 9092 and mutual TLS 9094 serve the same partitions, so the two
-# measurement arms differ only in the listener. The transport is fixed when the
-# job graph is built, so switching arms needs a resubmit.
+# Plaintext 9092 or mutual TLS 9094 - the same partitions; switching needs a resubmit.
 KAFKA_SECURITY_PROTOCOL = os.getenv("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT").upper()
 KAFKA_SSL_CA = os.getenv("KAFKA_SSL_CA", "/certs/ca.crt")
 KAFKA_SSL_KEYSTORE = os.getenv("KAFKA_SSL_KEYSTORE", "/certs/client.keystore.pem")
@@ -70,10 +68,8 @@ STRUCTURING_BAND_LOW = 0.80         # "just under" band: [0.80*T, 1.0*T)
 DISTINCT_PAYEE_MAX = 5              # > 5 distinct payees in the window (fan-out)
 AMOUNT_DEVIATION_SIGMA = 4.0        # amount > mean + sigma*std
 
-# 900 km/h is jet cruise speed: above it is impossible, not merely unusual, and
-# that is what separates this from GEO_ANOMALY. The distance floor absorbs the
-# error from putting a region at its administrative centre (geo.py) - adjacent
-# regions can be ~35 km apart there.
+# Faster than a jet (900 km/h) is impossible, not unusual; the distance floor
+# absorbs placing each region at its administrative centre (geo.py).
 MAX_PLAUSIBLE_KMH = 900.0
 MIN_TRAVEL_DISTANCE_KM = 100.0
 
@@ -82,11 +78,8 @@ MIN_TRAVEL_DISTANCE_KM = 100.0
 RECEIVER_WINDOW_S = 3600
 MULE_FAN_IN_MIN_SENDERS = 6
 
-# "relative" replaces the constant with a quantile of the population's own live
-# distribution, because 6 encodes THIS generator's in-degree density: on AMLSim
-# the rule fired on 3.12% of legitimate traffic and caught 0.0% of the fan-in
-# typology (validation/README.md 3). A per-RECEIVER baseline was rejected -
-# drop accounts are fresh, so it is absent exactly where the rule is needed.
+# "relative": a quantile of the live population instead of the constant 6, which
+# fits only this generator's density (validation/README.md 3).
 MULE_FAN_IN_MODE = os.getenv("MULE_FAN_IN_MODE", "absolute")   # absolute | relative
 MULE_FAN_IN_QUANTILE = float(os.getenv("MULE_FAN_IN_QUANTILE", "0.999"))
 MULE_FAN_IN_MIN_OBS = int(os.getenv("MULE_FAN_IN_MIN_OBS", "5000"))      # else fall back
@@ -105,11 +98,8 @@ W_STRUCTURING = 0.40
 W_DISTINCT_BURST = 0.25
 W_DEVICE_CHANGE = 0.20
 W_GEO_ANOMALY = 0.20
-# Alone reaches REVIEW at the CEP layer (0.45 > 0.40): a physical contradiction
-# should not need corroboration. This does NOT carry to the fused decision, which
-# reads the model score and overrides the rule layer's verdict unless the rule is
-# in MANDATORY_REVIEW_RULES - so impossible travel with a low ml_score is ALLOW.
-# Whether it belongs in that set is a detection-policy question, not a weight one.
+# Reaches REVIEW alone at the CEP layer (0.45 > 0.40); the fused decision follows
+# the model unless the rule is in MANDATORY_REVIEW_RULES.
 W_IMPOSSIBLE_TRAVEL = 0.45
 W_MULE_FAN_IN = 0.35
 W_AMOUNT_DEVIATION = 0.25
@@ -126,12 +116,8 @@ SCALE_THRESHOLDS_BY_CAPABILITY = (
     os.getenv("SCALE_THRESHOLDS_BY_CAPABILITY", "1").lower()
     not in ("0", "false", "no"))
 
-# --- Latency tuning ----------------------------------------------------------
-# Every default below was chosen for throughput and turned down here, because
-# the requirement is to decide before settlement.
-#
-# PyFlink batches before crossing into Python. With the defaults the bundle
-# never fills: measured 7.6 ms of scoring behind 1923 ms of waiting.
+# --- Latency tuning: every default below favoured throughput ------------------
+# PyFlink batches records before crossing into Python; the default bundle never fills.
 PY_BUNDLE_TIME_MS = int(os.getenv("PY_BUNDLE_TIME_MS", "50"))
 PY_BUNDLE_SIZE = int(os.getenv("PY_BUNDLE_SIZE", "100"))
 # 5 rather than 0: sending each record individually costs more than it saves.
@@ -139,23 +125,17 @@ BUFFER_TIMEOUT_MS = int(os.getenv("BUFFER_TIMEOUT_MS", "5"))
 # The 500 ms default adds half a second to a transaction landing just after a
 # fetch on an empty topic.
 KAFKA_FETCH_MAX_WAIT_MS = int(os.getenv("KAFKA_FETCH_MAX_WAIT_MS", "20"))
-# Not only recovery: with AT_LEAST_ONCE the sink flushes at checkpoint barriers,
-# so nothing leaves the job between them. At the 30 s default the warehouse path
-# measured a 30 s median - the interval exactly.
+# With AT_LEAST_ONCE the sink flushes at checkpoint barriers, so this interval
+# bounds the warehouse delay as well as recovery.
 CHECKPOINT_INTERVAL_MS = int(os.getenv("CHECKPOINT_INTERVAL_MS", "2000"))
 
 # --- Restart behaviour -------------------------------------------------------
-# Found by fault injection: one taskmanager kill left the job gone rather than
-# restarting. A detection system that quietly stops is worse than one that never
-# started, because nothing alerts on silence. The window still bounds a crash
-# loop - exceed it and the job stops for good, which a human should see.
+# Restart after a crash rather than stop silently; the window bounds a crash loop.
 RESTART_ATTEMPTS = int(os.getenv("RESTART_ATTEMPTS", "10"))
 RESTART_DELAY_MS = int(os.getenv("RESTART_DELAY_MS", "5000"))
 RESTART_WINDOW_MS = int(os.getenv("RESTART_WINDOW_MS", "300000"))   # 5 min
 
-# Also fault injection, and worse: checkpoints default to living only as long as
-# the job, so the next submission restarts from the beginning of the topic.
-# Observed 6,890 rows over 1,714 transactions - each scored about four times.
+# Keep checkpoints past the job, or the next submission rescores the topic.
 CHECKPOINT_DIR = os.getenv("CHECKPOINT_DIR", "file:///opt/flink/checkpoints")
 
 MODEL_VERSION = os.getenv("MODEL_VERSION", "cep+ml-fusion-v2")
@@ -164,20 +144,15 @@ MODEL_VERSION = os.getenv("MODEL_VERSION", "cep+ml-fusion-v2")
 MODEL_VERSION_CEP_ONLY = os.getenv("MODEL_VERSION_CEP_ONLY", "cep-only-fallback")
 
 # --- Deploy-time artefacts ---------------------------------------------------
-# NEVER resolve these relative to __file__. `flink run --pyFiles` unpacks the
-# modules into a per-job temp directory where the binary artefacts are not, and
-# the job then degrades to CEP-only while still stamping the fusion version. The
-# mounted job directory is tried first because that is where they live.
+# Never relative to __file__: --pyFiles unpacks modules into a temp directory
+# without the artefacts, and the job would fall back to CEP-only.
 JOB_DIR = os.path.dirname(os.path.abspath(__file__))
 MOUNTED_JOB_DIR = "/opt/flink/usrjobs"
 
 
 def _resolve_artefact(env_var, filename, extra_dirs=()):
-    """Locate a deploy-time artefact, mounted directory first.
-
-    `extra_dirs` are searched LAST: preferring a repository path would let a
-    local file silently override what was deployed.
-    """
+    """Locate a deploy-time artefact: the mounted directory first, `extra_dirs` last,
+    so a local file cannot override what was deployed."""
     override = os.getenv(env_var)
     if override:
         return override
@@ -192,9 +167,7 @@ def _resolve_artefact(env_var, filename, extra_dirs=()):
 MODEL_ONNX_PATH = _resolve_artefact("MODEL_ONNX_PATH", "model.onnx")
 FEATURE_NAMES_PATH = _resolve_artefact("FEATURE_NAMES_PATH", "feature_names.json")
 THRESHOLDS_PATH = _resolve_artefact("THRESHOLDS_PATH", "thresholds.json")
-# bins.py derived this from its own __file__ once and failed the job at import -
-# the trap above, walked into twice. data-generator/ is a last resort so tests
-# and offline replay work without serve-prep.
+# data-generator/ last, for tests and offline replay without serve-prep.
 BANKS_CSV_PATH = _resolve_artefact(
     "BANKS_CSV", "banks.csv",
     extra_dirs=(os.path.join(JOB_DIR, "..", "data-generator"),))
@@ -206,12 +179,8 @@ FINAL_BLOCK_THRESHOLD = 0.80
 
 def _model_thresholds(path):
     """The model's REVIEW / BLOCK cutoffs, chosen on validation rows by ml/train.py
-    and shipped beside model.onnx. A probability's scale belongs to the model that
-    produced it - an unweighted model on 0.2% fraud seldom says 0.40 - so its
-    cutoffs travel with it. A null BLOCK means the model never blocks on its own.
-    Without the file (a model exported before 2026-09-14) the fixed ones stand;
-    they also stay the base of the CEP-only fallback, which is an additive rule
-    score and not a probability (fusion.cutoffs)."""
+    and shipped beside model.onnx; a null BLOCK means the model never blocks alone.
+    Without the file the fixed cutoffs stand, as they do for the CEP-only fallback."""
     try:
         with open(path, encoding="utf-8") as fh:
             t = json.load(fh)

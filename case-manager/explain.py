@@ -14,9 +14,8 @@ NO_FEATURES = "NO_FEATURES"           # the alert predates feature publication
 MODEL_MISMATCH = "MODEL_MISMATCH"     # joblib disagrees with what scored
 FAILED = "FAILED"
 
-#: Max |recomputed - recorded| before the explanation is refused. ONNX and the joblib
-#: booster agree to 3.3e-07 across 50k events; 1e-4 flags a stale or un-re-exported
-#: artefact without firing on float noise.
+#: Max |recomputed - recorded| before an explanation is refused: flags a stale
+#: artefact without firing on float noise (ONNX and the booster agree to 3.3e-07).
 TOLERANCE = 1e-4
 
 TOP_N = 3
@@ -30,9 +29,8 @@ _MODEL_CANDIDATES = (
     os.path.join(_HERE, "..", "ml", "models", "model.txt"),
 )
 
-#: The booster carries no usable names - trained on a bare numpy array, its
-#: feature_name() is ["Column_0", ...]. The real order lives in feature_names.json,
-#: the artefact `serve-prep` copies next to the Flink job; mislabelling fails loudly.
+#: The booster's own names are "Column_0"...; the real order is feature_names.json,
+#: shipped next to the Flink job by serve-prep.
 _NAMES_CANDIDATES = (
     os.path.join(_HERE, "feature_names.json"),
     os.path.join(_HERE, "..", "ml", "models", "feature_names.json"),

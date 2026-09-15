@@ -20,11 +20,8 @@ from fraud_patterns import inject_fraud
 
 
 def _assign_payees(persons, rng):
-    """Each person gets 3..8 frequent payees.
-
-    A share are relatives (FAMILY_PAYEE_SHARE): a kinship signal that never appeared in
-    legitimate traffic would be as unrealistic as one that never appeared in fraud.
-    """
+    """Each person gets 3..8 frequent payees, a share of them relatives
+    (FAMILY_PAYEE_SHARE)."""
     by_household = P.households(persons)
     payees = {}
     for p in persons:
@@ -40,23 +37,17 @@ def _assign_payees(persons, rng):
                 q = persons[int(rng.integers(len(persons)))].pinfl
             if q != p.pinfl:
                 chosen.add(q)
-        # sorted(), not list(): iterating a set of strings orders them by hash, and
-        # Python randomises string hashing per process (PYTHONHASHSEED), so under list()
-        # the same seed and pinned versions still produced a different receiver for most
-        # transactions. Measured 2026-08-30 on two runs differing only in PYTHONHASHSEED:
-        # persons.csv byte-identical, 36,072 of 50,000 transaction rows different.
-        # NOTE: this fix changes the RNG stream, so it does not regenerate the frozen
-        # dataset of record - see the hashes in docs/generator-spec.md.
+        # sorted(), not list(): set order follows the per-process string hash, so the
+        # same seed gave different receivers. (Changes the RNG stream - see the pinned
+        # hashes in docs/generator-spec.md.)
         payees[p.pinfl] = sorted(chosen)
     return payees
 
 
 def _lookalikes(config, persons, known, rng, start_dt, trips):
     """Legitimate transfers with fraud's shapes (generator-spec.md 10): collections
-    - many people paying one person within hours, for a wedding, a gift, a joint
-    purchase - and large payments split into parts, a car or a deposit paid in
-    instalments. Without them MULE_FAN_IN and STRUCTURING can fire only on fraud,
-    which is the label under another name. Off in the baseline profile."""
+    and instalments, so MULE_FAN_IN and STRUCTURING can also fire on legitimate
+    traffic. Off in the baseline profile."""
     events = []
     span = max(1, config.days - 2) * 24 * 3600
 
@@ -126,10 +117,8 @@ def generate_normal(config, persons, by_pinfl, n_normal, rng, start_dt, trips):
                 rp = cand
 
         receiver = by_pinfl[rp]
-        # TWO senses of "new payee", NOT the same thing - they differ on ~28% of rows. This
-        # column is generator-internal: is the receiver outside the sender's ASSIGNED payee
-        # set. The one the model and rules use (features.py) is stream-derived: has this
-        # sender sent to this receiver BEFORE within the observed window.
+        # Generator-internal: outside the sender's assigned payee set. Not the
+        # stream-derived "new payee" of features.py; the two differ on ~28% of rows.
         is_new = rp not in known[sender.pinfl]
         known[sender.pinfl].add(rp)
 
@@ -150,10 +139,7 @@ def generate_normal(config, persons, by_pinfl, n_normal, rng, start_dt, trips):
         ts = T.settle_after_transit(sender, trips, ts, rng)
         region, _ = T.locate(sender, trips, ts)
 
-        # Most events come from the sender's usual device; those who own a second
-        # one use it sometimes. Without this every legitimate event carried one
-        # device forever and device_is_new became a fraud-only signal - see the
-        # SECOND_DEVICE_* note in config.py.
+        # Mostly the usual device; owners of a second one use it sometimes.
         device_id = f"dev-{sender.pinfl[-8:]}"
         if sender.pinfl in phone_changed and ts >= phone_changed[sender.pinfl]:
             device_id = f"dev-{sender.pinfl[-8:]}-n"          # a new phone, kept
@@ -201,9 +187,7 @@ def build_dataset(config):
 
     persons_df = pd.DataFrame([{
         "pinfl": p.pinfl, "card": p.card, "network": p.network,
-        # Empty for the ~80% who hold one card. Written out because a
-        # reader checking payee_identity needs to see which people can
-        # receive under two keys - see config.SECOND_CARD_SHARE.
+        # Empty for the ~80% who hold one card.
         "card2": p.card2, "bank_code2": p.bank_code2,
         "full_name": p.full_name,
         "bank_code": p.bank_code, "bank_name": p.bank_name,
@@ -225,12 +209,8 @@ def _summary(df):
 
 
 def _signal_check(df):
-    """Report `is_new_payee` as the PIPELINE computes it, not as the column records it.
-
-    The two disagreed on 14,201 of 50,000 rows and the check reported the wrong one: the
-    column said 8.11% of legitimate traffic went to a new payee, while the value features.py
-    derives from the stream says 36.93%. Both are printed now.
-    """
+    """Report `is_new_payee` as the pipeline computes it (stream-derived) beside the
+    column's own value; the two disagree on many rows."""
     seen, computed = {}, []
     for card, rcv in zip(df["sender_card"], df["receiver_pinfl"]):
         s = seen.setdefault(card, set())
@@ -282,11 +262,7 @@ def main():
     df, persons_df = build_dataset(config)
 
     os.makedirs(args.out, exist_ok=True)
-    # LF explicitly, not os.linesep. pandas takes its terminator from the host, so
-    # the same seed on Windows and Linux produced files that differed in every
-    # line ending and therefore in SHA-256 - generator-spec.md 9 records the
-    # dataset of record as "not produced on the Windows host" for exactly this
-    # reason. A hash pin that only holds on one operating system is not a pin.
+    # LF explicitly, not os.linesep: the hash pin must hold on every OS.
     df.to_csv(os.path.join(args.out, "transactions.csv"), index=False,
               lineterminator="\n")
     persons_df.to_csv(os.path.join(args.out, "persons.csv"), index=False,

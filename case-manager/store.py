@@ -13,12 +13,9 @@ log = logging.getLogger("case_store")
 RECONNECT_INTERVAL_S = 10.0
 _TABLE = "cases"
 
-#: The table DDL, shipped into the image beside this module and applied on every
-#: connect: docker-entrypoint-initdb.d scripts run ONLY when the data directory is
-#: empty, so on any cluster that has been up before a newly added schema file is never
-#: executed. The failure is quiet - the service starts, consumes the alert topic,
-#: commits offsets, and every insert fails against a table that does not exist: the
-#: same shape as the 331 events the sink-writer once discarded in silence.
+#: The table DDL, shipped beside this module and applied on every connect:
+#: initdb scripts run only on an empty data directory, so a new schema file would
+#: otherwise never reach a running cluster.
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _DDL_CANDIDATES = (
     os.path.join(_HERE, "02-cases.sql"),                       # in the image
@@ -35,13 +32,9 @@ def _ddl_file():
 
 
 def _statements(sql: str):
-    """Split a DDL file into executable statements.
-
-    Comments are stripped BEFORE splitting: the first version dropped only whole comment
-    lines and then split on ";", which silently tore the CREATE TABLE in half at the
-    semicolon inside an inline comment ("-- one case per alert; see note below") into
-    three fragments, none valid SQL. Line comments only - an assumption about THIS file,
-    which is why test_store.py asserts the shipped schema parses to one statement."""
+    """Split a DDL file into executable statements. Comments are stripped BEFORE
+    splitting, since a ";" inside a comment would tear a statement apart (line
+    comments only - test_store.py checks the shipped schema)."""
     stripped = "\n".join(ln.split("--", 1)[0] for ln in sql.splitlines())
     for chunk in stripped.split(";"):
         chunk = chunk.strip()
@@ -125,10 +118,8 @@ class CaseStore:
             self._client = None
 
     def open_cases(self, limit=20):
-        """The work queue: unresolved cases, most urgent first. FINAL is required,
-        not optional: ReplacingMergeTree collapses duplicate keys only when parts
-        merge, which is background work on no schedule, so a plain SELECT can return
-        both the open row and its resolution and show a closed case as open."""
+        """The work queue, most urgent first. FINAL is required: until parts merge, a
+        plain SELECT can return the open row beside its resolution."""
         if not self._ensure():
             return []
         q = (f"SELECT {', '.join(CASE.CASE_COLUMNS)} "

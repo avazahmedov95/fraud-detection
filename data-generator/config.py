@@ -18,50 +18,26 @@ ATO_TIME_COMPRESS = (0.4, 0.7)        # attacker in a hurry: faster
 SECS_LOGIN_FLOOR = 3.0                # physical minimum
 
 # --- Devices ----------------------------------------------------------------
-# The same failure as the kinship shares below, found the same way and fixed the
-# same way. Every legitimate event used to carry the sender's ONE device, so
-# `device_is_new` fired on 25 of 50,000 rows and all 25 were fraud: a perfect
-# predictor, and useless - 25 is under LightGBM's min_child_samples=30, so the
-# model could not split on it at all and `device_telemetry=off` measured a delta
-# of exactly 0.0000 across five seeds. A signal only fraud can produce is not a
-# signal, it is the label wearing a feature's name.
-#
-# Real people carry a phone and sign in from a laptop, and replace the phone. Two
-# parameters rather than one per-event probability, because "who owns a second
-# device" is a property of a person and belongs in persons.py with the rest of them.
+# Legitimate people own a second device and replace phones; with one device each,
+# device_is_new fired only on fraud - the label wearing a feature's name.
 SECOND_DEVICE_SHARE = 0.25    # people who use a second device at all
 SECOND_DEVICE_USE_RATE = 0.15 # share of THEIR transactions sent from it
 
 # --- Second card ------------------------------------------------------------
-# The `payee_identity` capability chooses whether receiver-side state is keyed by
-# PAN or by the person behind it. With one card per person the two keys induce
-# the SAME partition, so the ablation compared a configuration against itself and
-# reported a delta of exactly zero on every seed - "no effect" where the truth was
-# "this dataset cannot tell". Holding cards at two banks is ordinary here (UzCard
-# and HUMO), and it is what makes the two keys differ: fan-in to a person is one
-# stream by PINFL and two smaller ones by PAN.
-#
-# RECEIVING ONLY, deliberately. A sender using two cards would fragment the
-# per-sender history every other feature is built on - the stream is keyed by
-# sender - and that is a different question. Confounding it with this one would
-# make neither answerable.
+# Some people receive on cards at two banks, so keying the payee by PAN and by
+# PINFL can differ (the payee_identity capability). Receiving only: a sender with
+# two cards would fragment the per-sender history.
 SECOND_CARD_SHARE = 0.20      # people who hold a second card
 SECOND_CARD_USE_RATE = 0.40   # share of transfers TO them that arrive on it
 
 # --- Kinship (households stand in for MyID-verified relatives) ---------------
-# Both shares must stay non-zero: with no fraud going to relatives, `is_family`
-# separated the classes perfectly and topped SHAP - an artefact, not a finding.
+# Both shares stay non-zero, or is_family would separate the classes by construction.
 FAMILY_PAYEE_SHARE = 0.35     # frequent payees who are relatives
 FAMILY_FRAUD_SHARE = 0.10     # eligible fraud legs routed to a relative
 MULE_RECRUITED_SHARE = 0.30   # mules who are recruited people, not made accounts
 
-# Seeds the payee before an APP transfer - the documented cheap evasion of
-# NEW_PAYEE_HIGH_AMOUNT (threat-model.md 4), which the generator does not
-# otherwise produce: 99.20% of fraud goes to a stream-new payee against 36.93%
-# of legitimate traffic, making the feature's measured value a ceiling.
-# Default 0.0 - it moves every figure in irp-framing and the ablation tables,
-# and the dataset of record is hash-pinned. APP only, so at share S it seeds
-# 0.35*S of all fraud: a lower bound on what full evasion costs.
+# Seeds the payee before an APP transfer - the cheap evasion of NEW_PAYEE_HIGH_AMOUNT
+# (threat-model.md 4). Default 0: the dataset of record is hash-pinned.
 SEEDED_PAYEE_SHARE = float(os.getenv("SEEDED_PAYEE_SHARE", "0.0"))
 
 # --- Card networks (BIN prefixes) -------------------------------------------
@@ -78,12 +54,9 @@ AMOUNT_MIN = 1_000
 AMOUNT_MAX = 50_000_000
 
 # --- Transfer thresholds (UZS) ----------------------------------------------
-# NOT from Regulation 3759 - an earlier revision cited it and was wrong; 3759
-# sets no sum thresholds. The real traceability threshold is in BRV, so it moves
-# (25 BRV was ~10.3M UZS in March 2026); this is a chosen round figure and
-# should become a BRV multiple with a dated BRV beside it.
-# Load-bearing: fraud_patterns.py places STRUCTURING at 0.85-0.99 of it and
-# rules.py watches the same constant, so that recall is partly by construction.
+# A chosen round figure, not from Regulation 3759 (which sets no sums); it should
+# become a dated BRV multiple. STRUCTURING is placed at 0.85-0.99 of it and the
+# rule watches the same constant, so that recall is partly by construction.
 STRUCTURING_THRESHOLD = 10_000_000
 
 # Bank limits, not regulatory. Only LIMIT_DAILY is read (DAILY_LIMIT_BREACH).
@@ -114,10 +87,8 @@ class GeneratorConfig:
     hard_negative_share: float = 0.03  # legit transfers that look suspicious
     start_date: str = "2025-01-01"
 
-    # Everything below defaults to the behaviour the dataset of record was made
-    # with, and every knob that ADDS behaviour is off at 0 - tested before any
-    # random draw, so this profile reproduces that dataset draw for draw. The
-    # realistic values, and the case for each: docs/generator-spec.md 10.
+    # Defaults reproduce the dataset of record draw for draw: every knob that adds
+    # behaviour is off at 0. The realistic values: docs/generator-spec.md 10.
     profile: str = "baseline"
     active_call_base_rate: float = ACTIVE_CALL_BASE_RATE
     active_call_app_rate: float = ACTIVE_CALL_APP_RATE
@@ -159,16 +130,13 @@ def realistic(**overrides):
     return GeneratorConfig(**values)
 
 
-#: The profile being generated. Session signals are drawn inside make_event, which
-#: every pattern calls; reading them here keeps the knobs out of every call site.
-#: generator.build_dataset sets it.
+#: The profile being generated, set by generator.build_dataset; make_event reads it.
 PROFILE = GeneratorConfig()
 
 
 # --- Issuing banks ------------------------------------------------------------
-# Header `bin,code,name,cards_mln`; one row per BIN, cards_mln repeated. No
-# fallback table on purpose - a synthetic one put on-us at 8.3% against the
-# registry's 6.9%, moving receiver_age coverage by a fifth, silently.
+# Header `bin,code,name,cards_mln`, one row per BIN. No fallback table: a synthetic
+# one would move the on-us rate, and with it receiver_age coverage.
 BANKS_SOURCE = "banks.csv"
 
 
@@ -196,10 +164,8 @@ def _load_banks():
 
 BANKS = _load_banks()
 
-# The on-us rate bounds receiver_age coverage, so assignment is not cosmetic:
-# uniform gives ~1/n_banks (~3%), a property of the list, while card-share
-# weighting reproduces the real concentration (Xalq ~16%). False = uniform, a
-# legitimate control. Cards in circulation proxies volume - hence the toggle.
+# Card-share weighting reproduces the real bank concentration, which bounds
+# receiver_age coverage; False = uniform, a control.
 WEIGHT_BANKS_BY_CARD_SHARE = True
 
 

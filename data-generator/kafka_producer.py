@@ -12,9 +12,8 @@ from datetime import datetime
 import integrity
 import payload_crypto
 
-# kafka-python 3.0.10 warns for any serializer that is not a subclass of its own
-# Serializer ABC - a plain callable is the documented, supported form. Silenced
-# narrowly: PowerShell renders a native stderr line as a red NativeCommandError block.
+# kafka-python warns for any serializer that is not its own ABC subclass; a plain
+# callable is the supported form, and PowerShell shows the warning as an error.
 warnings.filterwarnings("ignore", message=".*does not implement kafka.serializer.Serializer",
                         category=DeprecationWarning)
 
@@ -30,26 +29,16 @@ RAW_FIELDS = [
     "transaction_id", "event_time", "sender_pinfl", "sender_card", "sender_network",
     "receiver_card", "receiver_network", "amount_uzs",
     "device_id", "sender_region", "sender_balance_before",
-    # Session signals the mobile app sends with the confirmation. Raw, not enrichment:
-    # omitting them scores every live event as "no call, average hesitation" while the
-    # model was trained on real values - the train/serve skew this project has been
-    # bitten by twice. session_telemetry is the second most valuable capability measured.
+    # Session signals the mobile app sends with the confirmation - raw, so the live
+    # job scores the values the model was trained on.
     "active_call", "secs_login_to_confirm",
 ]
-# NOT sent: receiver_pinfl. A card-to-card transfer reaches the sending bank as a destination
-# PAN; the person behind it is a core-banking lookup available for the bank's own clients
-# only (6.85% of transfers at the measured market concentration). Carrying it made the wire
-# format assert knowledge no deployment has. sender_pinfl stays: the sender IS the client.
-# NOT sent: sender_bank_name / receiver_bank_name - the issuer is derived from the PAN's BIN
-# (stream-processor/bins.py). Sending them carried a field UzCard / HUMO does not and put the
-# on-us test on a convenience of the generator, not on data a deployment holds.
+# NOT sent: receiver_pinfl (the sending bank sees only the destination PAN) and the
+# bank names (the issuer comes from the PAN's BIN, stream-processor/bins.py).
 
 
-#: Fields that are booleans, not text. csv.DictReader returns every column as a string,
-#: so without this `active_call` travelled as "False" - a non-empty string, therefore TRUE
-#: to every consumer that tested truthiness. The live job scored active_call = 1 on 100%
-#: of events while the model had been trained on 3.5%. Numbers were cast from the start,
-#: booleans were not, and the omission was invisible because the JSON looked right.
+#: Fields that are booleans, not text: csv.DictReader gives strings, and "False"
+#: is truthy to every consumer.
 _BOOL_FIELDS = ("active_call",)
 _INT_FIELDS = ("amount_uzs", "sender_balance_before")
 _FLOAT_FIELDS = ("secs_login_to_confirm",)
@@ -92,10 +81,8 @@ def main():
                     help="pace at a fixed events/s; 0 sends as fast as the "
                          "client can. Excludes --realtime")
 
-    # Slicing. Arms must be equal length (unequal cache warming moves the
-    # figures more than the effect) and DISJOINT: replaying the same ids makes
-    # every later row look like a duplicate, which is what experiments/outage.py
-    # measures. Skipped rows are dropped before the pacing clock starts.
+    # Slicing: arms equal in length and disjoint in ids, so no row replays as a
+    # duplicate. Skipped rows are dropped before the pacing clock starts.
     ap.add_argument("--limit", type=int, default=None,
                     help="stop after N messages")
     ap.add_argument("--skip", type=int, default=0,
@@ -109,9 +96,7 @@ def main():
     ap.add_argument("--ssl-ca", default="/certs/ca.crt")
     ap.add_argument("--ssl-cert", default="/certs/client.crt")
     ap.add_argument("--ssl-key", default="/certs/client.key")
-    # Each transport arm holds ONE long-lived connection, so the handshake is
-    # amortised away. This makes it recur - the only condition under which the
-    # mutual-TLS answer could change.
+    # Reconnect every N messages, so the handshake recurs instead of amortising.
     ap.add_argument("--reconnect-every", type=int, default=0, metavar="N",
                     help="reopen the producer every N messages")
 
@@ -127,11 +112,8 @@ def main():
         print("payload encryption: ON (AES-256-GCM)")
 
     def _serialize(v):
-        """One serialiser for both arms of the experiment.
-
-        The encrypted form is text (base64 envelope, see payload_crypto), so both arms are
-        UTF-8 on the wire; the difference is cryptography plus framing, not transport.
-        """
+        """One serialiser for both arms: the encrypted envelope is base64 text, so
+        both are UTF-8 on the wire."""
         if crypto_key is None:
             return json.dumps(v).encode()
         return payload_crypto.encrypt(v, crypto_key).encode()
@@ -171,10 +153,8 @@ def main():
                 if skipped < args.skip:
                     skipped += 1
                     continue
-                # Deadline pacing, not sleep(1/rate): per-message sleeps drift and cannot
-                # resolve the interval above a few hundred events/s - OS timer granularity
-                # is 1-15 ms and 5000 TPS needs 0.2 ms. An absolute schedule keeps the
-                # AVERAGE rate correct and makes falling behind measurable.
+                # Deadline pacing, not sleep(1/rate): per-message sleeps drift, while an
+                # absolute schedule keeps the average rate and shows falling behind.
                 if args.rate > 0:
                     if pace_t0 is None:
                         pace_t0 = time.time()
@@ -197,9 +177,8 @@ def main():
                 # Wall clock at ingress. `event_time` is SIMULATED time spread over
                 # weeks, so it cannot measure anything about the pipeline.
                 msg["ingested_at"] = time.time()
-                # Integrity hash of the raw event, carried unchanged to the audit store.
-                # Stamped after ingested_at so that cannot be altered undetected; it
-                # excludes itself and the labels.
+                # Integrity hash of the raw event, including ingested_at;
+                # it excludes itself and the labels.
                 msg["ingress_hash"] = integrity.ingress_hash(msg)
                 if args.dry_run:
                     print(msg["sender_card"], "->", json.dumps(msg))
@@ -214,20 +193,13 @@ def main():
                     producer.close(timeout=10)
                     reconnects += 1
                     producer = _new_producer()
-                    # SCOPE: the reconnect happens AFTER the send and _new_producer()
-                    # blocks until bootstrap, so the next row's ingested_at is on the far
-                    # side of the handshake - client-side handshake cost is EXCLUDED from
-                    # every decision-latency figure by construction (handshake_bench.py
-                    # measures it). A churn arm shows broker-side spillover; the confound
-                    # the other way is that the pause drains buffers and the TLS arm pauses
-                    # longer, biasing TLS to look FASTER (both arms reconnect).
+                    # The reconnect follows the send and blocks until bootstrap,
+                    # so the handshake stays outside every latency figure.
                 if args.limit is not None and sent >= args.limit:
                     break
     except KeyboardInterrupt:
-        # Ctrl+C is a normal exit for a paced stream but must still reach the flush
-        # below: messages buffered and never flushed would be counted in the
-        # fault-injection run as transactions LOST after the kill. The count printed here
-        # is what `experiments/outage.py --expect` needs, knowable only on this side.
+        # Ctrl+C still reaches the flush below, and the count printed is what
+        # experiments/outage.py --expect needs.
         interrupted = True
 
     if producer is not None:
@@ -237,10 +209,8 @@ def main():
     print(f"produced {sent:,} messages to '{args.topic}'" + slice_note
           + (" (stopped by hand)" if interrupted else ""))
 
-    # The achieved rate, always, and loudly when it is not the requested one: if the client
-    # cannot reach the requested rate, every latency figure from that arm describes the
-    # PRODUCER, not the pipeline, and the arm still looks successful unless the shortfall is
-    # printed. `ingested_at` is stamped before send(), so client-buffer time is inside it.
+    # The achieved rate, always: an arm that cannot reach the requested rate measures
+    # the producer, not the pipeline.
     if pace_t0 is not None and sent:
         elapsed = time.time() - pace_t0
         achieved = sent / elapsed if elapsed > 0 else float("inf")

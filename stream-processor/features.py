@@ -52,24 +52,16 @@ _FALSEY_TEXT = {"", "0", "false", "f", "no", "n", "none", "null", "nan"}
 
 
 def truthy(v) -> int:
-    """Coerce a wire-shaped flag to 0/1.
-
-    `1 if v else 0` was wrong here in production: csv.DictReader gives every Kafka
-    field as TEXT, so active_call arrived as "False" - non-empty, therefore true.
-    The live job scored active_call = 1 on 100% of events while the model had been
-    trained on 3.5%: not a missing feature, a constant one, at the RARE value.
-    Coerced here as well as in the producer, so no caller's typing can break it."""
+    """Coerce a wire-shaped flag to 0/1. Kafka fields arrive as text, and "False"
+    is a non-empty string."""
     if isinstance(v, str):
         return 0 if v.strip().lower() in _FALSEY_TEXT else 1
     return 1 if v else 0
 
 
 def age_or_none(v):
-    """Receiver account age as an int, or None when the CSV has no usable value.
-
-    None is not zero here: `visible_receiver_age` treats None as "not obtainable"
-    and zero as "opened today", which is the most suspicious value there is.
-    """
+    """Receiver account age as an int, or None when unknown - not 0, which means
+    "opened today"."""
     try:
         return int(float(v))
     except (TypeError, ValueError):
@@ -77,17 +69,8 @@ def age_or_none(v):
 
 
 def event_from(row: dict) -> dict:
-    """One generated-CSV row as the event `rules.evaluate` expects.
-
-    OFFLINE ONLY - the Flink job builds its events from the Kafka payload and
-    never calls this. It lives here rather than beside a caller because it is the
-    inverse of the generator's event schema, and it had been written out four
-    times: in ml/dataset.py and in three stream-processor harnesses. A field
-    added to that mapping had to be added in every copy, and a field forgotten
-    does not fail - it reads as absent, which is a different measurement rather
-    than an error. The same reasoning put `truthy` here: one coercion, so no
-    caller's typing can break it.
-    """
+    """One generated-CSV row as the event `rules.evaluate` expects - offline only,
+    and the one copy of this mapping every replay uses."""
     return {
         "amount_uzs": row["amount_uzs"],
         "sender_pinfl": row["sender_pinfl"],
@@ -100,10 +83,7 @@ def event_from(row: dict) -> dict:
         # baseline train as constant zeros without them.
         "active_call": truthy(row.get("active_call")),
         "secs_login_to_confirm": row.get("secs_login_to_confirm", 0.0),
-        # The cards, from which the issuer is resolved via the BIN table - the
-        # on-us test behind receiver_age. Forwarded rather than the bank-name
-        # columns so the replay resolves the issuer through the path the live
-        # job uses.
+        # The cards: the replay resolves the issuer from the BIN table, as the job does.
         "sender_card": row.get("sender_card", ""),
         "receiver_card": row.get("receiver_card", ""),
         "is_family_transfer": truthy(row.get("is_family_transfer")),
@@ -111,10 +91,7 @@ def event_from(row: dict) -> dict:
 
 
 def _issuer(event: dict, side: str) -> str:
-    """Card issuer for one side of the transfer, resolved from the PAN's BIN. Used to
-    be faked: the two `*_bank_name` fields travelled in the Kafka message, making the
-    wire carry what UzCard / HUMO does not and the on-us test - with it the whole
-    receiver_age capability - depend on a convenience of the generator."""
+    """Card issuer for one side of the transfer, resolved from the PAN's BIN."""
     return B.issuer_of(event.get(f"{side}_card"))
 
 
@@ -126,30 +103,18 @@ def is_on_us(event: dict) -> bool:
 
 
 def payee_key(event: dict) -> str:
-    """The identity this deployment pins the payee to: card (the destination PAN,
-    default) or pinfl (the person behind it - a platform-level deployment).
-
-    Everything receiver-side keys on this, so it must be present on EVERY event.
-    No per-transfer mode: resolving to PINFL where the bank can and to PAN otherwise
-    makes the key depend on the SENDER's bank. Measured: 24 MULE_FAN_IN hits under
-    either uniform key, 19 under the mixed one - a 17.4% loss of true positives."""
+    """The identity the payee is pinned to - card (default) or pinfl - uniform per
+    deployment: every receiver-side store keys on it, and a per-transfer mix loses
+    fan-in hits."""
     if CAP.mode("payee_identity") == "pinfl":
         pinfl = str(event.get("receiver_pinfl", "") or "")
         if pinfl:
             return pinfl
-        # Normal for the LIVE stream: receiver_pinfl is not on the wire. Returning ""
-        # would make ReceiverStore skip write and read, and fan-in would silently
-        # vanish with the knob still showing "on".
+        # Normal live: receiver_pinfl is not on the wire, and "" would disable fan-in.
         _warn_pinfl_unavailable()
     card = str(event.get("receiver_card", "") or "")
     if not card:
-        # The failure the branch above guards against, in its worse direction.
-        # An empty key does not make fan-in vanish - every payee collapses into
-        # ONE ReceiverState, so the store reports the whole stream's inflow as
-        # arriving at a single receiver and MANUFACTURES the pattern the rule
-        # looks for. Found running this on PaySim, which carries account names
-        # and no PANs at all: the shared deque grew without bound and the replay
-        # went quadratic before any result appeared.
+        # An empty key would merge every payee into one state and manufacture fan-in.
         _warn_no_payee_key()
     return card
 
@@ -225,14 +190,8 @@ def extract(event: dict, receiver_age_days, state, now: float,
         receiver_age = float(age)
         receiver_is_fresh = 1.0 if age < C.FRESH_RECEIVER_DAYS else 0.0
     else:
-        # NaN, not a sentinel: LightGBM branches on missing natively, so "unknown"
-        # stays distinct. A sentinel like -1 would be ordered against real ages -
-        # and in the default mode it was: an age Neo4j could not supply read as
-        # younger than any real account, and losing the graph made the model MORE
-        # suspicious (docs/irp-framing.md 7.7a, 7.7c). NaN is half the fix. A
-        # feature never missing in training sends NaN down the 0.0 side of every
-        # split - an account opened today - so ml/train.py withholds the age on a
-        # share of its rows, and the model learns where "unknown" belongs.
+        # NaN, not -1: LightGBM branches on missing natively, while -1 reads as the
+        # youngest account. train.py withholds it on some rows so the model learns it.
         receiver_age = float("nan")
         receiver_is_fresh = float("nan")
 

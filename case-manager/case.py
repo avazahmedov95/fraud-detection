@@ -6,14 +6,10 @@ from datetime import datetime, timezone
 #: NEW is the open state; the other two are terminal retrain labels.
 DISPOSITIONS = ("NEW", "CONFIRMED_FRAUD", "FALSE_POSITIVE")
 
-#: Versions written when a case is OPENED. Never wall clock - see the engine note in
-#: 02-cases.sql: a redelivered alert must never outrank a resolution, and a resolution
-#: is versioned by epoch milliseconds. Two of them because ReplacingMergeTree keeps only
-#: the HIGHEST version and an arbitrary row among ties: a re-alert (the producer
-#: replaying a CSV it already sent) raced an open row carrying an explanation against an
-#: older one carrying none - 16 cases picked up their explanation on a replay and 212 did
-#: not. An explanation is strictly more information about the same event, so it wins
-#: deterministically; both remain astronomically below any resolution version.
+#: Versions written when a case is OPENED - never wall clock, so a redelivered alert
+#: cannot outrank a resolution (versioned by epoch ms; 02-cases.sql). Two of them
+#: because ReplacingMergeTree keeps an arbitrary row among ties: an explanation is
+#: more information about the same event, so it wins deterministically.
 OPEN_VERSION = 0
 OPEN_VERSION_EXPLAINED = 1
 
@@ -37,14 +33,9 @@ def _epoch_dt(v):
 
 
 def priority_of(alert: dict) -> int:
-    """0 = work this first. The BAND only - deliberately not the score.
-
-    Bucketing the score inside each band ordered nothing: 89.1% of alerts carry a
-    model probability that rounds to 1.000 and only 35 distinct rounded values exist
-    across the whole alert set, so every case landed on priority 0 and the queue
-    degenerated to arrival order. The queue orders by EXPOSURE after the band instead
-    (see CaseStore.open_cases); amount varies over four orders of magnitude. A BLOCK
-    still outranks every REVIEW - a blocked transfer has a customer waiting on it."""
+    """0 = work this first. The BAND only, not the score: most alerts round to the
+    same probability, so the queue orders by exposure within a band
+    (CaseStore.open_cases). A BLOCK outranks every REVIEW - a customer is waiting."""
     return 0 if alert.get("decision") == "BLOCK" else 1
 
 
@@ -58,10 +49,9 @@ CASE_COLUMNS = [
 
 
 def case_row(alert: dict, explanation=None, explanation_status="") -> list:
-    """One alert -> one case row, deterministically. The alert topic is AT_LEAST_ONCE,
-    so this runs more than once per alert and every field must come out identical - else
-    the duplicate is a row ReplacingMergeTree cannot collapse and the queue shows the case
-    twice. Hence `opened_at` from the pipeline's own stamp rather than now()."""
+    """One alert -> one case row, deterministically: the alert topic is AT_LEAST_ONCE,
+    and a duplicate must collapse in ReplacingMergeTree - hence `opened_at` from the
+    pipeline's stamp, not now()."""
     # Explanation is passed in, not computed here: store.py owns the Explainer.
     return [
         alert.get("transaction_id", "") or "",     # case_id: one case per alert
@@ -86,10 +76,8 @@ def case_row(alert: dict, explanation=None, explanation_status="") -> list:
 
 
 def resolution_row(case: dict, disposition: str, by: str, at_epoch: float) -> list:
-    """An existing case, re-written with a verdict: ClickHouse has no row update
-    and ReplacingMergeTree collapses by ORDER BY key on merge. The caller reads the
-    current case and passes it back in, so a resolution cannot be written for a case
-    that was never opened."""
+    """An existing case, re-written with a verdict (ClickHouse has no row update).
+    The caller passes the current case, so an unopened case cannot be resolved."""
     if disposition not in DISPOSITIONS or disposition == "NEW":
         raise ValueError(
             f"{disposition!r} is not a terminal disposition; expected one of "

@@ -24,11 +24,8 @@ def _resolve_path():
 
 
 def _bank_identity(rows):
-    """The column that identifies a bank: the code. Checked, not assumed.
-
-    banks.csv shipped with `code` unfilled - every row "00000" - which would make
-    is_on_us() true for EVERY transfer, turning the on_us receiver-age mode into
-    `always` and inflating its measured coverage from 6.85% to 100%."""
+    """The column that identifies a bank - the code, checked: banks.csv once
+    shipped it unfilled, which made every transfer on-us."""
     codes = {r["code"] for r in rows if r.get("code")}
     if len(codes) <= 1:
         raise ValueError(
@@ -60,9 +57,8 @@ def _load():
 BIN_TABLE, IDENTITY_FIELD = _load()
 
 
-#: BINs held by generated accounts but no longer in the table. NOT consulted
-#: by issuer_of(): a closed bank is correctly an unknown issuer. test_bins.py
-#: requires every unresolved BIN to appear here, so a deletion still fails.
+#: BINs still held by generated accounts after their bank closed. issuer_of()
+#: ignores them - a closed bank is an unknown issuer; test_bins.py checks the list.
 RETIRED_BINS = {
     # Licence withdrawn after the data-generator/out set was generated. 74 of
     # the 5200 generated accounts hold a card on this BIN, ~1.1% of card sides.
