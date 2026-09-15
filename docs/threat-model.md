@@ -1,55 +1,42 @@
 # Adversarial threat model
 
 Working note addressing reviewer point 1, and supplying the operational basis
-for point 5 (organic drift vs adversarial evasion). Not thesis text.
+for point 5 (organic drift vs adversarial evasion). Not thesis text. Condensed on
+2026-09-15; the full version is in git history
+(`git show 483891f:docs/threat-model.md`).
 
-The four fraud patterns in the generator are raw material, not a threat model:
-they describe *what the traffic looks like*, not *what an adversary can do*. This
-note states the adversary's capabilities, what each control assumes they cannot
-do, and what it would cost them to be wrong.
+The generator's four fraud patterns describe *what the traffic looks like*, not
+*what an adversary can do*. This note states the adversary's capabilities, what
+each control assumes they cannot do, and what it would cost them to be wrong.
 
 ---
 
 ## 1. Scope
 
 **In scope.** Fraud against instant P2P card-to-card transfers on the UzCard and
-HUMO networks, detected between authorisation and settlement by a single
-issuing bank's antifraud system.
-
-**Out of scope**, and deliberately so:
-
-- Compromise of the detection infrastructure itself (Kafka, Flink, ClickHouse).
-  That is a platform security problem, addressed by the transport and integrity
-  controls in reviewer points 3 and 4, not by detection logic.
-- Insider threat at the bank.
-- Card-present, e-commerce and cross-border flows.
-- Attacks on the payment switch or the card networks.
-
-The boundary matters: everything below assumes the attacker operates **through
+HUMO networks, detected between authorisation and settlement by a single issuing
+bank's antifraud system. Everything below assumes the attacker operates **through
 the payment system as a user of it**, not against the system.
 
-**The cross-border exclusion needs its number, because it is not small.** The
-Central Bank's *Review of international migration and currency operations of
-individuals* (March 2026) reports that of **$18.9bn** of remittances received in
-Uzbekistan in 2025 — up 28% on 2024 — **$8.6bn, 46%, arrived as P2P transfers
-sent directly to individuals' bank cards**, a channel that grew 1.4x in a year
-while conventional bank transfers fell 49% to $397mn. So "cross-border is out of
-scope" excludes roughly half of a flow that lands on exactly the cards this
-system watches.
+**Out of scope**, deliberately: compromise of the detection infrastructure (Kafka,
+Flink, ClickHouse) - a platform problem, handled by the transport and integrity
+controls of reviewer points 3 and 4; insider threat at the bank; card-present,
+e-commerce and cross-border flows; attacks on the payment switch or the card
+networks.
 
-The exclusion is still correct, and the reason is structural rather than
-convenient: for an inbound cross-border transfer the **sender is not a customer
-of this bank and has no history here**, so the 14 relational features computed
-over sender state do not exist. What survives is the receiver side — account age,
-inflow concentration, distinct senders per hour.
+**The cross-border exclusion is not small.** The Central Bank's *Review of
+international migration and currency operations of individuals* (March 2026)
+reports that of **$18.9bn** of remittances received in 2025, **$8.6bn, 46%,
+arrived as P2P transfers sent directly to individuals' bank cards** - a channel
+that grew 1.4x in a year while conventional bank transfers fell 49% to $397mn.
 
-That inverts the usual reading of §4 for this market. On domestic traffic,
-receiver-side aggregation is the most valuable capability (−0.032 PR-AUC). On the
-46% of inflow that arrives from abroad it is not the most valuable, it is **the
-only one available**. The finding this project treats as its strongest is, in the
-Uzbek remittance context, more load-bearing than its own evaluation shows —
-and that evaluation cannot demonstrate it, because the generator models domestic
-traffic only.
+The exclusion is still correct, for a structural reason: for an inbound
+cross-border transfer the **sender is not a customer of this bank**, so the 14
+relational features computed over sender state do not exist. What survives is
+the receiver side - account age, inflow concentration, distinct senders per hour.
+On domestic traffic receiver-side aggregation is the most valuable capability
+(§4); on the 46% of inflow from abroad it is **the only one available**. The
+evaluation cannot show that, because the generator models domestic traffic only.
 
 ---
 
@@ -62,127 +49,90 @@ traffic only.
 | Regulatory standing (CBU 3759) | Reportable patterns are detected and recorded | Sanction; loss of licence conditions |
 | Audit trail | Every decision is reconstructable | Cannot defend a decision in dispute or inspection |
 
-The first two goals are in direct tension, and the threat model exists to say
-where the trade-off should sit rather than to eliminate it.
+The first two goals are in direct tension; the threat model says where the
+trade-off should sit rather than eliminating it.
 
 **From 16 November 2026 the first row stops being the customer's loss.** The
 Central Bank's amended P2P requirements make the credit or payment organisation
 **liable for fraudulent transactions carried out without additional verification
-within the limit that organisation itself set**. Three consequences, and the
-third is the one for the thesis.
-
-- The asset table above is written from the customer's side. After that date the
-  loss lands on the bank's own balance sheet, so detection stops being a
-  prudential or reputational matter and becomes a priced one.
-- **The bank now chooses its own exposure.** Institutions may set the transfer
-  amount below which no additional confirmation is required — and that same
-  threshold defines what they will pay for. A detection system's value becomes
-  directly expressible: a higher no-OTP limit is affordable exactly to the extent
-  that detection is good, so the model's precision and recall convert into a
-  number the institution can set.
-- This is the strongest available motivation for the whole system, and it did not
-  exist when the project started. It should be stated in the introduction rather
-  than left in a threat model: **regulation has converted fraud detection quality
-  from a cost centre into the variable that sets a revenue-bearing limit.**
+within the limit that organisation itself set**. The loss moves onto the bank's
+own balance sheet, and the bank now chooses its exposure: the amount below which
+no confirmation is required is also the amount it will pay for, so a higher no-OTP
+limit is affordable exactly to the extent that detection is good. That belongs in
+the introduction, not only here: **regulation has converted fraud detection
+quality from a cost centre into the variable that sets a revenue-bearing limit.**
 
 ---
 
 ## 3. Adversary model
 
 Three adversaries, distinguished by what they control rather than by pattern
-name. This is the distinction that matters for evasion: a control is only as
-strong as the attacker's inability to influence its inputs.
+name: a control is only as strong as the attacker's inability to influence its
+inputs.
 
-### A1 — Social engineer (APP fraud)
+**A1 — social engineer (APP fraud).** *Controls* what the victim is told to do:
+amount, timing, destination account and the story around it - including ending a
+phone call before confirming, using a particular channel, or splitting a transfer.
+*Does not control* the victim's device, location, transaction history or account
+age: every baseline the system holds was built before the attacker arrived.
+*Constraint:* each episode needs a live human interaction, which bounds volume and
+makes the attacker's time the scarce resource.
 
-**Controls:** what the victim is told to do — amount, timing, destination
-account, and the story around it. Can instruct the victim to end a phone call
-before confirming, to use a particular channel, or to split a transfer.
+**A2 — account takeover operator.** *Controls* the session - device, IP and hence
+apparent region, timing, amount, destination - with valid credentials. *Does not
+control* the victim's historical baseline, cannot make the victim's other activity
+consistent with the takeover, and cannot be in two places at once - the one
+physical constraint the system can rely on. *Constraint:* the window is short;
+credentials get revoked and the victim notices.
 
-**Does not control:** the victim's device, location, transaction history, or
-account age. Every baseline the system holds about the victim was built before
-the attacker arrived.
-
-**Constraint:** each episode requires a live human interaction, which bounds
-volume and makes the attacker's time the scarce resource.
-
-### A2 — Account takeover operator
-
-**Controls:** the session — device, IP and hence apparent region, timing, amount,
-destination. Holds valid credentials.
-
-**Does not control:** the victim's historical baseline, and cannot make the
-victim's *other* activity consistent with the takeover session. Cannot be in two
-places at once — the one physical constraint the system can rely on.
-
-**Constraint:** the window is short. Credentials get revoked; the victim
-notices.
-
-### A3 — Mule network operator
-
-**Controls:** a population of accounts, their age (accounts can be farmed and
-aged before use), the number of senders feeding each, and the timing of fan-in
-and fan-out. Recruits through personal networks, including families.
-
-**Does not control:** the fact that money must converge somewhere. Concentration
-is not incidental to the pattern; it *is* the pattern.
-
-**Constraint:** capital and coordination. Aged accounts cost money to farm;
-spreading fan-in across time and accounts reduces throughput.
+**A3 — mule network operator.** *Controls* a population of accounts, their age
+(accounts can be farmed and aged before use), the number of senders feeding each,
+and the timing of fan-in and fan-out; recruits through personal networks,
+families included. *Does not control* the fact that money must converge
+somewhere: concentration is not incidental to the pattern, it *is* the pattern.
+*Constraint:* capital and coordination - aged accounts cost money to farm, and
+spreading fan-in across time and accounts cuts throughput.
 
 ---
 
 ## 3a. The adversary model against national data
 
-The three adversaries above are constructed from the fraud literature and from
-how the payment system works. One national source lets parts of them be checked
-rather than asserted: the **State Institution "Cybersecurity Centre" of the
-Republic of Uzbekistan, 2025 annual report** (csec.uz). It is a cybersecurity
-register, not a fraud register, so what it can and cannot support has to be
-stated carefully.
+One national source lets parts of §3 be checked rather than asserted: the **State
+Institution "Cybersecurity Centre" of the Republic of Uzbekistan, 2025 annual
+report** (csec.uz). It is a cybersecurity register, not a fraud register, so what
+it can support has to be stated carefully.
 
 **What it supports.**
 
-*A2's premise — that credentials are obtainable — is quantified.* During 2025
-the Centre found databases belonging to 37 organisations, **21 million rows in
-total**, together with **1,697 user login/password pairs**, leaked to darknet
-networks; separately, rapid analysis of 10 systems prevented the leak of over
-**23 million personal records**, which the report notes is close to two-thirds
-of the country's population. A2 is modelled as "holds valid credentials", and
-that assumption does not need to be argued.
+- *A2's premise - that credentials are obtainable.* In 2025 the Centre found
+  databases of 37 organisations, **21 million rows in total**, with **1,697 user
+  login/password pairs**, leaked to darknet networks; separately, rapid analysis
+  of 10 systems prevented the leak of over **23 million personal records**, close
+  to two-thirds of the population.
+- *The attack surface is moving toward this system's setting.* Mobile application
+  security expertise rose from 18 apps in 2024 to **40 in 2025 (+122%)**, which
+  the report reads as attacker attention shifting to smartphones **and to the
+  financial applications on them**. Banking and finance is second by share of
+  detected vulnerabilities (**22.84%**, behind public administration at 25.84%).
+- *Session persistence is a real defect.* "Session retained" is the second most
+  common high-severity finding in information systems (82 instances) and appears
+  in mobile apps (8). `COACHED_SESSION` and `DEVICE_CHANGE` assume a session
+  boundary means something; where sessions do not expire, that assumption is
+  weaker than §4 implies.
 
-*The attack surface is moving toward exactly this system's setting.* Mobile
-application security expertise rose from 18 apps in 2024 to **40 in 2025
-(+122%)**, and the report's own forward-looking conclusion reads the rise as
-confirmation that attacker attention is shifting to smartphones **and to the
-financial applications on them**. Banking and finance is the second-largest
-sector by share of detected vulnerabilities (**22.84%**, behind public
-administration at 25.84%).
-
-*Session persistence is a real defect, not a theoretical one.* "Session retained"
-is the second most common high-severity finding in information systems (82
-instances) and appears again in mobile apps (8). The `COACHED_SESSION` and
-`DEVICE_CHANGE` controls assume a session boundary means something; in a
-deployment where sessions do not expire, that assumption is weaker than §4
-implies.
-
-**What it does not support, and the misreading to head off.** Of 247 recorded
-cybersecurity incidents in 2025, **only 3 are phishing**. Read carelessly, that
-says social-engineering fraud is negligible in Uzbekistan and A1 is
-over-modelled. It says nothing of the kind. The Centre's incident register
-counts incidents **against state web resources** — the most common entry is
-website defacement, at 219 — and consumer-facing APP fraud is neither its remit
-nor within its visibility. The absence is a scope artefact. This is worth
-stating explicitly in the thesis, because it is the kind of number a reader will
-find, quote, and draw the opposite conclusion from.
+**What it does not support.** Of 247 recorded incidents in 2025, **only 3 are
+phishing** - which does not say that social-engineering fraud is negligible or A1
+over-modelled. The register counts incidents **against state web resources** (219
+are website defacements); consumer APP fraud is neither its remit nor within its
+visibility. The absence is a scope artefact, and worth stating in the thesis
+before a reader quotes the number the other way.
 
 **Prevention is arriving from a second direction.** Alongside the CBU 3759
-requirements discussed in §5, the Centre now ships citizen-facing preventive
-tools — a "CyberQalqon" Telegram bot for checking suspicious files, "Xavfsizlink"
-for checking links against phishing, and a permissions monitor. That reinforces
-the substitution argument in §5 rather than softening it: controls that remove
-the observable, whoever deploys them, reduce what a detection system can claim
-credit for.
+requirements (§5), the Centre ships citizen-facing tools - a "CyberQalqon"
+Telegram bot for checking suspicious files, "Xavfsizlink" for checking links
+against phishing, and a permissions monitor. That reinforces §5's substitution
+argument: controls that remove the observable, whoever deploys them, reduce what
+a detection system can claim credit for.
 
 ---
 
@@ -210,109 +160,87 @@ break it.
 
 ### Two of these controls assume data the deploying bank mostly does not have
 
-The table above states what an attacker must not be able to influence. It says
-nothing about whether the input exists, and for the two receiver-side controls
-that turns out to be the binding constraint.
+A card-to-card transfer reaches the sending bank as a **destination PAN**.
+Resolving it to the person behind it is a core-banking lookup available only for
+the bank's own clients - **6.85% of transfers** at the measured card-market
+concentration (69.0 million cards, 34 banks, largest share 16.3%; the generated
+stream realises 6.73%). So `FRESH_RECEIVER` and `receiver_age`, rated "medium"
+above, are **unavailable on 93% of traffic**, and `MULE_FAN_IN` aggregates over
+the card, not the person. Two consequences:
 
-A card-to-card P2P transfer reaches the sending bank as a **destination PAN**.
-Resolving that PAN to the person behind it is a core-banking lookup available
-only for the bank's own clients — **6.85% of transfers** at the measured card-
-market concentration (69.0 million cards, 34 banks, largest share 16.3%; the
-generated stream realises 6.73%). So `FRESH_RECEIVER` and `receiver_age`, rated
-"medium cost to evade" above, are simply **unavailable on 93% of traffic**, and
-`MULE_FAN_IN` aggregates over whatever identity the deployment can pin the payee
-to — the card, not the person.
-
-Two consequences for this threat model:
-
-- **A3's cost to evade is overstated at bank level.** Spreading fan-in across
-  accounts is rated "high" because it cuts the network's throughput. But a mule
-  holding several cards is already split across as many fan-in buckets when the
-  key is the PAN, at no cost to the operator at all. The rating holds at
-  switch or platform level, where the payee resolves to one person.
-- **A2 and A3 both benefit from the same gap**, and it is not a modelling gap —
-  it is a position-in-the-topology gap. It is the strongest argument in this
-  document for resolution at the national-platform level, and it is measured
-  rather than asserted.
+- **A3's cost to evade is overstated at bank level.** A mule holding several cards
+  is already split across as many fan-in buckets when the key is the PAN, at no
+  cost to the operator. The "high" rating holds at switch or platform level, where
+  the payee resolves to one person.
+- **A2 and A3 both benefit from the same gap**, and it is a
+  position-in-the-topology gap, not a modelling one - the strongest argument in
+  this document for resolution at the national-platform level, and a measured one.
 
 `docs/irp-framing.md` §6, "RQ3, fourth result" carries the measurement, including
 why resolving the payee per-transfer where the bank *can* makes detection worse
-rather than better (−17.4% of `MULE_FAN_IN`'s true positives).
+(−17.4% of `MULE_FAN_IN`'s true positives).
 
 ### One of those "cost to evade" ratings is now measured rather than reasoned
 
-Every entry in the right-hand column above was an argument. `NEW_PAYEE_HIGH_AMOUNT`
-is the first one with a price attached, and the price was obtainable only after
-noticing that **the generator never produced the evasion this table names**:
-measured on the frozen dataset, 99.20% of fraud went to a stream-new payee
-against 36.93% of legitimate traffic. A control whose stated weakness is absent
-from the data cannot have its value measured, only its ceiling.
+Every rating above was an argument. `NEW_PAYEE_HIGH_AMOUNT` is the first with a
+price attached, obtainable only after noticing that **the generator never
+produced the evasion this table names**: on the frozen dataset 99.20% of fraud
+went to a stream-new payee against 36.93% of legitimate traffic, so the control's
+value could not be measured, only its ceiling.
 
 `SEEDED_PAYEE_SHARE` (`data-generator/config.py`) produces it: a share of APP
-episodes are preceded by one small transfer to the same payee, one to three
-weeks earlier, labelled **not fraud** because no loss occurs on it. Default 0.0,
-so nothing quoted elsewhere moves.
-
-Five generator seeds at share 0.5, APP episodes only, restricted to those late
-enough in the window for a seed to land (`stream-processor/experiments/replay.py
-payee-seeding`):
+episodes are preceded by one small transfer to the same payee, one to three weeks
+earlier, labelled **not fraud** because no loss occurs on it. Default 0.0, so
+nothing quoted elsewhere moves. Five generator seeds at share 0.5, APP episodes
+late enough in the window for a seed to land
+(`stream-processor/experiments/replay.py payee-seeding`):
 
 | payee at the time of the fraud | episodes | detected |
 |---|---|---|
 | new to the stream | 159 | **56.0%** |
 | established by one prior transfer | 201 | **31.8%** |
 
-Per-seed delta **−25.3 pp, 95% CI [−47.5, −3.1], 4 of 5 negative.**
-
-**Read the interval, not the headline.** It excludes zero, so the evasion works;
-it is also 44 points wide and one seed came out positive, so "roughly halves APP
-detection" is the pooled estimate and not a precise one. The width comes mostly
-from 30-50 episodes per group per seed rather than from disagreement between
-datasets, which is a reason to trust the direction and distrust the magnitude.
-
-Two things follow.
+Per-seed delta **−25.3 pp, 95% CI [−47.5, −3.1], 4 of 5 negative.** The interval
+excludes zero, so the evasion works; it is also 44 points wide, mostly from 30-50
+episodes per group per seed rather than disagreement between datasets - trust the
+direction more than the magnitude.
 
 - **The rating "low" was right, and now it has a number.** One small prior
-  transfer — no infrastructure, no cost, one sentence added to the script the
-  fraudster is already reading to the victim — removes roughly half the
-  detection on that episode.
+  transfer - no infrastructure, one sentence added to the script the fraudster is
+  already reading to the victim - removes roughly half the detection on that
+  episode.
 - **`is_new_payee`'s measured importance is an upper bound.** It is the model's
-  top SHAP feature at 0.770, measured on data where fraud reaches a stream-new
-  payee 99.2% of the time. That is not a finding about the signal; it is a
-  property of a generator that does not model the evasion. The figure should be
-  reported with that stated, exactly as the `is_family` artefact was.
+  top SHAP feature at 0.770, on data where fraud reaches a stream-new payee 99.2%
+  of the time - a property of a generator that does not model the evasion, to be
+  reported as such, exactly as the `is_family` artefact was.
 
 The measurement is deliberately a **lower** bound on full evasion: only APP is
-seeded. ATO is excluded because §3 constrains A2 to a short window, and seeding
-weeks ahead would put an evasion in the data that this threat model says that
-adversary cannot perform.
+seeded. ATO is excluded because §3 gives A2 a short window, and seeding weeks
+ahead would put in the data an evasion this threat model says that adversary
+cannot perform.
 
 ### The uncomfortable finding
 
-Ranking capabilities by measured detection value (from the ablation) against cost
-to evade:
+Measured detection value (the capability ablation in `ml/README.md`, baseline
+profile, five seeds) against cost to evade:
 
 | Capability | Δ PR-AUC | Cost to evade |
 |---|---|---|
-| receiver-side aggregation | −0.032 | **high** |
-| session telemetry | −0.019 | **very low** |
-| receiver account age | −0.011 | medium |
+| receiver-side aggregation | −0.036 | **high** |
+| session telemetry | −0.034 | **very low** |
+| receiver account age | −0.022 | medium |
 | geo telemetry | ~0 in the model, but enables IMPOSSIBLE_TRAVEL | high for that rule, low for GEO_ANOMALY |
 
 **The second most valuable signal is the most fragile.** `COACHED_SESSION` works
 today because APP victims are on the phone with the fraudster while they confirm.
-It survives exactly as long as attackers do not adapt, and the adaptation is one
-sentence of script: *hang up, then confirm*. No infrastructure, no cost.
+The adaptation is one sentence of script - *hang up, then confirm* - at no cost.
+Evading receiver-side aggregation instead means spreading collection across more
+accounts and more hours, which cuts the throughput the mule network exists to
+provide: a control whose evasion is *expensive by construction*.
 
-Receiver-side aggregation is the opposite: evading it requires the mule network
-to spread collection across more accounts and more hours, which directly reduces
-the throughput the network exists to provide. That is a control whose evasion is
-*expensive by construction*.
-
-This suggests a reporting discipline for the thesis: **detection value and
-robustness are different axes, and a system evaluated only on the first will
-over-credit its most brittle signals.** The ablation measures the first. This
-table is the second.
+Hence a reporting discipline for the thesis: **detection value and robustness are
+different axes, and a system evaluated only on the first will over-credit its most
+brittle signals.** The ablation measures the first; this table is the second.
 
 ---
 
@@ -330,75 +258,66 @@ capability registry makes the test concrete.
 
 **Operational test.** Monitor per-feature distributions split by outcome:
 
-1. A shift in `P(feature | legit)` alongside `P(feature | fraud)` is drift —
-   more people banking at night, the population adopting a new channel.
-2. A shift in `P(feature | fraud)` alone, on a feature the adversary controls,
-   is evasion.
+1. A shift in `P(feature | legit)` alongside `P(feature | fraud)` is drift - more
+   people banking at night, the population adopting a new channel.
+2. A shift in `P(feature | fraud)` alone, on a feature the adversary controls, is
+   evasion.
 3. A shift on a feature the adversary *cannot* control (receiver-side
    concentration, physical travel consistency) is more likely a data-quality or
-   integration fault than either — worth alerting on separately, because it
+   integration fault than either - worth alerting on separately, because it
    usually means an upstream feed broke.
 
-The third row is why this framing is worth having: it turns a monitoring
-ambiguity into three distinguishable causes with different responses.
+The third row turns a monitoring ambiguity into three distinguishable causes with
+different responses.
 
 **Concrete prediction, falsifiable.** If `COACHED_SESSION` is deployed and
 announced, `P(active_call = 1 | APP fraud)` should fall toward the population
 base rate (~3%) within weeks, while `P(active_call = 1 | legitimate)` stays
-unchanged. That is the signature of evasion, and it is measurable on the audit
-log the system already writes.
+unchanged - the signature of evasion, measurable on the audit log the system
+already writes.
 
 **The prediction has already been answered, and not by the adversary.** CBU
 Board resolution 3759 of 21 January 2026 requires the mobile application to
-restrict user access during audio and video calls, messenger calls included,
-and during remote-control sessions. In a compliant deployment the coached
-session never reaches confirmation, so `active_call = 1` should be absent from
-the stream rather than merely rarer.
-
-Three consequences, and the third belongs in the main argument.
+restrict user access during audio and video calls, messenger calls included, and
+during remote-control sessions. In a compliant deployment the coached session
+never reaches confirmation, so `active_call = 1` should be absent from the stream
+rather than merely rarer.
 
 - `COACHED_SESSION` detects a state a compliant app must prevent. Its measured
-  contribution - session telemetry at -0.019 PR-AUC, the second most valuable
-  capability in the ablation - is measured on a capability that regulation is
+  contribution - session telemetry at −0.034 PR-AUC, the second most valuable
+  capability in the ablation - is measured on a capability regulation is
   removing.
-- The evasion predicted above is performed by the regulator rather than the
-  attacker, for a better reason, on a fixed date and for everyone at once. An
-  adversary would have adapted eventually; compliance adapts on their behalf.
+- The predicted evasion is performed by the regulator rather than the attacker,
+  for a better reason, on a fixed date and for everyone at once.
 - **Detection value and prevention are substitutes, and a detection system must
-  not claim credit for what prevention removes.** The capability ablation ranks
-  data sources by what their absence costs the model. This is the third axis it
-  does not have: whether a control elsewhere in the stack is supposed to make
-  the source unobservable in the first place. On all three, session telemetry
-  reads the same way - high value, lowest robustness, and now legislated away.
-
-**A second instance, and this one lands on a capability the ablation already
-measured as worthless.** The same November 2026 package requires that logging in
-from a new device deactivates the linked cards, and that biometric identification
-be performed before an account is used from a different device or after a
-password reset. `DEVICE_CHANGE` measures exactly that event as a *signal*; the
-regulation converts it into a *hard control*.
-
-Note what makes this cleaner than the `active_call` case. Session telemetry was
-the second most valuable capability in the ablation, so its removal by regulation
-is a loss. `device_telemetry=off` measured **+0.000 [+0.000, +0.000]** — no
-effect at all, on five seeds. The capability whose detection value this project
-could not measure is the one regulation found worth mandating as prevention.
-
-That is not a contradiction, it is the substitution stated from the other end: a
-signal contributes nothing to a *detector* precisely when the event it marks is
-rare or already handled, and it is exactly such an event that is cheapest to
-*prevent* outright. **A capability's detection value and its prevention value can
-be inversely related, and an ablation measures only the first.** Any argument
-that ranks data sources by ablation delta alone will therefore rank prevention
-candidates last.
+  not claim credit for what prevention removes.** The ablation ranks data sources
+  by what their absence costs the model; it has no axis for whether a control
+  elsewhere in the stack is meant to make the source unobservable. On all three
+  axes session telemetry reads the same way: high value, lowest robustness, and
+  now legislated away.
 
 A blanket block carries a cost the rule did not: the bank's own support line
 walking a customer through a transfer is blocked along with the fraudster.
-Whitelisting the institution's support number is the obvious refinement, and
-whether 3759 admits such an exception has to be read from the clause itself.
+Whitelisting the institution's support number is the obvious refinement; whether
+3759 admits such an exception has to be read from the clause itself. This rests
+on the published summary of 3759, not the clause text - quote the wording
+directly before the thesis leans on it.
 
-This paragraph rests on the published summary of 3759, not on the clause text.
-Quote the wording directly before the thesis leans on it.
+**A second instance, on a capability the ablation measured as worthless.** The
+same November 2026 package requires that logging in from a new device deactivates
+the linked cards, and that biometric identification be performed before an
+account is used from a different device or after a password reset.
+`DEVICE_CHANGE` measures exactly that event as a *signal*; the regulation converts
+it into a *hard control*. And `device_telemetry=off` measured **+0.002 [−0.001,
++0.005]** over five seeds - no effect. The capability worth nothing to the
+detector is the one regulation found worth mandating as prevention.
+
+That is the substitution stated from the other end: a signal contributes nothing
+to a *detector* precisely when the event it marks is rare or already handled, and
+such an event is the cheapest to *prevent* outright. **A capability's detection
+value and its prevention value can be inversely related, and an ablation measures
+only the first** - so ranking data sources by ablation delta alone ranks
+prevention candidates last.
 
 ---
 
@@ -415,8 +334,8 @@ reviewer asks about in points 3 and 4.
 | Poisoning the model through crafted training data | Retraining is offline on labelled data with human review | acceptable while retraining is manual; becomes a real risk under automated retraining |
 
 The last row is worth flagging: this system is safe from poisoning **because it
-does not retrain automatically**. That is a property of the current operating
-model, not of the design, and it changes the moment retraining is automated.
+does not retrain automatically** - a property of the current operating model, not
+of the design, and it changes the moment retraining is automated.
 
 ---
 
