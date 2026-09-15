@@ -541,103 +541,36 @@ test while a genuinely closed bank does not.
 
 ## 7. Latency: measured
 
+Condensed on 2026-09-15 to the figures and what each supports. The full log -
+every run, including the readings later withdrawn - is in git history:
+`git show 1ebde33:docs/irp-framing.md`.
+
 ### 7.0 The July figures are withdrawn
 
-The measurements previously reported here were taken on a job that **was not
-running the model**. `config.py` resolved `model.onnx` relative to `__file__`,
-but `flink run --pyFiles` ships Python modules to the TaskManager and unpacks
-them into a per-job temporary directory, where the ONNX file — a binary
-artefact, not a pyFile — is not present. The job took its documented CEP-only
-fallback path and announced it with a single INFO line among thousands of Kafka
-configuration dumps. Every record it produced was still stamped
-`model_version = cep+ml-fusion-v1`, so nothing downstream could tell a rules-only
-run from a fused one.
-
-Three things follow, and all three are worth stating rather than quietly fixing:
-
-1. The stated scoring cost — "rules, ONNX inference, Redis and Neo4j lookups" —
-   never included inference.
-2. A degraded run was indistinguishable from a healthy one **in the warehouse**,
-   which is where such a claim would normally be audited.
-3. The failure was legible only by reading a container log at the moment of
-   submission.
-
-Fixed by resolving deploy-time artefacts against the mounted job directory
-first, by stamping `MODEL_VERSION_CEP_ONLY` when the session is absent, and by
-making the fallback announce itself in a banner. Every figure below was taken
-after confirming in ClickHouse that the run was fused:
-**`model_version = cep+ml-fusion-v1`**.
-
-**The second half of that check used to be `countIf(ml_score IS NULL) = 0`, and
-it was vacuous.** `ml_score` is `Float32` in `01-schema.sql`, not `Nullable`, and
-`record.py` coerces a missing score to `0.0` on the way in - its own comment says
-so (`None -> 0.0 (model-down)`). The count is therefore zero on every run that
-has ever been written, including a rules-only one, so the clause could not fail.
-Nor does `ml_score = 0` substitute for it: on a five-record fused run taken while
-checking this, three of the five scored an honest 0.0000, which is
-indistinguishable from the model-down value.
-
-Verified directly rather than reasoned: the job was submitted with `model.onnx`
-removed, five records were fed through it, and the rows landed stamped
-`cep-only-fallback` with `ml_score = 0` and `ml_score IS NULL` counting zero.
-`model_version` is the whole check, and it works - it is the one field written
-from what actually ran. The lesson is the section's own: **a verification
-criterion that cannot fail is not a weaker check, it is the absence of one**, and
-this one sat in the sentence claiming the figures were sound.
+They were taken on a job that was not running the model. `model.onnx` was
+resolved relative to `__file__`, and `flink run --pyFiles` unpacks the modules
+into a temporary directory without that binary, so the job took its CEP-only
+fallback while still stamping `cep+ml-fusion-v1`. Fixed by resolving artefacts
+against the mounted job directory, stamping `MODEL_VERSION_CEP_ONLY` when no
+session exists, and announcing the fallback in a banner. Every figure below was
+checked fused on `model_version`, the one field written from what actually ran.
+The second check once used beside it, `countIf(ml_score IS NULL) = 0`, could not
+fail - `ml_score` is a non-nullable `Float32` and a missing score is written as
+0.0: **a verification criterion that cannot fail is the absence of one.**
 
 ### 7.1 Re-measured, with the model verifiably loaded
 
-Live stack, producer inside the Docker network, paced replay. Order statistics,
-distribution-free CI for the median.
+Live stack, producer inside the Docker network, paced replay; order statistics,
+with a distribution-free CI for the median. The <300 ms target applies to the
+decision, which leaves on `fraud.alerts`; the warehouse write has no real-time
+requirement. Two short runs - 1,602 records warm, 430 cold - first read as "met
+warm, missed cold" (p99 186 ms against 1533 ms). Three later cold runs breached
+0, 0 and 1 times: a cold cache raises the cost of scoring (7.2), and the target
+is missed only when a stall occurs (7.3).
 
-**The <300 ms target applies to the decision, not to the warehouse write.** The
-decision leaves for the switch on `fraud.alerts`; ClickHouse is where it is
-queried afterwards and has no real-time requirement. Holding the reporting stack
-to a real-time budget would be measuring the wrong thing.
+### 7.1a The reference run on the July dataset
 
-Two runs, differing in one variable — the state of the receiver-age enrichment
-cache in Redis.
-
-**Run A — warm cache** (1,602 transactions, ~6 events/s):
-
-| stage | median | p95 | p99 | max |
-|---|---|---|---|---|
-| ingest -> decision | 80 ms | 138 ms | **186 ms** | 570 ms |
-| of which scoring work | 2.3 ms | 5.1 ms | 11.8 ms | 323.7 ms |
-| decision -> ClickHouse | 33.2 s | 69.5 s | 75.3 s | 77.8 s |
-
-**Target met: 6 of 1,602 (0.37%) exceeded 300 ms.**
-
-**Run B — cold cache** (430 transactions, ~4 events/s, `age:*` keys deleted
-immediately beforehand):
-
-| stage | median | p95 | p99 | max |
-|---|---|---|---|---|
-| ingest -> decision | 89 ms | 223 ms | **1533 ms** | 1567 ms |
-| of which scoring work | 7.4 ms | 19.0 ms | 39.5 ms | 1452.5 ms |
-| decision -> ClickHouse | 20.2 s | 63.8 s | 71.7 s | 72.4 s |
-
-**Target NOT met: 18 of 430 (4.19%) exceeded 300 ms.**
-
-**A conclusion withdrawn on further runs.** Run B was first read as "the target
-is met warm and missed cold". Three later cold-cache runs — 209, 400 and 400
-records — breached 0, 0 and 1 times respectively. Cold cache is therefore *not*
-sufficient to miss the target. What run B had that the others did not was a
-1452 ms stall, and §7.3 explains how one stall becomes eighteen breaches.
-
-The corrected statement is narrower and better supported: **a cold enrichment
-cache raises the cost of scoring measurably (§7.2) but stays inside the budget;
-the target is missed only when a stall occurs, and the stall's cause is
-unidentified (§"What is not yet resolved")**. The single observation that
-suggested otherwise was over-read, which is the same error the reviewer's point
-6 warns about in a different context — and worth recording rather than
-overwriting, since the first reading survived long enough to be written down.
-
-### 7.1a The reference run: 5,956 records, thirty minutes, no stall
-
-Runs A and B above are 1,602 and 430 records. This one is 5,956 over about
-thirty minutes of continuous paced traffic, producer inside the Docker network,
-warm enrichment cache, and it supersedes them as the figure to quote.
+5,956 records over thirty minutes, warm cache:
 
 | stage | median (95% CI) | p95 | p99 | max |
 |---|---|---|---|---|
@@ -645,51 +578,13 @@ warm enrichment cache, and it supersedes them as the figure to quote.
 | of which scoring work | 4.2 ms [4, 4] | 13.8 ms | 22.0 ms | 168.3 ms |
 | decision -> ClickHouse | 30.3 s | 69.8 s | 79.7 s | 87.8 s |
 
-**Target met: 2 of 5,956 over 300 ms (0.03%).** Both breaches are marginal -
-the maximum on the decision path is 325 ms - rather than the tail of a stall.
+**2 of 5,956 over 300 ms (0.03%)**, both marginal; the multi-second stall of the
+short runs did not recur.
 
-Every decision-path statistic is better than run A's on a sample 3.7 times
-larger: median 69 against 80, p99 176 against 186, maximum 325 against 570, and
-a breach rate of 0.03% against 0.37%. The host-to-container clock offset read
-+0 ms with a 6 ms round trip, the cleanest of any run taken, so the confound
-that historically dominated these figures is absent here.
+### 7.1b The regenerated dataset: the figure to quote
 
-**The multi-second stall did not recur.** Characterising it is what this run was
-for: two observations, 1,452 ms in run B and 323 ms in run A, are too few to
-attribute to anything. Across 5,956 records the worst scoring excursion was
-168 ms - an order of magnitude below the stall that prompted the investigation.
-
-That does not identify the cause; it bounds the frequency. **Under warm
-steady-state conditions the stall occurs less often than once in ~6,000
-records**, where run B put it at 2 in 430. Both observed stalls fell in short
-runs taken shortly after a cold start or a job submission, which suggests they
-belong to startup rather than to steady state - a hypothesis on n=2, not a
-finding, and one this run can only make plausible by failing to reproduce it.
-
-The head-of-line mechanism in 7.3 is confirmed from the other side: with no
-stall there is nothing to queue behind, and the breach count falls to two
-marginal records rather than run B's eighteen.
-
-Three limits on what this measures. The reporting window clipped the first
-~1,044 records of the run, which were the coldest, so this describes warm steady
-state and says nothing about a cold start. Throughput is 5 events/s on one
-machine - a pacing choice, not a load test, and p99 at this rate implies nothing
-about behaviour at a switch's volumes. And the warehouse path at a 30.3 s median
-sits at the top of the 20-33 s band reported earlier and is still undiagnosed;
-nothing real-time rides on it, but it did not improve.
-
-### 7.1b The same run on the regenerated dataset: 7,000 records, and a sixteen-minute sleep
-
-7.1a was taken on the July dataset of record, before the regeneration of
-2026-09-07/08, the removal of the `channel` capability and a retrained model.
-This is the same protocol on the system as it now stands: a fresh job with empty
-keyed state, an empty warehouse, the producer inside the Docker network,
-`produce-stream-docker 7000`, the dataset of record at `ca8a3dcd…`. Fused on
-every row - all 7,000 stamped `model_version = cep+ml-fusion-v1`, checked against
-the verified export after the warehouse was cleared. Host-to-container clock
-offset +2 ms, 8 ms round trip.
-
-Whole run, nothing clipped:
+The same protocol on the system as it now stands - 7,000 records, a fresh job,
+every row stamped fused, nothing clipped:
 
 | stage | n | median (95% CI) | p95 | p99 | max |
 |---|---|---|---|---|---|
@@ -697,756 +592,171 @@ Whole run, nothing clipped:
 | of which scoring work | 7,000 | 5.8 ms [6, 6] | 24.5 ms | 39.3 ms | 696.7 ms |
 | decision -> ClickHouse | 7,000 | 25.1 s | 62.9 s | 70.2 s | 978 s |
 
-**Target met: 3 of 7,000 over 300 ms (0.04%).**
-
-Clipped exactly as 7.1a was - its reporting window dropped the first 1,044
-records, so the comparison drops them too:
-
-| ingest -> decision | 7.1a, July dataset | 7.1b, first 1,044 clipped |
-|---|---|---|
-| n | 5,956 | 5,956 |
-| median | 69 ms [68, 70] | 84 ms [83, 85] |
-| p95 | 131 ms | 154 ms |
-| p99 | 176 ms | 192 ms |
-| max | 325 ms | 259 ms |
-| over 300 ms | 2 (0.03%) | **0** |
-| scoring work, median / p99 | 4.2 / 22.0 ms | 5.1 / 36.7 ms |
-
-**The tail improved and the middle did not.** No warm record breached the target
-and the maximum fell, but the median rose 15 ms, and the scoring work itself by
-about a fifth at the median and two thirds at p99. The system changed in several
-ways between the runs - a regenerated dataset whose ATO episodes now run to eight
-events, a retrained model, a 20-feature contract in place of 24 - and nothing here
-separates them. It is recorded as unattributed rather than explained: an
-explanation fitted to one before-and-after pair would be exactly that.
-
-Three things the clipped window hid, or that this run added.
-
-**The first record costs a second and a half, once.** Record 1 took 1,494 ms,
-697 ms of it scoring: the Python worker initialises on the first element it
-receives, and the job log shows that initialisation in the second the record
-arrived. 7.1a's window cut its coldest 1,044 records and could not see this. It is
-*not* the rare stall described under "What is not yet resolved" below - those fell
-late in their runs, which is why ONNX warm-up was ruled out for them. This is a
-separate, predictable cost of starting a job, and one record pays it.
-
-**The rare stall did not recur.** After record 1 the worst scoring excursion was
-129 ms. Together with 7.1a that is 12,955 records without a recurrence, so under
-steady state it is rarer than about one in 13,000. And 1,043 of those records fell
-in the first minutes after a job submission - exactly where 7.1a suspected the
-stall belonged. That weakens the startup hypothesis rather than supporting it, on
-numbers that are still small. The two remaining breaches, records 956 and 957 at
-303 and 302 ms, are adjacent and spent 1.1 and 16.5 ms scoring: queueing behind
-something, not work.
-
-**The host slept for sixteen minutes, and only Windows recorded it.** At 23:11:09
-local time the laptop entered Modern Standby on an idle timeout, and left it at
-23:27:25 on touchpad input (System log, Kernel-Power 506 and 507). Everything froze
-together. The last event before the pause was ingested at 23:11:21.5 and the next
-at 23:27:28.2; Flink triggered checkpoint 520 at 23:11:21 and 521 at 23:27:29 -
-consecutive, nothing failed or expired between them. No container logged anything
-at all. The 24 decisions taken just before the pause reached the warehouse three
-seconds after it ended, and that is the whole of the 978 s maximum on the warehouse
-path. `latency.py` printing "3 events/s" is likewise 7,000 over a wall time that
-includes the pause: about 4.9 events/s over the 24 active minutes. The
-decision-path figures are unaffected - every record was decided before the pause
-or after it, none across it.
-
-Two consequences. The cause was the session, not the system: the run outlived the
-interactive turn that was keeping the machine awake, and the machine is now held
-awake for the whole session. And the open "VM-level pause" hypothesis for the rare
-stall gains a place to be checked - a host-level freeze leaves no trace inside any
-container, and the one log that records it is outside all of them.
-
-**Which figure to quote.** 7.1b for the system as it now stands; 7.1a for the July
-dataset. The audit-chain anchor for this run is in `audit-anchors.md`.
+**3 of 7,000 over 300 ms (0.04%).** On 7.1a's clipped window the tail improved
+(no breach, maximum 259 ms) and the median rose 15 ms; dataset, model and
+feature contract all changed in between, so the difference is recorded
+unattributed. The 1,494 ms maximum is record 1 - the Python worker initialises
+on its first element, once. The 978 s warehouse maximum is the laptop entering
+Modern Standby for sixteen minutes mid-run (System log, Kernel-Power 506/507):
+everything froze together, no container logged it, and no decision spans the
+pause. The audit-chain anchor for this run is in `audit-anchors.md`.
 
 ### 7.2 The enrichment cache is the variable, and the prototype flatters it
 
-`enrichment.py` looks up receiver account age in Neo4j, cached in Redis with a
-1-hour TTL, **synchronously inside `process_element`**. Its own docstring already
-notes that production would use Flink async I/O. That recommendation now has a
-measurement behind it rather than an intuition.
-
-Cost of a lookup, within run B:
-
-| | n | median | p95 | p99 | max |
-|---|---|---|---|---|---|
-| cache hit | 27 | 3.01 ms | 6.10 ms | 8.44 ms | 9.20 ms |
-| cache miss | 403 | 7.62 ms | 19.16 ms | 39.43 ms | 1452.54 ms |
-
-A miss costs ~4.6 ms at the median and ~31 ms at p99. The graph lookup is
-index-backed (`person_pinfl`, confirmed in the Neo4j log), so this is a network
-round trip, not a scan.
-
-The warming is visible directly. Median `scoring_ms` per 10-second bucket across
-run B, from a cold start:
-
-```
-14.48  12.32  11.49  8.65  10.96  8.32  7.41  7.87  6.25  7.34  6.70  5.68
-```
-
-**The prototype's hit rate is an artefact of its scale.** Run A executed against
-2,879 cached `age:*` keys over a population of 5,200 persons — better than half
-of every receiver that could possibly appear. A few thousand synthetic
-transactions saturate a five-thousand-person graph; a bank with millions of
-accounts and a one-hour TTL will not see that hit rate, so the realistic
-per-event scoring cost sits nearer run B's miss column than run A's headline.
-Quoting 2.3 ms without that qualification would export a property of the test
-population as a property of the system.
+Receiver age is looked up in Neo4j, cached in Redis for an hour, synchronously
+inside `process_element`. A miss costs 7.62 ms at the median against 3.01 for a
+hit, and ~31 ms more at p99. A few thousand transactions saturate a
+five-thousand-person graph, so the prototype's hit rate is a property of its
+scale; a bank with millions of accounts sits nearer the miss column.
 
 ### 7.3 Two stalls became eighteen breaches
 
-Run B contained exactly **two** records with `scoring_ms > 300`, yet **eighteen**
-records breached the 300 ms decision-path target. The Python worker processes
-records serially, so a single multi-second stall delays everything queued behind
-it. Head-of-line blocking is what converts a rare stall into a target-breach
-rate, and it is a property of the execution model rather than of the stall's
-cause — a system whose p99 depends on its worst individual record needs either
-parallelism or an interruption-free critical path, and this one has neither.
+The Python worker processes records serially, so one multi-second stall delays
+everything queued behind it: in the 430-record run, two records with
+`scoring_ms > 300` produced eighteen breaches. A p99 that depends on the worst
+single record needs parallelism or an interruption-free critical path, and this
+pipeline has neither.
 
-### 7.4 Security overhead I: payload encryption (reviewer point 3)
+### 7.4 Security overhead I: payload encryption
 
-AES-256-GCM applied to the event payload at the producer and reversed inside
-`process_element`, so the cost falls inside the measured `scoring_ms` bracket
-rather than beside it. Both arms are 400 records at 3 events/s with the
-enrichment cache flushed immediately beforehand, and both are consumed by one
-job binary — the envelope carries a magic prefix, so encrypted and plaintext
-records are discriminated per record without a redeploy.
+AES-256-GCM on the payload, decrypted inside the scoring bracket; 400 records
+per arm, enrichment cache flushed before each:
 
 | | plaintext | AES-256-GCM |
 |---|---|---|
 | ingest -> decision, median | 88 ms | 87 ms |
-| p95 | 147 ms | 150 ms |
 | **p99** | **183 ms** | **183 ms** |
-| over 300 ms | 0 / 400 | 1 / 400 |
 | scoring, median (95% CI) | 5.7 ms [5,6] | 5.0 ms [5,5] |
-| scoring p95 | 12.6 ms | 13.8 ms |
 
-**No detectable cost on the decision path.** The p99 figures are identical and
-the median confidence intervals overlap. The one breach on the encrypted arm is
-a 1030 ms stall of the kind discussed above, present on plaintext runs too.
+No detectable cost on the decision path. A microbenchmark supplies the figure
+the pipeline cannot resolve: ~8.9 µs to encrypt and ~6.8 µs to decrypt, the
+order of the JSON parse already done. The measurable cost is size - about +50%
+per message, 28 bytes of envelope and then base64. Two invariants: the plaintext
+is hashed before encryption, so an auditor can recompute `ingress_hash`; and the
+routing key is the GCM associated data, so altering it makes a record
+undecryptable rather than misrouted. The key comes from `PAYLOAD_KEY_HEX`, with
+no default.
 
-"No detectable" is not "none", and the difference matters for how this is
-reported. A controlled microbenchmark on the same envelope gives the actual
-figure: **~8.9 µs to encrypt and ~6.8 µs to decrypt**, against a JSON
-round-trip of ~7.7 µs on the same event. Decryption is therefore of the same
-order as the parsing the pipeline already does, and roughly 0.15% of a 5 ms
-scoring budget — three orders of magnitude below the resolution of an
-end-to-end measurement. The pipeline result confirms the microbenchmark by
-failing to see it.
+### 7.5 Security overhead II: transport
 
-Two disclosures the number needs:
+Mutual TLS (`ssl.client.auth = required`) against plaintext, four arms in
+A-B-B-A order. Chosen because transport security is the largest high-severity
+defect class in the 2025 findings of Uzbekistan's Cybersecurity Centre on mobile
+applications: 54 of 157.
 
-- **The scoring median came out lower on the encrypted arm** (5.0 vs 5.7 ms),
-  which is the wrong direction for an added cost. The cause is known and was
-  designed in: the job keys the stream by sender before scoring, and on the
-  encrypted arm that extracts an authenticated clear routing field by string
-  split, where the plaintext arm parses JSON. Partitioning is cheaper under
-  encryption. Both effects are sub-millisecond and neither is resolvable here,
-  but the asymmetry is real and favours the encrypted arm.
-- **The measurable cost is size, not time: about +50% per message.** The
-  envelope adds 28 fixed bytes and base64 adds a third on top. Roughly half of
-  that inflation is an artefact of `SimpleStringSchema`, which decodes records
-  as UTF-8 and so cannot carry raw ciphertext; a binary deserialiser would pay
-  the same CPU and none of the expansion. The figure is an upper bound on
-  transport cost and an accurate one for compute. It does not appear in the
-  latency figures because the decision path is dominated by buffer intervals,
-  not by message volume, at this rate.
+| # | arm | n | median (95% CI) | p99 | over 300 ms |
+|---|---|---|---|---|---|
+| 1 | plaintext | 400 | 77 [73, 81] | 201 | 0 |
+| 2 | mutual TLS | 400 | 82 [79, 88] | 243 | 1 |
+| 3 | mutual TLS | 1456 | 83 [81, 85] | 225 | 1 |
+| 4 | plaintext | 1456 | 87 [85, 89] | 230 | 0 |
 
-The regulatory reading is the useful one. TLS 1.3 and AES-256-GCM are already
-scoped in the compliance analysis; what was unknown was whether the real-time
-budget could absorb them. For payload encryption the answer is that it can,
-with the caveat that the cost shows up in bandwidth and storage rather than in
-the 300 ms budget — and that a keyed topic still discloses metadata, since the
-partitioning key must stay readable to the broker.
-
-Two invariants of the envelope, recorded here because they are easy to break
-later and neither is visible from the measurement:
-
-- **Hash the plaintext, then encrypt.** `ingress_hash` is computed over the
-  plaintext fields and travels inside the encrypted payload. Hashing the
-  ciphertext instead would break the audit guarantee outright: GCM nonces make
-  every encryption of the same event distinct, so an auditor holding the
-  original event could never recompute it.
-- **The routing key is authenticated, not merely appended.** It is the GCM
-  associated data, so altering it makes the record undecryptable rather than
-  silently misrouted. A record steered into the wrong key group would
-  accumulate into another sender's velocity and structuring windows — an
-  integrity failure in the detection logic, not only a privacy one.
-
-The key comes from `PAYLOAD_KEY_HEX` with no default. A hard-coded fallback
-would be worse than a startup failure, because it encrypts everything under a
-value that is in the source tree; the version digit in the magic prefix is what
-a rotation scheme would extend.
-
-Transport security (mTLS between the switch, the broker and the consumers) is a
-separate measurement with a different cost profile — per-connection handshakes
-rather than per-record work — and is taken in §7.5 and §7.5a below.
-
-### 7.5 Security overhead II: transport (reviewer point 3, second half)
-
-**Why this control and not another.** The reviewer asked for transport-security
-overhead, but there is a stronger reason to measure it here. In the 2025 annual
-report of Uzbekistan's State Institution "Cybersecurity Centre", transport
-security is the **largest single class of high-severity defect found in mobile
-applications**: of 157 high-severity findings, 33 are "interception of
-transmitted data", 13 are "transport security disabled in the application", and
-8 are "data transmitted unencrypted" - 54 of 157, over a third, in one class.
-The measurement below therefore prices the control that national data identifies
-as the one most often missing. That reframes the result: 7.5 and 7.5a do not
-report that a control the reviewer named happens to be affordable, they report
-that **the most commonly omitted high-severity control in this market costs less
-than this pipeline can measure** - which removes performance as a defence for
-omitting it.
-
-Mutual TLS between producer, broker and consumers, measured 2026-08-31. The
-broker runs a plaintext listener on 9092 and an SSL listener on 9094 side by
-side over the same partitions, so an arm changes only the port the clients dial
-and `KAFKA_SECURITY_PROTOCOL` for the job. `ssl.client.auth = required`: the
-broker rejects any client without a certificate signed by the CA, so this is
-mutual TLS rather than server-side TLS, and the handshake - the part with a real
-cost - is inside the measurement.
-
-Four arms, counterbalanced A-B-B-A. Each discards a warm-up of a quarter its
-length, waits for the backlog to drain, settles 90 s so earlier rows leave the
-reporting window, and flushes the `age:*` enrichment cache so both arms start
-cold.
-
-| # | arm | n | median (95% CI) | p95 | p99 | max | over 300 ms |
-|---|---|---|---|---|---|---|---|
-| 1 | plaintext | 400 | 77 [73, 81] | 167 | 201 | 212 | 0 / 400 |
-| 2 | mutual TLS | 400 | 82 [79, 88] | 196 | 243 | 306 | 1 / 400 |
-| 3 | mutual TLS | 1456 | 83 [81, 85] | 174 | 225 | 304 | 1 / 1456 |
-| 4 | plaintext | 1456 | 87 [85, 89] | 168 | 230 | 268 | 0 / 1456 |
-
-**The target is met in every arm at the 99th percentile.** Operationally that is
-the result: mutual TLS does not put the 300 ms decision budget at risk.
-
-**The transport effect does not survive counterbalancing, and that is the
-finding.** Read the first pair alone and it says mutual TLS costs +5 ms at the
-median, on intervals that barely overlap. Read the second pair alone and it says
-plaintext costs +4 ms - the same magnitude, the opposite sign. What is
-consistent is not the transport but the position: in both pairs the arm that ran
-second was the slower one.
-
-Subtracting the scoring bracket from the decision path leaves the buffering
-component, and in run order across all four arms it is monotone:
-
-| arm (run order) | decision | scoring | buffering |
-|---|---|---|---|
-| 1, plaintext | 77 | 8.1 | ~69 |
-| 2, mutual TLS | 82 | 8.9 | ~73 |
-| 3, mutual TLS | 83 | 6.8 | ~76 |
-| 4, plaintext | 87 | 6.7 | ~80 |
-
-The subtraction is of medians rather than a median of differences, so it
-indicates the shape and not the exact value. Scoring falls across the session as
-the JVM and the Python workers warm; the buffering component rises by roughly
-4 ms per arm regardless of transport. The cause is not diagnosed - a growing
-ClickHouse table changing the sink's back-pressure, keyed state accumulating
-across `resume-job` restores, and host-level drift over a forty-minute session
-are all candidates, and four arms cannot separate them.
-
-**Stated at the resolution the setup supports: the cost of mutual TLS on the
-decision path is below the resolution of this measurement, and that resolution
-is set by a per-arm drift of about 4 ms rather than by the transport.** This is
-the same shape as the payload result in 7.4 - the pipeline confirms a small cost
-by failing to see it - but it is reached differently. There a microbenchmark
-supplied the figure the pipeline could not resolve; here the counterbalancing
-supplied the reason that no figure should be quoted at all.
-
-**What the arms above do not measure.** Each holds one long-lived connection, so
-the handshake is amortised across it and what remains is mostly TLS record
-framing. A payment switch with many short-lived connections pays the handshake
-repeatedly, and that is the one scenario in which this answer could change. It
-is measured in 7.5a.
+The target holds in every arm. The apparent effect follows the order, not the
+transport - in both pairs the arm run second was slower, the buffering component
+rising ~4 ms per arm - so **the cost of mutual TLS is below the resolution of
+this measurement, and the resolution is set by that drift.**
 
 ### 7.5a Connection churn, and what one connection costs
 
-**The handshake, measured directly.** `data-generator/handshake_bench.py`
-constructs and closes one producer per iteration and times the constructor,
-which blocks until bootstrap completes. Forty pairs, arms alternating *within*
-each pair rather than in two blocks, one discarded warm-up pair:
-
-| transport | median | p95 | min | max |
-|---|---|---|---|---|
-| plaintext | 3.3 | 5.0 | 2.6 | 6.8 |
-| mutual TLS | 14.5 | 20.4 | 12.4 | 26.0 |
-
-Paired difference, TLS minus plaintext: **median +11.2 ms**, over the range
-[+9.2, +20.6]. Both arms pay the TCP connect, the API-version probe and the
-metadata fetch, so only the *difference* is the handshake; the absolutes are
-not. This is the same instrument 7.4 used for AES-GCM: a microbenchmark for a
-cost the pipeline cannot resolve.
-
-**The churn arms.** Four more arms, same A-B-B-A protocol as above, same 1200
-messages, with the producer closed and reopened every 20 messages - 60
-reconnects per arm, against one connection for the whole of 7.5.
-
-| # | arm | n | median (95% CI) | p95 | p99 | max | over 300 ms |
-|---|---|---|---|---|---|---|---|
-| 1 | plaintext, churn | 1456 | 66 [65, 68] | 128 | 170 | 475 | 3 / 1456 |
-| 2 | mutual TLS, churn | 1456 | 64 [62, 65] | 131 | 179 | 410 | 4 / 1456 |
-| 3 | mutual TLS, churn | 1389 | 62 [60, 64] | 127 | 171 | 226 | 0 / 1389 |
-| 4 | plaintext, churn | 1456 | 68 [65, 71] | 166 | 210 | 328 | 2 / 1456 |
-
-**The target is met at p99 in every churn arm**, with the worst arm at 210 ms.
-Operationally that is again the result.
-
-**The counterbalanced contrast has the wrong sign, and that is the finding.**
-Averaging the two arms of each transport - which cancels a drift linear in
-position - gives plaintext 67 ms against mutual TLS 63 ms: TLS **faster** by
-4 ms. Unlike 7.5 the sign does not reverse with the order. TLS was faster when
-it ran second (pair 1) and faster when it ran first (pair 2), and the per-arm
-confidence intervals do not overlap in the second pair. Subtracting the scoring
-bracket puts the whole difference in buffering (plaintext ~61.6 ms both arms;
-mutual TLS ~58.5 and ~57.7), not in work.
-
-Mutual TLS cannot make the decision path faster. So a sign-consistent,
-tight-interval result is being read here as evidence of a confound rather than
-of an effect, and two candidate confounds were named before the run:
-
-- **The handshake is outside the measurement by construction.** The reconnect
-  happens after the send, and the producer constructor blocks until bootstrap
-  finishes, so the next row's `ingested_at` is stamped on the far side of the
-  handshake. Every millisecond of the 11.2 ms above is paid by the client
-  *before* the clock this section reads starts. The churn arm can therefore only
-  show broker-side spillover - repeated handshakes competing with the partitions
-  Flink reads - never the handshake itself.
-- **The pause drains the pipeline.** Each reconnect is a gap in the stream, and
-  the mutual-TLS gap is ~11 ms longer. A longer gap lets buffers empty, which
-  biases the TLS arm toward *lower* latency. The direction of the observed
-  effect is the direction this confound predicts.
-
-Two pairs favouring one arm is `p = 0.25` under a null of no effect, by sign
-alone; the tight per-arm intervals do not improve on that, because 7.5 already
-established that they measure sampling within an arm rather than variation
-between arms. Nothing here is established. What the four arms do establish is
-the negative: **60 reconnects per arm did not make mutual TLS visible on the
-decision path, and the resolution floor is not the transport but the ~60 ms of
-pipeline buffering that swamps an 11 ms per-connection cost.**
-
-**Deployment consequence, stated plainly.** A switch that opens a connection per
-transaction pays 11.2 ms of its own latency each time - real, measured, and
-nearly 4% of a 300 ms end-to-end budget it does not get back. It does not,
-however, degrade the bank's detection path. The engineering answer is connection
-pooling on the switch side, and it is a switch-side answer: nothing in this
-pipeline is where that cost lands.
-
-**A comparison deliberately not drawn.** The churn arms sit ~20 ms below the
-arms in 7.5 across the board. That is a between-session difference - a different
-job submission, a larger ClickHouse table, restored checkpoints, two hours of
-uptime - and 7.5 established that per-arm drift of ~4 ms is already enough to
-reverse a conclusion. Quoting churn as a 20 ms improvement would repeat exactly
-the error this section exists to document. It would need its own counterbalanced
-design, alternating churn and no-churn within one session.
-
-**Why the arms were reversed.** Had only the first pair been run - which is the
-normal thing to do - this section would have reported that mutual TLS costs 5 ms
-at the median, on intervals clean enough to publish. Reversing the arm order is
-what prevented it. That is the third time in this project that a single-order or
-single-run figure was wrong: once by a factor of two, once in sign, and now once
-in sign again through an ordering confound.
+Measured directly (`data-generator/handshake_bench.py`, forty alternating pairs),
+a mutual-TLS handshake costs **+11.2 ms** at the median over plaintext (14.5
+against 3.3 ms). Four churn arms, reconnecting every 20 messages, met the target
+at p99 in every arm (worst 210 ms) and put TLS 4 ms *faster* - read as a
+confound, since the handshake falls outside the clock and a longer gap drains
+the buffers. A switch opening a connection per transaction pays 11.2 ms of its
+own budget each time; the answer is connection pooling on the switch side.
 
 ### The work was never the constraint
 
-Scoring — rules, ONNX inference, Redis and Neo4j lookups — is 2.3 ms at the
-median and 12 ms at p99 warm, 7.4 ms and 40 ms cold, against a 300 ms budget.
-Everything else in the figure is framework buffering, and each default that
-mattered was chosen for throughput:
+Scoring - rules, ONNX inference, Redis and Neo4j lookups - takes a few
+milliseconds of a 300 ms budget. The rest is framework buffering, and each
+default that mattered was tuned for throughput:
 
 | setting | default | set to | why the default hurts |
 |---|---|---|---|
-| `python.fn-execution.bundle.time` | 1000 ms | 50 ms | PyFlink batches records before crossing into Python. Below ~100k events/s the bundle never fills, so every record waits the full second. This alone was 1923 ms of the original 1931. |
+| `python.fn-execution.bundle.time` | 1000 ms | 50 ms | Below ~100k events/s the bundle never fills, so every record waited the full second: 1923 ms of the original 1931. |
 | `fetch.max.wait.ms` | 500 ms | 20 ms | A fetch against an empty topic parks for the full interval. |
-| checkpoint interval | 30 s | 2 s | With AT_LEAST_ONCE the Kafka sink flushes at checkpoint barriers, so nothing leaves the job between them. |
-| `KafkaOffsetsInitializer` | `earliest()` | `committed_offsets(EARLIEST)` | Not latency: every restart replayed the whole topic and re-scored settled transactions, raising duplicate alerts. |
+| checkpoint interval | 30 s | 2 s | With AT_LEAST_ONCE the Kafka sink flushes only at checkpoint barriers. |
+| `KafkaOffsetsInitializer` | `earliest()` | `committed_offsets(EARLIEST)` | Not latency: every restart replayed the topic and raised duplicate alerts. |
 
-This is the engineering finding worth reporting: **a streaming fraud pipeline
-assembled from components whose defaults are tuned for throughput and
-reprocessing will miss a sub-second target by two orders of magnitude, and none
-of that is visible in model inference time.** Latency estimated from the model
-alone would have been off by a factor of 400.
+**A streaming fraud pipeline assembled from throughput-tuned defaults misses a
+sub-second target by two orders of magnitude, and none of it shows in model
+inference time** - latency estimated from the model alone would have been off by
+a factor of 400.
 
-The re-measurement sharpens it. The correction for the missing model went the
-*opposite* way to expectation: adding ONNX inference to the critical path
-**lowered** median scoring from 4.2 ms to 2.3 ms, because the July figure was
-never dominated by inference in the first place — it was dominated by the
-enrichment lookups that 7.2 has now isolated. Inference on 22 features is not
-measurable against this budget. What is measurable is every I/O hop the model
-sits behind, which is the reverse of where optimisation effort is usually
-directed in an ML system.
+### Two artefacts of desktop Docker
 
-### A measurement artefact that nearly became a finding
-
-Three rounds of tuning failed to move a stable p95 of ~640 ms. It was not
-latency. `ingested_at` was stamped by the producer on the Windows host while
-`scored_at_job` came from inside Docker, and on Windows and macOS containers run
-in a VM whose clock drifts from the host and is periodically resynced. Measured
-offsets minutes apart: **+205 ms, then −279 ms** — a swing comparable to the
-quantity being measured.
-
-Running the producer inside the Docker network removed it: the tail collapsed
-from 644 ms to 159 ms at p95 with no configuration change at all.
-
-Worth stating in the methodology section: measuring sub-second latency across
-two unsynchronised clocks produces a systematic error of the same order as the
-measurement, and the desktop-Docker setup where most prototypes are evaluated is
-exactly the configuration that has this problem. `experiments/latency.py` now probes
-the offset and reports it. Offsets observed since: **+219 ms** and **−270 ms** on
-consecutive runs.
-
-### The same platform, a second way
-
-The clock drift is not the only thing the virtualisation layer does to a
-measurement. Neo4j ships a monitor for it, and it fired on this stack:
-
-```
-WARN [o.n.k.i.c.VmPauseMonitorComponent] Detected VM stop-the-world pause:
-     {pauseTime=254, gcTime=0, gcCount=0}
-```
-
-`gcCount = 0`: no garbage collection ran. The virtual machine hosting the
-containers stopped executing for 254 ms and every process inside it stopped
-together. On a 300 ms budget that is a target breach caused by nothing in the
-system under test.
-
-Generalised, and this belongs in the methodology chapter rather than the
-results: **desktop virtualisation perturbs sub-second measurements by amounts
-comparable to the measurements themselves, and it does so in at least two
-independent ways — by moving the clocks and by stopping the processes.** The
-first was found by chasing a tail that would not move; the second by a
-monitor that happened to be running in a component nobody was looking at.
-Neither is visible from inside the application. A sub-second latency claim
-produced on desktop Docker needs to say so.
+The containers' VM clock drifts from the host's - +205 then -279 ms, minutes
+apart - which held p95 at ~640 ms through three rounds of tuning, until the
+producer moved inside the Docker network (p95 159 ms); `experiments/latency.py`
+now probes the offset. And the VM pauses: Neo4j's monitor logged a 254 ms
+stop-the-world pause with no garbage collection. Neither is visible from inside
+the application, so **a sub-second latency claim produced on desktop Docker
+needs to say so.**
 
 ### What is not yet resolved
 
-- **Warehouse path is 20–33 s**, and the figure moved in the wrong direction
-  after the graph sink was repaired (§8): it had been 15.6 s while the Neo4j
-  writer was silently disabled and doing no work. The two numbers are therefore
-  not comparable, and the current one has not been diagnosed. No real-time
-  requirement rides on it, but Grafana dashboards inherit the lag.
-- **A rare multi-second stall in scoring**, 1452 ms in run B, 323 ms in run A.
-  **Frequency now bounded (7.1a):** a 5,956-record run over thirty minutes did
-  not reproduce it at all, worst scoring excursion 168 ms, so under warm
-  steady-state conditions it is rarer than one in ~6,000 records. **7.1b adds
-  6,999 more** on the regenerated dataset, worst excursion after the first record
-  129 ms: about one in 13,000, including the first minutes after a job submission
-  where it was suspected to belong. The cause
-  remains unidentified and the thirty-minute run that was owed is done.
-  Three hypotheses were tested and rejected or left open: it is **not** ONNX
-  warm-up (the stalls occur late in a run, not on the first records - 7.1b shows
-  what warm-up does look like: 697 ms of scoring on record 1, and never again);
-  it is
-  **not** enrichment cache misses (the worst stall fell in the cache-hit
-  bucket); and it is **not** a Neo4j pause (that component's own pause monitor
-  logged nothing at the time). VM-level pause and Python worker GC remain
-  plausible and were not separated — with n=2 any attribution would be fitted
-  rather than measured. A VM-level pause is at least checkable now: 7.1b found
-  a sixteen-minute one that no container logged and the host's System log did.
-  Characterising the cause needs *occurrences*, and the
-  thirty-minute run produced none: bounding the frequency and diagnosing the
-  cause turn out to need opposite conditions, and the run that settled the
-  first made the second no easier.
-- Single machine. Security overhead has since been measured against this
-  baseline (§7.4 payload, §7.5 transport, §7.5a churn), and the limitation that
-  remains is the baseline itself: one host, so every arm shares whatever that
-  host was doing at the time. That is what the counterbalancing in §7.5 exists
-  to work around, and §7.5a shows it working around it imperfectly - a
-  sign-consistent result with the wrong sign.
+- **The warehouse path takes 20-33 s**, undiagnosed. Nothing real-time rides on
+  it, but Grafana inherits the lag.
+- **A rare multi-second scoring stall** - 1452 ms and 323 ms in the short runs -
+  did not recur in the 12,955 records of 7.1a and 7.1b, so it is rarer than about
+  one in 13,000. Not ONNX warm-up, not cache misses, not a Neo4j pause; a
+  VM-level pause and Python garbage collection remain open.
+- **One machine.** Every arm shares whatever the host was doing, which is what
+  the counterbalancing in 7.5 works around.
 
 ### 7.6 Throughput: where the 300 ms target stops holding
 
-Every latency figure above was taken at one arrival rate. That answers "how fast
-is a decision" and not "how fast can decisions arrive", which is the question a
-capacity plan asks. The sweep drives the producer at a fixed offered rate and
-reports the DECISION path — `ingested_at` to `scored_at_job` — separately from
-the warehouse path, which carries up to five seconds of sink batching and would
-otherwise dominate the headline by two orders of magnitude.
+3,000 messages per arm, deadline-based pacing, the decision path only (ms;
+`work` is in-operator processing):
 
-Pacing is deadline-based (`due = t0 + n / rate`) rather than `sleep(1 / rate)`:
-the naive form adds the send cost to every interval, so the achieved rate drifts
-below the requested one and the arm silently measures a slower stream than it
-claims. The producer prints the achieved rate on every run and says SATURATED
-when it falls below 95% of the request, because a client that cannot keep up
-produces latency figures that describe the CLIENT.
+| offered/s | achieved | p50 | p95 | p99 | over 300 ms | work | state |
+|---:|---:|---:|---:|---:|---:|---:|---|
+| 5 | 5 | 87 | 101 | 116 | 1 | 5.5 | ok |
+| 10 | 10 | 87 | 139 | 156 | 0 | 1.9 | ok |
+| 25 | 25 | 124 | 218 | 340 | 49 | 1.6 | p99 over target |
+| 50 | 50 | 156 | 282 | 382 | 110 | 1.2 | p99 over target |
+| 100 | 100 | 240 | 805 | 1,162 | 1,039 | 0.9 | p99 over target |
+| 250 | 250 | 5,671 | 9,263 | 9,515 | 2,961 | 1.0 | SATURATED |
 
-3,000 messages per arm, milliseconds, `work` = in-operator processing time:
-
-| offered/s | achieved | p50 | p95 | p99 | over 300ms | work | e2e | state |
-|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| 5 | 5 | 87 | 101 | 116 | 1 | 5.5 | 49,913 | ok |
-| 10 | 10 | 87 | 139 | 156 | 0 | 1.9 | 25,045 | ok |
-| 25 | 25 | 124 | 218 | 340 | 49 | 1.6 | 10,185 | p99 over target |
-| 50 | 50 | 156 | 282 | 382 | 110 | 1.2 | 5,211 | p99 over target |
-| 100 | 100 | 240 | 805 | 1,162 | 1,039 | 0.9 | 2,931 | p99 over target |
-| 250 | 250 | 5,671 | 9,263 | 9,515 | 2,961 | 1.0 | 7,823 | SATURATED |
-
-**The pipeline stops meeting the 300 ms target somewhere at or below 25
-events/s** — a figure that has to be stated plainly, because it is two orders of
-magnitude below what a national switch carries.
-
-The shape of the failure says where it comes from. `work` stays at roughly one
-millisecond across the whole sweep while decision time climbs by a factor of
-sixty: the operator is not getting slower, records are waiting. That is pure
-queueing, and `enrichment.py` names the cause in its own comment — the Redis and
-Neo4j lookups are SYNCHRONOUS, so the operator blocks per record and one slot
-processes one transaction at a time. Flink's async I/O is the documented fix and
-is not implemented here; the sweep is what turns that known shortcut into a
-number. `work` FALLING as load rises (5.5 ms to 0.9 ms) is the cache warming:
-at 250/s the same accounts recur inside the TTL.
-
-Two things this does not measure: a single machine with one TaskManager slot, so
-it is a per-slot figure and not a ceiling for the design; and the sweep tops out
-where the PRODUCER saturates, not where the pipeline does.
+**The target stops holding at or below 25 events/s**, two orders of magnitude
+below a national switch. `work` stays near a millisecond while decision time
+climbs sixty-fold: records queue behind the synchronous Redis and Neo4j lookups
+in `enrichment.py`, one at a time per slot. Flink async I/O is the documented
+fix and is not implemented. This is a per-slot figure on one machine, and the
+sweep ends where the producer saturates.
 
 ### 7.7 Dependency matrix: what each outage silently removes
 
-`experiments/outage.py --service scorer` kills the scorer. Its other arms kill what
-the scorer leans on, and
-asks the question that matters for a fail-open design: not "did it crash" but
-"what did it stop doing without saying so". Each expectation was written down
-BEFORE the run, in `EXPECTED` in `experiments/outage.py`, so the result is a test
-of a prediction rather than a description of whatever happened.
+`experiments/outage.py` stops one service per arm while 1,000 transactions are
+produced through the outage, each prediction written in `EXPECTED` before the
+run; loss is offered minus stored. All four loss predictions held. Redis, Neo4j
+and a 20 s mid-stream Kafka outage lost nothing; a ClickHouse outage lost all
+1,000 rows by design - the sink commits offsets on a timer - so the pipeline
+keeps deciding and the audit trail is the part that yields first.
 
-Loss is counted as **offered minus stored** — what the producer reported
-delivering, against the row delta in the warehouse. Neither half of that was
-obvious: §7.7b lists three ways this harness computed a confident wrong number
-before it computed a right one.
+### 7.7a Fail-open is not fail-fast
 
-1,000 transactions per arm, each arm stopping one service, producing through the
-outage, restarting it and letting the topic drain.
-
-| stopped | offered | stored | lost | prediction |
-|---|---:|---:|---:|---|
-| redis | 1,000 | 1,000 | 0 | held |
-| neo4j | 1,000 | 1,000 | 0 | held |
-| clickhouse | 1,000 | **0** | **1,000 (100%)** | held |
-| kafka (mid-stream, 20 s) | 1,000 | 1,000 | 0 | held |
-
-**All four predictions held. None of these arms is a discovery, and the
-ClickHouse row least of all** — stopping a database and observing that nothing
-was written to it is a tautology, and the mechanism behind the 100% was already
-stated in the sink's own code: `consumer.py` sets `enable_auto_commit=True`, so
-offsets advance on a timer regardless of whether the insert succeeded, and
-`ch_writer._discard` logs in as many words that "Kafka offsets have already
-advanced, so these events will not be re-delivered." The measurement confirms a
-documented design property; it did not find one.
-
-What the run adds beyond the code is narrower and worth stating at its real
-size: the reconnect path (`_reconnect_due`) rescues **nothing** — not a partial
-batch, not the tail — so the loss is the whole slice rather than some fraction
-of it; and the failure is silent across component boundaries, which no single
-file shows. Scoring was unaffected, alerts were published, and the analyst queue
-filled normally while the warehouse took a 1,000-row hole.
-
-That makes the ClickHouse arm useful for one thing, and it is not a defect
-report. It puts a number on a **trade the design makes deliberately**: the
-pipeline keeps deciding on live payments while the warehouse is gone, and pays
-for that with the completeness of the audit trail. Blocking instead would stop
-detection on real transactions, which is the worse outage. For a system that
-offers its audit trail as a defensibility argument (§8, §9.4), the qualification
-this earns is that **the record is the part that yields first**, by choice, and
-that a routine warehouse restart is enough to exercise it. Corroborated by
-`docker compose logs sink-writer | Select-String DISCARDED`.
-
-The Kafka arm is the one that had to be redesigned to say anything. Stopping the
-transport before producing means the producer cannot bootstrap: nothing is
-offered, and an arm that offered nothing cannot lose anything — the experiment
-tested nothing while appearing to run. Taken out MID-STREAM for twenty seconds,
-the result is that the producer still reported `produced 1,000 messages` and all
-1,000 reached the warehouse. Client-side buffering and retry absorbed the outage
-completely, and the job resumed from its committed offsets. AT_LEAST_ONCE held
-in both directions.
-
-**On the loss column the matrix validated four predictions and discovered
-nothing** — which is what engineering validation looks like when the design is
-understood, and is worth reporting as such rather than dressed up. The discovery
-is in the other column, and it took two attempts to reach: the alert-mix
-measurement was first reporting the contents of the test slice rather than the
-effect of the outage, exposed by the arm that predicted no degradation. Rebuilt
-as a paired design, it produced the one result here that was not predicted in
-advance — **the pipeline fails open without failing fast**, and a 1,000-event
-slice that drains in six seconds healthy had not drained in five minutes with
-Redis or Neo4j gone (§7.7a).
-
-### 7.7a Fail-open is not fail-fast: what the paired run actually found
-
-The matrix reports a second quantity beside loss: which alert types stop
-appearing while a dependency is down. The first attempt at it was an artefact —
-every arm replayed the same slice and was compared against the whole table, so
-all three arms reported the same "degradation", **including the arm that
-predicted none**. An effect visible in the control is not an effect.
-
-The rerun fixed the design: a healthy CONTROL pass over the same 1,000
-transactions supplies the reference mix, Redis state is flushed before every
-pass (all three namespaces — `age:*`, `rcv:*` and `mule:fanin:hist`), and the
-dependency stays down **through the drain** so no record is scored healthy.
-Results, alerts by `predicted_type`:
-
-| arm | MULE | STRUCTURING | ATO | drain time |
-|---|---:|---:|---:|---|
-| control (healthy) | 23 | 4 | 1 | ~6 s |
-| redis down | 22 | 4 | 1 | **did not drain in 300 s** |
-| neo4j down | 31 | 4 | 1 | **did not drain in 300 s** |
-| clickhouse down | — | — | — | ~6 s |
-| kafka mid-stream | 25 | 4 | 1 | ~6 s |
-
-> **Read with 7.7b, fifth, and 7.7c.** This table was taken with Redis flushed
-> between passes but the Flink job left running, so every pass after the first
-> scored the slice on top of the passes before it. The MULE column was then named by
-> `DISTINCT_PAYEE_BURST` and `VELOCITY` - the two rules replay inflates - so it
-> cannot be read as a per-arm effect. The first finding below is also superseded:
-> since 2026-09-08 MULE is named by `MULE_FAN_IN`, and 7.7c tests the Redis
-> prediction directly. The third finding stands, and was reproduced.
-
-Three things fall out, and the third is the finding.
-
-**The alert-type column cannot test its own prediction, and no experimental
-design fixes that.** The prediction for the Redis arm is that `MULE_FAN_IN`
-stops firing. The column reports `predicted_type`, and `fusion._TYPE_PRIORITY`
-maps the MULE label to `DISTINCT_PAYEE_BURST` and `VELOCITY` — `MULE_FAN_IN` is
-**not in the table at all**. Both mapped rules are sender-side, served from
-Flink keyed state, and touch neither Redis nor Neo4j. So a Redis outage was
-never going to move this number, and 22-against-23 says nothing about the
-prediction. This is a category error in the metric, not a confound in the
-experiment: the prediction is about a *rule*, the column reports a *pattern
-label* derived from different rules. Testing it needs `rule_hits`, which the
-warehouse stores and this query does not read.
-
-**The Kafka arm supplies the noise floor.** It predicts no degradation and is
-the closest thing to a second control: +2 MULE against the reference with no
-treatment applied. Redis at −1 is inside that; Neo4j at +8 is outside it.
-
-**Failing open is not the same as failing fast, and only the clock shows it.**
-The healthy pass drained 1,000 events in about six seconds. With Redis down, and
-again with Neo4j down, the same 1,000 events **had not drained after five
-minutes** — a slowdown of at least fifty times. The ClickHouse arm drained
-normally, which localises it: ClickHouse is downstream of the decision, while
-Redis and Neo4j sit on the synchronous per-event lookup path (§7.6).
-
-The mechanism is in `enrichment.py` and is not subtle once looked for. Neither
-client is constructed with a timeout — no `socket_timeout` or
-`socket_connect_timeout` on the Redis handle, no `connection_timeout` on the
-Neo4j driver. And the handle is only set to `None` inside `open()`, which runs
-once per worker at job start: a dependency that dies *later* leaves a live
-client object behind, so **every subsequent event pays a failed round trip** —
-for Redis a failed read and a failed cache write, for Neo4j a session open that
-cannot connect. The pipeline keeps deciding, exactly as designed, and stops
-keeping up.
-
-For a system whose entire claim is a 300 ms budget, that distinction is the
-whole point: **a decision that arrives after the payment has settled is not a
-degraded decision, it is no decision.** The row count cannot see this, the alert
-mix cannot see this, and the containers stay `Up` throughout — it belongs with
-the silent failures of §8 rather than with the loss column above.
-
-It also compounds with §7.6 rather than duplicating it. There, the synchronous
-lookup caps healthy throughput at 25 events/s. Here the same synchronous lookup,
-against an *absent* dependency and with no timeout to bound it, drives that cap
-toward zero. One design decision, two measured costs. The fix is small and
-declared rather than made: bound both clients with timeouts, and mark a client
-dead after N consecutive failures so the fail-open path stops paying for a
-connection that is not coming back.
-
-**A second result, weaker and stated as such.** Losing Neo4j did not remove
-alerts, it added them: +8 MULE, above the ±2 noise floor the Kafka arm
-establishes. A mechanism exists in the code and matches the direction. In the
-default `receiver_age` mode an unknown age is encoded as `-1.0`, which sorts
-*below every real account age* — so to a model trained on "younger is riskier",
-an unreachable Neo4j does not read as "unknown", it reads as "newer than the
-newest account that exists". The argument against exactly this is already
-written in `features.py`, in the comment explaining why the `on_us` branch uses
-NaN instead ("a sentinel such as -1 would be ordered against real ages"); it was
-simply never applied to the default branch. One arm is not enough to establish
-this, and it does not need the cluster to settle: replaying the slice offline
-with the age forced to unknown would separate the mechanism from the noise.
-
-> **Since done (2026-09-13).** `ml/experiments/receiver_age_outage.py` replays
-> the held-out slice with every payee age withheld, through the model as it was
-> deployed - reproduced exactly, max |delta| 0 - and four more seeds. False alarms
-> went from 10 to 95 on average and rose on every seed (77-107): the mechanism is
-> confirmed. The fix is on the training side, as 7.7c says: the age is now NaN in
-> every mode, and `train.py` withholds it on a tenth of its rows so the model
-> learns where "unknown" goes. Under the same replay the retrained recipe raises
-> 14 false alarms against 10 with the ages known - most of the damage undone, not
-> all of it, and short of the verdict fixed before the run, which asked for no
-> more false alarms without the ages than with them. `ml/README.md` has the table.
-
+Killed under a running job, Redis or Neo4j left 1,000 events undrained after
+five minutes, against six seconds healthy. Neither client has a timeout, and a
+handle is set to `None` only in `open()`, so every later event pays a failed
+round trip: the pipeline keeps deciding and stops keeping up. **A decision that
+arrives after the payment has settled is no decision.** The fix is declared, not
+made: timeouts on both clients, and a client marked dead after N consecutive
+failures.
 
 ### 7.7b Five ways this harness computed a confident wrong number
 
-Recorded because all five produced output that looked like a result, and because
-four of them were caught only by a value that could not have been true:
-
-1. **`uniqExact(transaction_id)` as the loss denominator.** The producer replays
-   the same CSV, so distinct ids do not grow. The tool reported "1000 LOST" for
-   four services including two it had never touched. Distinct count is a
-   duplication indicator, not a loss measurement.
-2. **`--expect` as the loss denominator.** What the producer was asked to send is
-   not what reached the topic, and the two differ for exactly one arm. The first
-   version printed the same caution — "check whether the producer could send at
-   all" — for both the Kafka case, where it is correct, and the ClickHouse case,
-   where it is wrong. That single conflation reported the matrix's one
-   data-loss result as an inconclusive arm.
-3. **The whole table as the alert-mix denominator**, with no control pass and no
-   state reset — §7.7a.
-4. **The service restart in the success path.** A producer that died left the
-   dependency stopped, so the next run took no baseline — and because PowerShell
-   ignores a native command's exit code, the arm then produced traffic for five
-   minutes before reporting that it had nothing to compare against. The restart
-   is now in a `finally` and the baseline's exit code is checked.
-5. **A state reset that reset half the state.** `Reset-FeatureState` flushed the
-   three Redis namespaces between passes and said, in as many words, that this
-   was sufficient: the CEP windows key on event time, so a replayed row lands in
-   the same simulated window. It does - and the sender's history deque still
-   holds the previous pass's copy, so every replay adds another copy to that
-   window. The evidence the claim rested on, STRUCTURING and ATO constant across
-   arms, was taken before 2026-09-08, when the two burst rules could not fire on
-   this generator at all. On the 2026-09-13 run the same 1,000 transactions
-   produced ATO alerts 0, 0, 7, 24 and 48 by pass number, whichever service was
-   down, and APP 6 then 0 - and the harness reported that a twenty-second Kafka
-   outage had silenced every other alert type. Kafka has nothing to do with a
-   sender's velocity; that was the value that could not have been true. The
-   loss column, which counts rows, was unaffected. The reset now cancels the
-   job, flushes Redis, restarts the TaskManager and submits a fresh job, in
-   that order, and each step is there because its absence was measured.
-   Flushing first let the cancelled job's close write 5,236
-   population-histogram observations from the pass being erased back into the
-   store; restarting the job without the TaskManager leaked Metaspace until
-   the eighth submission killed it (§8, twenty-first).
-
-The pattern across all five is worth naming, because it is the same one §8
-catalogues for the pipeline: **none of these failed. Each returned a plausible
-number.** A measurement harness is a piece of production software with no user
-to notice when it is wrong, and the only defences that worked here were a
-predicted value written down before the run, and an arm that was supposed to
-show nothing.
-
-For chapter 7 this section reduces to one sentence of method: *loss is measured
-as delivered minus stored rather than requested minus stored, and the alert mix
-against a healthy control pass over the same transactions, each pass scored by a
-fresh job with empty state, because the producer
-replays a fixed slice and stopping the transport also stops the offer.*
+Distinct transaction ids as the loss denominator, though the producer replays
+one CSV; the requested count instead of the delivered one; the whole table as
+the alert-mix reference, with no control pass; a service restart skipped on a
+failed run; and a state reset that flushed Redis but kept the job's keyed state,
+so each pass stacked on the last. None failed - each returned a plausible
+number. The method that survived: *loss as delivered minus stored, the alert mix
+against a healthy control over the same transactions, each pass on a fresh job
+with empty state.*
 
 ### 7.7c Re-measured on 2026-09-13: one fresh job per pass
-
-The matrix was run three times on the regenerated dataset.
-
-The first run used the protocol above and reproduced its loss column - Redis 0,
-Neo4j 0, ClickHouse 1,000 by design, Kafka 0 on a job that had been running for
-hours - and its drain failures: with Redis, and again with Neo4j, killed under a
-running job, 1,000 events had not drained after 300 s. Its alert-mix column is
-void: the same 1,000 transactions produced ATO alerts 0, 0, 7, 24 and 48 by pass
-number, whichever service was down (7.7b, fifth).
-
-The second run gave every pass a fresh job with empty keyed state and an empty
-Redis, so each arm scores the slice exactly once. Its Kafka arm then landed on a
-TaskManager that a Metaspace leak had killed two seconds earlier (§8,
-twenty-first). The reset now restarts the TaskManager as well, and the third run
-repeated the Kafka arm that way, with its own control:
 
 | arm | stored | lost | drain | alert mix against the control |
 |---|---:|---:|---|---|
@@ -1454,44 +764,18 @@ repeated the Kafka arm that way, with its own control:
 | Redis down | 1,000 | 0 | 13 s | **MULE 1 -> 0**, APP 6 -> 2, unlabelled 17 -> 7 |
 | Neo4j down | 1,000 | 0 | 13 s | **APP 6 -> 20, unlabelled 17 -> 30**, MULE 1 |
 | ClickHouse down | 0 | **1,000** | 14 s | none observable - nothing stored |
-| Kafka down 20 s, mid-stream (third run) | 1,000 | 0 | drained | **identical**: unlabelled 17, APP 6, MULE 1 |
+| Kafka down 20 s, mid-stream | 1,000 | 0 | drained | **identical**: unlabelled 17, APP 6, MULE 1 |
 
-**Kafka: nothing lost and nothing changed - which is what makes the other rows
-readable.** The third run's control reproduced the second run's to the unit - 17,
-6 and 1 both times - and a pass through a twenty-second broker outage matched it
-exactly. Under this protocol a pass that changes nothing reproduces the reference
-count for count, so the Redis and Neo4j rows are effects, not noise. That is the
-question 7.7a's noise floor was trying to answer, answered by the design rather
-than by a margin.
-
-**Redis: the prediction held, and is now testable.** MULE is named by
-`MULE_FAN_IN` since 2026-09-08, and with the payee's inbound window unreachable it
-went silent. What the prediction did not say is that the model-driven alerts fell
-too, by about sixty per cent: the receiver-side features read zero, and the model
-loses the signal they carry.
-
-**Neo4j: the opposite of blindness.** The prediction was about a rule -
-`FRESH_RECEIVER` stops firing - and that rule names no alert label, so this column
-cannot test it. What the column does show is alerts *rising*, APP more than
-threefold. The mechanism is in `features.py`: in the deployed `always` mode an age
-that cannot be obtained is encoded as -1, the very sentinel the neighbouring
-`on_us` branch rejects in its own comment - "a sentinel like -1 would be ordered
-against real ages". Every age split therefore reads an unknown payee as younger
-than any real account. A Neo4j outage makes the model more suspicious, not blind:
-fail-open at the rule, fail-noisy at the model. It is recorded rather than
-patched, because the model was trained on data where the age was always known,
-so any encoding of "unknown" is outside what it has seen; the fix is on the
-training side.
-
-> **Since made there (2026-09-13)**, with the offline replay in 7.7a: the -1
-> took false alarms from 10 to 95; the retrained recipe, from 10 to 14.
-
-**Drain: fast in every arm, and not a contradiction of 7.7a.** Here the dependency
-was already down when the Python worker - which starts lazily, on its first
-element (7.1b) - opened its clients, so `open()` set the handle to `None` and
-every event skipped the lookup. In the first run the dependency died under a
-running worker, which is 7.7a's mechanism, and reproduced it. They are the two
-halves of one code path, and only the second is the production case.
+The Kafka arm reproducing the control count for count makes the other rows
+effects, not noise. Redis down silenced `MULE_FAN_IN`, as predicted, and cut the
+model-driven alerts by about sixty per cent. Neo4j down *raised* alerts: an
+unknown payee age was encoded as -1, which every age split reads as younger than
+any real account. Fixed on the training side on 2026-09-13 - the age is NaN in
+every mode and `train.py` withholds it on a tenth of its rows - and on the
+baseline profile an offline replay with every age withheld then raised 14 false
+alarms against 10, where the -1 had raised 95 (`ml/README.md`). Drain was fast
+in every arm here because the dependency was already down when the worker opened
+its clients; 7.7a is the other half of the same code path.
 
 ## 8. Silent failure modes
 
