@@ -1,14 +1,10 @@
 """A committee of LightGBM fits, served as one booster.
 
-The mean of several fits' log-odds scored far above any single fit on IBM AML
-(PR-AUC 0.180 against 0.066) and on the realistic profile (0.488 against 0.422,
-ml/README.md): one fit to rare fraud is noisy, and
-averaging is the cheapest way to take the noise out. Served as five models it
-would mean five ONNX graphs in the job and five explainers in case-manager. It
-does not have to be: a boosted model's raw score is the sum of its trees'
-outputs, so the mean of K models is one model holding every member's trees with
-every value divided by K. merge() writes that model, and the ONNX export,
-model.txt and the exact tree contributions all see a single booster.
+Averaging several fits' log-odds takes the noise out of one fit to rare fraud
+(ml/README.md). A boosted model's raw score is the sum of its trees' outputs, so
+the mean of K models is one model holding every member's trees with every value
+divided by K: merge() writes it, and the ONNX export, model.txt and the tree
+contributions all see a single booster.
 """
 import re
 

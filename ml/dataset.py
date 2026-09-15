@@ -1,10 +1,6 @@
 """Builds the training matrix by replaying the CSV through the SAME feature
-extractor the Flink job uses, so the model trains on what it will be served.
-
-The row-to-event mapping is `features.event_from`, not a local copy. It was a
-local copy - a fourth one, beside three in stream-processor - and a mapping
-written out four times is four places to forget a column, where forgetting one
-reads as absent rather than failing.
+extractor the Flink job uses (rows mapped by `features.event_from`), so the model
+trains on what it will be served.
 """
 
 import os
@@ -21,12 +17,9 @@ FEATURE_NAMES = F.FEATURE_NAMES
 
 
 def build_matrix(csv_path: str, age_unknown=None, nrows=None) -> pd.DataFrame:
-    """`age_unknown`, if given, is called with the row count and returns a boolean
-    array over the rows in time order. A True row is replayed with no payee age,
-    as the live job replays every event while Neo4j cannot be read - withheld
-    before the rules run, not blanked after, so FRESH_RECEIVER cannot fire and
-    cep_score agrees with the missing age as it does live.
-    """
+    """`age_unknown(n)` returns a boolean array over the rows in time order; a True
+    row is replayed with no payee age, before the rules run, as the live job does
+    while Neo4j cannot be read."""
     # nrows: the first rows only - the file is written in time order - for a caller
     # that needs valid feature vectors rather than the whole replay.
     df = pd.read_csv(csv_path, nrows=nrows).sort_values("event_time").reset_index(drop=True)
@@ -34,11 +27,8 @@ def build_matrix(csv_path: str, age_unknown=None, nrows=None) -> pd.DataFrame:
     states = defaultdict(R.SenderState)
     # Keyed by payee, mirroring the shared store the live job reads.
     receiver_states = defaultdict(R.ReceiverState)
-    # cep_score is a model feature MULE_FAN_IN feeds: a population-relative threshold live
-    # against a constant in training would make it mean two different things either side
-    # of deployment - train/serve skew, which the single ordered FEATURE_NAMES makes
-    # impossible. Offline the replay is one process, so this baseline sees exactly what
-    # PopulationStore reads out of Redis in the job.
+    # cep_score depends on MULE_FAN_IN's population baseline; one in-process baseline
+    # here sees what PopulationStore reads from Redis live, so no train/serve skew.
     population = R.PopulationBaseline()
     rows = []
     for i, rec in enumerate(df.itertuples(index=False)):

@@ -1,23 +1,10 @@
-"""What every external-dataset run does identically.
+"""What every external-dataset run does identically: the unit conversion, the
+replay over the DEPLOYED rule engine, and the report sections. Each adapter owns
+only its dataset's shape - file, columns, identifiers, and which capabilities the
+data can support - so the results stay one measurement.
 
-Three public datasets have three shapes, so there are three adapters. What they must
-NOT have is three copies of the measurement: a change to how lift is computed would
-then land in one report and silently not in the others, and the three results are
-only comparable because they are the same measurement.
-
-So each adapter owns exactly its dataset's shape - which file, which columns, which
-identifiers, which capabilities the data can support - and everything downstream of
-"a translated event" lives here: the unit conversion, the replay over the DEPLOYED
-rule engine, and the report sections.
-
-Named `harness` and not `replay` for two reasons, and the second is the load-bearing
-one. stream-processor/experiments/replay.py already exists and does the same job for
-this project's OWN generated CSV, so the name would have been ambiguous to a reader;
-and pytest imports test modules by bare module name, so two files called replay.py
-collide the moment anyone runs the suites together. They are kept separate because
-the two sides differ in what they may assume - full capabilities and a known schema
-here, a reduced profile and a foreign schema there - not because the loop is worth
-writing twice.
+Not `replay.py`: stream-processor/experiments/replay.py does this for the
+project's own CSV, and pytest imports modules by bare name.
 """
 
 import os
@@ -40,31 +27,21 @@ import features as F                                            # noqa: E402
 from rules import ReceiverState, SenderState, evaluate          # noqa: E402
 
 
-#: Median legitimate amount on this project's own generated data, in UZS. Foreign
-#: amounts are rescaled onto it so that rules carrying ABSOLUTE thresholds
-#: (STRUCTURING_THRESHOLD, NEW_PAYEE_ABS_FLOOR, LIMIT_DAILY) can fire at all.
+#: Median legitimate amount on this project's own data, in UZS: foreign amounts are
+#: rescaled onto it so rules with absolute thresholds can fire at all.
 OUR_MEDIAN_UZS = 138_740.0
 
 
 def scale_factor(amounts, our_median_uzs=OUR_MEDIAN_UZS):
-    """One multiplier for the whole dataset, taken from the medians.
-
-    A unit conversion, not tuning. It is deliberately a single number rather than a
-    per-rule adjustment: tuning would mean choosing it to make a rule fire, and one
-    factor fixed by the medians cannot be chosen that way.
-    """
+    """One multiplier for the whole dataset, from the medians - a unit conversion,
+    not a per-rule tuning."""
     med = float(amounts.median())
     return our_median_uzs / med if med > 0 else 1.0
 
 
 class Event(NamedTuple):
-    """One foreign row, translated into what the extractor expects.
-
-    `ev` carries only fields the dataset actually has; anything absent stays absent
-    and its capability is switched off, so no rule fires on a fabricated zero.
-    `typology` is an optional per-row pattern label, printed by
-    `section_by_group`.
-    """
+    """One foreign row, translated: `ev` carries only fields the dataset has, and
+    `typology` is an optional per-row pattern label for `section_by_group`."""
     ev: dict
     ts: int
     label: int
@@ -74,16 +51,8 @@ class Event(NamedTuple):
 
 def replay(events, total=None):
     """Run the deployed rule engine over translated events, in stream order.
-
-    Receiver state is keyed by `receiver_pinfl` because that is the identifier these
-    datasets carry; the payee_identity capability, which chooses between PAN and
-    person on this project's own rail, has nothing to choose between here.
-
-    Pass `total` to get progress on stderr. The IBM AML run is 4.5M rows and took
-    over an hour with no output at all, which left no way to tell a slow run from a
-    hung one - the same confusion that made the PaySim quadratic bug take so long to
-    recognise. stderr, so a redirected report stays clean.
-    """
+    Receiver state is keyed by `receiver_pinfl`, the identifier these datasets
+    carry. `total` prints progress on stderr, keeping a redirected report clean."""
     senders, receivers = defaultdict(SenderState), defaultdict(ReceiverState)
     rows, hits_by_class = [], defaultdict(Counter)
     checked, started = False, time.time()
@@ -108,18 +77,9 @@ def replay(events, total=None):
 
 
 def capability_profile(*off, payee_identity="pinfl"):
-    """The profile a foreign dataset gets: what it cannot supply, switched off, and
-    the payee keyed by account.
-
-    Switching OFF rather than leaving a field absent is the point: an absent field
-    reaches the extractor as a zero, and a rule firing on that measures the adapter,
-    not the data. An unknown key raises - see test_capabilities.py.
-
-    `payee_identity` defaults to "pinfl" here while the deployed default is "card",
-    and that is a property of these datasets rather than a convenience: all three
-    NAME accounts and none of them issues a PAN, so the deployed default resolves the
-    key to "" on every row. See `_require_a_payee_key` for what that costs.
-    """
+    """The profile a foreign dataset gets: what it cannot supply switched OFF - an
+    absent field would reach the extractor as a zero - and the payee keyed by
+    account ("pinfl"), since these datasets name accounts and issue no PANs."""
     for key in off:
         CAP.MODES[key] = "off"
     CAP.MODES["payee_identity"] = payee_identity
@@ -129,22 +89,9 @@ def capability_profile(*off, payee_identity="pinfl"):
 
 
 def _require_a_payee_key(ev):
-    """Refuse to replay a stream whose payee key resolves empty.
-
-    features.payee_key falls back to the destination PAN, and none of these datasets
-    issues one. With the deployed `card` default the key is then "" on every row, and
-    the damage is quiet rather than loud: `state.seen_payees` holds exactly one
-    element forever, so is_new_payee is true once per sender and never again,
-    DISTINCT_PAYEE_BURST cannot fire at all, and NEW_PAYEE_HIGH_AMOUNT inverts -
-    measured at 0.2x on IBM AML against the 4.0x the same rule reaches on PaySim.
-
-    features.py has warned about this on stderr since the PaySim run, and a warning
-    inside a run that prints eighty lines of report is not enough: the AMLSim result
-    in README.md 3 was published with the key empty and nothing said so. Re-run with
-    it set, that table does not move by a single figure - the two rules that fire
-    there read amounts and receiver-side state, neither of which goes through this
-    key. That is luck, not design, and it is why this raises rather than warns.
-    """
+    """Refuse to replay a stream whose payee key resolves empty: every payee would
+    share one key, so is_new_payee, DISTINCT_PAYEE_BURST and NEW_PAYEE_HIGH_AMOUNT
+    would all measure the adapter. Raises rather than warns."""
     if not F.payee_key(ev):
         raise SystemExit(
             "the payee key resolves empty on this stream. features.payee_key falls "
@@ -176,12 +123,8 @@ def _head(title, width):
 
 
 def section_lift(res, hits, positive="fraud", width=70):
-    """A. Per-rule lift - the measure that survives a wrong threshold.
-
-    Threshold-free, and therefore the section that actually answers "does this rule
-    carry signal on foreign data". A rule that fires more often on the positive class
-    than on the negative one is discriminating, whatever the decision layer does.
-    """
+    """A. Per-rule lift: threshold-free, so it answers whether a rule carries signal
+    on foreign data whatever the decision layer does."""
     n_pos = int((res.label == 1).sum())
     n_neg = int((res.label == 0).sum())
 
@@ -199,12 +142,8 @@ def section_lift(res, hits, positive="fraud", width=70):
 
 
 def section_by_group(res, title, notes, width=70):
-    """B. Recall split by the dataset's own typology labels, when it has them.
-
-    Only a dataset that says WHICH pattern each positive row belongs to can answer
-    "which pattern does this system miss", and that is a different question from
-    aggregate recall.
-    """
+    """B. Recall by the dataset's own typology labels, when it has them - which
+    pattern the system misses."""
     _head(title, width)
     for line in notes:
         print(line)
@@ -221,13 +160,8 @@ def section_by_group(res, title, notes, width=70):
 
 
 def section_decision(res, hits, positive="fraud", width=70):
-    """C. What the deployed decision layer did with those rules.
-
-    Reported after the lift table on purpose: the threshold is calibrated for this
-    project's own capability profile and base rate, so on foreign data it is the
-    least transferable thing here. A weak result in this section beside a strong one
-    in A is a statement about calibration, not about the features.
-    """
+    """C. What the deployed decision layer did. Last on purpose: the threshold is
+    calibrated for this project's profile and base rate, the least transferable part."""
     n_pos = int((res.label == 1).sum())
     n_neg = int((res.label == 0).sum())
     flagged = res.decision.isin(["REVIEW", "BLOCK"])
@@ -292,10 +226,8 @@ def section_decision(res, hits, positive="fraud", width=70):
 
 
 def available_features():
-    """(indices, names) of the contract columns the active capability profile can
-    supply. `features.FEATURE_NAMES` is fixed at import, so switching a capability
-    off at run time does not shrink it: the column is still computed, from data the
-    dataset does not carry, and has to be dropped here rather than fed to a model."""
+    """(indices, names) of the contract columns the active profile can supply;
+    FEATURE_NAMES is fixed at import, so switched-off columns are dropped here."""
     import features as F
     off = {f for cap in CAP.REGISTRY if CAP.MODES.get(cap.key) == "off"
            for f in cap.features}
@@ -305,16 +237,8 @@ def available_features():
 
 def extract_features(events, total):
     """This project's model inputs over translated events, computed by the deployed
-    extractor exactly as fraud_job computes them: extract, then advance both states.
-
-    Returns (X, y, ts) with one column per `features.FEATURE_NAMES`; pass
-    `available_features()` to keep only what the profile supplies.
-
-    One copy for every adapter, for the reason `replay` has one: PaySim's model mode
-    carried its own loop, and when `to_events` changed shape that loop was not
-    changed with it - it still unpacked dict events and would have failed on its
-    first row, with no test to say so.
-    """
+    extractor as fraud_job computes them. Returns (X, y, ts), one column per
+    `features.FEATURE_NAMES`; `available_features()` says which to keep."""
     import numpy as np
     import features as F
     X = np.zeros((total, len(F.FEATURE_NAMES)), dtype="float32")

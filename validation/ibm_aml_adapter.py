@@ -1,17 +1,8 @@
 """Replays the deployed rules over IBM's AML transaction sets (Altman et al.,
-NeurIPS 2023 Datasets and Benchmarks). Why this dataset and what it settles:
-README.md 4.
-
-It exists to retest one thing. The AMLSim run found MULE_FAN_IN anti-correlated
-with the label and traced it to a clock: fan_in patterns there span a median of 363
-days against a one-hour window, so a null result was ambiguous between "the rule
-does not transfer" and "the window is shorter than the pattern". This dataset runs
-at MINUTE resolution over 17 days, which is not our hour but is roughly two orders
-of magnitude closer, and section D of the report measures the remaining gap from
-the data instead of assuming it.
-
-Everything downstream of a translated event is in harness.py, shared with the other
-two adapters.
+NeurIPS 2023), at minute resolution over 17 days - to retest MULE_FAN_IN, whose
+null result on AMLSim was ambiguous with a day-long clock (README.md 4), and to
+score this project's model on a published benchmark. Section D measures the
+remaining window gap. The shared replay is in harness.py.
 """
 
 import argparse
@@ -23,20 +14,16 @@ import harness as RP
 from harness import C, Event                                   # noqa: F401
 
 
-#: The file's own headers contain spaces, and itertuples renames any such column to
-#: a POSITIONAL name (_3, _8 ...) - reading fields by those is a landmine this
-#: project has already been bitten by once. Renamed once, on load, to identifiers.
-#: pandas de-duplicates the file's two `Account` columns into Account / Account.1.
+#: The headers contain spaces, which itertuples turns into positional names, so
+#: they are renamed on load (pandas splits the two `Account` columns into
+#: Account / Account.1).
 COLUMNS = {"Account": "sender", "Account.1": "receiver", "Amount Paid": "amount",
            "Payment Currency": "currency", "Payment Format": "fmt",
            "Is Laundering": "label", "From Bank": "from_bank",
            "To Bank": "to_bank"}
 
-#: Rows whose sender and receiver are the same account. 12% of the file, almost all
-#: of them `Reinvestment`. They are not transfers between two parties: counted as
-#: such they inflate every per-sender history and give each account a fan-in edge to
-#: itself. Dropped, and the count is printed - a silent filter on 600,000 rows would
-#: be the kind of thing that makes a result unreproducible.
+#: Self-transfers (12% of the file, mostly `Reinvestment`) are not transfers
+#: between two parties: dropped, and the count printed.
 DROP_SELF_TRANSFERS = True
 
 
@@ -65,15 +52,8 @@ def load(path, formats=None, limit=None):
 
 
 def _scales(d):
-    """One scale factor PER CURRENCY, each from that currency's own median.
-
-    The file carries 15 currencies and this project's absolute thresholds are
-    written in UZS, so a single global factor would put a yen amount and a dollar
-    amount on different sides of the structuring threshold for no reason but their
-    denomination. Per-currency medians make "just under the limit" mean the same
-    thing in each. Still a unit conversion and still not tuning: every factor is
-    fixed by a median, none is chosen to make a rule fire.
-    """
+    """One scale factor PER CURRENCY, from that currency's median, so "just under the
+    limit" means the same in yen and in dollars. Fixed by medians, not chosen."""
     return {cur: RP.scale_factor(g.amount) for cur, g in d.groupby("currency")}
 
 
@@ -86,9 +66,7 @@ def to_events(d, scales, typologies=None):
             ev={"amount_uzs": float(r.amount) * scales.get(r.currency, 1.0),
                 "sender_pinfl": r.sender,
                 "receiver_pinfl": r.receiver,
-                # The bank on each side. cross_network compares the issuers behind
-                # the two cards, and an interbank transfer is the same distinction;
-                # left out, the feature was a constant zero on a file naming both.
+                # The bank on each side, for cross_network.
                 "sender_network": r.from_bank,
                 "receiver_network": r.to_bank},
             ts=int(r.ts.timestamp()),
@@ -97,29 +75,20 @@ def to_events(d, scales, typologies=None):
 
 
 def read_patterns(path):
-    """Map (timestamp, sender, receiver) -> typology from a `*_Patterns.txt` sidecar.
+    """Map (minute, sender, receiver) -> typology from a `*_Patterns.txt` sidecar.
 
-    The released transaction CSVs carry only `Is Laundering`; WHICH typology each
-    row belongs to lives in this separate file, and the Hugging Face mirror of the
-    transactions does not include it. Without it section B is empty and the run
-    still answers the aggregate question - so it is optional, and its absence is
-    reported rather than worked around.
-
-    Format, checked against an excerpt of the real HI-Small file: blocks opened by
-    `BEGIN LAUNDERING ATTEMPT - <TYPE>`, some with a suffix (`FAN-OUT:  Max
-    16-degree Fan-Out`, `CYCLE:  Max 10 hops`), then rows in the CSV's column order,
-    the accounts at positions 2 and 4. The minute is part of the key because one
-    account pair recurs across attempts of different types. The full file has not
-    been run yet: an empty section B from it means "not parsed", not "all missed".
+    Blocks open with `BEGIN LAUNDERING ATTEMPT - <TYPE>`, some with a suffix
+    (`FAN-OUT:  Max 16-degree Fan-Out`); rows follow in the CSV's column order. The
+    minute is in the key because one account pair recurs across attempts of
+    different types. Optional: without it section B is empty.
     """
     typ, current = {}, None
     with open(path, encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
             if line.startswith("BEGIN LAUNDERING ATTEMPT"):
-                # The first " - " only, since the names are hyphenated (FAN-IN,
-                # GATHER-SCATTER); and up to a ":", or the suffix would make
-                # "fan-out: max 16-degree fan-out" a typology of its own.
+                # The first " - " only (the names are hyphenated), and up to a ":" - a
+                # suffix like "Max 16-degree Fan-Out" is not part of the name.
                 current = line.split(" - ", 1)[-1].split(":", 1)[0].strip().lower()
             elif line.startswith("END LAUNDERING ATTEMPT"):
                 current = None
@@ -131,12 +100,8 @@ def read_patterns(path):
 
 
 def window_stats(d):
-    """How far the collection stage outruns RECEIVER_WINDOW_S, measured here.
-
-    The AMLSim report had to state this as a caveat because the mismatch there was
-    ~10^4 and swamped everything. Measuring it makes the caveat quantitative, and
-    it is the number that says how much of each pattern the rule can even see.
-    """
+    """How far the collection stage outruns RECEIVER_WINDOW_S - the share of each
+    pattern the rule can see."""
     span = d[d.label == 1].groupby("receiver").ts.agg(["min", "max", "size"])
     span = span[span["size"] > 1]
     if span.empty:
@@ -192,18 +157,10 @@ def report(res, hits, stats):
 
 
 def extract_matrix(path, cache, limit=None):
-    """Run the deployed extractor over the file once and cache what a model needs.
-
-    The rules replay over these 4.49M rows took 5.5 hours, because the extractor
-    re-scans each sender's day of history per event and this file holds senders
-    with 26,365 transactions in one day (README.md 4). Every fit reads the cache, so
-    a fit that fails costs minutes rather than the extraction again.
-
-    Saved beside the features: the label, the timestamp for a temporal split, and
-    the file's own payment format and currency - columns this project's contract has
-    no place for, kept so a configuration WITH them can be compared, as PaySim's
-    transaction type was.
-    """
+    """Run the deployed extractor over the file once and cache what a model needs:
+    features, label, timestamp, and the file's payment format and currency. The
+    replay takes hours (senders with 26,365 transactions in a day), so every fit
+    reads the cache."""
     import numpy as np
     d, n_all, n_self = load(path, None, limit)
     print(f"{len(d):,} transactions ({n_self:,} self-transfers dropped), "
@@ -222,11 +179,8 @@ def extract_matrix(path, cache, limit=None):
     print(f"  kept: {', '.join(names)}")
 
 
-#: Published minority-class F1 (%) on HI-Small, on the split `our_model` uses:
-#: the earliest 60% of transactions train, the next 20% validate, the last 20% test.
-#: arXiv:2402.08593 (Graph Feature Preprocessor), Table 4, mean +/- sd over runs;
-#: for GFP the better of its two batch settings. The paper does not say how the
-#: threshold behind each F1 was chosen - see `our_model` for the rule used here.
+#: Published minority-class F1 (%) on HI-Small, on the split `our_model` uses
+#: (60% train, 20% validation, 20% test): arXiv:2402.08593, Table 4, mean +/- sd.
 PUBLISHED_F1 = (
     ("XGBoost, the file's own columns", 19.75, 0.89),
     ("LightGBM, the file's own columns", 21.30, 0.30),
@@ -255,13 +209,8 @@ def _ci95(xs):
 
 
 def _fit_score(Xtr, ytr, Xva, yva, Xte, yte, weighted, seed):
-    """One fit of train.py's recipe; test metrics at a threshold chosen on validation.
-
-    The threshold is the one that maximises F1 on the VALIDATION slice, then applied
-    unchanged to the test slice. The published table does not state its rule, so
-    F1 at 0.5 is reported beside it: the gap between the two is the size of that
-    uncertainty, not something to be hidden by picking the kinder one.
-    """
+    """One fit of train.py's recipe; test metrics at the threshold that maximises F1
+    on validation, with F1 at 0.5 beside it since the paper does not state its rule."""
     import numpy as np
     import lightgbm as lgb
     from sklearn.metrics import (average_precision_score, f1_score,
@@ -284,19 +233,9 @@ def _fit_score(Xtr, ytr, Xva, yva, Xte, yte, weighted, seed):
 
 
 def our_model(cache, seeds=3):
-    """This project's features and training recipe on IBM AML, scored on the
-    published split and metric so it sits beside published models on one axis.
-
-    Nothing is tuned to this dataset: train.py's hyperparameters, the deployed
-    extractor's features, the capability profile the data supports. What is new is
-    only the evaluation - minority-class F1 on a temporal 60/20/20 split, the
-    convention of the IBM benchmark - because a number on a different split or
-    metric could not be compared with anything.
-
-    The second configuration is the reason to run it at all: receiver-side
-    aggregation is this project's largest measured effect, PaySim could not test it
-    (no collection stage, and the sign reversed), and this dataset has one.
-    """
+    """This project's features and recipe on IBM AML, scored on the published split
+    and metric; nothing is tuned to the dataset. The second configuration drops the
+    receiver-side aggregation, which this dataset can test and PaySim could not."""
     import warnings
     import numpy as np
     # sklearn warns once per fit that LightGBM was fitted without feature names;
@@ -355,15 +294,9 @@ def our_model(cache, seeds=3):
 
 
 def _bootstrap_delta(y, p_full, p_less, t_full, t_less, boots, seed=0):
-    """Paired Poisson bootstrap over the test rows: the SAME resampling weights for
-    both models, so what varies is the test set, not the comparison.
-
-    Returns the 2.5th/97.5th percentiles of the F1 and PR-AUC deltas (full minus
-    less) and the share of resamples in which the delta is not positive. PR-AUC is
-    computed from one fixed ordering per model with weighted cumulative sums, which
-    ignores score ties - immaterial for an interval, and the point estimates are
-    taken with sklearn separately.
-    """
+    """Paired Poisson bootstrap over the test rows - the same weights for both models.
+    Returns the 2.5/97.5 percentiles of the F1 and PR-AUC deltas (full minus less)
+    and the share of resamples where the delta is not positive."""
     import numpy as np
     rng = np.random.default_rng(seed)
 
@@ -396,26 +329,11 @@ def _bootstrap_delta(y, p_full, p_less, t_full, t_less, boots, seed=0):
 
 
 def receiver_ablation(cache, seeds=20, boots=1000):
-    """Is receiver aggregation worth anything to the model here? Asked so that seed
-    noise cannot answer it.
-
-    Ten seeds put the paired F1 delta at +2.1, 95% CI [-1.5, +5.6]: the model's own
-    fit-to-fit spread, about 4 F1 points, is wider than the effect. So the question
-    is asked two ways, both fixed before the run and both reported whatever they
-    say:
-
-    1. per seed, paired, with a t-based 95% interval - the ablate_seeds convention,
-       at twenty seeds instead of ten;
-    2. on the seed-AVERAGED model - the mean of every seed's probabilities, which
-       removes most of the fit-to-fit noise - with a paired bootstrap over the test
-       rows, which measures the uncertainty that remains, the test set's own.
-
-    Decision rule, stated in advance: the effect counts as established only if BOTH
-    intervals exclude zero for F1 on the fourteen-feature configuration, which is
-    this project's own feature set. PR-AUC and the configuration with the file's own
-    format and currency are reported beside it and do not change the verdict.
-    Unweighted recipe only: the weighted one collapses at this base rate (README 4).
-    """
+    """Is receiver aggregation worth anything to the model here, beyond seed noise?
+    Asked two ways, fixed before the run: per seed with a t-interval (twenty seeds),
+    and on the seed-averaged model with a paired bootstrap over the test rows. It
+    counts as established only if BOTH F1 intervals on the fourteen-feature
+    configuration exclude zero. Unweighted recipe only (README 4)."""
     import warnings
     import numpy as np
     from sklearn.metrics import average_precision_score, f1_score
@@ -530,9 +448,7 @@ def main():
     if not os.path.exists(args.file):
         raise SystemExit(f"{args.file} not found")
 
-    # Same profile PaySim forced: account identifiers, amounts and a clock, and
-    # nothing else this project uses. receiver_age is off here too - unlike AMLSim,
-    # the released files carry no account-opening date.
+    # The PaySim profile: accounts, amounts and a clock; no account-opening date either.
     RP.capability_profile("receiver_age", "myid_kinship", "device_telemetry",
                           "geo_telemetry", "session_telemetry")
 

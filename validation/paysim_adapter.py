@@ -1,11 +1,6 @@
 """Replays the deployed rules over PaySim, mapping its schema onto the event shape
-features.py expects. What transfers and what does not: validation/README.md 2.
-
-Everything downstream of a translated event - the unit conversion, the replay, the
-report sections - is in harness.py, shared with the other two adapters. The second
-half of this file is not shared and should not be: fitting a model on foreign data
-answers a different question, and only PaySim has a published baseline to fit
-against.
+features.py expects (validation/README.md 2), and fits this project's model on
+PaySim's published split. The shared replay and report are in harness.py.
 """
 
 import argparse
@@ -19,21 +14,14 @@ from harness import CAP, Event, scale_factor      # noqa: F401  (scale_factor: t
 
 
 def to_events(df, scale):
-    """PaySim rows -> translated events.
-
-    Only fields PaySim actually has are populated; the rest are left absent and their
-    capabilities switched off (see main), so nothing fires on a fabricated value.
-    """
+    """PaySim rows -> translated events, only with fields PaySim has."""
     for r in df.itertuples(index=False):
         yield Event(
             ev={"amount_uzs": float(r.amount) * scale,
                 "sender_pinfl": r.nameOrig,
                 "receiver_pinfl": r.nameDest},
-            # `step` is PaySim's hour index (1..744 over 30 days) and the sharpest
-            # limitation of this cross-check: same-step events share a timestamp, so
-            # the 10-minute and 1-hour windows see nearly the same set and
-            # secs_since_last is 0. Sub-hour patterns are invisible here - a property
-            # of PaySim, not of the rules.
+            # `step` is PaySim's hour: same-step events share a timestamp, so
+            # sub-hour patterns are invisible - a property of PaySim, not the rules.
             ts=int(r.step) * 3600,
             label=int(r.isFraud))
 
@@ -61,26 +49,17 @@ def report(res, hits):
     RP.section_decision(res, hits, positive="fraud", width=70)
 
 
-#: The published baseline this project calibrates its own PR-AUC against, and the
-#: split it was measured on. 24 days train / 7 days test is a cut at PaySim's
-#: hourly step 576; that reproduces their stated rates (train 0.103%, test
-#: 1.142%, 1,854 holdout frauds) closely enough to confirm it is the split.
+#: The published baseline and its split: 24 days train / 7 test, a cut at step 576
+#: (it reproduces their stated rates).
 BASELINE = dict(source="ris3abh/aml-p2p-fraud-detection (MIT)", cut_step=576,
                 pr_auc=0.380, roc_auc=0.908, recall_at_2pct=0.494,
                 lift_at_decile=7.0, pr_auc_with_leakage=0.988)
 
 
 def _fit_report(name, X, y, step, cut, drop=(), names=None, weighted=True):
-    """Train and score one configuration on the published split.
-
-    `weighted` is not a tuning knob; it is what makes the rows comparable at all.
-    train.py sets scale_pos_weight from the class ratio, which at PaySim's 0.129%
-    prevalence is ~974, and heavy positive weighting flattens the top of the
-    ranking - exactly what AUPRC reads. The published baseline was fitted
-    unweighted. Quoting only the weighted row beside it would compare this
-    project's TRAINING RECIPE against their FEATURE SET and report the difference
-    as though it were about features.
-    """
+    """Train and score one configuration on the published split. `weighted` keeps
+    the rows comparable: the published baseline was fitted unweighted, and heavy
+    positive weighting flattens the top of the ranking that AUPRC reads."""
     import numpy as np
     import lightgbm as lgb
     from sklearn.metrics import roc_auc_score, average_precision_score
@@ -107,25 +86,10 @@ def _fit_report(name, X, y, step, cut, drop=(), names=None, weighted=True):
 
 
 def our_model(path, limit=None):
-    """This project's own feature extractor and model, trained on PaySim.
-
-    The question the rules replay above cannot answer: not "do the rules fire on
-    foreign data" but "how does this system score on it". 14 of the 20 features
-    survive - PaySim carries identifiers on both sides, so the per-sender history
-    and the receiver-side aggregation both compute; what it cannot supply is
-    device, geo, session, receiver age and kinship, and those
-    capabilities are switched off rather than defaulted.
-
-    Trained on the SAME split as the published baseline (24 days / 7 days, a cut
-    at step 576), so the numbers sit beside `--baseline` on one axis.
-
-    The second configuration is the point of running this at all. Receiver-side
-    aggregation is this project's largest measured effect and the one with no
-    external evidence, because the only foreign dataset run so far could not
-    express the pattern. Dropping those two features here asks whether the
-    finding reproduces off this project's own generator - the one legitimate
-    training use of foreign data, per validation/README.md 1.
-    """
+    """This project's own feature extractor and model, trained on PaySim's published
+    split: 14 of the 20 features survive, the rest switched off. The second
+    configuration drops the receiver-side aggregation, to ask whether that finding
+    reproduces off this project's own generator."""
     import numpy as np
     import features as F
 
@@ -135,9 +99,7 @@ def our_model(path, limit=None):
     df = df.sort_values("step", kind="stable").reset_index(drop=True)
     scale = scale_factor(df.amount)
 
-    # features.FEATURE_NAMES is fixed at IMPORT, so switching modes in main() cannot
-    # shrink it: the full contract is extracted, and the columns whose capability is
-    # unavailable here - computed from data PaySim does not carry - are dropped.
+    # FEATURE_NAMES is fixed at import: extract all, drop what PaySim cannot supply.
     keep_idx, names = RP.available_features()
     unavailable = sorted(set(F.FEATURE_NAMES) - set(names))
 
@@ -160,10 +122,8 @@ def our_model(path, limit=None):
             f"no rows past step {cut}. PaySim is ordered by step, so a "
             f"--limit keeps only the training side of the published "
             f"split and leaves nothing to score. Run without --limit.")
-    # PaySim puts ALL of its fraud in TRANSFER and CASH_OUT, so the transaction
-    # type carries much of the available signal - and this project's contract has
-    # no column for it. Adding PaySim's own type tests whether the gap is the
-    # feature SET, rather than asserting it.
+    # PaySim's fraud is all TRANSFER and CASH_OUT, and the contract has no column for
+    # type: adding it tests whether the gap is the feature set.
     types = np.zeros((len(df), 5), dtype="float32")
     tnames = ["CASH_IN", "CASH_OUT", "DEBIT", "PAYMENT", "TRANSFER"]
     for j, t in enumerate(tnames):
@@ -204,20 +164,9 @@ def our_model(path, limit=None):
 
 
 def baseline(path):
-    """Retrain the published PaySim baseline, because the file to do it with is
-    already here.
-
-    related-work.md 6 quoted AUPRC 0.380 for a year with "not independently
-    reproduced here" attached, while the full 6.36M-row log sat in this
-    directory. Two things come out of actually running it: the figure is real,
-    and the prevalence it was quoted against was not - 0.380 belongs to a holdout
-    slice at 1.142%, not to PaySim's 0.129% overall, and AUPRC's floor IS the
-    prevalence.
-
-    The balance columns are excluded, which is what their leakage removal did.
-    Left in they do not merely help, they ARE the label: same split, same model,
-    PR-AUC 1.000.
-    """
+    """Retrain the published PaySim baseline: its AUPRC 0.380 is real, on a holdout
+    slice at 1.142% fraud rather than PaySim's 0.129%. The balance columns are
+    excluded, as their leakage removal did - left in, they are the label."""
     import numpy as np
     import lightgbm as lgb
     from sklearn.metrics import roc_auc_score, average_precision_score
@@ -230,9 +179,7 @@ def baseline(path):
     for t in ["CASH_IN", "CASH_OUT", "DEBIT", "PAYMENT", "TRANSFER"]:
         X[f"type_{t}"] = (df.type.values == t).astype("int8")
     X["dest_is_merchant"] = df.nameDest.str.startswith("M").astype("int8")
-    # `step` itself is deliberately not a feature: across a temporal split the
-    # test steps are all unseen, and across a random one it encodes the fraud
-    # concentration in PaySim's tail.
+    # `step` is not a feature: it is unseen across a temporal split.
 
     y = df.isFraud.values
     tr = df.step.values <= BASELINE["cut_step"]

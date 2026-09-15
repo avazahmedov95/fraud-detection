@@ -1,11 +1,10 @@
 """Trains the scoring committee on a time-ordered split and writes the model, the
 cutoffs the job decides with, and metrics.json.
 
-By time: the earliest 64% of rows fit the committee, the next 16% choose the
-REVIEW and BLOCK cutoffs, the last 20% are held out, and every figure printed is
-measured there. Calibration is reported beside the AUCs because a rank statistic
-cannot see a score that ranks well yet cannot order a queue - docs/irp-framing.md
-9.1.
+The earliest 64% of rows fit the committee, the next 16% choose the REVIEW and
+BLOCK cutoffs, and every printed figure is measured on the last 20%. Calibration
+is reported beside the AUCs because a rank statistic cannot see a score that
+ranks well yet cannot order a queue.
 """
 
 import json
@@ -32,31 +31,20 @@ TRAIN_SHARE = 0.80        # the earliest 80% trains; the rest is the held-out sl
 FIT_SHARE = 0.80          # of the training slice: the committee fits on this much,
                           # and the cutoffs are chosen on the rest
 
-#: Share of TRAINING rows replayed with the payee's age withheld, as the live job
-#: sees every event while Neo4j cannot be read. Without such rows the model has no
-#: missing branch to learn: LightGBM sends NaN in a feature never missing in
-#: training down the 0.0 side of every split - an account opened today - and the
-#: -1 this replaced sorted below every real age (docs/irp-framing.md 7.7a).
-#: Random, independent of the label, and only before the cut, so the held-out
-#: figures still describe a healthy graph; `_graph_outage` measures the other case.
+#: Share of training rows replayed with the payee's age withheld, as the live job
+#: sees them while Neo4j is down, so the model learns where "unknown" goes. Random,
+#: label-independent and before the cut; `_graph_outage` measures the other case.
 AGE_UNKNOWN_SHARE = 0.10
 AGE_UNKNOWN_SEED = 42
 
-#: Class weighting - negatives over positives - is validated at the baseline
-#: profile's 1.5% fraud (a weight near 65). Below this line it collapses the
-#: ranking: on IBM AML (0.10%) every weight from 65 up, on the realistic profile
-#: (0.18%) every weight from 10 up, with unweighted the best on the realistic
-#: validation rows (ml/README.md). There the default
-#: fits unweighted, and because an unweighted model's probabilities sit near the
-#: base rate, the cutoffs are chosen on validation rows and shipped with the model
-#: (thresholds.json) instead of being fixed at 0.40 / 0.80.
+#: Class weighting (negatives over positives) is validated at 1.5% fraud; below
+#: this rate it collapses the ranking, so the default fits unweighted and the
+#: cutoffs are chosen on validation rows (thresholds.json), not fixed.
 MIN_WEIGHTED_POSITIVE_RATE = 0.005
 #: auto: weight above the line, unweighted below it. on / off: force either.
 CLASS_WEIGHTING = os.getenv("CLASS_WEIGHTING", "auto")
 
-#: Five fits averaged into one booster (committee.py). On the realistic profile
-#: the average scored 0.488 PR-AUC against 0.422 for one fit; on IBM AML 0.180
-#: against 0.066.
+#: Five fits averaged into one booster (committee.py).
 COMMITTEE_SEEDS = tuple(range(42, 47))
 #: BLOCK stops a customer, so it asks more than REVIEW: the lowest cutoff at or
 #: above REVIEW whose validation precision is at least this.
@@ -96,10 +84,9 @@ def make_model(scale_pos_weight, random_state=42):
 
 
 def choose_cutoffs(y, p, block_precision=BLOCK_PRECISION):
-    """REVIEW maximises F1 on validation rows; BLOCK is the lowest cutoff at or
-    above it whose precision there is at least `block_precision`. Where none
-    reaches it, BLOCK is None: the model then never blocks on its own, and says
-    so, rather than block on a guess."""
+    """REVIEW maximises F1 on validation rows; BLOCK is the lowest cutoff at or above
+    it with validation precision >= `block_precision`, or None - the model then never
+    blocks on its own."""
     prec, rec, thr = precision_recall_curve(y, p)
     f1 = 2 * prec[:-1] * rec[:-1] / np.maximum(prec[:-1] + rec[:-1], 1e-12)
     review = float(thr[int(np.argmax(f1))])
@@ -116,12 +103,8 @@ def _metrics(y, proba, thr):
 
 
 def _calibration(y, proba, review_thr, block_thr):
-    """How usable the probabilities are AS MAGNITUDES, not just as a ranking.
-    The AUCs are rank statistics and hid this once: 89% of alerts tied at 1.000,
-    leaving arrival order as the only tiebreak when a work queue tried to order by
-    score. The review band is the alerts below BLOCK - all of them when there is
-    no BLOCK cutoff.
-    """
+    """How usable the probabilities are as magnitudes, not just as a ranking; the
+    review band is the alerts below BLOCK (all of them when there is no BLOCK)."""
     alert = proba >= review_thr
     n_alert = int(alert.sum())
     pa = proba[alert]
@@ -137,10 +120,8 @@ def _calibration(y, proba, review_thr, block_thr):
 
 
 def _graph_outage(model, feats, yte, healthy_proba, review):
-    """The held-out slice replayed as if Neo4j were down throughout: no payee has an
-    age, so FRESH_RECEIVER cannot fire and the model sees the age as missing. A
-    dependency that fails open should cost alerts, not add them - under the -1
-    encoding it added them (docs/irp-framing.md 7.7a, 7.7c)."""
+    """The held-out slice replayed as if Neo4j were down throughout: no payee age, so
+    FRESH_RECEIVER cannot fire and the model sees the age as missing."""
     df = D.build_matrix(CSV, age_unknown=lambda n: age_unknown_rows(n, outage=True))
     test = df.iloc[cut_index(len(df)):]
     if not np.array_equal(test["label"].values, yte):

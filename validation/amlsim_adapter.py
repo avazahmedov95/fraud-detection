@@ -1,8 +1,5 @@
 """Replays the deployed rules over an IBM AMLSim run, which generates the mule
-collection stage PaySim lacks. Landmines and the negative result: README.md 3.
-
-Everything downstream of a translated event - the unit conversion, the replay, the
-report sections - is in harness.py, shared with the other two adapters.
+collection stage PaySim lacks (README.md 3). The shared replay is in harness.py.
 """
 
 import argparse
@@ -36,12 +33,9 @@ def load(dirpath):
 
 
 def _epoch(series):
-    """AMLSim's clock granularity is ONE DAY (dates from `base_date` + step).
-    RECEIVER_WINDOW_S is 3600 s, so a one-hour window covers at most one simulated day of
-    inbound traffic while fan_in spreads over 5-20 STEPS in the shipped parameter files:
-    the deployed window sees a FRACTION of each fan-in pattern by construction. Reported
-    rather than corrected - widening it to fit the dataset would be tuning on validation.
-    """
+    """AMLSim's clock is ONE DAY per step, so the one-hour receiver window sees only a
+    fraction of each fan-in pattern - reported, not corrected, since widening it to
+    fit the dataset would be tuning on validation."""
     dt = pd.to_datetime(series, errors="coerce")
     if dt.notna().any():
         return (dt.astype("int64") // 10**9).astype("int64")
@@ -93,10 +87,7 @@ def _events(tx, open_dt, typ, scale):
         if pd.notna(opened):
             age_days = max(0, (pd.Timestamp(ts, unit="s") - opened).days)
 
-        # str(), and not decoration: AMLSim numbers its accounts from zero, and
-        # features.payee_key resolves the identity as `event.get(...) or ""`, so the
-        # integer 0 is falsy and account 0 gets an EMPTY key - 21 rows here, all of
-        # them collapsing into the shared receiver state the guard exists to prevent.
+        # str(): AMLSim numbers accounts from 0, and a falsy 0 would give an empty key.
         yield Event(
             ev={"amount_uzs": float(getattr(r, "base_amt")) * scale,
                 "sender_pinfl": str(getattr(r, "orig_acct")),

@@ -19,9 +19,8 @@ CSV = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 ONNX_PATH = os.path.join(MODELS_DIR, "model.onnx")
 PARITY_ROWS = 60_000
 
-#: Plain-text booster for case-manager/explain.py. Not model.joblib: unpickling an
-#: LGBMClassifier drags in scikit-learn, ~30 MB of training dependency in a service
-#: that only reads trees. Written from the SAME object converted to ONNX below.
+#: Plain-text booster for case-manager/explain.py - no scikit-learn needed there -
+#: written from the same object that is converted to ONNX below.
 BOOSTER_PATH = os.path.join(MODELS_DIR, "model.txt")
 
 
@@ -63,9 +62,7 @@ def main():
     # file, ten minutes shorter at the realistic profile's size.
     df = D.build_matrix(CSV, nrows=PARITY_ROWS)
     sample = df.iloc[int(len(df) * 0.80):][feats].astype("float32").values[:2000]
-    # The same rows again with the payee age unknown, as the live job sends them
-    # while Neo4j is down. NaN routing is where a converter can part from the
-    # native model, and a sample with no NaN in it would never notice.
+    # The same rows with no payee age: NaN routing is where a converter can differ.
     age_cols = [feats.index(c) for c in ("receiver_age", "receiver_is_fresh") if c in feats]
     if age_cols:
         unknown = sample[:500].copy()
