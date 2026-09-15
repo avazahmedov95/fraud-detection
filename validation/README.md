@@ -679,14 +679,15 @@ transaction CSV carries only `Is Laundering`, and which typology a row belongs t
 lives in that sidecar. Without it section B is empty and the aggregate question is
 still answered.
 
-The sidecar is not on the Hugging Face mirror and needs a Kaggle account, so
-`read_patterns` is written from the dataset's description and has **never been run
-against a real one**. Its column indices are confirmed — IBM's own Multi-GNN
-loader reads the accounts from positions 2 and 4 — but the `BEGIN LAUNDERING
-ATTEMPT` marker lines are not. Whoever runs it first must check that section B
-comes back non-empty: an empty table means the parse failed, not that the system
-missed everything, and reading one as the other would be the worst available
-outcome.
+The sidecar is not on the Hugging Face mirror and needs a Kaggle account. An
+excerpt of the real file corrected two guesses `read_patterns` had made from the
+dataset's description: some markers carry a suffix (`FAN-OUT:  Max 16-degree
+Fan-Out`), which it kept as part of the name — one typology split into one per
+degree; and an account pair recurs across attempts of different types, so a row is
+now matched on its minute as well as its two accounts. The full file has **not
+been run yet**: whoever runs it first must check that section B comes back
+non-empty — an empty table means the parse failed, not that the system missed
+everything.
 
 **Three translation decisions, none of them free.**
 

@@ -80,6 +80,8 @@ def _scales(d):
 def to_events(d, scales, typologies=None):
     typologies = typologies or {}
     for r in d.itertuples(index=False):
+        # read_patterns' key: the minute as the sidecar prints it, and both accounts.
+        key = (f"{r.ts:%Y/%m/%d %H:%M}", r.sender, r.receiver)
         yield Event(
             ev={"amount_uzs": float(r.amount) * scales.get(r.currency, 1.0),
                 "sender_pinfl": r.sender,
@@ -91,11 +93,11 @@ def to_events(d, scales, typologies=None):
                 "receiver_network": r.to_bank},
             ts=int(r.ts.timestamp()),
             label=int(r.label),
-            typology=typologies.get((r.sender, r.receiver), ""))
+            typology=typologies.get(key, ""))
 
 
 def read_patterns(path):
-    """Map (sender, receiver) -> typology from a `*_Patterns.txt` sidecar.
+    """Map (timestamp, sender, receiver) -> typology from a `*_Patterns.txt` sidecar.
 
     The released transaction CSVs carry only `Is Laundering`; WHICH typology each
     row belongs to lives in this separate file, and the Hugging Face mirror of the
@@ -103,34 +105,28 @@ def read_patterns(path):
     still answers the aggregate question - so it is optional, and its absence is
     reported rather than worked around.
 
-    Format: blocks introduced by a `BEGIN LAUNDERING ATTEMPT - <TYPE>` line,
-    followed by transaction rows in the same column order as the CSV.
-
-    UNVERIFIED against a real sidecar - written from the dataset's description,
-    because the Hugging Face mirror carries only the transactions and the file
-    itself is behind a Kaggle account. The column indices ARE confirmed: IBM's own
-    Multi-GNN loader reads the accounts from positions 2 and 4, which is what this
-    reads. The marker lines are not. So the first real run must check that section B
-    is non-empty and that the typology names look like typologies - an empty table
-    here means "the file was not parsed", not "the system missed everything", and
-    those two must not be confused.
+    Format, checked against an excerpt of the real HI-Small file: blocks opened by
+    `BEGIN LAUNDERING ATTEMPT - <TYPE>`, some with a suffix (`FAN-OUT:  Max
+    16-degree Fan-Out`, `CYCLE:  Max 10 hops`), then rows in the CSV's column order,
+    the accounts at positions 2 and 4. The minute is part of the key because one
+    account pair recurs across attempts of different types. The full file has not
+    been run yet: an empty section B from it means "not parsed", not "all missed".
     """
     typ, current = {}, None
     with open(path, encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
             if line.startswith("BEGIN LAUNDERING ATTEMPT"):
-                # Split on the FIRST " - " only: the typology names are themselves
-                # hyphenated (FAN-IN, GATHER-SCATTER), and splitting on every "-"
-                # turns FAN-IN into "in" - which still parses, still populates the
-                # table, and quietly merges FAN-IN with every other *-IN typology.
-                current = line.split(" - ", 1)[-1].strip().lower()
+                # The first " - " only, since the names are hyphenated (FAN-IN,
+                # GATHER-SCATTER); and up to a ":", or the suffix would make
+                # "fan-out: max 16-degree fan-out" a typology of its own.
+                current = line.split(" - ", 1)[-1].split(":", 1)[0].strip().lower()
             elif line.startswith("END LAUNDERING ATTEMPT"):
                 current = None
             elif current and "," in line:
-                parts = line.split(",")
+                parts = [p.strip() for p in line.split(",")]
                 if len(parts) >= 5:
-                    typ[(parts[2].strip(), parts[4].strip())] = current
+                    typ[(parts[0], parts[2], parts[4])] = current
     return typ
 
 

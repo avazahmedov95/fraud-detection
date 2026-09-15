@@ -357,17 +357,31 @@ def test_ibm_capabilities_without_data_are_off(ibm_file):
 
 
 def test_ibm_patterns_sidecar_labels_the_edges(tmp_path):
-    """Typologies live in a separate file the Hugging Face mirror does not carry;
-    without it section B is empty, so the parser must work when it IS supplied."""
+    """Typologies live in a separate file the Hugging Face mirror does not carry.
+    These rows are from the real HI-Small file: a suffix on some markers, and one
+    account pair in two attempts of different types."""
+    import pandas as pd
     p = tmp_path / "HI-Small_Patterns.txt"
     p.write_text(
-        "BEGIN LAUNDERING ATTEMPT - FAN-IN\n"
-        "2022/09/01 00:00,010,S1,020,DROP,900,US Dollar,900,US Dollar,ACH,1\n"
-        "2022/09/01 00:01,010,S2,020,DROP,900,US Dollar,900,US Dollar,ACH,1\n"
-        "END LAUNDERING ATTEMPT - FAN-IN\n", encoding="utf-8")
+        "BEGIN LAUNDERING ATTEMPT - FAN-OUT:  Max 16-degree Fan-Out\n"
+        "2022/09/01 00:06,021174,800737690,012,80011F990,2848.96,Euro,2848.96,Euro,ACH,1\n"
+        "END LAUNDERING ATTEMPT - FAN-OUT\n\n"
+        "BEGIN LAUNDERING ATTEMPT - STACK\n"
+        "2022/09/02 17:28,023691,8021353D0,015231,80266F880,1413.09,Euro,1413.09,Euro,ACH,1\n"
+        "END LAUNDERING ATTEMPT - STACK\n\n"
+        "BEGIN LAUNDERING ATTEMPT - BIPARTITE\n"
+        "2022/09/05 08:25,023691,8021353D0,015231,80266F880,946.84,Euro,946.84,Euro,ACH,1\n"
+        "END LAUNDERING ATTEMPT - BIPARTITE\n", encoding="utf-8")
     typ = IB.read_patterns(str(p))
-    assert typ == {("S1", "DROP"): "fan-in", ("S2", "DROP"): "fan-in"}, (
-        "the typology names are hyphenated; splitting on every '-' yields 'in'")
+    assert typ == {("2022/09/01 00:06", "800737690", "80011F990"): "fan-out",
+                   ("2022/09/02 17:28", "8021353D0", "80266F880"): "stack",
+                   ("2022/09/05 08:25", "8021353D0", "80266F880"): "bipartite"}
+    # to_events must build the same key from a loaded row.
+    d = pd.DataFrame({"ts": pd.to_datetime(["2022/09/05 08:25"], format="%Y/%m/%d %H:%M"),
+                      "sender": ["8021353D0"], "receiver": ["80266F880"],
+                      "amount": [946.84], "currency": ["Euro"], "from_bank": ["023691"],
+                      "to_bank": ["015231"], "label": [1]})
+    assert next(IB.to_events(d, {}, typ)).typology == "bipartite"
 
 
 def test_ibm_window_stats_measure_the_span(ibm_file):
