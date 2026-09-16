@@ -236,7 +236,9 @@ def realistic(cache, seeds):
           f"{'PASS - IBM AML is asked next' if adopt else 'do NOT pass - not adopted'}")
 
 
-def ibm(path, cache, seeds):
+def ibm_matrix(path, cache):
+    """IBM AML's cached matrix, the shapes for the same rows, and the labels - the
+    cache checked against the file row by row first."""
     sys.path.insert(0, os.path.join(os.path.dirname(_PKG), "validation"))
     import ibm_aml_adapter as A
     d, _, _ = A.load(path)
@@ -247,7 +249,11 @@ def ibm(path, cache, seeds):
             or (y != d.label.values.astype("int8")).any()):
         raise SystemExit("the cache is not row-aligned with this file - re-run --extract-only")
     ids, _ = pd.factorize(np.concatenate([d.sender.values, d.receiver.values]))
-    S = shape_features(file_ts, ids[:len(d)], ids[len(d):])
+    return base, shape_features(file_ts, ids[:len(d)], ids[len(d):]), y
+
+
+def ibm(path, cache, seeds):
+    base, S, y = ibm_matrix(path, cache)
     X = np.hstack([base, S])
     n = len(y)
     a, b = int(n * 0.6), int(n * 0.8)

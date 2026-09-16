@@ -22,6 +22,8 @@ experiments/      harnesses - each produces a NUMBER, not an artefact the
   recall.py       per-type recall across seeds (budgeted; resumes)
   shapes.py       multi-day link shapes (circles, split-and-gather): both
                   offline gates passed, the stream build is next
+  thresholds.py   the alert-cutoff menu: how much more is caught for how many
+                  more false alarms, every cutoff chosen on validation rows
                   One-off experiments are deleted once their decision is
                   written below: git log --diff-filter=D -- ml/experiments
 
