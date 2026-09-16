@@ -20,8 +20,8 @@ experiments/      harnesses - each produces a NUMBER, not an artefact the
                   intervals; --only <capability> sweeps all of its modes
   layers.py       CEP-only vs ML-only vs fused on the held-out slice
   recall.py       per-type recall across seeds (budgeted; resumes)
-  shapes.py       multi-day link shapes: stopped after IBM AML, asked once
-                  more on PaySim for a strict cutoff (rule in its docstring)
+  shapes.py       multi-day link shapes: passed on PaySim for a strict cutoff;
+                  kept until they are built into the stream
                   One-off experiments are deleted once their decision is
                   written below: git log --diff-filter=D -- ml/experiments
 
@@ -124,7 +124,7 @@ owner's "adopt only if it does not get worse", on validation rows over five seed
 The code was removed rather than kept switched off; commit `bfe556f` holds all of
 it, with its harness and both gates.
 
-### Multi-day link shapes: passed both gates, not built
+### Multi-day link shapes: to be built, for a strict cutoff
 
 Seven columns over the 96 hours before each transfer (`experiments/shapes.py`):
 fan-in and fan-out, the payers of the sender and the payees of the payee, money
@@ -151,7 +151,7 @@ the table does not say:
 
 The rule said to build them into the stream next. The cutoff menu below found the
 IBM AML gain confined to the top of the list, and a third question, fixed before
-its run, decided against building them for now.
+its run, stopped the build; PaySim, asked last, restarted it for a strict cutoff.
 
 ### The alert cutoff: a menu, not a verdict
 
@@ -208,6 +208,29 @@ budget; they lose at three of four, as they do on all rows. **Companies do not
 explain the caveat, so the shapes are not built into the stream.** Its harness is
 deleted (`git show f672c10:ml/experiments/individuals.py`);
 `experiments/shapes.py` is back for one question more, on PaySim.
+
+### PaySim, asked last: a narrow pass
+
+The owner keeps a strict cutoff, and at the top of the list the shapes were ahead
+on IBM AML too. That question is narrower than the first two and was chosen after
+seeing IBM AML, so it was fixed before its run (`974ba0c`) and asked of data not
+looked at yet: PaySim, the published split's first 24 days - fit on the earliest
+80% of rows, validate on the rest - five seeds.
+
+| | without the shapes | with |
+|---|---|---|
+| validation PR-AUC, per seed | 0.135 | 0.148, paired +0.013 [-0.034, +0.060] |
+| averaged committee, validation / last seven days | 0.155 / 0.266 | 0.145 / 0.287 |
+| fraud in the top 0.1% of validation transfers | 18.5% | 19.8% |
+
+Both conditions hold, so by the rule the shapes are built into the stream for a
+strict cutoff, with IBM AML's many-alert caveat. **The pass is narrow and says less
+than it seems**: the interval spans zero, the averaged committee is lower on
+validation, and one column does all the work - PaySim's senders almost never
+repeat and it has no circles, so every column but the payee's distinct payers over
+96 hours is zero. What each dataset supports is different: the multi-day counts on
+the realistic profile, the payee's multi-day payers weakly on PaySim, and circles
+and split-and-gather only at the top of the list on IBM AML.
 
 **Everything below is the baseline profile, the dataset of record until
 2026-09-14, unless it says otherwise.**
