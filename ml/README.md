@@ -20,6 +20,8 @@ experiments/      harnesses - each produces a NUMBER, not an artefact the
                   intervals; --only <capability> sweeps all of its modes
   layers.py       CEP-only vs ML-only vs fused on the held-out slice
   recall.py       per-type recall across seeds (budgeted; resumes)
+  shapes.py       multi-day link shapes: stopped after IBM AML, asked once
+                  more on PaySim for a strict cutoff (rule in its docstring)
                   One-off experiments are deleted once their decision is
                   written below: git log --diff-filter=D -- ml/experiments
 
@@ -203,9 +205,9 @@ transfers by score:
 
 The rule, committed before the run, needed the shapes at least level at every
 budget; they lose at three of four, as they do on all rows. **Companies do not
-explain the caveat, so the shapes are not built into the stream.** Both harnesses
-are deleted: `git show f672c10:ml/experiments/shapes.py` and
-`git show f672c10:ml/experiments/individuals.py` restore them.
+explain the caveat, so the shapes are not built into the stream.** Its harness is
+deleted (`git show f672c10:ml/experiments/individuals.py`);
+`experiments/shapes.py` is back for one question more, on PaySim.
 
 **Everything below is the baseline profile, the dataset of record until
 2026-09-14, unless it says otherwise.**
