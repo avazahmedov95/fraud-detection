@@ -7,6 +7,10 @@
 # generator --out can point anywhere: out/, out_check/, ...
 data-generator/out*/
 validation/*.csv
+# What the adapters download and what --extract-only writes beside them:
+# the IBM sidecar and every cached feature matrix (ibm_features.npz is 96 MB).
+validation/*_Patterns.txt
+validation/*.npz
 
 # Python
 __pycache__/
