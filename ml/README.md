@@ -20,8 +20,8 @@ experiments/      harnesses - each produces a NUMBER, not an artefact the
                   intervals; --only <capability> sweeps all of its modes
   layers.py       CEP-only vs ML-only vs fused on the held-out slice
   recall.py       per-type recall across seeds (budgeted; resumes)
-  shapes.py       multi-day link shapes (circles, split-and-gather): the
-                  rule is fixed in its docstring, decision pending
+  shapes.py       multi-day link shapes (circles, split-and-gather): both
+                  offline gates passed, the stream build is next
                   One-off experiments are deleted once their decision is
                   written below: git log --diff-filter=D -- ml/experiments
 
@@ -123,6 +123,40 @@ owner's "adopt only if it does not get worse", on validation rows over five seed
 
 The code was removed rather than kept switched off; commit `bfe556f` holds all of
 it, with its harness and both gates.
+
+### Multi-day link shapes: both offline gates passed, the stream build is next
+
+Seven columns over the 96 hours before each transfer (`experiments/shapes.py`):
+fan-in and fan-out, the payers of the sender and the payees of the payee, money
+going straight back, three-step circles, and a split gathered again. Computed
+offline in replay order on the identity the job keys on; the rule - money_chains'
+own - was committed before the run (`c1c58ea`).
+
+| | validation PR-AUC, five seeds | paired difference | committee at its cutoff, test rows |
+|---|---|---|---|
+| realistic profile | 0.515 -> 0.583 | +0.067 [+0.035, +0.099] | precision 65.5% -> 68.4%, recall 45.0% -> 53.5% |
+| IBM AML | 0.041 -> 0.097 | +0.056 [+0.028, +0.083] | precision 34.7% -> 53.9%, recall 30.1% -> 22.6% |
+
+Both pass, by a wider margin than money_chains passed its first gate. Two things
+the table does not say:
+
+- **Each dataset is carried by different columns.** On the realistic profile the
+  circle and split-and-gather columns are almost never nonzero - the generator
+  draws no such shapes - and the gain is the multi-day counts. On IBM AML money
+  goes straight back on 5.2% of laundering against 0.1% of legitimate transfers,
+  and a split is gathered again on 7.2% against 0.7%: the typologies IBM injected.
+  Part of each gain is the columns finding what that generator put there.
+- **On IBM AML the validation-chosen cutoff trades recall for precision.** The
+  ranking improved; the operating point did not improve on both axes.
+
+Next, as the rule says: build the columns into the stream and measure again
+through the deployed extractor, which is where their cost - four days of state per
+card and a circle search per transfer - will show.
+
+```bash
+python experiments/shapes.py --cache shapes_realistic.npz
+python experiments/shapes.py --ibm ../validation/HI-Small_Trans.csv --ibm-cache ../validation/ibm_features.npz
+```
 
 **Everything below is the baseline profile, the dataset of record until
 2026-09-14, unless it says otherwise.**
