@@ -211,7 +211,7 @@ def realistic(cache, seeds):
         if not np.array_equal(raw.label_is_fraud.values.astype("int8"),
                               df.label.values.astype("int8")):
             raise SystemExit("the replay and the CSV are not in the same order")
-        ts = pd.to_datetime(raw.event_time).astype("int64").values / 1e9
+        ts = pd.to_datetime(raw.event_time, format="ISO8601").astype("int64").values / 1e9
         ids, _ = pd.factorize(np.concatenate([raw.sender_card.astype(str).values,
                                               raw.receiver_card.astype(str).values]))
         S = shape_features(ts, ids[:len(raw)], ids[len(raw):])
