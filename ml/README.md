@@ -22,8 +22,6 @@ experiments/      harnesses - each produces a NUMBER, not an artefact the
   recall.py       per-type recall across seeds (budgeted; resumes)
   shapes.py       multi-day link shapes (circles, split-and-gather): both
                   offline gates passed, the stream build is next
-  thresholds.py   the alert-cutoff menu: how much more is caught for how many
-                  more false alarms, every cutoff chosen on validation rows
                   One-off experiments are deleted once their decision is
                   written below: git log --diff-filter=D -- ml/experiments
 
@@ -193,12 +191,9 @@ which is how a gate can pass on a model that is worse where a bank with more
 analysts would operate. That belongs in the decision to build the shapes into the
 stream.
 
-Nothing was changed in `train.py`: which cutoff to run is the owner's choice.
-
-```bash
-python experiments/thresholds.py --cache shapes_realistic.npz
-python experiments/thresholds.py --ibm ../validation/HI-Small_Trans.csv --ibm-cache ../validation/ibm_features.npz
-```
+**Decision, 2026-09-16: the owner kept the F1-peak cutoff.** `train.py` is
+unchanged, and the harness is deleted now that its question is answered; it is in
+git history (`git show 5377e74:ml/experiments/thresholds.py`).
 
 **Everything below is the baseline profile, the dataset of record until
 2026-09-14, unless it says otherwise.**
