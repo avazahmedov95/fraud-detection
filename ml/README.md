@@ -153,11 +153,51 @@ the table does not say:
 
 Next, as the rule says: build the columns into the stream and measure again
 through the deployed extractor, which is where their cost - four days of state per
-card and a circle search per transfer - will show.
+card and a circle search per transfer - will show. The cutoff menu below
+qualifies the IBM AML gain before that is built.
 
 ```bash
 python experiments/shapes.py --cache shapes_realistic.npz
 python experiments/shapes.py --ibm ../validation/HI-Small_Trans.csv --ibm-cache ../validation/ibm_features.npz
+```
+
+### The alert cutoff: a menu, not a verdict
+
+`experiments/thresholds.py`: the committee's test rows at cutoffs chosen on the
+validation rows. Realistic profile, 100,000 test transfers, 202 fraud:
+
+| cutoff | model | alerts | caught | real |
+|---|---|---|---|---|
+| F1 peak (the current rule) | without the shapes | 139 | 45.0% | 65.5% |
+| top 0.2% of transfers | without | 198 | 56.4% | 57.6% |
+| top 0.5% | without | 416 | 69.8% | 33.9% |
+| F1 peak | with the shapes | 158 | 53.5% | 68.4% |
+| F2 peak | with | 284 | 71.8% | 51.1% |
+| top 1% | with | 862 | 91.1% | 21.3% |
+
+IBM AML, 897,427 test transfers, 1,653 laundering:
+
+| cutoff | model | alerts | caught | real |
+|---|---|---|---|---|
+| F1 peak | without | 1,432 | 30.1% | 34.7% |
+| top 1% | without | 9,937 | 55.2% | 9.2% |
+| F1 peak | with | 694 | 22.6% | 53.9% |
+| the catch of "without" at its F1 peak | with | 3,326 | 30.7% | 15.2% |
+| top 1% | with | 9,673 | 44.8% | 7.7% |
+
+**On the realistic profile the shapes help at every cutoff. On IBM AML they help
+only at the top of the list**: flagging under about 0.1% of transfers they catch
+more, above it less, and matching the old model's catch costs 2.3 times the
+alerts. Validation PR-AUC, which the gate read, weights the top of the list most -
+which is how a gate can pass on a model that is worse where a bank with more
+analysts would operate. That belongs in the decision to build the shapes into the
+stream.
+
+Nothing was changed in `train.py`: which cutoff to run is the owner's choice.
+
+```bash
+python experiments/thresholds.py --cache shapes_realistic.npz
+python experiments/thresholds.py --ibm ../validation/HI-Small_Trans.csv --ibm-cache ../validation/ibm_features.npz
 ```
 
 **Everything below is the baseline profile, the dataset of record until
