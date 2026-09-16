@@ -22,6 +22,8 @@ experiments/      harnesses - each produces a NUMBER, not an artefact the
   recall.py       per-type recall across seeds (budgeted; resumes)
   shapes.py       multi-day link shapes (circles, split-and-gather): both
                   offline gates passed, the stream build is next
+  individuals.py  the shapes on IBM AML's people-like transfers only: does the
+                  top-of-the-list caveat come from its companies?
                   One-off experiments are deleted once their decision is
                   written below: git log --diff-filter=D -- ml/experiments
 
