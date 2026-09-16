@@ -286,12 +286,14 @@ IBM Box, or a Hugging Face mirror of the transactions that needs no account.
 ```bash
 python ibm_aml_adapter.py --file HI-Small_Trans.csv --limit 500000
 python ibm_aml_adapter.py --file HI-Small_Trans.csv --patterns HI-Small_Patterns.txt
+python ibm_aml_adapter.py --file HI-Small_Trans.csv --patterns HI-Small_Patterns.txt --typology-recall
 ```
 
-`--patterns` adds the per-typology breakdown (section B) from the sidecar file,
-which needs a Kaggle account. An excerpt of the real file corrected the parser -
-typology suffixes, account pairs recurring across attempts; the full file has
-**not been run yet**, and an empty section B from it means the parse failed.
+`--patterns` names each laundering row from the sidecar, which needs a Kaggle
+account. The full sidecar parses: **370 attempts, 3,209 edges, eight typologies**,
+matching 61.9% of the laundering rows (below). Section B of the replay then
+reports the RULES' recall per typology, at the replay's full cost;
+`--typology-recall` reports the MODEL's from the cached matrix, in minutes.
 
 Three translation decisions: self-transfers are dropped (12% of the file, mostly
 `Reinvestment`); amounts are scaled per currency, each by its own median; and
@@ -382,6 +384,51 @@ Averaging twenty fits also more than doubles PR-AUC (0.153 against 0.065).
 ```bash
 python ibm_aml_adapter.py --file HI-Small_Trans.csv --receiver-ablation --cache ibm_features.npz --seeds 20 --boots 1000
 ```
+
+### Result (`--typology-recall`): which laundering patterns the model catches
+
+The sidecar names 370 injected attempts, 3,209 edges, in eight typologies, and
+matches **3,198 of the 5,166 laundering rows (61.9%)** - the 11 edges matching no
+row are self-transfers, which the adapter drops. Recall per typology on the
+published test split, the recipe fitted unweighted, three seeds:
+
+| typology | in test | recall | across seeds |
+|---|---|---|---|
+| fan-in | 127 | **51.4%** | 47.2-54.3% |
+| stack | 122 | 43.2% | 41.8-45.1% |
+| random | 84 | 40.5% | 40.5-40.5% |
+| gather-scatter | 378 | 39.5% | 36.8-43.4% |
+| cycle | 99 | 37.0% | 36.4-38.4% |
+| scatter-gather | 242 | 32.1% | 31.0-34.3% |
+| bipartite | 67 | 30.8% | 26.9-34.3% |
+| fan-out | 133 | 30.6% | 24.8-36.8% |
+| **(unnamed)** | 401 | **5.8%** | 5.2-7.0% |
+| all laundering | 1,653 | 30.3% | 29.2-31.5% |
+
+1. **Fan-in is the best-detected typology**, at 51.4% against 30.3% overall, on a
+   dataset this project did not write and with the patterns named by whoever
+   injected them. It is external evidence for the shape receiver-side aggregation
+   was built for (`ml/README.md`, "Fan-in"), from labels chosen independently of
+   this project - where the ablation on IBM AML could only say the capability is
+   worth something to the model, this says which pattern it is worth it on.
+2. **The 38% of laundering rows the sidecar does not name are a different
+   population, and nearly invisible at 5.8%.** 95.7% of them are the only
+   laundering row at their receiver, against 59.4% of the named ones, and 99.4%
+   have a receiver that appears in no named attempt at all. There is no relation
+   to see, so a relational model sees nothing. The 30.3% overall is a mix of the
+   two: quoting it alone understates the model on patterns and overstates it on
+   isolated transfers.
+3. The order is not a difficulty ranking for laundering in general - it is this
+   generator's patterns, at this file's scale, under a one-hour receiver window
+   that sees a fraction of each (median collection span by typology: 35.8 hours
+   for fan-out, 86.1 for fan-in, 90.6 for gather-scatter).
+
+The mode joins the sidecar's labels onto the matrix `--extract-only` cached, so
+it costs minutes instead of the replay's hours, and it refuses to print if that
+cache is not row-aligned with the file - a misaligned join would hang a typology
+on the wrong transaction and still produce a table. The fit is not bit-stable
+(LightGBM's threaded histograms), so each row moves a few tenths of a point
+between runs: one decimal is all these figures carry.
 
 ---
 

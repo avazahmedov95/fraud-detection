@@ -208,13 +208,12 @@ def _ci95(xs):
     return float(stats.t.ppf(0.975, n - 1) * sd / math.sqrt(n))
 
 
-def _fit_score(Xtr, ytr, Xva, yva, Xte, yte, weighted, seed):
-    """One fit of train.py's recipe; test metrics at the threshold that maximises F1
-    on validation, with F1 at 0.5 beside it since the paper does not state its rule."""
+def _fit_and_cut(Xtr, ytr, Xva, yva, weighted, seed):
+    """One fit of train.py's recipe, with the cut that maximises F1 on validation.
+    The recipe lives here once, for every mode that needs a fitted model."""
     import numpy as np
     import lightgbm as lgb
-    from sklearn.metrics import (average_precision_score, f1_score,
-                                 precision_recall_curve, roc_auc_score)
+    from sklearn.metrics import precision_recall_curve
     spw = ((ytr == 0).sum() / max(int(ytr.sum()), 1)) if weighted else 1.0
     m = lgb.LGBMClassifier(n_estimators=400, learning_rate=0.05, num_leaves=31,
                            subsample=0.8, colsample_bytree=0.8,
@@ -224,7 +223,14 @@ def _fit_score(Xtr, ytr, Xva, yva, Xte, yte, weighted, seed):
     pva = m.predict_proba(Xva)[:, 1]
     prec, rec, thr = precision_recall_curve(yva, pva)
     f1s = 2 * prec[:-1] * rec[:-1] / np.maximum(prec[:-1] + rec[:-1], 1e-12)
-    t = float(thr[int(np.argmax(f1s))]) if len(thr) else 0.5
+    return m, (float(thr[int(np.argmax(f1s))]) if len(thr) else 0.5)
+
+
+def _fit_score(Xtr, ytr, Xva, yva, Xte, yte, weighted, seed):
+    """Test metrics at that cut, with F1 at 0.5 beside it since the paper does not
+    state its rule."""
+    from sklearn.metrics import (average_precision_score, f1_score, roc_auc_score)
+    m, t = _fit_and_cut(Xtr, ytr, Xva, yva, weighted, seed)
     pte = m.predict_proba(Xte)[:, 1]
     return {"f1_tuned": 100 * f1_score(yte, pte >= t, zero_division=0),
             "f1_05": 100 * f1_score(yte, pte >= 0.5, zero_division=0),
@@ -292,6 +298,70 @@ def our_model(cache, seeds=3):
                   f"{np.mean(d):+.3f} +/- {h:.3f} (95% CI, n={len(d)}){verdict}")
     return results
 
+
+def typology_recall(path, patterns, cache, seeds=3):
+    """Recall per laundering typology, for the recipe fitted on this file.
+
+    The replay takes hours, so the sidecar's labels are joined onto the matrix
+    --extract-only cached rather than measured again. The join is positional, so it
+    is checked first: a cache built from another file, or another sort, would hang
+    a typology on the wrong transaction and the table would still print. This is
+    the MODEL's recall; the rules' is section B of a replay with --patterns.
+    """
+    import warnings
+    import numpy as np
+    warnings.filterwarnings("ignore", message="X does not have valid feature names")
+
+    typ = read_patterns(patterns)
+    d, n_all, n_self = load(path)
+    lab = np.array([""] * len(d), dtype=object)
+    mins = d.ts.dt.strftime("%Y/%m/%d %H:%M").values
+    sender, receiver = d.sender.values, d.receiver.values
+    for i in np.flatnonzero(d.label.values == 1):
+        lab[i] = typ.get((mins[i], sender[i], receiver[i]), "")
+    print(f"{len(d):,} transactions, {int(d.label.sum()):,} laundering, "
+          f"{int((lab != '').sum()):,} of them named by the sidecar "
+          f"({len(typ):,} edges read)")
+
+    z = np.load(cache, allow_pickle=False)
+    X, y, ts = z["X"], z["y"].astype("int8"), z["ts"]
+    if len(y) != len(d):
+        raise SystemExit(f"the cache holds {len(y):,} rows and this file {len(d):,} "
+                         f"- they are not the same run")
+    file_ts = d.ts.values.astype("datetime64[s]").astype("int64")
+    if (int((ts.astype("int64") != file_ts).sum())
+            or int((y != d.label.values.astype("int8")).sum())):
+        raise SystemExit("the cache is not row-aligned with this file - re-run "
+                         "--extract-only before joining labels onto it")
+
+    n = len(y)
+    a, b = int(n * 0.6), int(n * 0.8)
+    yte, lte = y[b:], lab[b:]
+    print(f"split by time 60/20/20: test {n - b:,} rows, {int(yte.sum()):,} "
+          f"laundering, {int((lte != '').sum()):,} of them named\n")
+
+    flags = []
+    for seed in range(seeds):
+        # Unweighted: train.py's rule below 0.5% fraud, and this file is at 0.102%.
+        m, t = _fit_and_cut(X[:a], y[:a], X[a:b], y[a:b], False, seed)
+        f = m.predict_proba(X[b:])[:, 1] >= t
+        flags.append(f)
+        print(f"  seed {seed}: cut {t:.4f} from validation, {int(f.sum()):,} alerts, "
+              f"{int((f & (yte == 1)).sum()):,} of them laundering")
+
+    def row(name, sel):
+        k = int(sel.sum())
+        if not k:
+            return
+        rs = [float((f & sel).sum()) / k for f in flags]
+        print(f"  {name:<22}{k:>9,}{np.mean(rs):>9.1%}"
+              f"{min(rs):>11.1%}-{max(rs):.1%}")
+
+    print(f"\n  {'typology':<22}{'in test':>9}{'recall':>9}{'across seeds':>17}")
+    for g in sorted({str(v) for v in lte[yte == 1] if v}):
+        row(g, (yte == 1) & (lte == g))
+    row("(unnamed)", (yte == 1) & (lte == ""))
+    row("ALL laundering", yte == 1)
 
 def _bootstrap_delta(y, p_full, p_less, t_full, t_less, boots, seed=0):
     """Paired Poisson bootstrap over the test rows - the same weights for both models.
@@ -441,6 +511,10 @@ def main():
                     action="store_true",
                     help="the receiver-aggregation delta, per seed and on the "
                          "seed-averaged model with a paired bootstrap")
+    ap.add_argument("--typology-recall", dest="typology_recall",
+                    action="store_true",
+                    help="recall per laundering typology from --patterns and the "
+                         "cached matrix, without re-running the replay")
     ap.add_argument("--boots", type=int, default=1000,
                     help="bootstrap resamples for --receiver-ablation")
     args = ap.parse_args()
@@ -462,6 +536,13 @@ def main():
         if not os.path.exists(args.cache):
             raise SystemExit(f"{args.cache} not found - run --extract-only first")
         return receiver_ablation(args.cache, args.seeds, args.boots)
+    if args.typology_recall:
+        if not os.path.exists(args.cache):
+            raise SystemExit(f"{args.cache} not found - run --extract-only first")
+        if not args.patterns:
+            raise SystemExit("--typology-recall needs --patterns: the released CSV "
+                             "carries no typology of its own")
+        return typology_recall(args.file, args.patterns, args.cache, args.seeds)
 
     formats = ([f.strip() for f in args.formats.split(",")]
                if args.formats else None)
