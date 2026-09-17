@@ -22,6 +22,8 @@ experiments/      harnesses - each produces a NUMBER, not an artefact the
   recall.py       per-type recall across seeds (budgeted; resumes)
   shapes.py       multi-day link shapes: passed on PaySim for a strict cutoff;
                   kept until they are built into the stream
+  links.py        link_history as built: parity with the offline shapes, then
+                  their gates again (rule in its docstring)
                   One-off experiments are deleted once their decision is
                   written below: git log --diff-filter=D -- ml/experiments
 
