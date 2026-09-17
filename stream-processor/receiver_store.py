@@ -5,6 +5,7 @@ Fails open."""
 
 import logging
 
+import capabilities as CAP
 import config as C
 import features as F
 from rules import ReceiverState, quantile_threshold
@@ -13,9 +14,16 @@ log = logging.getLogger("receiver_store")
 
 
 class ReceiverStore:
-    def __init__(self, host, port, window_s=None):
+    def __init__(self, host, port, window_s=None, prefix="rcv"):
         self._host, self._port = host, port
-        self._window_s = window_s or C.RECEIVER_WINDOW_S
+        # Four days when link_history reads that far back; the hour MULE_FAN_IN needs
+        # otherwise. Four days is also what a hub costs: one load returns every
+        # member in the window.
+        self._window_s = window_s or (C.LINK_WINDOW_S if CAP.enabled("link_history")
+                                      else C.RECEIVER_WINDOW_S)
+        # "rcv": under the payee, naming the sender. "out" (link_history): under the
+        # sender, naming the payee by the key its own inbound is recorded under.
+        self._prefix = prefix
         self._redis = None
 
     def open(self):
@@ -37,7 +45,7 @@ class ReceiverStore:
         state = ReceiverState()
         try:
             members = self._redis.zrangebyscore(
-                f"rcv:{payee}", now - self._window_s, now)
+                f"{self._prefix}:{payee}", now - self._window_s, now)
         except Exception as exc:                       # noqa: BLE001
             log.warning("fan-in lookup failed, failing open: %s", exc)
             return None
@@ -57,16 +65,19 @@ class ReceiverStore:
         """Append this transfer to the payee's window and prune what expired."""
         if self._redis is None:
             return
-        # Same helper load() uses, so a write cannot land under a key the read ignores.
-        payee = F.payee_key(event)
-        if not payee:
+        # The same helpers the job loads with, so a write cannot land under a key the
+        # read ignores.
+        if self._prefix == "out":
+            owner, counterparty = F.payer_key(event), F.payee_key(event)
+        else:
+            owner, counterparty = F.payee_key(event), event.get("sender_pinfl", "")
+        if not owner:
             return
-        key = f"rcv:{payee}"
+        key = f"{self._prefix}:{owner}"
         # The transaction id makes replays idempotent - this store does not roll back
         # with a checkpoint - and keeps two identical transfers distinct.
         txid = event.get("transaction_id") or ""
-        member = (f"{now}|{event.get('sender_pinfl', '')}|"
-                  f"{float(event['amount_uzs'])}|{txid}")
+        member = f"{now}|{counterparty}|{float(event['amount_uzs'])}|{txid}"
         try:
             pipe = self._redis.pipeline()
             pipe.zadd(key, {member: now})

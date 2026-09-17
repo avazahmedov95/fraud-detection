@@ -122,6 +122,23 @@ REGISTRY = (
                   "back to the card and says so once. The harnesses that read "
                   "the generated CSV can run it.",
     ),
+    Capability(
+        key="link_history",
+        requires="the shared store holding four days of every card's inbound and "
+                 "outbound transfers, read for the sender as well as the payee",
+        modes=("off", "on"),            # off until measured through this extractor
+        features=("payee_payers_96h", "sender_payers_96h", "sender_payees_96h",
+                  "payee_payees_96h", "money_back_96h"),
+        rules=(),
+        rationale="A mule collects over days and pays on; the one-hour receiver "
+                  "window sees a slice of that. Four days of who paid whom, read "
+                  "for both parties, count the collecting, the paying on, and "
+                  "money going straight back. Measured offline on three datasets "
+                  "(ml/README.md, multi-day link shapes); the three-step circles "
+                  "and split-and-gather that need more than a count are not "
+                  "built. Last in the registry, so switching it on appends to the "
+                  "vector instead of shifting every trained model's columns.",
+    ),
 )
 
 BY_KEY = {c.key: c for c in REGISTRY}

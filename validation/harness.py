@@ -49,11 +49,22 @@ class Event(NamedTuple):
     typology: str = ""
 
 
+def _links(ev, inbound, outbound):
+    """link_history's three extra reads, as fraud_job makes them - none when it is off."""
+    import features as F
+    if not CAP.enabled("link_history"):
+        return {}
+    payer = F.payer_key(ev)
+    return dict(sender_inbound=inbound[payer], sender_outbound=outbound[payer],
+                payee_outbound=outbound[F.payee_key(ev)])
+
+
 def replay(events, total=None):
     """Run the deployed rule engine over translated events, in stream order.
     Receiver state is keyed by `receiver_pinfl`, the identifier these datasets
     carry. `total` prints progress on stderr, keeping a redirected report clean."""
     senders, receivers = defaultdict(SenderState), defaultdict(ReceiverState)
+    outbound = defaultdict(ReceiverState)
     rows, hits_by_class = [], defaultdict(Counter)
     checked, started = False, time.time()
 
@@ -62,7 +73,8 @@ def replay(events, total=None):
             _require_a_payee_key(e.ev)
             checked = True
         res = evaluate(e.ev, e.receiver_age, senders[e.ev["sender_pinfl"]],
-                       e.ts, receivers[e.ev["receiver_pinfl"]])
+                       e.ts, receivers[e.ev["receiver_pinfl"]],
+                       **_links(e.ev, receivers, outbound))
         rows.append((e.label, res["cep_score"], res["decision"], e.typology))
         for hit in res["rule_hits"]:
             hits_by_class["fraud" if e.label else "legit"][hit] += 1
@@ -245,16 +257,20 @@ def extract_features(events, total):
     y = np.zeros(total, dtype="int8")
     ts = np.zeros(total, dtype="int64")
     senders, receivers = defaultdict(SenderState), defaultdict(ReceiverState)
+    outbound = defaultdict(ReceiverState)
     started, n = time.time(), 0
     for n, e in enumerate(events, 1):
         if n == 1:
             _require_a_payee_key(e.ev)
         key = F.payee_key(e.ev)
         sender = senders[e.ev["sender_pinfl"]]
+        links = _links(e.ev, receivers, outbound)
         X[n - 1] = F.to_vector(F.extract(e.ev, e.receiver_age, sender, e.ts,
-                                         receivers[key]))
+                                         receivers[key], **links))
         F.update_state(sender, e.ev, e.ts)
         F.update_receiver_state(receivers[key], e.ev, e.ts)
+        if links:
+            F.update_outbound_state(links["sender_outbound"], e.ev, e.ts)
         y[n - 1], ts[n - 1] = e.label, e.ts
         if n % PROGRESS_EVERY == 0:
             _progress(n, total, started)

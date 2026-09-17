@@ -4,6 +4,7 @@ was not trained on. Pure."""
 
 import logging
 import math
+from collections import Counter
 import datetime
 
 import config as C
@@ -119,6 +120,17 @@ def payee_key(event: dict) -> str:
     return card
 
 
+def payer_key(event: dict) -> str:
+    """The SENDER in payee-key space: the key their own inbound transfers were
+    recorded under, and their outbound ones are, so link_history can read both.
+    Card or PINFL by the same payee_identity mode as payee_key."""
+    if CAP.mode("payee_identity") == "pinfl":
+        pinfl = str(event.get("sender_pinfl", "") or "")
+        if pinfl:
+            return pinfl
+    return str(event.get("sender_card", "") or "")
+
+
 def visible_receiver_age(event: dict, receiver_age_days):
     """Apply the receiver_age capability mode (CAP_RECEIVER_AGE); None means
     "not obtainable", never a value."""
@@ -131,10 +143,11 @@ def visible_receiver_age(event: dict, receiver_age_days):
 
 
 def extract(event: dict, receiver_age_days, state, now: float,
-            receiver_state=None) -> dict:
-    """Read-only feature extraction; does NOT mutate either state. `receiver_state`
+            receiver_state=None, sender_inbound=None, sender_outbound=None,
+            payee_outbound=None) -> dict:
+    """Read-only feature extraction; does NOT mutate any state. `receiver_state`
     may be None when the shared store is down - inbound features then read as zero,
-    the fail-open behaviour used elsewhere."""
+    the fail-open behaviour used elsewhere. The last three are link_history's."""
     amount = float(event["amount_uzs"])
     payee = payee_key(event)
     device = event.get("device_id", "")
@@ -199,10 +212,28 @@ def extract(event: dict, receiver_age_days, state, now: float,
     # cannot see. Distinct senders, not transfers: ten from one person is a habit.
     rcv_senders, rcv_inflow = 0, 0.0
     if receiver_state is not None:
-        recent = [e for e in receiver_state.inbound
-                  if now - e[0] <= C.RECEIVER_WINDOW_S]
+        recent = []
+        for e in reversed(receiver_state.inbound):      # newest first, to the hour
+            if now - e[0] > C.RECEIVER_WINDOW_S:
+                break
+            recent.append(e)
         rcv_senders = len({e[1] for e in recent} | {event.get("sender_pinfl", "")})
         rcv_inflow = sum(e[2] for e in recent) + amount
+
+    # link_history: four days of who paid whom, read for both parties, strictly before
+    # this transfer. Zero when a store is unreachable, as above; in the vector only
+    # when the capability is on.
+    payee_payers = sender_payers = sender_payees = payee_payees = money_back = 0
+    if CAP.enabled("link_history"):
+        if receiver_state is not None:
+            payee_payers = _recent(receiver_state, now)[0]
+        if sender_inbound is not None:
+            sender_payers = _recent(sender_inbound, now)[0]
+        if sender_outbound is not None:
+            sender_payees = _recent(sender_outbound, now)[0]
+        if payee_outbound is not None:
+            payee_payees, back = _recent(payee_outbound, now, payer_key(event))
+            money_back = min(C.LINK_BACK_CAP, back)
 
     active_call = truthy(event.get("active_call"))
     secs_login = float(event.get("secs_login_to_confirm") or 0.0)
@@ -223,6 +254,11 @@ def extract(event: dict, receiver_age_days, state, now: float,
         "is_new_payee": 0 if payee in state.seen_payees else 1,
         "rcv_distinct_senders_1h": rcv_senders,
         "rcv_inflow_1h": math.log1p(rcv_inflow),
+        "payee_payers_96h": payee_payers,
+        "sender_payers_96h": sender_payers,
+        "sender_payees_96h": sender_payees,
+        "payee_payees_96h": payee_payees,
+        "money_back_96h": money_back,
         "receiver_age": receiver_age,
         "receiver_is_fresh": receiver_is_fresh,
         "receiver_age_known": age_known,
@@ -255,15 +291,58 @@ def to_vector(feat: dict) -> list:
     return [float(feat[name]) for name in FEATURE_NAMES]
 
 
+def _recent(state, now, of=""):
+    """(distinct counterparties, entries naming `of`) in `state` over the
+    LINK_WINDOW_S before `now`, strictly before it: the running counts less the stale
+    head and whatever is stamped `now`, so O(stale) rather than O(four days). A state
+    whose counts are not current - built by a store read - is scanned instead."""
+    lo = now - C.LINK_WINDOW_S
+    if state.n != len(state.inbound):
+        seen = [e[1] for e in state.inbound if lo <= e[0] < now]
+        return len(set(seen)), (seen.count(of) if of else 0)
+    gone = Counter()
+    for e in state.inbound:                              # oldest first, to the window
+        if e[0] >= lo:
+            break
+        gone[e[1]] += 1
+    for e in reversed(state.inbound):                    # newest first, to before now
+        if e[0] < now:
+            break
+        gone[e[1]] += 1
+    distinct = len(state.counts) - sum(1 for c, k in gone.items() if state.counts[c] == k)
+    return distinct, ((state.counts.get(of, 0) - gone.get(of, 0)) if of else 0)
+
+
 def update_receiver_state(receiver_state, event: dict, now: float) -> None:
     """Advance the payee's inbound history (call AFTER extract)."""
-    if receiver_state is None:
+    _record(receiver_state, event.get("sender_pinfl", ""), event, now)
+
+
+def update_outbound_state(outbound_state, event: dict, now: float) -> None:
+    """Advance the sender's outbound history for link_history (call AFTER extract)."""
+    if CAP.enabled("link_history"):
+        _record(outbound_state, payee_key(event), event, now)
+
+
+def _record(state, counterparty, event, now):
+    if state is None:
         return
-    receiver_state.inbound.append(
-        (now, event.get("sender_pinfl", ""), float(event["amount_uzs"])))
-    while (receiver_state.inbound
-           and now - receiver_state.inbound[0][0] > C.RECEIVER_WINDOW_S):
-        receiver_state.inbound.popleft()
+    current = state.n == len(state.inbound)
+    state.inbound.append((now, counterparty, float(event["amount_uzs"])))
+    # Four days when link_history reads that far back; the hour MULE_FAN_IN needs otherwise.
+    keep = C.LINK_WINDOW_S if CAP.enabled("link_history") else C.RECEIVER_WINDOW_S
+    dropped = []
+    while state.inbound and now - state.inbound[0][0] > keep:
+        dropped.append(state.inbound.popleft())
+    if not current:                   # counts never kept for this state: leave them off
+        return
+    state.counts[counterparty] += 1
+    state.n += 1
+    for _, c, _amount in dropped:
+        state.counts[c] -= 1
+        if not state.counts[c]:
+            del state.counts[c]
+        state.n -= 1
 
 
 def update_state(state, event: dict, now: float) -> None:

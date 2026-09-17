@@ -76,6 +76,10 @@ MIN_TRAVEL_DISTANCE_KM = 100.0
 # Above the fan-OUT threshold: receiving from several people in an hour is
 # ordinary, paying out to several unrelated new payees is not.
 RECEIVER_WINDOW_S = 3600
+# link_history reads four days back: IBM AML's median collection span, 86.8 hours,
+# in whole days (ml/README.md, multi-day link shapes).
+LINK_WINDOW_S = 96 * 3600
+LINK_BACK_CAP = 20          # money_back_96h stops counting here
 MULE_FAN_IN_MIN_SENDERS = 6
 
 # "relative": a quantile of the live population instead of the constant 6, which
