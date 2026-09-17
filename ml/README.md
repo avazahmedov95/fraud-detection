@@ -20,10 +20,6 @@ experiments/      harnesses - each produces a NUMBER, not an artefact the
                   intervals; --only <capability> sweeps all of its modes
   layers.py       CEP-only vs ML-only vs fused on the held-out slice
   recall.py       per-type recall across seeds (budgeted; resumes)
-  shapes.py       multi-day link shapes: passed on PaySim for a strict cutoff;
-                  kept until they are built into the stream
-  links.py        link_history as built: parity with the offline shapes, then
-                  their gates again (rule in its docstring)
                   One-off experiments are deleted once their decision is
                   written below: git log --diff-filter=D -- ml/experiments
 
@@ -126,7 +122,7 @@ owner's "adopt only if it does not get worse", on validation rows over five seed
 The code was removed rather than kept switched off; commit `bfe556f` holds all of
 it, with its harness and both gates.
 
-### Multi-day link shapes: to be built, for a strict cutoff
+### Multi-day link shapes: built as link_history, and left off
 
 Seven columns over the 96 hours before each transfer (`experiments/shapes.py`):
 fan-in and fan-out, the payers of the sender and the payees of the payee, money
@@ -233,6 +229,27 @@ repeat and it has no circles, so every column but the payee's distinct payers ov
 96 hours is zero. What each dataset supports is different: the multi-day counts on
 the realistic profile, the payee's multi-day payers weakly on PaySim, and circles
 and split-and-gather only at the top of the list on IBM AML.
+
+### link_history as built: exact, and left off
+
+Step 1 went into the stream as the `link_history` capability - five of the seven
+columns, without the three-step circles and split-and-gather - and was measured
+again (`experiments/links.py`, rule committed before the run in `77e6dad`):
+
+| | parity with the offline columns | validation PR-AUC, paired | top 0.1% of validation transfers | verdict |
+|---|---|---|---|---|
+| realistic profile | 0 of 500,000 rows differ | +0.068 [+0.058, +0.077] | - | pass |
+| PaySim | 0 of 6,362,620 rows differ | +0.031 [+0.002, +0.060] | 18.5% -> 20.2% | pass |
+| IBM AML | stood in for by PaySim's | +0.032 [+0.021, +0.043] | 20.0% -> 16.9% | **fail** |
+
+The deployed extractor reproduces the offline columns exactly, and switching it on
+changes none of the existing twenty. The five columns pass on the realistic profile
+and on PaySim - there now with an interval clear of zero - and lift IBM AML's
+PR-AUC, but find less laundering in IBM AML's top 0.1%: the top-of-the-list gain
+the seven columns had there came from the circles and split-and-gather, which step
+1 does not build. **By the rule, link_history stays off.** The capability, its
+store and its tests remain, switched off; both harnesses are deleted
+(`git show 77e6dad:ml/experiments/links.py`, `git show 77e6dad:ml/experiments/shapes.py`).
 
 **Everything below is the baseline profile, the dataset of record until
 2026-09-14, unless it says otherwise.**

@@ -126,7 +126,7 @@ REGISTRY = (
         key="link_history",
         requires="the shared store holding four days of every card's inbound and "
                  "outbound transfers, read for the sender as well as the payee",
-        modes=("off", "on"),            # off until measured through this extractor
+        modes=("off", "on"),            # off: less in IBM AML's top 0.1% (ml/README.md)
         features=("payee_payers_96h", "sender_payers_96h", "sender_payees_96h",
                   "payee_payees_96h", "money_back_96h"),
         rules=(),
