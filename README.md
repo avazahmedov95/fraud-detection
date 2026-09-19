@@ -41,7 +41,6 @@ fraud-detection/
 ├── validation/             the deployed rules run on FOREIGN datasets
 │   ├── paysim_adapter.py   PaySim, and what transfers from it
 │   ├── amlsim_adapter.py   IBM AMLSim + amlsim.Dockerfile toolchain
-│   ├── ibm_aml_adapter.py  IBM AML: the rules and the model on a foreign benchmark
 │   └── harness.py          the replay loop every adapter shares
 ├── tools/
 │   └── boundary_audit.py   what one component produces vs what the next expects
@@ -59,7 +58,7 @@ reader:
 | `docs/irp-framing.md` | the research question, every measurement with its interval, a line-by-line answer to the seven review points, nineteen silent failure modes, and what a real work queue exposed that no metric did |
 | `docs/threat-model.md` | three adversaries, what each control assumes, and what evading it costs — one of those costs is now measured rather than argued |
 | `docs/generator-spec.md` | the generator as a specification, the dataset of record with its hashes, and why the data is generated at all |
-| `validation/README.md` | four foreign datasets, what each could and could not test, and the screens that came out of it |
+| `validation/README.md` | the foreign datasets, what each could and could not test, and the ones rejected, with why |
 | `docs/related-work.md` | fifteen sources, each with what it does **not** support — and §9, which maps every source to the file it actually reaches |
 | `ml/README.md` | model, SHAP, and the capability ablation |
 | `case-manager/README.md` | the alert consumer: the analyst queue, the disposition as the only real label this system can produce, and why the model's reasons are computed off the scoring path |

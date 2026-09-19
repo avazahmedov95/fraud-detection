@@ -12,7 +12,7 @@ def test_weighted_at_the_rate_the_recipe_was_validated_at():
 
 
 def test_below_the_line_the_default_fits_unweighted():
-    # 0.1%, IBM AML's rate, where every weighted fit collapsed.
+    # 0.1%, PaySim's rate, where every weighted fit collapsed.
     assert T.class_weight(1, 999, "auto") == 1.0
 
 

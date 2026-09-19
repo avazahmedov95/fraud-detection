@@ -268,8 +268,8 @@ Extends the table in `generator-spec.md` §0; the datasets actually run are in
   synthetic, with no generating specification.
 - **AMLSim** (IBM, open source) - run: `validation/README.md` §3.
 - **The AI4FCF catalogue** (`sites.google.com/view/ai4fcf/open-datasets`): BankSim
-  (customer→merchant, so receiver concentration is normal), IBM AML-Data (run:
-  `validation/README.md` §4), Amaretto (capital markets), the Czech financial
+  (customer→merchant, so receiver concentration is normal), IBM AML-Data (run, then
+  removed: it includes banks and companies - `validation/README.md`, Rejected), Amaretto (capital markets), the Czech financial
   dataset (no fraud labels), the Libra Bank graph, Paradise/Panama Papers.
 - **`CiferAI/Cifer-Fraud-Detection-Dataset-AF`** - 21M rows of PaySim's
   phenomenology: no collection stage, balance-column leakage, and `isFlaggedFraud`
@@ -296,9 +296,9 @@ Extends the table in `generator-spec.md` §0; the datasets actually run are in
   closable with these sources.
 - **No external benchmark this system's numbers are directly comparable to** - §6
   anchors the difficulty of the *data*, not a comparison of *systems*.
-- **Receiver-side aggregation now has external evidence** from IBM AML
-  (`validation/README.md` §4), on synthetic data this project did not write; real
-  data would still be the stronger test.
+- **No external evidence for receiver-side aggregation.** IBM AML supplied the only
+  one and was removed as not P2P (`validation/README.md`, Rejected); PaySim has no
+  collection stage, and AMLSim's daily clock cannot see one.
 
 ---
 

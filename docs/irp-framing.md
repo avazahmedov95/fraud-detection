@@ -493,7 +493,7 @@ submission restarts the TaskManager first, and the TaskManager has
 `restart: unless-stopped`. The production answer is a per-job cluster.
 
 **Twentieth: the feature extractor was quadratic in a population this project
-never streams.** Replaying IBM AML (4.49M rows) took 5.5 hours: five linear passes
+never streams.** Replaying IBM AML (4.49M rows; since removed as not P2P) took 5.5 hours: five linear passes
 over the sender's 24-hour history per event, invisible at two events per retail
 sender-day, dominant at IBM's 26,365. The latency chapter could not see it - a
 benchmark from the same generator shares its assumptions. The same property

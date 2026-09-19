@@ -45,50 +45,6 @@
       ]
     },
     {
-      "key": "ibm-aml",
-      "status": "used",
-      "name": {"ru": "IBM AML (HI-Small)", "en": "IBM AML (HI-Small)"},
-      "what": {
-        "ru": "Искусственные банковские переводы с отмыванием денег: около 5 млн операций, 0,1% отмывания, время с точностью до минуты. Самый ценный набор: в нём есть схема сбора денег на один счёт.",
-        "en": "Synthetic bank transfers with money laundering: about 5M operations, 0.1% laundering, a clock to the minute. The most valuable set: it contains the collection-into-one-account scheme."
-      },
-      "how": {
-        "ru": "Правила — на всём файле (4,49 млн операций, 5 166 случаев отмывания). Копию модели переобучили на опубликованном разбиении по времени: 60% обучение, 20% подбор порога, 20% проверка.",
-        "en": "The rules on the whole file (4.49M operations, 5,166 laundering). A copy of the model retrained on the published time split: 60% train, 20% threshold, 20% test."
-      },
-      "findings": {
-        "ru": [
-          "«Новый получатель + крупная сумма» срабатывает на отмывании в 9,3 раза чаще, «сумма необычна для отправителя» — в 6,9 раза, «много отправителей на один счёт» — в 2,8 раза.",
-          "Пороги не переносятся: система подняла бы тревогу на 39,1% отмывания, но и на 22% честных переводов — в данных есть банки и компании с тысячами переводов в день.",
-          "Модель (оценка из 100, F1): на наших признаках 17,5; с колонками «тип платежа» и «валюта» из файла — 35,7. Простые опубликованные модели — около 20–21, сильные графовые методы — 48–65.",
-          "Признаки про получателя доказаны и на уровне модели: 20 запусков, +2,5 балла, вторая независимая проверка это подтвердила."
-        ],
-        "en": [
-          "\"New payee + large amount\" fires on laundering 9.3 times as often, \"amount unusual for the sender\" 6.9 times, \"many senders into one account\" 2.8 times.",
-          "Thresholds do not transfer: the system would alert on 39.1% of the laundering, but also on 22% of honest transfers — the data holds banks and companies with thousands of transfers a day.",
-          "The model (score out of 100, F1): 17.5 on our features; 35.7 with the file's payment type and currency. Simple published models reach about 20-21, strong graph methods 48-65.",
-          "The receiver-side features are established at model level too: 20 runs, +2.5 points, confirmed by a second, independent check."
-        ]
-      },
-      "verdict": {
-        "ru": "Самое сильное подтверждение: идея «сбора денег на один счёт» работает на чужих данных и в правилах, и в модели. Графовые методы, которые видят цепочки переводов, сильнее — таких признаков у нас нет.",
-        "en": "The strongest confirmation: the collection-into-one-account idea works on foreign data, in the rules and in the model. Graph methods that see chains of transfers do better — we have no such features."
-      },
-      "source": "validation/README.md, section 4",
-      "quotes": [
-        {"file": "validation/README.md", "text": "| `NEW_PAYEE_HIGH_AMOUNT` | 17.15% | 1.84% | **9.3x** |"},
-        {"file": "validation/README.md", "text": "| `AMOUNT_DEVIATION` | 6.08% | 0.88% | **6.9x** |"},
-        {"file": "validation/README.md", "text": "| `MULE_FAN_IN` | 3.17% | 1.12% | **2.8x** |"},
-        {"file": "validation/README.md", "text": "The decision layer flags 39.1% of laundering"},
-        {"file": "validation/README.md", "text": "| this project, 14 features | 17.5 +/- 3.9 |"},
-        {"file": "validation/README.md", "text": "| - plus the file's payment format and currency | **35.7 +/- 4.1** |"},
-        {"file": "validation/README.md", "text": "file's own columns 21.3 +/- 0.3 (LightGBM)"},
-        {"file": "validation/README.md", "text": "GIN+EU 47.7 +/- 7.9"},
-        {"file": "validation/README.md", "text": "graph features 62.9 +/- 0.3 and 64.8 +/- 0.5"},
-        {"file": "validation/README.md", "text": "| 14 features - F1 points | **+2.46 [+0.52, +4.40]**"}
-      ]
-    },
-    {
       "key": "amlsim",
       "status": "inconclusive",
       "name": {"ru": "AMLSim", "en": "AMLSim"},

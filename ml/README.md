@@ -89,13 +89,12 @@ labelled fraud, legitimate look-alikes of every pattern, a tenth of fraud never
 reported. Three changes, each measured before it was adopted:
 
 - **No class weight at a realistic base rate.** Validation PR-AUC on the realistic
-  profile was 0.515 unweighted, 0.344 at weight 10, 0.155 at 30; on IBM AML every
-  weight from 65 up collapsed. The rule fixed before the IBM run chose 30; the
-  validation rows overruled it, and that is recorded rather than smoothed over.
+  profile was 0.515 unweighted, 0.344 at weight 10, 0.155 at 30, and on PaySim
+  weighting collapsed every fit (0.032 against 0.267 unweighted).
 - **A committee of five fits, served as one booster** (`committee.py`). The mean
-  of several fits' log-odds beat a single fit on IBM AML (0.180 against 0.066) and
-  on the realistic profile (0.488 against 0.422). Row bagging was tested the same
-  way and not adopted: +0.004 on the baseline profile, nothing on IBM AML.
+  of several fits' log-odds beat a single fit on the realistic profile (0.488
+  against 0.422). Row bagging was tested the same way and not adopted: +0.004 on
+  the baseline profile.
 - **Cutoffs chosen on data and shipped with the model.** An unweighted model's
   probabilities sit near the base rate, so a fixed 0.40 / 0.80 means nothing.
   `train.py` fits on the earliest 64% of rows, puts REVIEW where F1 peaks on the
@@ -105,6 +104,10 @@ reported. Three changes, each measured before it was adopted:
   no cutoff reached 90% on the validation rows, so the model sends to review and
   never blocks on its own. The CEP-only fallback keeps the fixed cutoffs, since an
   additive rule score is not a probability.
+
+*IBM AML, which the gates below use, was removed from the project on 2026-09-19:
+its accounts include banks and companies, and this project is about transfers
+between people. The gates stay as the record of the decisions they made.*
 
 ### Following the money a hop further: tried, not adopted, removed
 

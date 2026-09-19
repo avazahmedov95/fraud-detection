@@ -403,7 +403,7 @@ This profile keeps every mechanism and moves each parameter toward overlap:
 | knob | baseline | realistic | why |
 |---|---|---|---|
 | transactions / persons | 50,000 / 5,000 | 500,000 / 50,000 | enough fraud to measure at a real rate |
-| fraud rate | 1.5% | 0.2% | real card traffic, IBM AML and PaySim all sit near 0.1-0.2% |
+| fraud rate | 1.5% | 0.2% | real card traffic and PaySim both sit near 0.1-0.2% |
 | unreported fraud | 0 | 10% of episodes | real labels are incomplete (§8, item 7): the behaviour stays, the label does not |
 | legitimate hard negatives | 3% | 8% | a new payee and a large one-off - rent, a car, a deposit |
 | legitimate active call | 3% | 10% | people send money while talking to the payee |
@@ -414,7 +414,7 @@ This profile keeps every mechanism and moves each parameter toward overlap:
 | aged fraud accounts | 30% | 50% | bought and rented accounts, not only fresh ones |
 | ATO stealth | 40% | 60% | more takeovers from the victim's own device |
 | MULE recruited people | 30% | 50% | ordinary histories, not purpose-made accounts |
-| MULE senders, spacing | 4-8, 1-6 min | 3-10, 5-60 min | collection spread over hours, as in IBM AML |
+| MULE senders, spacing | 4-8, 1-6 min | 3-10, 5-60 min | collection spread over hours, not minutes |
 | STRUCTURING events, spacing, band | 5-11, 3-15 min, 85-99% | 3-8, 10-90 min, 70-99% | pieces spread through the day |
 | legitimate collections | 0 | 1% of persons | 5-15 senders within hours: a wedding, a gift, a joint purchase |
 | legitimate split payments | 0 | 0.3% of persons | 3-5 large parts to one payee |

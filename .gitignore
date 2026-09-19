@@ -8,7 +8,7 @@
 data-generator/out*/
 validation/*.csv
 # What the adapters download and what --extract-only writes beside them:
-# the IBM sidecar and every cached feature matrix (ibm_features.npz is 96 MB).
+# sidecar files and cached feature matrices.
 validation/*_Patterns.txt
 validation/*.npz
 

@@ -1,10 +1,10 @@
 # External validation
 
-Three datasets answering three different questions, and three more examined and
-rejected. Each has its own adapter, because each file has its own shape;
+Two datasets answering two different questions, and more examined and rejected.
+Each has its own adapter, because each file has its own shape;
 everything downstream of a translated event - the unit conversion, the replay
 over the deployed rule engine, the report sections - is in **`harness.py`**,
-shared by all three, so the results stay one measurement.
+shared by both, so the results stay one measurement.
 
 ## The constraint that shapes everything here
 
@@ -258,7 +258,7 @@ project needs - and a label that carries nothing. Screened on 2026-09-19:
 
 The label is independent of every column, including the ones named after fraud
 signals, and the time-since-last column does not describe the file it is in: there is
-nothing to detect. The Mendeley set of section 5 was downloaded again the same day and
+nothing to detect. The Mendeley set of section 4 was downloaded again the same day and
 is the one already rejected.
 
 ---
@@ -275,186 +275,20 @@ anything is downloaded.
 
 ---
 
-## 4. IBM AML - the collection stage on a clock that can see it
+## Rejected: IBM AML (HI-Small)
 
-*Since 2026-09-19 reported for information only: IBM AML's accounts include banks
-and companies, and this project is about transfers between people, so it no longer
-decides whether a feature is adopted.*
-
-`ibm_aml_adapter.py`. AMLSim left two readings of its inverted fan-in result: the
-rule detects a rate, or the window cannot see a 363-day pattern. Separating them
-needs a collection stage on a finer clock. *IBM Transactions for Anti-Money
-Laundering* (Altman et al., NeurIPS 2023,
-[arXiv:2306.16424](https://arxiv.org/abs/2306.16424); CDLA-Sharing-1.0),
-`HI-Small_Trans.csv`:
-
-| | PaySim | AMLSim | **IBM AML (HI-Small)** |
-|---|---|---|---|
-| clock resolution | 1 hour | 1 day | **1 minute** |
-| rows | 6.36M | 198K | 5.08M |
-| span | 30 days | ~2 years | **17 days** |
-| positives | 0.129% | 0.339% | 0.102% |
-| collection stage | absent | present, ~363-day span | **present, ~3.6-day span** |
-
-The median laundering receiver collects over 86.8 hours against the one-hour
-window (~87x, measured by section D on every run). Before any replay: 1.02% of
-laundering receivers exceed six senders in an hour against 0.18% of the rest -
-5.6x the right way, where AMLSim was 0.4x.
-
-**Get it:** Kaggle
-([ealtman2019/ibm-transactions-for-anti-money-laundering-aml](https://www.kaggle.com/datasets/ealtman2019/ibm-transactions-for-anti-money-laundering-aml)),
-IBM Box, or a Hugging Face mirror of the transactions that needs no account.
-
-```bash
-python ibm_aml_adapter.py --file HI-Small_Trans.csv --limit 500000
-python ibm_aml_adapter.py --file HI-Small_Trans.csv --patterns HI-Small_Patterns.txt
-python ibm_aml_adapter.py --file HI-Small_Trans.csv --patterns HI-Small_Patterns.txt --typology-recall
-```
-
-`--patterns` names each laundering row from the sidecar, which needs a Kaggle
-account. The full sidecar parses: **370 attempts, 3,209 edges, eight typologies**,
-matching 61.9% of the laundering rows (below). Section B of the replay then
-reports the RULES' recall per typology, at the replay's full cost;
-`--typology-recall` reports the MODEL's from the cached matrix, in minutes.
-
-Three translation decisions: self-transfers are dropped (12% of the file, mostly
-`Reinvestment`); amounts are scaled per currency, each by its own median; and
-payment format is not filtered on - laundering concentrates in ACH, so filtering
-would select rows by the label.
-
-### Result (4,487,133 rows, 5,166 laundering, full file)
-
-| rule | on laundering | on legit | lift |
-|---|---|---|---|
-| `NEW_PAYEE_HIGH_AMOUNT` | 17.15% | 1.84% | **9.3x** |
-| `AMOUNT_DEVIATION` | 6.08% | 0.88% | **6.9x** |
-| `MULE_FAN_IN` | 3.17% | 1.12% | **2.8x** |
-| `STRUCTURING` | 5.59% | 4.36% | 1.3x |
-| `DISTINCT_PAYEE_BURST` | 11.61% | 9.48% | 1.2x |
-| `VELOCITY` | 11.79% | 9.68% | 1.2x |
-| `DAILY_LIMIT_BREACH` | 18.00% | 19.23% | 0.9x |
-
-1. **`MULE_FAN_IN` separates the classes 2.8:1** on a clock three orders of
-   magnitude finer than AMLSim's: the inversion there was AMLSim's timescale, not
-   the rule. It is conservative - the rule sees a fraction of each 87-hour pattern
-   - and the first external evidence for the pattern receiver-side aggregation
-   rests on.
-2. **The relational features transfer more strongly than on PaySim**:
-   `NEW_PAYEE_HIGH_AMOUNT` 9.3x against 4.0x.
-3. **The thresholds do not transfer.**
-   The decision layer flags 39.1% of laundering - and **22.18% of legitimate
-   traffic**. `VELOCITY`, `DISTINCT_PAYEE_BURST` and `DAILY_LIMIT_BREACH` count
-   events against retail limits, and this file contains banks and corporates (a
-   sender-day reaches 26,365 transactions).
-
-The replay took 5.5 hours: the extractor makes five linear passes over each
-sender's 24-hour history per event, free on retail traffic and quadratic on hubs
-- a scalability boundary only foreign data could expose (`docs/irp-framing.md` 8,
-twentieth). Hub accounts were not dropped to speed it up: they are almost all
-legitimate, so dropping them would inflate every lift.
-
-### Result (`--our-model`): this project's model on the published split
-
-`train.py`'s hyperparameters on the features the deployed extractor computes,
-scored as the IBM benchmark scores: the earliest 60% train, the next 20%
-validate, the last 20% test (897,427 rows, 1,653 laundering), minority-class F1,
-ten seeds.
-
-| configuration | F1 %, threshold from validation | F1 % at 0.5 | PR-AUC | ROC-AUC |
-|---|---|---|---|---|
-| this project, 14 features | 17.5 +/- 3.9 | 6.5 | 0.065 | 0.927 |
-| - without receiver aggregation | 15.4 +/- 3.5 | 4.7 | 0.057 | 0.917 |
-| - plus the file's payment format and currency | **35.7 +/- 4.1** | 18.7 | 0.200 | 0.931 |
-| *any of the three, class-weighted* | *1.5 - 2.2* | *1.5 - 2.1* | *0.009 at most* | |
-
-Published on the same split (arXiv:2402.08593, Table 4): gradient boosting on the
-file's own columns 21.3 +/- 0.3 (LightGBM) and 19.8 +/- 0.9 (XGBoost), GIN
-28.7 +/- 1.1, GIN+EU 47.7 +/- 7.9, PNA 56.8 +/- 2.4, and gradient boosting with
-graph features 62.9 +/- 0.3 and 64.8 +/- 0.5.
-
-With the file's own columns this feature set sits between the tabular baselines
-and the graph methods - though at a fixed 0.5 threshold it scores 18.7, and the
-paper does not state its threshold rule. Class weighting collapses at this 0.1%
-base rate, as on PaySim; `train.py` now fits unweighted below 0.5% fraud.
-
-```bash
-python ibm_aml_adapter.py --file HI-Small_Trans.csv --extract-only --cache ibm_features.npz
-python ibm_aml_adapter.py --file HI-Small_Trans.csv --our-model --cache ibm_features.npz --seeds 10
-```
-
-### Receiver aggregation, asked so that seed noise cannot answer it (`--receiver-ablation`)
-
-Ten seeds left the receiver-side delta inside the model's own spread (2.1 F1
-points, CI [-1.5, +5.6]), so it was asked again with twenty seeds and a second
-method - the seed-averaged model, with a paired bootstrap over the test rows -
-under a rule fixed before the run: established only if both F1 intervals on the
-fourteen features exclude zero.
-
-| configuration | per seed, paired (20 seeds) | seed-averaged model, paired bootstrap |
-|---|---|---|
-| 14 features - F1 points | **+2.46 [+0.52, +4.40]**, 14 of 20 positive | **22.33 vs 20.00 = +2.33 [+1.05, +3.52]** |
-| 14 features - PR-AUC | +0.012 [+0.005, +0.019] | 0.153 vs 0.099 = +0.053 [+0.042, +0.064] |
-| plus format and currency - F1 points | -0.76 [-4.27, +2.75], 9 of 20 positive | 53.02 vs 49.77 = +3.25 [+1.73, +4.69] |
-| plus format and currency - PR-AUC | +0.003 [-0.023, +0.028] | 0.463 vs 0.423 = +0.040 [+0.026, +0.055] |
-
-**Established**, with caveats: it is a second look (the twenty seeds include the
-ten), the two methods disagree once the file's own columns are added, and the
-bootstrap measures only the test set's uncertainty. On PaySim, with no collection
-stage, the same removal helped - the sign turns where the design says it should.
-Averaging twenty fits also more than doubles PR-AUC (0.153 against 0.065).
-
-```bash
-python ibm_aml_adapter.py --file HI-Small_Trans.csv --receiver-ablation --cache ibm_features.npz --seeds 20 --boots 1000
-```
-
-### Result (`--typology-recall`): which laundering patterns the model catches
-
-The sidecar names 370 injected attempts, 3,209 edges, in eight typologies, and
-matches **3,198 of the 5,166 laundering rows (61.9%)** - the 11 edges matching no
-row are self-transfers, which the adapter drops. Recall per typology on the
-published test split, the recipe fitted unweighted, three seeds:
-
-| typology | in test | recall | across seeds |
-|---|---|---|---|
-| fan-in | 127 | **51.4%** | 47.2-54.3% |
-| stack | 122 | 43.2% | 41.8-45.1% |
-| random | 84 | 40.5% | 40.5-40.5% |
-| gather-scatter | 378 | 39.5% | 36.8-43.4% |
-| cycle | 99 | 37.0% | 36.4-38.4% |
-| scatter-gather | 242 | 32.1% | 31.0-34.3% |
-| bipartite | 67 | 30.8% | 26.9-34.3% |
-| fan-out | 133 | 30.6% | 24.8-36.8% |
-| **(unnamed)** | 401 | **5.8%** | 5.2-7.0% |
-| all laundering | 1,653 | 30.3% | 29.2-31.5% |
-
-1. **Fan-in is the best-detected typology**, at 51.4% against 30.3% overall, on a
-   dataset this project did not write and with the patterns named by whoever
-   injected them. It is external evidence for the shape receiver-side aggregation
-   was built for (`ml/README.md`, "Fan-in"), from labels chosen independently of
-   this project - where the ablation on IBM AML could only say the capability is
-   worth something to the model, this says which pattern it is worth it on.
-2. **The 38% of laundering rows the sidecar does not name are a different
-   population, and nearly invisible at 5.8%.** 95.7% of them are the only
-   laundering row at their receiver, against 59.4% of the named ones, and 99.4%
-   have a receiver that appears in no named attempt at all. There is no relation
-   to see, so a relational model sees nothing. The 30.3% overall is a mix of the
-   two: quoting it alone understates the model on patterns and overstates it on
-   isolated transfers.
-3. The order is not a difficulty ranking for laundering in general - it is this
-   generator's patterns, at this file's scale, under a one-hour receiver window
-   that sees a fraction of each (median collection span by typology: 35.8 hours
-   for fan-out, 86.1 for fan-in, 90.6 for gather-scatter).
-
-The mode joins the sidecar's labels onto the matrix `--extract-only` cached, so
-it costs minutes instead of the replay's hours, and it refuses to print if that
-cache is not row-aligned with the file - a misaligned join would hang a typology
-on the wrong transaction and still produce a table. The fit is not bit-stable
-(LightGBM's threaded histograms), so each row moves a few tenths of a point
-between runs: one decimal is all these figures carry.
+*IBM Transactions for Anti-Money Laundering* (Altman et al., NeurIPS 2023): 5.08M
+synthetic transfers on a one-minute clock, with a collection stage. Used from
+2026-09-08 and **removed on 2026-09-19 at the owner's decision**: its accounts
+include banks and companies, and this project is about card transfers between
+people. The decisions made with it stay recorded where they were made
+(`ml/README.md`); the adapter and its results are in git history
+(`git show 8f46624:validation/README.md`, section 4, and
+`git show 8f46624:validation/ibm_aml_adapter.py`).
 
 ---
 
-## 5. Mendeley ktbthg777x - examined and NOT used
+## 4. Mendeley ktbthg777x - examined and NOT used
 
 *"Synthetic Banking Transaction Dataset with Multi-Pattern Fraud Labels for
 Machine Learning Research"*, [doi 10.17632/ktbthg777x.1](https://data.mendeley.com/datasets/ktbthg777x/1),
