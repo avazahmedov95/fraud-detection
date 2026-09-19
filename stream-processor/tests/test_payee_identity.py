@@ -53,16 +53,16 @@ def test_state_write_and_read_use_the_same_key(mode):
         mode(m)
         st = R.SenderState()
         ev = _ev(pinfl="P1")
-        assert F.extract(ev, 800, st, now=1000)["is_new_payee"] == 1
+        assert F.extract(ev, st, now=1000)["is_new_payee"] == 1
         F.update_state(st, ev, now=1000)
-        assert F.extract(ev, 800, st, now=2000)["is_new_payee"] == 0
+        assert F.extract(ev, st, now=2000)["is_new_payee"] == 0
 
 
 def test_distinct_payees_stay_distinct(mode):
     mode("card")
     st = R.SenderState()
     F.update_state(st, _ev(pinfl="P1"), now=1000)
-    assert F.extract(_ev(pinfl="P2"), 800, st, now=2000)["is_new_payee"] == 1
+    assert F.extract(_ev(pinfl="P2"), st, now=2000)["is_new_payee"] == 1
 
 
 # --- the limitation, asserted ------------------------------------------------
@@ -77,13 +77,13 @@ def test_one_person_two_cards_is_two_payees_by_card(mode):
     mode("card")
     st = R.SenderState()
     F.update_state(st, one, now=1000)
-    assert F.extract(two, 800, st, now=2000)["is_new_payee"] == 1, \
+    assert F.extract(two, st, now=2000)["is_new_payee"] == 1, \
         "by card, the same person's second card is a new payee"
 
     mode("pinfl")
     st = R.SenderState()
     F.update_state(st, one, now=1000)
-    assert F.extract(two, 800, st, now=2000)["is_new_payee"] == 0, \
+    assert F.extract(two, st, now=2000)["is_new_payee"] == 0, \
         "by pinfl, both cards are the same payee"
 
 
@@ -95,8 +95,8 @@ def test_card_mode_never_reads_the_pinfl(mode):
     with_pinfl = _ev(pinfl="P1")
     without = {k: v for k, v in with_pinfl.items() if k != "receiver_pinfl"}
 
-    a = R.evaluate(with_pinfl, 800, R.SenderState(), now=1000)
-    b = R.evaluate(without, 800, R.SenderState(), now=1000)
+    a = R.evaluate(with_pinfl, R.SenderState(), now=1000)
+    b = R.evaluate(without, R.SenderState(), now=1000)
     assert a["features"] == b["features"]
     assert a["cep_score"] == b["cep_score"]
     assert a["rule_hits"] == b["rule_hits"]

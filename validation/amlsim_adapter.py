@@ -46,8 +46,6 @@ def _epoch(series):
 def run(dirpath, limit):
     tx, acct, alerts = load(dirpath)
 
-    open_dt = pd.to_datetime(
-        acct.set_index("acct_id")["open_dt"], errors="coerce")
     # NOT a leading-underscore name: itertuples renames such columns to
     # positional ones (_1, _2 ...), silently breaking getattr below.
     tx["ts_epoch"] = _epoch(tx["tran_timestamp"])
@@ -72,20 +70,13 @@ def run(dirpath, limit):
               ", ".join(f"{k}={v}" for k, v in Counter(typ.values()).most_common()))
     print()
 
-    return RP.replay(_events(tx, open_dt, typ, scale), total=len(tx))
+    return RP.replay(_events(tx, typ, scale), total=len(tx))
 
 
-def _events(tx, open_dt, typ, scale):
+def _events(tx, typ, scale):
     for r in tx.itertuples(index=False):
         ts = int(getattr(r, "ts_epoch"))
         bene = getattr(r, "bene_acct")
-
-        # Receiver account age in days, from the accounts file. PaySim had no equivalent
-        # field, so this capability was forced off there.
-        opened = open_dt.get(bene, pd.NaT)
-        age_days = None
-        if pd.notna(opened):
-            age_days = max(0, (pd.Timestamp(ts, unit="s") - opened).days)
 
         # str(): AMLSim numbers accounts from 0, and a falsy 0 would give an empty key.
         yield Event(
@@ -94,7 +85,6 @@ def _events(tx, open_dt, typ, scale):
                 "receiver_pinfl": str(bene)},
             ts=ts,
             label=1 if str(getattr(r, "is_sar")).lower() in ("true", "1") else 0,
-            receiver_age=age_days,
             typology=typ.get(getattr(r, "tran_id"), ""))
 
 
@@ -145,8 +135,6 @@ def main():
     if not os.path.isdir(args.dir):
         raise SystemExit(f"{args.dir} is not a directory")
 
-    # receiver_age stays ON - the one capability this dataset supports and PaySim
-    # did not.
     RP.capability_profile("myid_kinship", "geo_telemetry",
                           "session_telemetry")
 

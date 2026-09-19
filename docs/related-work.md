@@ -116,7 +116,8 @@ the prevalences match, so the comparison is like for like:
 
 Those rows are the baseline profile. On the realistic profile - fraud at 0.18%,
 legitimate look-alikes, a tenth of fraud unreported -
-the committee scores 0.450 PR-AUC, and most of the gap has closed: much of the
+the committee scores 0.321 PR-AUC, and the gap has closed (at a far lower fraud
+rate, so not directly comparable): much of the
 old distance was a generator whose classes separated by construction.
 
 **How much of the gap is features, and how much is data** (`validation/README.md`):

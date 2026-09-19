@@ -25,7 +25,7 @@ sys.path.insert(0, _PKG)
 
 import config as C
 import features as F
-from features import event_from, age_or_none
+from features import event_from
 from rules import SenderState, ReceiverState, PopulationBaseline, evaluate
 
 
@@ -42,7 +42,6 @@ def replay(path, population=None, count_hits=False):
         r = row._asdict()
         ev = event_from(r)
         res = evaluate(ev,
-                       receiver_age_days=age_or_none(r.get("receiver_account_age_days")),
                        state=states[r["sender_card"]],
                        now=pd.Timestamp(r["event_time"]).timestamp(),
                        receiver_state=rstates[F.payee_key(ev)],

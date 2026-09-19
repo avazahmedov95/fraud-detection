@@ -140,8 +140,7 @@ function Wait-Ready {
 # Every module the PyFlink job imports, shipped with it; kept in one place.
 $JobModules = @(
     "config.py", "capabilities.py", "features.py", "geo.py", "rules.py",
-    "enrichment.py", "receiver_store.py", "fusion.py", "payload_crypto.py",
-    "bins.py"
+    "receiver_store.py", "fusion.py", "payload_crypto.py"
 ) | ForEach-Object { "/opt/flink/usrjobs/$_" }
 
 function Assert-JobRunning {
@@ -303,13 +302,13 @@ function Reset-FeatureState {
         Clear the Redis state that accumulates ACROSS passes, so every pass of
         the dependency matrix scores the same slice from the same start.
 
-        THREE namespaces, and leaving any one of them makes the arms
-        incomparable. `age:*` is the enrichment cache. `rcv:*` are the payee
-        inbound windows MULE_FAN_IN reads - scored on WALL CLOCK, so replaying
-        the same rows a second time finds the first run still inside the
-        window. `mule:fanin:hist` is the population histogram the RELATIVE
-        threshold is derived from, so an unflushed pass does not merely see
-        warmer state, it scores against a different threshold.
+        TWO namespaces, and leaving either makes the arms incomparable.
+        `rcv:*` are the payee inbound windows MULE_FAN_IN reads - scored on
+        WALL CLOCK, so replaying the same rows a second time finds the first
+        run still inside the window. `mule:fanin:hist` is the population
+        histogram the RELATIVE threshold is derived from, so an unflushed pass
+        does not merely see warmer state, it scores against a different
+        threshold.
 
         This is what produced 43 -> 45 -> 47 MULE alerts across three arms that
         should have been identical. Note which counts did NOT drift: the CEP
@@ -353,7 +352,6 @@ function Reset-FeatureState {
         param($pattern)
         docker compose exec -T redis sh -c "redis-cli --scan --pattern '$pattern' | xargs -r redis-cli DEL" | Out-Null
     }
-    & $del "age:*"
     & $del "rcv:*"
     docker compose exec -T redis sh -c "redis-cli DEL mule:fanin:hist" | Out-Null
 
@@ -530,9 +528,6 @@ function Invoke-Measurement {
     # reporting window. experiments/latency.py filters on write time, not send.
     Write-Host "==> settling for 90 s so earlier rows leave the window" -ForegroundColor Cyan
     Start-Sleep -Seconds 90
-
-    Write-Host "==> flushing the enrichment cache (cold start, both arms alike)" -ForegroundColor Cyan
-    docker compose exec -T redis sh -c "redis-cli --scan --pattern 'age:*' | xargs -r redis-cli DEL" | Out-Null
 
     $startedAt = Get-Date
     switch ($Arm) {
@@ -775,10 +770,9 @@ switch ($Target.ToLower()) {
         Write-Host ""
         Write-Host "=== THROUGHPUT SWEEP: $($rates -join ', ') ev/s, $n messages each ===" -ForegroundColor Cyan
 
-        # One warm-up, discarded, AFTER the cache flush: every arm must meet a warm
-        # cache and a warm JVM, or the first rate is charged for the deployment's age.
-        docker compose exec -T redis sh -c "redis-cli --scan --pattern 'age:*' | xargs -r redis-cli DEL" | Out-Null
-        Write-Host "==> warm-up: 500 messages, discarded (also warms the cache)" -ForegroundColor Cyan
+        # One warm-up, discarded: every rate must meet a warm JVM and warm state,
+        # or the first rate is charged for the deployment's age.
+        Write-Host "==> warm-up: 500 messages, discarded" -ForegroundColor Cyan
         & $PSCommandPath produce-at-rate 500 -Rate 200
         if (-not (Wait-Drained "the warm-up")) { break }
 
@@ -941,11 +935,9 @@ switch ($Target.ToLower()) {
     "serve-prep" {
         Copy-Item "ml/models/model.onnx" "stream-processor/" -Force
         Copy-Item "ml/models/feature_names.json" "stream-processor/" -Force
-        # The model's REVIEW / BLOCK cutoffs: an unweighted committee's scale
-        # belongs to it, and config._model_thresholds reads them from here.
+        # The model's REVIEW cutoff: an unweighted committee's scale belongs to
+        # it, and config._model_review_threshold reads it from here.
         Copy-Item "ml/models/thresholds.json" "stream-processor/" -Force
-        # The BIN table: bins.py reads it, and the job dies at import without it.
-        Copy-Item "data-generator/banks.csv" "stream-processor/" -Force
         Write-Host "model + feature spec copied to stream-processor/"
     }
 

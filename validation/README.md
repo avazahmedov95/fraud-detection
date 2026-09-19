@@ -8,7 +8,7 @@ shared by both, so the results stay one measurement.
 
 ## The constraint that shapes everything here
 
-14 of this project's 18 features are **relational** - computed over the history
+13 of this project's 16 features are **relational** - computed over the history
 of a named sender and a named receiver. Measured cost of losing them (seed 42,
 held-out slice, baseline profile, on the 20-column vector of the time):
 
@@ -18,7 +18,7 @@ held-out slice, baseline profile, on the 20-column vector of the time):
 | no account identifiers | 0.761 | 0.563 | 0.745 |
 | amount + hour only | 0.653 | 0.272 | 0.819 |
 
-On the realistic profile the full system scores PR-AUC 0.450 (`ml/README.md`);
+On the realistic profile the full system scores PR-AUC 0.321 (`ml/README.md`);
 the stripped configurations have not been re-run there. Public transaction
 datasets carry no account identifiers, because those are what cannot be
 published:
@@ -38,7 +38,7 @@ source.
 built for another market, with **identifiers on both sides**, so this project's
 own extractor and CEP rules run on it unchanged - `rules.evaluate()` as deployed,
 nothing retrained or tuned. Capabilities PaySim cannot support (geo,
-session, receiver age, kinship) are switched **off**, never defaulted, so no rule
+session, kinship) are switched **off**, never defaulted, so no rule
 fires on a fabricated zero.
 
 It is not trained on, for three reasons: fitting to the data under test answers
@@ -155,8 +155,7 @@ directly.
 ## 3. AMLSim - the adapter, and how to run it
 
 `amlsim_adapter.py`, the same contract: the deployed `rules.evaluate()`, nothing
-retrained. AMLSim's `accounts.csv` carries `open_dt`, so `receiver_age` is
-exercised, and its alerts label `fan_in` and `fan_out` separately.
+retrained. Its alerts label `fan_in` and `fan_out` separately.
 
 ```powershell
 git clone https://github.com/IBM/AMLSim.git          # once, outside this repo

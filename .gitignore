@@ -45,7 +45,6 @@ ml/models/_pre_ablation/
 stream-processor/model.onnx
 stream-processor/feature_names.json
 stream-processor/thresholds.json
-stream-processor/banks.csv
 
 # TLS material for the mutual-TLS arm (regenerate with `run.ps1 make-certs`).
 # The CA private key lives here alongside the certificates it signs, which is

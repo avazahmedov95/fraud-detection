@@ -7,8 +7,7 @@ It adds no detection logic: transfers are built by data-generator's
 reasons and queue from case-manager's `Explainer` and `CaseStore`.
 
 Scenarios are real episodes from the held-out 20% of the dataset, replayed under
-a fresh sender card and moved in time to end now; receivers keep their cards so
-Neo4j still knows their account age.
+a fresh sender card and moved in time to end now; receivers keep their cards.
 
     python demo/server.py        # then open http://localhost:8090
 """
@@ -194,8 +193,8 @@ class Episodes:
 
 def replay_messages(items, now, rng=random):
     """The rows as kafka_producer sends them, re-identified and moved in time:
-    senders get new PINFLs and new cards with the same BIN (so issuer and on-us are
-    unchanged); receivers, and a sender also paid in the episode, keep their cards.
+    senders get new PINFLs and new cards with the same BIN (the same issuing bank);
+    receivers, and a sender also paid in the episode, keep their cards.
     Times shift so the last row lands at `now`, keeping every gap."""
     keep = {row["receiver_card"] for row, _ in items}
     cards, pinfls = {}, {}
@@ -222,7 +221,8 @@ _PHRASE = re.compile(r"^(?P<label>.+?): (?P<shown>.*) \((?P<w>[+-]\d+\.\d+)\)$")
 
 
 def split_phrases(phrases):
-    """case-manager's explanation lines - "payee's account age: 3 days (+0.42)" -
+    """case-manager's explanation lines - "distinct senders paying this payee in an
+    hour: 3 (+0.42)" -
     back into (feature, shown value, weight), so the page can say them in either
     language without a second explainer to drift from the first."""
     names = {label: name for name, (label, _) in EX._PHRASES.items()}
@@ -434,8 +434,7 @@ class App:
                    "review": m["thresholds"]["review"],
                    "rules_precision": m["cep_only"]["precision"],
                    "rules_recall": m["cep_only"]["recall"],
-                   "by_type": {k: v["recall"] for k, v in m["by_fraud_type"].items()},
-                   "outage": m.get("graph_outage")}
+                   "by_type": {k: v["recall"] for k, v in m["by_fraud_type"].items()}}
         except (OSError, KeyError, ValueError) as exc:
             own = {"error": str(exc)[:200]}
         if self.library is not None:

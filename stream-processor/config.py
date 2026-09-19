@@ -35,13 +35,8 @@ TOPIC_SCORED = os.getenv("TOPIC_SCORED", "transactions.scored")
 TOPIC_ALERTS = os.getenv("TOPIC_ALERTS", "fraud.alerts")
 CONSUMER_GROUP = os.getenv("CONSUMER_GROUP", "fraud-cep")
 
-NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
-NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "fraud_neo4j")
-
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
-ENRICH_CACHE_TTL_S = 3600           # receiver-age lookups cached for 1h
 
 SECS_LOGIN_MIN_HISTORY = 5          # cold start: z = 0 below this many observations
 W_COACHED_SESSION = 0.35            # deliberately level with W_NEW_PAYEE_HIGH
@@ -88,11 +83,9 @@ MULE_FAN_IN_REFRESH_EVERY = int(os.getenv("MULE_FAN_IN_REFRESH_EVERY", "512"))
 AMOUNT_DEVIATION_MIN_HISTORY = 5   # history needed before deviation can fire
 NEW_PAYEE_AMOUNT_FACTOR = 3.0      # amount > factor * sender mean
 NEW_PAYEE_ABS_FLOOR = 2_000_000    # ...and above this absolute floor (UZS)
-FRESH_RECEIVER_DAYS = 30           # younger receiver account is "fresh"
 
 # --- Rule weights (contribution to the CEP score, capped at 1.0) ------------
 W_NEW_PAYEE_HIGH = 0.35
-W_FRESH_RECEIVER = 0.15
 W_VELOCITY = 0.30
 W_STRUCTURING = 0.40
 W_DISTINCT_BURST = 0.25
@@ -167,10 +160,6 @@ def _resolve_artefact(env_var, filename, extra_dirs=()):
 MODEL_ONNX_PATH = _resolve_artefact("MODEL_ONNX_PATH", "model.onnx")
 FEATURE_NAMES_PATH = _resolve_artefact("FEATURE_NAMES_PATH", "feature_names.json")
 THRESHOLDS_PATH = _resolve_artefact("THRESHOLDS_PATH", "thresholds.json")
-# data-generator/ last, for tests and offline replay without serve-prep.
-BANKS_CSV_PATH = _resolve_artefact(
-    "BANKS_CSV", "banks.csv",
-    extra_dirs=(os.path.join(JOB_DIR, "..", "data-generator"),))
 
 # Fusion happens at the DECISION layer - fusion.py says why every blend degraded.
 FINAL_REVIEW_THRESHOLD = 0.40

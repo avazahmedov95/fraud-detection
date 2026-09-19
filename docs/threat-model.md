@@ -33,7 +33,7 @@ that grew 1.4x in a year while conventional bank transfers fell 49% to $397mn.
 The exclusion is still correct, for a structural reason: for an inbound
 cross-border transfer the **sender is not a customer of this bank**, so the 14
 relational features computed over sender state do not exist. What survives is
-the receiver side - account age, inflow concentration, distinct senders per hour.
+the receiver side - inflow concentration, distinct senders per hour.
 On domestic traffic receiver-side aggregation is the most valuable capability
 (§4); on the 46% of inflow from abroad it is **the only one available**. The
 evaluation cannot show that, because the generator models domestic traffic only.
@@ -151,21 +151,20 @@ the bet makes it falsifiable — and shows which controls are load-bearing.
 | `COACHED_SESSION` (`active_call`, `secs_login_z`) | be on a call, or hesitate, while confirming | **no** | n/a | n/a | **very low once known** — "hang up before you confirm" |
 | `GEO_ANOMALY` | appear from the victim's usual region | yes | **no** | yes | **low** — a proxy in the right city |
 | `IMPOSSIBLE_TRAVEL` | be in two places at once | yes | **yes** | yes | **high** — requires a proxy geographically consistent with the victim's *recent* activity, which the attacker cannot observe |
-| `FRESH_RECEIVER`, `receiver_age` | use an aged destination account | no | no | **no** | **medium** — account farming; real cost, real lead time |
 | `MULE_FAN_IN` (`rcv_distinct_senders_1h`) | avoid concentration at the payee | n/a | n/a | **no** | **high** — spreading fan-in across accounts and hours cuts the network's throughput, which is its purpose |
 
 "yes" means the assumption holds against that adversary; "no" means they can
 break it.
 
-### Two of these controls assume data the deploying bank mostly does not have
+### The payee side assumes data the deploying bank mostly does not have
 
 A card-to-card transfer reaches the sending bank as a **destination PAN**.
 Resolving it to the person behind it is a core-banking lookup available only for
 the bank's own clients - **6.85% of transfers** at the measured card-market
 concentration (69.0 million cards, 34 banks, largest share 16.3%; the generated
-stream realises 6.73%). So `FRESH_RECEIVER` and `receiver_age`, rated "medium"
-above, are **unavailable on 93% of traffic**, and `MULE_FAN_IN` aggregates over
-the card, not the person. Two consequences:
+stream realises 6.73%). So the payee's account age was **unavailable on 93% of
+traffic** - the reason it was removed on 2026-09-19 - and `MULE_FAN_IN`
+aggregates over the card, not the person. Two consequences:
 
 - **A3's cost to evade is overstated at bank level.** A mule holding several cards
   is already split across as many fan-in buckets when the key is the PAN, at no
@@ -227,7 +226,7 @@ profile, five seeds) against cost to evade:
 |---|---|---|
 | receiver-side aggregation | −0.036 | **high** |
 | session telemetry | −0.034 | **very low** |
-| receiver account age | −0.022 | medium |
+| receiver account age (removed 2026-09-19) | −0.022 | medium |
 | geo telemetry | ~0 in the model, but enables IMPOSSIBLE_TRAVEL | high for that rule, low for GEO_ANOMALY |
 
 **The second most valuable signal is the most fragile.** `COACHED_SESSION` works

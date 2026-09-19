@@ -5,56 +5,43 @@ import pytest
 from rules import SenderState, evaluate
 import config as C
 import capabilities as CAP
-from conftest import bank_card, payee_card
+from conftest import payee_card
 
 # A rule cannot fire with its capability off; those tests skip, not weaken.
-needs_receiver_age = pytest.mark.skipif(
-    not CAP.enabled("receiver_age"),
-    reason="receiver age is disabled by CAP_RECEIVER_AGE=off")
 needs_geo = pytest.mark.skipif(
     not CAP.enabled("geo_telemetry"),
     reason="geo is disabled by CAP_GEO_TELEMETRY=off")
 
 
-def _ev(amount, payee="rcv", device="dev-1", region="Tashkent City",
-        sender_bank="BankA", receiver_bank="BankA"):
-    # Both sides default to the SAME issuer so these behave identically under
-    # every receiver_age mode: on-us means the age is always visible. The mode
-    # switch itself is covered in test_receiver_age_modes.py.
-    return {"amount_uzs": amount, "receiver_pinfl": payee,
-            "device_id": device, "sender_region": region,
-            "sender_card": bank_card(sender_bank),
-            "receiver_card": payee_card(payee, receiver_bank)}
+def _ev(amount, payee="rcv", region="Tashkent City"):
+    return {"amount_uzs": amount, "receiver_pinfl": payee, "sender_region": region,
+            "sender_card": payee_card("sender"), "receiver_card": payee_card(payee)}
 
 
 def test_known_small_payment_is_allowed():
     st = SenderState()
     # establish a baseline of small transfers to a known payee
     for _ in range(6):
-        evaluate(_ev(100_000, payee="friend"),  800, st, now=1000)
-    res = evaluate(_ev(120_000, payee="friend"),  800, st, now=2000)
+        evaluate(_ev(100_000, payee="friend"), st, now=1000)
+    res = evaluate(_ev(120_000, payee="friend"), st, now=2000)
     assert res["decision"] == "ALLOW"
     assert res["is_new_payee"] is False
 
 
 
-@needs_receiver_age
-def test_app_pattern_new_large_fresh_payee_is_flagged():
+def test_app_pattern_new_large_payee_is_flagged():
     st = SenderState()
     for i in range(6):
-        evaluate(_ev(150_000, payee="friend"),  800, st, now=1000 + i)
-    res = evaluate(_ev(9_000_000, payee="fraudster"),
-                   receiver_age_days=5, state=st, now=5000)
-    assert res["decision"] == "REVIEW"
+        evaluate(_ev(150_000, payee="friend"), st, now=1000 + i)
+    res = evaluate(_ev(9_000_000, payee="fraudster"), st, now=5000)
     assert "NEW_PAYEE_HIGH_AMOUNT" in res["rule_hits"]
-    assert "FRESH_RECEIVER" in res["rule_hits"]
 
 
 def test_velocity_burst_is_flagged():
     st = SenderState()
     res = None
     for i in range(7):  # 7 transfers inside the velocity window
-        res = evaluate(_ev(200_000, payee=f"p{i}"),  800, st, now=1000 + i)
+        res = evaluate(_ev(200_000, payee=f"p{i}"), st, now=1000 + i)
     assert "VELOCITY" in res["rule_hits"]
 
 
@@ -63,7 +50,7 @@ def test_structuring_is_flagged():
     just_under = int(0.95 * C.STRUCTURING_THRESHOLD)
     res = None
     for i in range(3):
-        res = evaluate(_ev(just_under, payee=f"p{i}"), 800, st, now=1000 + i * 60)
+        res = evaluate(_ev(just_under, payee=f"p{i}"), st, now=1000 + i * 60)
     assert "STRUCTURING" in res["rule_hits"]
 
 
@@ -71,10 +58,8 @@ def test_structuring_is_flagged():
 def test_geo_change_flagged():
     st = SenderState()
     for i in range(4):
-        evaluate(_ev(150_000, payee="friend", device="dev-A", region="Samarkand"),
-                  800, st, now=1000 + i)
-    res = evaluate(_ev(150_000, payee="friend", device="dev-NEW", region="Andijan"),
-                    800, st, now=2000)
+        evaluate(_ev(150_000, payee="friend", region="Samarkand"), st, now=1000 + i)
+    res = evaluate(_ev(150_000, payee="friend", region="Andijan"), st, now=2000)
     assert "GEO_ANOMALY" in res["rule_hits"]
 
 
@@ -82,9 +67,8 @@ def test_geo_change_flagged():
 def test_impossible_travel_is_flagged():
     """Tashkent -> Nukus (~800 km) ten minutes later: no journey achieves this."""
     st = SenderState()
-    evaluate(_ev(150_000, payee="friend", region="Tashkent City"), 800, st, now=1000)
-    res = evaluate(_ev(150_000, payee="friend", region="Karakalpakstan"),
-                   800, st, now=1000 + 600)
+    evaluate(_ev(150_000, payee="friend", region="Tashkent City"), st, now=1000)
+    res = evaluate(_ev(150_000, payee="friend", region="Karakalpakstan"), st, now=1000 + 600)
     assert "IMPOSSIBLE_TRAVEL" in res["rule_hits"]
     # On its own the rule must be decisive enough to reach REVIEW.
     assert res["decision"] == "REVIEW"
@@ -94,9 +78,8 @@ def test_impossible_travel_is_flagged():
 def test_real_travel_is_not_flagged():
     """Same journey twelve hours later is an ordinary trip, not a contradiction."""
     st = SenderState()
-    evaluate(_ev(150_000, payee="friend", region="Tashkent City"), 800, st, now=1000)
-    res = evaluate(_ev(150_000, payee="friend", region="Karakalpakstan"),
-                   800, st, now=1000 + 12 * 3600)
+    evaluate(_ev(150_000, payee="friend", region="Tashkent City"), st, now=1000)
+    res = evaluate(_ev(150_000, payee="friend", region="Karakalpakstan"), st, now=1000 + 12 * 3600)
     assert "IMPOSSIBLE_TRAVEL" not in res["rule_hits"]
 
 
@@ -104,9 +87,8 @@ def test_real_travel_is_not_flagged():
 def test_adjacent_regions_are_never_impossible():
     """Bordering regions: centre-to-centre distance is a table artefact, not a trip."""
     st = SenderState()
-    evaluate(_ev(150_000, payee="friend", region="Tashkent City"), 800, st, now=1000)
-    res = evaluate(_ev(150_000, payee="friend", region="Tashkent Region"),
-                   800, st, now=1001)
+    evaluate(_ev(150_000, payee="friend", region="Tashkent City"), st, now=1000)
+    res = evaluate(_ev(150_000, payee="friend", region="Tashkent Region"), st, now=1001)
     assert "IMPOSSIBLE_TRAVEL" not in res["rule_hits"]
 
 
@@ -114,9 +96,8 @@ def test_adjacent_regions_are_never_impossible():
 def test_unknown_region_does_not_fire():
     """An unmapped region is 'not applicable', never a zero-distance move."""
     st = SenderState()
-    evaluate(_ev(150_000, payee="friend", region="Atlantis"), 800, st, now=1000)
-    res = evaluate(_ev(150_000, payee="friend", region="Karakalpakstan"),
-                   800, st, now=1001)
+    evaluate(_ev(150_000, payee="friend", region="Atlantis"), st, now=1000)
+    res = evaluate(_ev(150_000, payee="friend", region="Karakalpakstan"), st, now=1001)
     assert "IMPOSSIBLE_TRAVEL" not in res["rule_hits"]
 
 
@@ -124,8 +105,8 @@ def test_unknown_region_does_not_fire():
 def test_impossible_travel_is_independent_of_home_region():
     """No established home means no GEO_ANOMALY, but physics still applies."""
     st = SenderState()
-    evaluate(_ev(150_000, payee="friend", region="Termez-like"), 800, st, now=1000)
+    evaluate(_ev(150_000, payee="friend", region="Termez-like"), st, now=1000)
     st.last_region = "Surkhandarya"
-    res = evaluate(_ev(150_000, payee="friend", region="Khorezm"), 800, st, now=1060)
+    res = evaluate(_ev(150_000, payee="friend", region="Khorezm"), st, now=1060)
     assert "IMPOSSIBLE_TRAVEL" in res["rule_hits"]
     assert "GEO_ANOMALY" not in res["rule_hits"]

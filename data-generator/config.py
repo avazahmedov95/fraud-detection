@@ -136,7 +136,7 @@ PROFILE = GeneratorConfig()
 
 # --- Issuing banks ------------------------------------------------------------
 # Header `bin,code,name,cards_mln`, one row per BIN. No fallback table: a synthetic
-# one would move the on-us rate, and with it receiver_age coverage.
+# one would silently change the bank mix of every generated card.
 BANKS_SOURCE = "banks.csv"
 
 
@@ -146,8 +146,8 @@ def _load_banks():
     if not os.path.exists(path):
         raise FileNotFoundError(
             f"bank registry '{BANKS_SOURCE}' not found at {path}. Nothing is "
-            f"substituted for it: market structure decides the on-us rate, and "
-            f"the on-us rate decides how much traffic receiver_age can cover. "
+            f"substituted for it: market structure decides which bank issues "
+            f"each generated card. "
             f"Supply the UzCard/HUMO BIN registry as CSV with the header "
             f"bin,code,name,cards_mln.")
     with open(path, newline="", encoding="utf-8") as fh:
@@ -164,8 +164,8 @@ def _load_banks():
 
 BANKS = _load_banks()
 
-# Card-share weighting reproduces the real bank concentration, which bounds
-# receiver_age coverage; False = uniform, a control.
+# Card-share weighting reproduces the real bank concentration; False = uniform,
+# a control.
 WEIGHT_BANKS_BY_CARD_SHARE = True
 
 
@@ -184,7 +184,7 @@ def _bank_weights():
         print(f"WARNING: {BANKS_SOURCE} carries no cards_mln figures; bank "
               f"assignment falls back to UNIFORM weights. The on-us rate drops "
               f"to about 1/n_banks, a property of the list rather than of the "
-              f"market, and receiver_age coverage moves with it.", file=sys.stderr)
+              f"market.", file=sys.stderr)
         return [1.0 / n] * n
     return [w / total for w in raw]
 

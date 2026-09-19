@@ -3,8 +3,7 @@
 The streaming detection job:
 
 ```
-transactions.raw --(key by sender)--> enrich (Neo4j account lookup + Redis cache)
-                                    --> CEP rules (pure, stateful)
+transactions.raw --(key by sender)--> CEP rules (pure, stateful; payee windows in Redis)
                                     --> ONNX model on the feature vector
                                     --> final_score + decision
                  --> transactions.scored   (every event)
@@ -20,12 +19,10 @@ capabilities.py  what the deploying bank can observe -> features + active rules
 features.py      shared train/serve feature contract (Welford baseline) — the core
 rules.py         pure CEP engine + SenderState; returns the feature vector too
 fusion.py        final_score + decision + reason-code fraud-type tag (pure)
-enrichment.py    Neo4j receiver-age lookup, Redis-cached, fails open
 receiver_store.py  the payee's inbound window and the population baseline, in Redis
-bins.py          issuer from the destination PAN's BIN (on-us / cross-network)
 geo.py           region coordinates + haversine, for the travel-speed rule
 payload_crypto.py  AES-256-GCM envelope; duplicated in data-generator/ by design
-fraud_job.py     PyFlink job: Kafka -> enrich+CEP -> ONNX -> fusion -> Kafka sinks
+fraud_job.py     PyFlink job: Kafka -> CEP -> ONNX -> fusion -> Kafka sinks
 
 experiments/     harnesses. Nothing here is deployed; each one produces a
                  NUMBER, and none is imported by the modules above.
@@ -52,10 +49,8 @@ the active rule set are both derived from it, so a capability can be switched of
 in one place and the train/serve contract follows automatically.
 
 ```
-CAP_RECEIVER_AGE=always|on_us|off   account-age lookup / inter-bank exchange
 CAP_MYID_KINSHIP=off|on             MyID verified family relationships
 CAP_RECEIVER_VELOCITY=on|off        receiver-keyed fan-in counter (Redis)
-CAP_DEVICE_TELEMETRY=on|off         stable device identifier
 CAP_GEO_TELEMETRY=on|off            operation region
 CAP_SESSION_TELEMETRY=on|off        mobile-app session signals
 CAP_PAYEE_IDENTITY=card|pinfl       what the payee can be resolved to
@@ -155,15 +150,10 @@ mount as a literal rather than deriving it — and why a module absent from
 
 ## Known limitations / next enhancements
 
-- **Enrichment is synchronous** inside `process_element`. A cache miss costs
-  ~4.6 ms at the median and ~31 ms at p99, and the prototype's hit rate flatters
-  it: a few thousand transactions saturate a 5,200-person graph, which a bank
-  with millions of accounts will not reproduce. Flink async I/O is the fix
-  (`docs/irp-framing.md` §7.2).
 - **The Python worker processes records serially**, so one stall delays
   everything queued behind it — two stalls became eighteen target breaches in one
   run (§7.3). p99 here is a property of the worst individual record.
-- **Device / home-region profiles** are learned within-stream; in production
+- **Home-region profiles** are learned within-stream; in production
   these long-lived profiles belong in the Redis feature store, seeded from
   history.
 - **Receiver-side signals are keyed by card**, because a sending bank can resolve

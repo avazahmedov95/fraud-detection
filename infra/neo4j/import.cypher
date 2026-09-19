@@ -10,9 +10,9 @@
 CREATE CONSTRAINT person_pinfl IF NOT EXISTS
 FOR (p:Person) REQUIRE p.pinfl IS UNIQUE;
 
-// The account-age lookup runs by CARD under the default payee_identity mode,
-// because that is the identity a sending bank holds for the payee. Without an
-// index that lookup is a full label scan on every uncached transaction.
+// The alert-graph writer (sink-writer/neo4j_writer.py) matches both parties by
+// CARD, the identity a sending bank holds for the payee. Without an index every
+// alert write is a full label scan.
 //
 // An INDEX, not a constraint: card uniqueness happens to hold in the generated
 // population (one card per person), but the whole point of the card-keyed mode
@@ -30,7 +30,6 @@ MERGE (p:Person {pinfl: row.pinfl})
       p.bank_code        = row.bank_code,
       p.bank_name        = row.bank_name,
       p.region           = row.region,
-      p.account_age_days = toInteger(row.account_age_days),
       p.is_fraud_account = (row.is_fraud_account = 'True');
 
 // Sanity counts.

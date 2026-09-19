@@ -62,12 +62,6 @@ def main():
     # file, ten minutes shorter at the realistic profile's size.
     df = D.build_matrix(CSV, nrows=PARITY_ROWS)
     sample = df.iloc[int(len(df) * 0.80):][feats].astype("float32").values[:2000]
-    # The same rows with no payee age: NaN routing is where a converter can differ.
-    age_cols = [feats.index(c) for c in ("receiver_age", "receiver_is_fresh") if c in feats]
-    if age_cols:
-        unknown = sample[:500].copy()
-        unknown[:, age_cols] = np.nan
-        sample = np.vstack([sample, unknown])
 
     # The committee is a merged lgb.Booster (committee.py); a model trained before
     # it is an LGBMClassifier. Both are scored here the way each predicts.

@@ -43,18 +43,6 @@ REGISTRY = (
                   "would model nothing except declining to look at it.",
     ),
     Capability(
-        key="receiver_age",
-        requires="core-banking lookup of the payee's account, or an inter-bank "
-                 "exchange of that field",
-        modes=("always", "on_us", "off"),
-        features=("receiver_age", "receiver_is_fresh"),
-        rules=("FRESH_RECEIVER",),
-        rationale="The sending bank can only resolve its own clients' accounts. "
-                  "The UzCard / HUMO switch carries no account-age field, so on "
-                  "inter-bank transfers this is unobtainable ('on_us' models "
-                  "exactly that; it adds a receiver_age_known flag).",
-    ),
-    Capability(
         key="myid_kinship",
         requires="MyID integration exposing verified family relationships",
         modes=("off", "on"),            # default off: not every bank has it
@@ -174,10 +162,6 @@ def feature_names() -> list:
         if not enabled(cap.key):
             continue
         names.extend(cap.features)
-        # 'on_us' cannot distinguish "new account" from "not our client" without saying
-        # which, so the flag exists only in that mode.
-        if cap.key == "receiver_age" and MODES[cap.key] == "on_us":
-            names.append("receiver_age_known")
     return names
 
 
@@ -200,10 +184,10 @@ def rule_enabled(rule: str) -> bool:
 # Rules that plausibly fire TOGETHER on one episode - distinct from
 # fusion._TYPE_PRIORITY, which names an alert from whichever rule fired first.
 PATTERN_SIGNATURES = {
-    "APP":         ("NEW_PAYEE_HIGH_AMOUNT", "FRESH_RECEIVER", "COACHED_SESSION"),
+    "APP":         ("NEW_PAYEE_HIGH_AMOUNT", "COACHED_SESSION"),
     "ATO":         ("GEO_ANOMALY", "IMPOSSIBLE_TRAVEL", "VELOCITY"),
     "STRUCTURING": ("STRUCTURING", "VELOCITY"),
-    "MULE":        ("MULE_FAN_IN", "FRESH_RECEIVER", "NEW_PAYEE_HIGH_AMOUNT"),
+    "MULE":        ("MULE_FAN_IN", "NEW_PAYEE_HIGH_AMOUNT"),
 }
 
 
@@ -213,7 +197,6 @@ def _rule_weights():
     import config as C
     explicit = {
         "NEW_PAYEE_HIGH_AMOUNT": "W_NEW_PAYEE_HIGH",
-        "FRESH_RECEIVER": "W_FRESH_RECEIVER",
         "VELOCITY": "W_VELOCITY",
         "STRUCTURING": "W_STRUCTURING",
         "DISTINCT_PAYEE_BURST": "W_DISTINCT_BURST",

@@ -15,7 +15,7 @@ SCORED = {
     "is_new_payee": True,
     "cep_score": 0.5, "ml_score": 0.93, "final_score": 0.93,
     "decision": "BLOCK", "predicted_type": "APP",
-    "rule_hits": ["NEW_PAYEE_HIGH_AMOUNT", "FRESH_RECEIVER"],
+    "rule_hits": ["NEW_PAYEE_HIGH_AMOUNT", "VELOCITY"],
     "model_version": "cep+ml-fusion-v1",
 }
 ALLOW = {**SCORED, "transaction_id": "tx-2", "decision": "ALLOW",
@@ -39,7 +39,7 @@ def test_ml_score_none_becomes_zero():
 
 def test_audit_payload_is_full_json():
     row = dict(zip(R.AUDIT_CORE_COLUMNS, R.audit_core(SCORED)))
-    assert row["rule_hits"] == ["NEW_PAYEE_HIGH_AMOUNT", "FRESH_RECEIVER"]
+    assert row["rule_hits"] == ["NEW_PAYEE_HIGH_AMOUNT", "VELOCITY"]
     assert json.loads(row["payload"])["transaction_id"] == "tx-1"
 
 

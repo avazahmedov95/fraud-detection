@@ -72,11 +72,11 @@ Each package keeps its tests in its own `tests/` directory, and the packages are
 run **one at a time**:
 
 ```bash
-python -m pytest stream-processor -q     # 185
+python -m pytest stream-processor -q     # 159
 python -m pytest data-generator   -q     #  25
 python -m pytest sink-writer      -q     #  23
-python -m pytest validation       -q     #  15
-python -m pytest case-manager     -q     #  45
+python -m pytest validation       -q     #  14
+python -m pytest case-manager     -q     #  44
 python -m pytest ml               -q     #  9
 python -m pytest demo             -q     #   8
 ```
@@ -86,11 +86,10 @@ Not all seven in one invocation: five module names recur across packages
 `payload_crypto.py`), because the packages deploy as separate units, and pytest
 cannot import two modules of the same name.
 
-Nine of those files were written after a defect that had already happened —
+Eight of those files were written after a defect that had already happened —
 `test_wire_types.py` after a boolean that travelled as the string `"False"` and
 scored 1 on 100% of live events, `test_payload_crypto.py` after the risk of two
-copies of one module drifting, `test_bins.py` after a bank that closed. They are
-regression evidence, not coverage.
+copies of one module drifting. They are regression evidence, not coverage.
 
 ```bash
 python tools/boundary_audit.py           # 25 joins between components
@@ -155,7 +154,7 @@ From inside the Docker network use service names: `kafka:9092`, `redis:6379`,
 1. ✅ Synthetic data generator
 2. ✅ Infrastructure (this stack)
 3. ✅ Kafka ingestion wiring
-4. ✅ Flink job: enrichment + CEP
+4. ✅ Flink job: stateful CEP
 5. ✅ ML: training, SHAP, ONNX export
 6. ✅ ONNX serving inside Flink + score fusion
 7. ✅ ClickHouse + Neo4j sinks

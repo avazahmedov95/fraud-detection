@@ -98,8 +98,8 @@ def b_wire_extracts_like_typed():
     for k, v in list(typed.items()):                      # re-type as a caller would
         if isinstance(v, str) and v.lower() in ("true", "false"):
             typed[k] = v.lower() == "true"
-    a = F.to_vector(F.extract(wire, 800, R.SenderState(), now=1000.0))
-    b = F.to_vector(F.extract(typed, 800, R.SenderState(), now=1000.0))
+    a = F.to_vector(F.extract(wire, R.SenderState(), now=1000.0))
+    b = F.to_vector(F.extract(typed, R.SenderState(), now=1000.0))
     if a != b:
         diff = [n for n, x, y in zip(F.FEATURE_NAMES, a, b) if x != y]
         return f"wire and typed events disagree on: {diff}"
@@ -113,7 +113,7 @@ def b_extractor_needs_nothing_absent():
     read = set(re.findall(r'event\.get\(\s*"([a-z_]+)"', src))
     read |= set(re.findall(r'event\[\s*"([a-z_]+)"\s*\]', src))
     sent = set(P.RAW_FIELDS) | {"ingested_at", "ingress_hash"}
-    # documented optional inputs: enrichment supplies them, not the wire
+    # documented optional inputs: a bank-side lookup supplies them, not the wire
     optional = {"is_family_transfer", "receiver_pinfl"}
     missing = sorted(read - sent - optional)
     if missing:

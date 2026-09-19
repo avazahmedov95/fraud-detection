@@ -111,12 +111,12 @@ def _review_threshold():
     return _THRESHOLD_CACHE[key]
 
 
-def evaluate(event: dict, receiver_age_days, state: SenderState, now: float,
+def evaluate(event: dict, state: SenderState, now: float,
              receiver_state: "ReceiverState | None" = None,
              population: "PopulationBaseline | None" = None) -> dict:
     """Score one event from the shared features. Mutates state (after extraction).
     `receiver_state` is optional: an unreachable shared store fails open here."""
-    f = F.extract(event, receiver_age_days, state, now, receiver_state)
+    f = F.extract(event, state, now, receiver_state)
 
     hits = []
     score = 0.0
@@ -126,10 +126,6 @@ def evaluate(event: dict, receiver_age_days, state: SenderState, now: float,
             f["is_new_payee"] and f["amount"] >= C.NEW_PAYEE_ABS_FLOOR
             and f["amount_gt_factor_mean"]):
         hits.append("NEW_PAYEE_HIGH_AMOUNT"); score += C.W_NEW_PAYEE_HIGH
-    # Guarded on age_known: an unavailable age makes receiver_is_fresh NaN, and
-    # NaN is truthy - unguarded, this would fire on every inter-bank transfer.
-    if on("FRESH_RECEIVER") and f["receiver_age_known"] and f["receiver_is_fresh"] == 1:
-        hits.append("FRESH_RECEIVER"); score += C.W_FRESH_RECEIVER
     if on("VELOCITY") and f["vel_10m"] > C.VELOCITY_MAX_COUNT:
         hits.append("VELOCITY"); score += C.W_VELOCITY
     if on("STRUCTURING") and f["sub_threshold_1h"] >= C.STRUCTURING_MIN_COUNT:
@@ -179,9 +175,6 @@ def evaluate(event: dict, receiver_age_days, state: SenderState, now: float,
 
     return {
         "is_new_payee": bool(f["is_new_payee"]),
-        # The age the bank could see, not ground truth, so the audit trail matches.
-        "receiver_account_age_days": (
-            receiver_age_days if f["receiver_age_known"] else None),
         "cep_score": round(score, 4),
         "decision": decision,
         "rule_hits": hits,

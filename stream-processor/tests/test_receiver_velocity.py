@@ -9,7 +9,7 @@ import capabilities as CAP
 import config as C
 import features as F
 from rules import SenderState, ReceiverState, evaluate
-from conftest import bank_card, payee_card
+from conftest import payee_card
 
 needs_cap = pytest.mark.skipif(
     not CAP.enabled("receiver_velocity"),
@@ -18,9 +18,8 @@ needs_cap = pytest.mark.skipif(
 
 def _ev(sender, amount=500_000, receiver="mule"):
     return {"amount_uzs": amount, "sender_pinfl": sender,
-            "receiver_pinfl": receiver, "device_id": f"dev-{sender}",
-            "sender_region": "Tashkent City",
-            "sender_card": bank_card("BankA"),
+            "receiver_pinfl": receiver, "sender_region": "Tashkent City",
+            "sender_card": payee_card("sender"),
             "receiver_card": payee_card(receiver)}
 
 
@@ -28,7 +27,7 @@ def _fan_in(n_senders, receiver_state, spacing_s=60, now0=1000):
     """Drive n distinct senders into one payee; return the last result."""
     res = None
     for i in range(n_senders):
-        res = evaluate(_ev(f"s{i}"), 800, SenderState(), now0 + i * spacing_s,
+        res = evaluate(_ev(f"s{i}"), SenderState(), now0 + i * spacing_s,
                        receiver_state)
     return res
 
@@ -53,7 +52,7 @@ def test_repeat_transfers_from_one_sender_are_not_fan_in():
     rs = ReceiverState()
     res = None
     for i in range(C.MULE_FAN_IN_MIN_SENDERS + 4):
-        res = evaluate(_ev("same-sender"), 800, SenderState(), 1000 + i * 60, rs)
+        res = evaluate(_ev("same-sender"), SenderState(), 1000 + i * 60, rs)
     assert "MULE_FAN_IN" not in res["rule_hits"]
 
 
@@ -70,14 +69,14 @@ def test_fan_in_spread_over_days_is_not_flagged():
 def test_inbound_features_reach_the_vector():
     rs = ReceiverState()
     _fan_in(3, rs)
-    f = F.extract(_ev("s99"), 800, SenderState(), now=1400, receiver_state=rs)
+    f = F.extract(_ev("s99"), SenderState(), now=1400, receiver_state=rs)
     assert f["rcv_distinct_senders_1h"] == 4      # three prior + this one
     assert f["rcv_inflow_1h"] > 0
 
 
 def test_missing_receiver_state_fails_open():
     """An unreachable shared store must keep scoring, not stall or crash."""
-    res = evaluate(_ev("s1"), 800, SenderState(), now=1000, receiver_state=None)
+    res = evaluate(_ev("s1"), SenderState(), now=1000, receiver_state=None)
     assert "MULE_FAN_IN" not in res["rule_hits"]
     assert res["decision"] in ("ALLOW", "REVIEW")
 

@@ -65,18 +65,18 @@ fails if this table disagrees with it.
 
 | metric                | ML model | CEP rules only |
 |-----------------------|----------|----------------|
-| ROC-AUC               | 0.987    | —              |
-| PR-AUC                | 0.450    | —              |
-| precision at REVIEW   | 0.586    | 0.024          |
-| recall at REVIEW      | 0.421    | 0.317          |
+| ROC-AUC               | 0.961    | —              |
+| PR-AUC                | 0.321    | —              |
+| precision at REVIEW   | 0.538    | 0.013          |
+| recall at REVIEW      | 0.351    | 0.149          |
 
-Recall by fraud type (ML at REVIEW): STRUCTURING 50.8%, APP 33.8%, ATO 80.0%, MULE 37.1%.
-The five fits alone scored 0.303-0.461 PR-AUC on the same slice; their committee
-0.450 - close to the best of them, and no fit is known in advance to be the best.
+Recall by fraud type (ML at REVIEW): STRUCTURING 42.4%, APP 31.0%, ATO 60.0%, MULE 29.0%.
+The five fits alone scored 0.260-0.359 PR-AUC on the same slice; their committee
+0.321 - inside that range, and no fit is known in advance to be the best.
 
-Read plainly: the committee finds about four in ten of the fraud in the held-out
-month, and about three alerts in five are fraud - with the spread one retrain
-moves (below). The rules alone reach 2.4% precision on data where
+Read plainly: the committee finds about a third of the fraud in the held-out
+month, and about half its alerts are fraud - with the spread one retrain
+moves (below). The rules alone reach 1.3% precision on data where
 legitimate traffic also collects, splits and changes phones. The weak patterns
 are APP and MULE.
 
@@ -100,7 +100,7 @@ reported. Three changes, each measured before it was adopted:
   probabilities sit near the base rate, so a fixed 0.40 means nothing.
   `train.py` fits on the earliest 64% of rows, puts REVIEW where F1 peaks on the
   next 16%, and writes it to `thresholds.json`, which serve-prep ships beside
-  `model.onnx` and the job reads (`stream-processor/config.py`). This run: cut at REVIEW = 0.0742, and
+  `model.onnx` and the job reads (`stream-processor/config.py`). This run: cut at REVIEW = 0.0606, and
   **there is no BLOCK**: since 2026-09-19 the system never blocks on its own - the
   owner's decision - and every alert goes to a person. The CEP-only fallback keeps
   its fixed cutoff, since an additive rule score is not a probability.
@@ -291,7 +291,7 @@ removed (above); the seller caveat stands for any count of a payee's payers.
 On 2026-09-19 the owner removed two inputs to simplify the system: `cross_network`
 (a transfer between UzCard and HUMO, which the generator draws independently of
 fraud) and device telemetry (`device_is_new` and the `DEVICE_CHANGE` rule - the
-bank's app now blocks a new device outright, CBU 3759). The vector is 18 columns.
+bank's app now blocks a new device outright, CBU 3759). The vector became 18 columns.
 
 Twenty paired fits of train.py's recipe on the realistic profile, with both and
 without both (seeds 0-19): validation PR-AUC 0.489 -> 0.498, paired +0.009
@@ -305,33 +305,37 @@ removing either column alone moved the served recall to 0.421 or 0.436 with PR-A
 unchanged (0.476, 0.469). **The headline figures carry about eight points of
 retrain-to-retrain spread in recall, and are quoted with it.**
 
+### The payee's account age: removed, and what it cost here
+
+On 2026-09-19 the owner removed the payee's account age - `receiver_age`,
+`receiver_is_fresh` and the `FRESH_RECEIVER` rule - with the Neo4j lookup that
+supplied it and the BIN table that decided when it was visible. A sending bank
+sees the account behind a card only when the payee is its own client, 6.85% of
+transfers at the real card market (`docs/threat-model.md` §4), and the UzCard /
+HUMO switch carries no such field. The vector is 16 columns.
+
+Unlike the two columns above, this one cost more than a retrain moves. The served
+committee went from PR-AUC 0.450 to 0.321, recall at REVIEW from 0.421 to 0.351 and
+precision from 0.586 to 0.538; the rules alone from 0.317 recall to 0.149, as the
+fallback-path figures below predicted. Five paired seeds on the baseline profile
+had put the capability at −0.022 [−0.040, −0.004]. Part of that lift was the
+generator's: it gives every payee an age and makes 70% of fraud payees younger
+than 45 days (`docs/generator-spec.md` §2), which a bank that cannot see the
+payee's account never observes. **The drop is the price of not assuming data the
+deploying bank does not have, and the figures above are quoted without it.**
+
 **Everything below is the baseline profile, the dataset of record until
 2026-09-14, unless it says otherwise.**
 
-### When the graph is down: the payee's age
+### When the graph is down
 
-**Since 2026-09-13 the recipe withholds the payee's age on a tenth of the training
-rows**, as the live job sees every event while Neo4j is down. Before, an unknown
-age was encoded as -1, which sorts below every real age, so a model that had never
-seen an unknown age read it as the newest account there is. The held-out slice
-replayed with every age withheld, both recipes, five seeds
-(`docs/irp-framing.md` 7.7c):
-
-| recipe | payee ages | alerts | false alarms | recall | PR-AUC |
-|---|---|---|---|---|---|
-| before: -1 for unknown | known | 137 | 10 | 0.854 | 0.935 |
-| | none | 228 | **95** | 0.891 | 0.891 |
-| since: withheld in training, NaN | known | 137 | 10 | 0.851 | 0.937 |
-| | none | 129 | **14** | 0.773 | 0.911 |
-
-The old encoding turned a dependency that fails open into ten times the false
-alarms, on every seed. The new one undoes most of that, not all: the verdict fixed
-before the run - no more false alarms without the ages than with them - fails, at
-14 against 10. The outage's price is now mostly recall (0.851 to 0.773), and with
-the ages known nothing moved. On the realistic profile, with Neo4j down for the
-whole slice, alerts go from 145 to 111 and recall from 0.421 to 0.292, while false
-alarms fall from 60 to 52. `train.py` scores the outage on every retrain, as
-`graph_outage` in `metrics.json`.
+Until 2026-09-19 the job looked the payee's age up in Neo4j, so an outage changed
+the scores: with an unknown age encoded as -1 it raised ten times the false alarms,
+and after the fix of 2026-09-13 - the age withheld on a tenth of the training rows -
+it cost recall instead: on the realistic profile, alerts 145 to 111 and recall
+0.421 to 0.292 (`docs/irp-framing.md` 7.7c). The age is gone (above), so the job
+reads nothing from Neo4j: an outage now costs only the analysts' alert graph,
+which the sink-writer discards with a running count until the graph returns.
 
 **A disclaimer is not a refresh.** The table the one above replaced was measured
 before the receiver-side aggregation capability and never updated: it showed MULE
@@ -361,7 +365,7 @@ public data. See `docs/related-work.md` §6.
 ## SHAP
 
 **Global importance (mean |SHAP|)**, regenerated 2026-08-30 on the pinned
-environment: `is_new_payee` (0.770), `log_amount` (0.694), `receiver_age` (0.603),
+environment: `is_new_payee` (0.770), `log_amount` (0.694), `receiver_age` (0.603, since removed),
 `rcv_inflow_1h` (0.516); the session signal `secs_login_z` sits sixth at 0.276.
 SHAP is not bit-stable even when the model is - the explainer samples its
 background set, about 0.002 per feature between runs - so quote three decimals at
@@ -398,13 +402,13 @@ baseline profile - the realistic profile has not been swept yet.
 
 `experiments/ablate_seeds.py` sweeps the capabilities across generator seeds and
 reports each delta paired within seed, with a 95% CI for the mean;
-`--only receiver_age` sweeps one capability across **all** its declared modes. It
+`--only payee_identity` sweeps one capability across **all** its declared modes. It
 fingerprints the feature set and the generator sources and refuses to mix results
 across versions, since either change moves the baseline and invalidates every
 stored delta. Older runs - `models/ablation/seeds_pre_*.json`, and the
 `always/on_us/off.json` files that predate the capability registry - are history,
-not current figures. The sweep predates the withheld payee ages (2026-09-13); the
-receiver_age row is the one that change could move.
+not current figures. The receiver_age and device_telemetry rows are history too:
+both capabilities were removed on 2026-09-19 (above).
 
 All rows measured on one feature set and one generator version, 5 seeds,
 baseline PR-AUC **0.960 ± 0.018**:
@@ -422,7 +426,7 @@ baseline PR-AUC **0.960 ± 0.018**:
 **`channel` is gone.** It measured −0.002 [−0.006, +0.002], no rule read its four
 one-hot features, and no public dataset carries the field. It was removed on
 07.09.2026 from the model, the wire, the ingress hash, ClickHouse, Grafana and the
-case view; the contract was 20 columns, and is 18 since 2026-09-19. Dropping four columns of noise also
+case view; the contract was 20 columns, and is 16 since 2026-09-19. Dropping four columns of noise also
 tightened every interval, which is how `receiver_age` moved from unresolved back
 to **real**.
 
@@ -469,6 +473,9 @@ with it: `receiver_age`, at −0.0131 the largest effect in the table, spans
 feature - the answer is more seeds, not fewer features.
 
 ### A rule's own precision is the wrong number
+
+*`FRESH_RECEIVER` was removed with the payee's age on 2026-09-19 (above); the
+lesson holds for every rule in an additive score.*
 
 `FRESH_RECEIVER` looks like the most expensive control in the system: 326 hits on
 fraud against **6,447 on legitimate traffic**, 4.8% precision.
@@ -554,23 +561,23 @@ confidence interval for the mean.
 
 `metrics.json` carries a `calibration` block beside the AUCs, computed by
 `train.py` on every run. It answers a different question: not *does the model rank
-fraud above legitimate traffic* (ROC-AUC 0.987 / PR-AUC 0.450 on the realistic
+fraud above legitimate traffic* (ROC-AUC 0.961 / PR-AUC 0.321 on the realistic
 profile) but *are its probabilities usable as magnitudes*.
 
 ```
-brier               0.00163
-n_alerts            145          (>= REVIEW on the held-out slice)
-saturated_share     23.4%        rounding to 1.000
-distinct_scores     97
-median_alert_score  0.735482
+brier               0.00166
+n_alerts            132          (>= REVIEW on the held-out slice)
+saturated_share     22.7%        rounding to 1.000
+distinct_scores     89
+median_alert_score  0.573876
 scored_with         model.onnx
 ```
 
 Read `saturated_share` and `distinct_scores` together. On the baseline profile
 they read 66.9% and 33: the model separated the classes almost perfectly and
 still could not **order** an alert queue, because the alerts piled up at the top
-of the scale. On the realistic profile 145 alerts carry 97 distinct scores and
-23.4% round to 1.000 - coarser than the 20-column model's 114 among 160, but a
+of the scale. On the realistic profile 132 alerts carry 89 distinct scores and
+22.7% round to 1.000 - coarser than the 20-column model's 114 among 160, but a
 queue that can still be ordered. AUC is blind to this by construction - it is a
 rank statistic - and the finding surfaced only when a real work queue tried to
 sort by score (`docs/irp-framing.md` §9.1). It is a property of near-separable

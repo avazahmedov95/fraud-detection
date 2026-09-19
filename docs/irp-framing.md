@@ -64,7 +64,7 @@ data - design targets, not validated findings.
 |---|---|---|---|
 | receiver-side aggregation | −0.036 [−0.068, −0.004] | 5/5 | real |
 | mobile-app session telemetry | −0.034 [−0.051, −0.016] | 5/5 | real |
-| receiver account age | −0.022 [−0.040, −0.004] | 4/5 | real |
+| receiver account age | −0.022 [−0.040, −0.004] | 4/5 | real - removed 2026-09-19: unobtainable on 93% of transfers |
 | MyID kinship (added) | +0.002 [−0.000, +0.004] | 4/5 | negligible |
 | device identity | +0.002 [−0.001, +0.005] | 4/5 | negligible - removed 2026-09-19 |
 | payee keyed by person, not card | +0.001 [−0.004, +0.007] | 2/5 | negligible |
@@ -159,7 +159,7 @@ Everything owed to the review is now done; the items keep their numbers.
    the thesis: **relational fraud detection cannot be validated end-to-end on
    public real data, because the account identifiers that make it relational are
    exactly what cannot be published.** 14 of the 20 features measured here are
-   relational (18 features since 2026-09-19);
+   relational (13 of the 16 deployed since 2026-09-19);
    removing them costs 0.937 → 0.761 PR-AUC on the baseline profile. So the
    question is split:
    - **PaySim** (`paysim_adapter.py`), the one public dataset with identifiers on
@@ -228,7 +228,8 @@ card market (69.0 million cards, 34 banks, largest share 16.3%), two random
 parties share a bank with probability **6.85%** (the generated stream: 6.73%).
 So receiver account age - among the most-cited APP-fraud features - is
 unobtainable on 93% of transfers here: an argument for resolving it at the
-national-platform level.
+national-platform level. It was removed from this system on 2026-09-19 for that
+reason, at a measured cost (`ml/README.md`).
 
 The obvious repair fails. Resolving to PINFL where possible and to the PAN
 otherwise, on 50,000 transactions:
@@ -303,13 +304,13 @@ Modern Standby for sixteen minutes mid-run (System log, Kernel-Power 506/507):
 everything froze together, no container logged it, and no decision spans the
 pause. The audit-chain anchor for this run is in `audit-anchors.md`.
 
-### 7.2 The enrichment cache is the variable, and the prototype flatters it
+### 7.2 The enrichment lookup, removed 2026-09-19
 
-Receiver age is looked up in Neo4j, cached in Redis for an hour, synchronously
-inside `process_element`. A miss costs 7.62 ms at the median against 3.01 for a
-hit, and ~31 ms more at p99. A few thousand transactions saturate a
-five-thousand-person graph, so the prototype's hit rate is a property of its
-scale; a bank with millions of accounts sits nearer the miss column.
+Until 2026-09-19 the payee's age was looked up in Neo4j, cached in Redis for an
+hour, synchronously inside `process_element`. A miss cost 7.62 ms at the median
+against 3.01 for a hit, and ~31 ms more at p99. The lookup went with the age; the
+latency figures in this section were measured with it in place and have not been
+re-measured.
 
 ### 7.3 Two stalls became eighteen breaches
 
@@ -423,8 +424,8 @@ needs to say so.**
 
 **The target stops holding at or below 25 events/s**, two orders of magnitude
 below a national switch. `work` stays near a millisecond while decision time
-climbs sixty-fold: records queue behind the synchronous Redis and Neo4j lookups
-in `enrichment.py`, one at a time per slot. Flink async I/O is the documented
+climbs sixty-fold: records queue behind the synchronous Redis and Neo4j lookups,
+one at a time per slot (the Neo4j one was removed on 2026-09-19). Flink async I/O is the documented
 fix and is not implemented. This is a per-slot figure on one machine, and the
 sweep ends where the producer saturates.
 
@@ -475,7 +476,9 @@ unknown payee age was encoded as -1, which every age split reads as younger than
 any real account. Fixed on the training side on 2026-09-13 - the age is NaN in
 every mode and `train.py` withholds it on a tenth of its rows - and on the
 baseline profile an offline replay with every age withheld then raised 14 false
-alarms against 10, where the -1 had raised 95 (`ml/README.md`). Drain was fast
+alarms against 10, where the -1 had raised 95 (`ml/README.md`). Since 2026-09-19
+the job reads nothing from Neo4j - the age is gone - so a graph outage costs only
+the alert graph. Drain was fast
 in every arm here because the dependency was already down when the worker opened
 its clients; 7.7a is the other half of the same code path.
 
@@ -617,6 +620,8 @@ differs from the recorded one by more than 1e-4.
 | distinct senders in 1h | 2 | `MULE_FAN_IN` | >= 6 | no |
 | inbound to payee in 1h | 14 615 204 UZS | - | - | - |
 | this transfer | 7 307 603 UZS | `NEW_PAYEE_HIGH_AMOUNT` | new payee and > 3x mean | no |
+
+*As measured then; `FRESH_RECEIVER` and the payee's age were removed on 2026-09-19.*
 
 **Rules test thresholds one at a time; the model tests combinations that cross
 none.** Across the 113 model-only alerts, 69% had receiver-side concentration as

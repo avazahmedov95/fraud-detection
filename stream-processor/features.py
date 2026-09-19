@@ -9,7 +9,6 @@ import datetime
 import config as C
 import geo as G
 import capabilities as CAP
-import bins as B
 
 # Derived from the capability registry, so the train/serve contract cannot
 # drift from what the deployment can observe.
@@ -59,15 +58,6 @@ def truthy(v) -> int:
     return 1 if v else 0
 
 
-def age_or_none(v):
-    """Receiver account age as an int, or None when unknown - not 0, which means
-    "opened today"."""
-    try:
-        return int(float(v))
-    except (TypeError, ValueError):
-        return None
-
-
 def event_from(row: dict) -> dict:
     """One generated-CSV row as the event `rules.evaluate` expects - offline only,
     and the one copy of this mapping every replay uses."""
@@ -83,23 +73,11 @@ def event_from(row: dict) -> dict:
         # baseline train as constant zeros without them.
         "active_call": truthy(row.get("active_call")),
         "secs_login_to_confirm": row.get("secs_login_to_confirm", 0.0),
-        # The cards: the replay resolves the issuer from the BIN table, as the job does.
+        # The cards: the payee is keyed by card, as the job keys it.
         "sender_card": row.get("sender_card", ""),
         "receiver_card": row.get("receiver_card", ""),
         "is_family_transfer": truthy(row.get("is_family_transfer")),
     }
-
-
-def _issuer(event: dict, side: str) -> str:
-    """Card issuer for one side of the transfer, resolved from the PAN's BIN."""
-    return B.issuer_of(event.get(f"{side}_card"))
-
-
-def is_on_us(event: dict) -> bool:
-    """True when both parties bank with the same issuer. Unknown issuers count as
-    inter-bank: an unresolvable BIN is not evidence of a shared institution."""
-    s, r = _issuer(event, "sender"), _issuer(event, "receiver")
-    return bool(s) and bool(r) and s == r
 
 
 def payee_key(event: dict) -> str:
@@ -119,19 +97,7 @@ def payee_key(event: dict) -> str:
     return card
 
 
-def visible_receiver_age(event: dict, receiver_age_days):
-    """Apply the receiver_age capability mode (CAP_RECEIVER_AGE); None means
-    "not obtainable", never a value."""
-    mode = CAP.mode("receiver_age")
-    if mode == "off":
-        return None
-    if mode == "on_us" and not is_on_us(event):
-        return None
-    return receiver_age_days
-
-
-def extract(event: dict, receiver_age_days, state, now: float,
-            receiver_state=None) -> dict:
+def extract(event: dict, state, now: float, receiver_state=None) -> dict:
     """Read-only feature extraction; does NOT mutate either state. `receiver_state`
     may be None when the shared store is down - inbound features then read as zero,
     the fail-open behaviour used elsewhere."""
@@ -180,17 +146,6 @@ def extract(event: dict, receiver_age_days, state, now: float,
     amount_to_mean = (amount / mean) if mean > 0 else float(C.NEW_PAYEE_AMOUNT_FACTOR + 1)
     amount_z = ((amount - mean) / std) if std > 0 else 0.0
 
-    age = visible_receiver_age(event, receiver_age_days)
-    age_known = 1 if age is not None else 0
-    if age is not None:
-        receiver_age = float(age)
-        receiver_is_fresh = 1.0 if age < C.FRESH_RECEIVER_DAYS else 0.0
-    else:
-        # NaN, not -1: LightGBM branches on missing natively, while -1 reads as the
-        # youngest account. train.py withholds it on some rows so the model learns it.
-        receiver_age = float("nan")
-        receiver_is_fresh = float("nan")
-
     # Inbound concentration on the PAYEE - the fan-in shape sender-keyed state
     # cannot see. Distinct senders, not transfers: ten from one person is a habit.
     rcv_senders, rcv_inflow = 0, 0.0
@@ -219,9 +174,6 @@ def extract(event: dict, receiver_age_days, state, now: float,
         "is_new_payee": 0 if payee in state.seen_payees else 1,
         "rcv_distinct_senders_1h": rcv_senders,
         "rcv_inflow_1h": math.log1p(rcv_inflow),
-        "receiver_age": receiver_age,
-        "receiver_is_fresh": receiver_is_fresh,
-        "receiver_age_known": age_known,
         # MyID kinship; in the vector only when the myid_kinship capability is on.
         "is_family": truthy(event.get("is_family_transfer")),
         "vel_10m": win_count(C.VELOCITY_WINDOW_S),

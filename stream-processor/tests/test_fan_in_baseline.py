@@ -74,7 +74,7 @@ def test_absolute_mode_ignores_the_baseline():
     from rules import SenderState, ReceiverState, evaluate
     pop = _fill(PopulationBaseline(), [50] * (C.MULE_FAN_IN_MIN_OBS * 2))
     ev = {"amount_uzs": 100_000.0, "sender_pinfl": "A", "receiver_pinfl": "B"}
-    res = evaluate(ev, None, SenderState(), 1_700_000_000.0,
+    res = evaluate(ev, SenderState(), 1_700_000_000.0,
                    ReceiverState(), population=pop)
     assert "MULE_FAN_IN" not in res["rule_hits"]
 
@@ -85,7 +85,7 @@ def test_baseline_is_observed_after_the_decision(relative_mode):
     pop = PopulationBaseline()
     before = pop.n
     ev = {"amount_uzs": 100_000.0, "sender_pinfl": "A", "receiver_pinfl": "B"}
-    evaluate(ev, None, SenderState(), 1_700_000_000.0, ReceiverState(),
+    evaluate(ev, SenderState(), 1_700_000_000.0, ReceiverState(),
              population=pop)
     assert pop.n == before + 1
 
@@ -94,6 +94,6 @@ def test_missing_baseline_falls_back_rather_than_failing(relative_mode):
     """Missing shared state degrades to known behaviour, as with Redis and Neo4j."""
     from rules import SenderState, ReceiverState, evaluate
     ev = {"amount_uzs": 100_000.0, "sender_pinfl": "A", "receiver_pinfl": "B"}
-    res = evaluate(ev, None, SenderState(), 1_700_000_000.0, ReceiverState(),
+    res = evaluate(ev, SenderState(), 1_700_000_000.0, ReceiverState(),
                    population=None)
     assert res["decision"] in ("ALLOW", "REVIEW")

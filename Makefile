@@ -57,7 +57,7 @@ serve-prep: ## copy the trained ONNX model + feature spec next to the Flink job
 
 # Every module fraud_job.py imports, transitively - boundary_audit.py checks both
 # submitters against it (--pyFiles, not the mount, is what reaches sys.path).
-PYFILES = /opt/flink/usrjobs/config.py,/opt/flink/usrjobs/capabilities.py,/opt/flink/usrjobs/features.py,/opt/flink/usrjobs/geo.py,/opt/flink/usrjobs/bins.py,/opt/flink/usrjobs/rules.py,/opt/flink/usrjobs/enrichment.py,/opt/flink/usrjobs/receiver_store.py,/opt/flink/usrjobs/fusion.py,/opt/flink/usrjobs/payload_crypto.py
+PYFILES = /opt/flink/usrjobs/config.py,/opt/flink/usrjobs/capabilities.py,/opt/flink/usrjobs/features.py,/opt/flink/usrjobs/geo.py,/opt/flink/usrjobs/rules.py,/opt/flink/usrjobs/receiver_store.py,/opt/flink/usrjobs/fusion.py,/opt/flink/usrjobs/payload_crypto.py
 
 # Refuse a second job beside a running one: two KafkaSources score every event
 # twice. run.ps1's Assert-NoActiveJob, in sh.

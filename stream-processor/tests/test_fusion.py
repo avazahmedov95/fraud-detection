@@ -61,7 +61,7 @@ def _full(profile):
 
 def _reduced(profile):
     """Own stream plus the fan-in window: the profile a single bank really has."""
-    profile(receiver_age="off", myid_kinship="off", geo_telemetry="off", session_telemetry="off")
+    profile(myid_kinship="off", geo_telemetry="off", session_telemetry="off")
 
 
 def test_full_capability_does_not_move_either_operating_point(profile):

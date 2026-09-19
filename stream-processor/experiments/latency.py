@@ -335,8 +335,7 @@ def cmd_throughput(args):
           "requirement and must not be read against the target.")
     print("'work' is the scoring inside process_element. Work flat while the "
           "decision time grows is QUEUEING: the worker cannot drain the offered "
-          "rate. The enrichment lookup is synchronous - enrichment.py says so, "
-          "and production would use Flink async I/O.")
+          "rate.")
     print("\nRead 'client-limited' as a fact about the harness, not the system: "
           "the producer could not offer that rate, so the row measures the "
           "producer. Only rows that achieved their offered rate say anything "

@@ -10,8 +10,6 @@
   "secs_since_last",
   "daily_sum_ratio",
   "hour",
-  "receiver_age",
-  "receiver_is_fresh",
   "rcv_distinct_senders_1h",
   "rcv_inflow_1h",
   "geo_is_anomaly",

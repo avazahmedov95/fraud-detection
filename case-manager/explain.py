@@ -41,8 +41,8 @@ def _uzs(v):
     return f"{int(round(v)):,}".replace(",", " ")
 
 
-#: feature -> (phrase, value formatter). An analyst acts on "payee's account is
-#: 2 days old", not "receiver_age = 2.0". Absent here falls back to the raw name.
+#: feature -> (phrase, value formatter). An analyst acts on a sentence, not on a
+#: column name and a float. Absent here falls back to the raw name.
 _PHRASES = {
     "log_amount":             ("amount",                        lambda v: _uzs(pow(2.718281828, v) - 1) + " UZS"),
     "amount_to_mean":         ("amount vs this sender's average", lambda v: f"{v:.1f}x"),
@@ -55,8 +55,6 @@ _PHRASES = {
     "secs_since_last":        ("time since the sender's last transfer", lambda v: f"{v/60:.0f} min"),
     "daily_sum_ratio":        ("share of the daily limit used", lambda v: f"{v:.0%}"),
     "hour":                   ("hour of day (UTC)",             lambda v: f"{int(v):02d}:00"),
-    "receiver_age":           ("payee's account age",           lambda v: "unknown" if v != v or v < 0 else f"{int(v)} days"),
-    "receiver_is_fresh":      ("payee's account is newly opened", lambda v: "unknown" if v != v else ("yes" if v else "no")),
     "rcv_distinct_senders_1h": ("distinct senders paying this payee in an hour", lambda v: f"{int(v)}"),
     "rcv_inflow_1h":          ("money into this payee in an hour", lambda v: _uzs(pow(2.718281828, v) - 1) + " UZS"),
     "geo_is_anomaly":         ("operation away from the sender's usual region", lambda v: "yes" if v else "no"),

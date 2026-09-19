@@ -17,7 +17,7 @@ ALERT = {
     "final_score": 0.91,
     "decision": "BLOCK",
     "predicted_type": "APP",
-    "rule_hits": ["FRESH_RECEIVER", "NEW_PAYEE_HIGH_AMOUNT"],
+    "rule_hits": ["VELOCITY", "NEW_PAYEE_HIGH_AMOUNT"],
 }
 
 

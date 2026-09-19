@@ -11,7 +11,7 @@ ALERT = {
     "scored_at_job": 1_772_000_000.5, "sender_card": "8600330000000001",
     "receiver_card": "8600030000000002", "amount_uzs": 4_800_000,
     "final_score": 0.91, "decision": "BLOCK", "predicted_type": "APP",
-    "rule_hits": ["FRESH_RECEIVER"],
+    "rule_hits": ["VELOCITY"],
 }
 
 

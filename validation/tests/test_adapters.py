@@ -75,7 +75,7 @@ def test_rules_fire_on_foreign_data(paysim_df, tmp_path):
 
     saved = dict(CAP.MODES)
     try:
-        for key in ("receiver_age", "myid_kinship", "geo_telemetry", "session_telemetry"):
+        for key in ("myid_kinship", "geo_telemetry", "session_telemetry"):
             CAP.MODES[key] = "off"
         CAP.MODES["payee_identity"] = "pinfl"
         res, hits = PS.run(str(path), ["TRANSFER"], None)
@@ -99,7 +99,7 @@ def test_capabilities_without_data_are_off_in_the_run(paysim_df, tmp_path):
 
     saved = dict(CAP.MODES)
     try:
-        for key in ("receiver_age", "myid_kinship", "geo_telemetry", "session_telemetry"):
+        for key in ("myid_kinship", "geo_telemetry", "session_telemetry"):
             CAP.MODES[key] = "off"
         CAP.MODES["payee_identity"] = "pinfl"
         _, hits = PS.run(str(path), ["TRANSFER"], None)
@@ -107,14 +107,14 @@ def test_capabilities_without_data_are_off_in_the_run(paysim_df, tmp_path):
         CAP.MODES.clear(); CAP.MODES.update(saved)
 
     forbidden = {"GEO_ANOMALY", "IMPOSSIBLE_TRAVEL",
-                 "COACHED_SESSION", "FRESH_RECEIVER"}
+                 "COACHED_SESSION"}
     fired = set(hits["fraud"]) | set(hits["legit"])
     assert not (fired & forbidden), f"fired without data: {fired & forbidden}"
 
 
 
 # --- AMLSim ----------------------------------------------------------------
-# Fixtures shaped like its output files; AMLSim also supplies receiver_age.
+# Fixtures shaped like its output files.
 
 @pytest.fixture
 def amlsim_dir(tmp_path):
@@ -180,21 +180,6 @@ def test_amlsim_daily_timestamps_become_epoch_seconds(amlsim_dir):
     assert ts.is_monotonic_increasing or ts.min() > 0
 
 
-def test_amlsim_receiver_age_is_read_from_accounts(amlsim_dir):
-    """If open_dt were ignored, receiver_age would be None and FRESH_RECEIVER never fire."""
-    saved = dict(CAP.MODES)
-    try:
-        for key in ("myid_kinship", "geo_telemetry",
-                    "session_telemetry"):
-            CAP.MODES[key] = "off"
-        CAP.MODES["payee_identity"] = "pinfl"
-        _, hits = AS.run(amlsim_dir, None)
-    finally:
-        CAP.MODES.clear(); CAP.MODES.update(saved)
-    fired = set(hits["fraud"]) | set(hits["legit"])
-    assert "FRESH_RECEIVER" in fired
-
-
 def test_amlsim_typology_labels_survive_to_the_result(amlsim_dir):
     """Section B needs alert_type on the rows; the fan_in/fan_out split is why this dataset."""
     saved = dict(CAP.MODES)
@@ -211,7 +196,7 @@ def test_amlsim_typology_labels_survive_to_the_result(amlsim_dir):
 
 
 def test_amlsim_capabilities_without_data_are_off(amlsim_dir):
-    """FRESH_RECEIVER is NOT forbidden here, unlike the PaySim test: open_dt is real."""
+    """AMLSim carries no geo, session or kinship; a rule firing means invented data."""
     saved = dict(CAP.MODES)
     try:
         for key in ("myid_kinship", "geo_telemetry",
@@ -257,7 +242,7 @@ def test_the_shared_profile_sets_the_payee_key(capsys):
 
 def _foreign_profile():
     saved = dict(CAP.MODES)
-    for key in ("receiver_age", "myid_kinship", "geo_telemetry", "session_telemetry"):
+    for key in ("myid_kinship", "geo_telemetry", "session_telemetry"):
         CAP.MODES[key] = "off"
     CAP.MODES["payee_identity"] = "pinfl"
     return saved
@@ -269,8 +254,7 @@ def test_available_features_drops_exactly_what_the_profile_switched_off():
     saved = _foreign_profile()
     try:
         idx, names = RP.available_features()
-        for gone in ("receiver_age", "receiver_is_fresh",
-                     "geo_is_anomaly", "active_call", "secs_login_z"):
+        for gone in ("geo_is_anomaly", "active_call", "secs_login_z"):
             assert gone not in names
         assert "rcv_distinct_senders_1h" in names and "vel_10m" in names
         assert len(idx) == len(names) == 13

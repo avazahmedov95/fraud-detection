@@ -64,7 +64,6 @@ pushed its score up, in words:
 
 ```
 money into this payee in an hour: 3 208 945 UZS (+9.86)
-payee's account age: 35 days (+7.09)
 distinct senders paying this payee in an hour: 3 (+5.12)
 ```
 

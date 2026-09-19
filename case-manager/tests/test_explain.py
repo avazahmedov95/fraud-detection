@@ -24,7 +24,7 @@ class FakeBooster:
         return np.asarray([self._c])
 
 
-def _explainer(contrib, names=("amount_z", "is_new_payee", "receiver_age")):
+def _explainer(contrib, names=("amount_z", "is_new_payee", "rcv_distinct_senders_1h")):
     ex = E.Explainer(feature_names=list(names))
     ex._booster = FakeBooster(contrib, n_features=len(names))
     ex._loaded = True
@@ -132,16 +132,10 @@ def test_at_most_top_n():
 # --- the phrasing ------------------------------------------------------------
 
 def test_phrases_read_as_findings_not_column_names():
-    """An analyst acts on 'account is 2 days old', not on 'receiver_age = 2.0'."""
-    assert E.phrase("receiver_age", 2.0, 1.5) == \
-        "payee's account age: 2 days (+1.50)"
+    """An analyst acts on a sentence, not on 'rcv_distinct_senders_1h = 7.0'."""
+    assert E.phrase("rcv_distinct_senders_1h", 7.0, 1.5) == \
+        "distinct senders paying this payee in an hour: 7 (+1.50)"
     assert "yes" in E.phrase("active_call", 1.0, 0.4)
-
-
-def test_unknown_age_is_not_rendered_as_a_number():
-    """NaN = age unseen, -1 = off-mode sentinel; printing either invents a fact."""
-    assert "unknown" in E.phrase("receiver_age", float("nan"), 1.0)
-    assert "unknown" in E.phrase("receiver_age", -1.0, 1.0)
 
 
 def test_an_unmapped_feature_still_renders():

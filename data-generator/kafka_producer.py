@@ -24,7 +24,8 @@ except ImportError:  # allow --dry-run without the dependency installed
     KafkaProducer = None
 
 
-# Raw fields the switch would actually emit; enrichment and labels are dropped here.
+# Raw fields the switch would actually emit; everything else - the labels, the
+# payee's account age - is dropped here.
 RAW_FIELDS = [
     "transaction_id", "event_time", "sender_pinfl", "sender_card", "sender_network",
     "receiver_card", "receiver_network", "amount_uzs",
@@ -34,7 +35,7 @@ RAW_FIELDS = [
     "active_call", "secs_login_to_confirm",
 ]
 # NOT sent: receiver_pinfl (the sending bank sees only the destination PAN) and the
-# bank names (the issuer comes from the PAN's BIN, stream-processor/bins.py).
+# bank names (a switch message carries the PAN, whose BIN names the issuer).
 
 
 #: Fields that are booleans, not text: csv.DictReader gives strings, and "False"

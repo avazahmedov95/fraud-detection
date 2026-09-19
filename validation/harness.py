@@ -11,7 +11,7 @@ import os
 import sys
 import time
 from collections import Counter, defaultdict
-from typing import NamedTuple, Optional
+from typing import NamedTuple
 
 import pandas as pd
 
@@ -45,7 +45,6 @@ class Event(NamedTuple):
     ev: dict
     ts: int
     label: int
-    receiver_age: Optional[int] = None
     typology: str = ""
 
 
@@ -61,7 +60,7 @@ def replay(events, total=None):
         if not checked:
             _require_a_payee_key(e.ev)
             checked = True
-        res = evaluate(e.ev, e.receiver_age, senders[e.ev["sender_pinfl"]],
+        res = evaluate(e.ev, senders[e.ev["sender_pinfl"]],
                        e.ts, receivers[e.ev["receiver_pinfl"]])
         rows.append((e.label, res["cep_score"], res["decision"], e.typology))
         for hit in res["rule_hits"]:
@@ -249,7 +248,7 @@ def extract_features(events, total):
             _require_a_payee_key(e.ev)
         key = F.payee_key(e.ev)
         sender = senders[e.ev["sender_pinfl"]]
-        X[n - 1] = F.to_vector(F.extract(e.ev, e.receiver_age, sender, e.ts,
+        X[n - 1] = F.to_vector(F.extract(e.ev, sender, e.ts,
                                          receivers[key]))
         F.update_state(sender, e.ev, e.ts)
         F.update_receiver_state(receivers[key], e.ev, e.ts)

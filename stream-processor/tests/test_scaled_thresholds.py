@@ -6,7 +6,7 @@ import pytest
 import capabilities as CAP
 import config as C
 import rules as R
-from conftest import bank_card, payee_card
+from conftest import payee_card
 
 
 @pytest.fixture
@@ -72,21 +72,20 @@ def test_threshold_never_goes_negative_or_above_the_base(profile):
 
 # --- the behaviour that motivated this --------------------------------------
 
-def _ev(amount, payee, bank="BankA"):
+def _ev(amount, payee):
     return {"amount_uzs": amount, "sender_pinfl": "S1", "receiver_pinfl": payee,
-            "device_id": "dev-1", "sender_region": "Tashkent City",
-            "sender_card": bank_card(bank),
-            "receiver_card": payee_card(payee, bank)}
+            "sender_region": "Tashkent City",
+            "sender_card": payee_card("S1"), "receiver_card": payee_card(payee)}
 
 
 def test_single_rule_can_flag_when_it_is_all_that_is_available(profile):
     """The PaySim case: one rule at 0.35 is below the 0.40 cutoff but must act."""
-    profile(receiver_age="off", myid_kinship="off", geo_telemetry="off", session_telemetry="off")
+    profile(myid_kinship="off", geo_telemetry="off", session_telemetry="off")
 
     st = R.SenderState()
     for i in range(6):
-        R.evaluate(_ev(150_000, "friend"), None, st, now=1000 + i)
-    res = R.evaluate(_ev(9_000_000, "fraudster"), None, st, now=5000)
+        R.evaluate(_ev(150_000, "friend"), st, now=1000 + i)
+    res = R.evaluate(_ev(9_000_000, "fraudster"), st, now=5000)
 
     assert "NEW_PAYEE_HIGH_AMOUNT" in res["rule_hits"]
     assert res["cep_score"] == pytest.approx(C.W_NEW_PAYEE_HIGH, abs=1e-6)
@@ -97,7 +96,7 @@ def test_single_rule_can_flag_when_it_is_all_that_is_available(profile):
 def test_scaling_can_be_switched_off(profile, monkeypatch):
     """The previous fixed-threshold behaviour stays available for comparison."""
     monkeypatch.setattr(C, "SCALE_THRESHOLDS_BY_CAPABILITY", False)
-    profile(receiver_age="off", myid_kinship="off", geo_telemetry="off", session_telemetry="off")
+    profile(myid_kinship="off", geo_telemetry="off", session_telemetry="off")
     assert R._review_threshold() == C.REVIEW_THRESHOLD
 
 

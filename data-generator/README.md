@@ -41,9 +41,10 @@ Kursiv Uzbekistan). Figures are published for 17 of the 35 banks; the remaining
 ~18.6 M cards are split evenly across the other 18, which is a documented
 approximation, not a source figure.
 
-This matters because it sets the **on-us rate** — the share of transfers where
-both parties bank with the same institution, and therefore the share for which
-the sending bank can know `receiver_account_age_days` at all. Uniform assignment
+This sets the **on-us rate** — the share of transfers where both parties bank
+with the same institution, and so the only ones where the sending bank could see
+the payee's account at all; that is why the detector does not use the payee's
+account age (`ml/README.md`). Uniform assignment
 gives ~3%, which is a property of having 35 banks in a list rather than of the
 market; share-weighted assignment gives ~7%.
 
@@ -65,7 +66,7 @@ Set `WEIGHT_BANKS_BY_CARD_SHARE = False` in `config.py` for uniform assignment.
 |---|---|---|
 | Raw (from switch) | `transaction_id, event_time, sender_*, receiver_*, amount_uzs, device_id, *_region, sender_balance_before` | what Kafka ingests |
 | Behavioural (session) | `active_call, secs_login_to_confirm` | signals the mobile channel observes during the session; `secs_login_to_confirm` is converted to a per-client z-score downstream |
-| Enriched | `is_new_payee, receiver_account_age_days` | in production these come from the **Flink** stage via the Neo4j account lookup and Redis feature store — not from the raw message. Materialised here so a model can train directly. |
+| Enriched | `is_new_payee, receiver_account_age_days` | not in the raw message: `is_new_payee` comes from the **Flink** stage's own state; `receiver_account_age_days` stays in the file, whose hash is pinned, and the detector does not read it. Materialised here so a model can train directly. |
 | Labels | `label_is_fraud, label_fraud_type` | ground truth; never available at inference |
 
 ## Travel
@@ -92,7 +93,7 @@ not a result**. The false-positive rate on legitimate travel is.
 
 | Type | Shape | Primary signals |
 |---|---|---|
-| **APP** | account-holder sends one unusually large amount to a new, fresh payee, often while on a call | new payee + amount spike + low receiver age + coached session |
+| **APP** | account-holder sends one unusually large amount to a new, fresh payee, often while on a call | new payee + amount spike + coached session |
 | **ATO** | new device, then 2–4 rapid transfers out; 60% continue the session from a region the victim cannot have reached since they were last seen | device change, impossible travel, velocity |
 | **STRUCTURING** | many transfers kept just under the control threshold, short window | sub-threshold clustering, velocity |
 | **MULE** | fan-in from many senders, then fan-out to a few | graph fan-in/out, velocity |

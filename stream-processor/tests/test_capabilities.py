@@ -94,7 +94,7 @@ def test_disabling_a_capability_drops_its_rules(set_mode):
 
 def test_core_rules_stay_enabled_when_integrations_are_off(set_mode):
     """A bank with no telemetry at all still runs its own-history rules."""
-    set_mode(geo_telemetry="off", session_telemetry="off", receiver_age="off")
+    set_mode(geo_telemetry="off", session_telemetry="off")
     for rule in ("VELOCITY", "STRUCTURING", "AMOUNT_DEVIATION",
                  "DAILY_LIMIT_BREACH", "DISTINCT_PAYEE_BURST",
                  "NEW_PAYEE_HIGH_AMOUNT"):

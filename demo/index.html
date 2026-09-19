@@ -161,7 +161,7 @@ ru: {
   own_split: "{rows} переводов, мошенничества {share}. Модель учится на первых {fit} по времени, порог тревоги подбирается на следующих {val}, проверка — на последних {test}, среди них {tf} мошеннических; эту часть модель не видела.",
   m_prec: "Точность: доля настоящего мошенничества среди тревог", m_rec: "Полнота: доля пойманного мошенничества",
   m_prauc: "Качество ранжирования (PR-AUC, 0–1)", m_rocauc: "ROC-AUC (0–1)", m_rules: "Только правила: точность / полнота",
-  by_type: "Поймано по типам", outage: "Если база связей (Neo4j) недоступна, модель ловит {rec} мошенничества, качество ранжирования {pr}.",
+  by_type: "Поймано по типам",
   own_caveat: "Данные искусственные, но сделаны похожими на жизнь: мошенничества 0,2%, честные люди иногда ведут себя «подозрительно», часть мошенничества никто не заявил. Прежние 93% точности были на слишком простых данных.",
   st_used: "использован", st_inconclusive: "не смог ответить", st_rejected: "отброшены",
   what: "Что это", how: "Что проверяли", verdict: "Вывод", source: "Подробно",
@@ -177,9 +177,9 @@ ru: {
     ATO: "Кто-то получил доступ к чужой карте и выводит с неё деньги новым получателям.",
     MULE: "Дроп-счёт: деньги многих людей за короткое время стекаются на один счёт и уходят дальше.",
     STRUCTURING: "Крупная сумма дробится на части чуть ниже порога отчётности в 10 млн сум, в течение часа."},
-  rules: {NEW_PAYEE_HIGH_AMOUNT: "новый получатель и крупная сумма", FRESH_RECEIVER: "счёт получателя открыт недавно",
+  rules: {NEW_PAYEE_HIGH_AMOUNT: "новый получатель и крупная сумма",
     VELOCITY: "много переводов за 10 минут", STRUCTURING: "суммы чуть ниже порога отчётности",
-    DISTINCT_PAYEE_BURST: "много разных получателей за 10 минут", DEVICE_CHANGE: "новое устройство",
+    DISTINCT_PAYEE_BURST: "много разных получателей за 10 минут",
     GEO_ANOMALY: "необычный регион", IMPOSSIBLE_TRAVEL: "невозможное перемещение",
     AMOUNT_DEVIATION: "сумма намного выше обычной", COACHED_SESSION: "идёт звонок, долгое подтверждение",
     DAILY_LIMIT_BREACH: "превышен дневной лимит", MULE_FAN_IN: "много отправителей на один счёт за час"},
@@ -187,9 +187,8 @@ ru: {
     is_new_payee: "получатель новый", vel_10m: "переводов за 10 минут", vel_1h: "переводов за час",
     distinct_payees_10m: "разных получателей за 10 минут", sub_threshold_1h: "переводов чуть ниже порога за час",
     secs_since_last: "время с прошлого перевода", daily_sum_ratio: "доля дневного лимита", hour: "час суток (UTC)",
-    cross_network: "перевод UzCard ↔ HUMO", receiver_age: "возраст счёта получателя", receiver_is_fresh: "счёт получателя новый",
     rcv_distinct_senders_1h: "разных отправителей этому получателю за час", rcv_inflow_1h: "поступило получателю за час",
-    device_is_new: "устройство новое для отправителя", geo_is_anomaly: "операция вне обычного региона",
+    geo_is_anomaly: "операция вне обычного региона",
     active_call: "звонок во время подтверждения", secs_login_z: "задержка подтверждения против привычки",
     cep_score: "оценка правил"}
 },
@@ -227,7 +226,7 @@ en: {
   own_split: "{rows} transfers, {share} of them fraud. The model learns on the first {fit} in time, the alert cutoff is chosen on the next {val}, and it is tested on the last {test}, {tf} of them fraud; the model never saw that part.",
   m_prec: "Precision: share of alerts that are real fraud", m_rec: "Recall: share of fraud caught",
   m_prauc: "Ranking quality (PR-AUC, 0-1)", m_rocauc: "ROC-AUC (0-1)", m_rules: "Rules alone: precision / recall",
-  by_type: "Caught by type", outage: "With the relationship graph (Neo4j) down, the model catches {rec} of the fraud, ranking quality {pr}.",
+  by_type: "Caught by type",
   own_caveat: "Synthetic, but shaped like life: 0.2% fraud, honest people who sometimes look suspicious, fraud nobody reported. The earlier 93% precision was measured on data that was too easy.",
   st_used: "used", st_inconclusive: "could not answer", st_rejected: "rejected",
   what: "What it is", how: "What was checked", verdict: "Verdict", source: "In full",
@@ -243,9 +242,9 @@ en: {
     ATO: "Someone has taken over a card and is draining it to new payees.",
     MULE: "A mule account: money from many people converges on one account within a short time and moves on.",
     STRUCTURING: "A large amount split into pieces just under the 10 million UZS reporting threshold, within an hour."},
-  rules: {NEW_PAYEE_HIGH_AMOUNT: "new payee, large amount", FRESH_RECEIVER: "payee's account newly opened",
+  rules: {NEW_PAYEE_HIGH_AMOUNT: "new payee, large amount",
     VELOCITY: "many transfers in 10 minutes", STRUCTURING: "amounts just under the reporting threshold",
-    DISTINCT_PAYEE_BURST: "many distinct payees in 10 minutes", DEVICE_CHANGE: "new device",
+    DISTINCT_PAYEE_BURST: "many distinct payees in 10 minutes",
     GEO_ANOMALY: "unusual region", IMPOSSIBLE_TRAVEL: "impossible travel",
     AMOUNT_DEVIATION: "amount far above usual", COACHED_SESSION: "call in progress, slow confirmation",
     DAILY_LIMIT_BREACH: "daily limit exceeded", MULE_FAN_IN: "many senders into one account within an hour"},
@@ -416,7 +415,6 @@ async function refreshResults() {
     ["m_rocauc", dec(o.roc_auc, 3)], ["m_rules", pct(o.rules_precision) + " / " + pct(o.rules_recall)]]
     .map(([k, v]) => `<div class="tile"><span>${t(k)}</span><b>${esc(v)}</b></div>`).join("") + `</div>`;
   if (o.by_type) h += `<p>${t("by_type")}: ` + Object.entries(o.by_type).map(([k, v]) => `${esc(kindName(k))} ${pct(v)}`).join(" · ") + `</p>`;
-  if (o.outage) h += `<p>${t("outage").replace("{rec}", pct(o.outage.at_review.recall)).replace("{pr}", dec(o.outage.pr_auc, 3))}</p>`;
   $("#own").innerHTML = h + `<p class="muted">${t("own_caveat")}</p></div>`;
   $("#public").innerHTML = (results.public || []).map(d => `<div class="panel"><h2>${esc(d.name[L])} ` +
     `<span class="badge st-${esc(d.status)}">${t("st_" + d.status)}</span></h2>` +

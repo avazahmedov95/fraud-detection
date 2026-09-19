@@ -39,13 +39,12 @@ audit fails when that line is gone.
 Each scenario is picked from the held-out 20% of the dataset - the rows after
 `ml/train.py`'s cut, which the model never trained on - and replayed:
 
-- **the sender gets a new card** with the same six-digit BIN, so the issuer, the
-  network and the on-us test are unchanged, and the job's state for that sender
+- **the sender gets a new card** with the same six-digit BIN, so the issuing bank
+  is unchanged, and the job's state for that sender
   starts empty: it meets them through the episode's own history, up to eight of
   their earlier transfers, before the fraud arrives;
-- **receivers keep their cards**, because the payee's account age is looked up in
-  Neo4j by card and a new card would read as unknown. For the same reason a mule,
-  paid inside the episode, keeps its card when it pays out;
+- **receivers keep their cards**, so a mule paid inside the episode is the same
+  card when it pays out;
 - **times move, gaps stay**: the episode is shifted to end now, with every gap
   between its rows kept, since the job's windows run on event time.
 

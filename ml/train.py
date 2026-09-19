@@ -31,12 +31,6 @@ TRAIN_SHARE = 0.80        # the earliest 80% trains; the rest is the held-out sl
 FIT_SHARE = 0.80          # of the training slice: the committee fits on this much,
                           # and the cutoffs are chosen on the rest
 
-#: Share of training rows replayed with the payee's age withheld, as the live job
-#: sees them while Neo4j is down, so the model learns where "unknown" goes. Random,
-#: label-independent and before the cut; `_graph_outage` measures the other case.
-AGE_UNKNOWN_SHARE = 0.10
-AGE_UNKNOWN_SEED = 42
-
 #: Class weighting (negatives over positives) is validated at 1.5% fraud; below
 #: this rate it collapses the ranking, so the default fits unweighted and the
 #: cutoffs are chosen on validation rows (thresholds.json), not fixed.
@@ -50,14 +44,6 @@ COMMITTEE_SEEDS = tuple(range(42, 47))
 
 def cut_index(n):
     return int(n * TRAIN_SHARE)
-
-
-def age_unknown_rows(n, outage=False, seed=AGE_UNKNOWN_SEED, share=AGE_UNKNOWN_SHARE):
-    """Rows replayed with no payee age: a random share of the training slice, and
-    with `outage` the whole held-out slice as well - Neo4j down from the cut on."""
-    rows = np.random.default_rng(seed).random(n) < share
-    rows[cut_index(n):] = outage
-    return rows
 
 
 def class_weight(pos, neg, mode=None):
@@ -110,24 +96,10 @@ def _calibration(y, proba, review_thr):
     )
 
 
-def _graph_outage(model, feats, yte, healthy_proba, review):
-    """The held-out slice replayed as if Neo4j were down throughout: no payee age, so
-    FRESH_RECEIVER cannot fire and the model sees the age as missing."""
-    df = D.build_matrix(CSV, age_unknown=lambda n: age_unknown_rows(n, outage=True))
-    test = df.iloc[cut_index(len(df)):]
-    if not np.array_equal(test["label"].values, yte):
-        raise RuntimeError("the outage replay does not line up with the held-out slice")
-    proba = model.predict(test[feats].astype("float32").values)
-    m = _metrics(yte, proba, review)
-    return dict(pr_auc=float(average_precision_score(yte, proba)), at_review=m,
-                alerts_healthy=int((healthy_proba >= review).sum()),
-                alerts_outage=m["tp"] + m["fp"])
-
-
 def main():
     os.makedirs(MODELS_DIR, exist_ok=True)
     print("building feature matrix ...")
-    df = D.build_matrix(CSV, age_unknown=age_unknown_rows)
+    df = D.build_matrix(CSV)
     feats = D.FEATURE_NAMES
     cut = cut_index(len(df))
     fit = int(cut * FIT_SHARE)
@@ -140,9 +112,6 @@ def main():
     print(f"fit {fit:,} (pos={pos}, {pos / (pos + neg):.3%}) | cutoffs {cut - fit:,} "
           f"(pos={int(y[fit:cut].sum())}) | test {len(yte):,} (pos={int(yte.sum())}) "
           f"| scale_pos_weight={spw:.1f}")
-    if "receiver_age" in feats:
-        print(f"payee age withheld on {int(df.iloc[:cut]['receiver_age'].isna().sum()):,} "
-              f"training rows ({AGE_UNKNOWN_SHARE:.0%} drawn, plus any the data lacks)")
 
     members = []
     for seed in COMMITTEE_SEEDS:
@@ -194,13 +163,6 @@ def main():
     # Counts beside the rate: a per-type recall on a few dozen events has a wide
     # binomial interval.
 
-    print("\nreplaying the held-out slice with Neo4j down (every payee age withheld) ...")
-    outage = _graph_outage(model, feats, yte, proba, review)
-    om = outage["at_review"]
-    print(f"alerts at REVIEW: {outage['alerts_healthy']} with the graph -> "
-          f"{outage['alerts_outage']} without   precision={om['precision']:.3f}  "
-          f"recall={om['recall']:.3f}  PR-AUC={outage['pr_auc']:.3f}")
-
     joblib.dump(model, os.path.join(MODELS_DIR, "model.joblib"))
     with open(os.path.join(MODELS_DIR, "feature_names.json"), "w") as fh:
         json.dump(feats, fh, indent=2)
@@ -211,7 +173,7 @@ def main():
     with open(os.path.join(MODELS_DIR, "metrics.json"), "w") as fh:
         json.dump(dict(roc_auc=auc, pr_auc=ap, thresholds=dict(review=review),
                        at_review=mr, cep_only=cep, calibration=cal,
-                       by_fraud_type=by_type, graph_outage=outage,
+                       by_fraud_type=by_type,
                        committee=dict(seeds=list(COMMITTEE_SEEDS),
                                       member_pr_auc=member_ap)),
                   fh, indent=2)

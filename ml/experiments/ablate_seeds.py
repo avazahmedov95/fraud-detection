@@ -27,7 +27,7 @@ DEFAULT_SEEDS = (42, 7, 13, 99, 2026)
 
 def _alternative(cap):
     """The mode to compare the active one against: the POOREST the capability
-    declares - not "off", which receiver_age and payee_identity do not have."""
+    declares - not "off", which payee_identity does not have."""
     poorest = cap.modes[-1]
     return poorest if poorest != CAP.MODES[cap.key] else cap.modes[0]
 

@@ -26,7 +26,6 @@ from pyflink.datastream.connectors.kafka import (
 import config as C
 from rules import SenderState, evaluate
 import features as F
-from enrichment import EnrichmentClient
 from receiver_store import ReceiverStore, PopulationStore
 import fusion
 import payload_crypto
@@ -66,20 +65,16 @@ def _positive_proba(outputs) -> float:
 
 
 class FraudDetector(KeyedProcessFunction):
-    """Stateful per-sender enrichment + CEP, with ONNX model fusion."""
+    """Stateful per-sender CEP, with ONNX model fusion."""
 
     def open(self, ctx: RuntimeContext):
         self._state = ctx.get_state(
             ValueStateDescriptor("sender_state", Types.PICKLED_BYTE_ARRAY()))
-        self._enrich = EnrichmentClient(
-            C.NEO4J_URI, C.NEO4J_USER, C.NEO4J_PASSWORD,
-            C.REDIS_HOST, C.REDIS_PORT, C.ENRICH_CACHE_TTL_S)
         # Outside Flink state: keyed by sender, so a payee's inbound transfers
         # are spread across every partition (receiver_store.py).
         self._receivers = ReceiverStore(C.REDIS_HOST, C.REDIS_PORT)
         # Opened in every mode: inert in "absolute", never missing in "relative".
         self._population = PopulationStore(C.REDIS_HOST, C.REDIS_PORT)
-        self._enrich.open()
         self._receivers.open()
         self._population.open()
 
@@ -129,16 +124,12 @@ class FraudDetector(KeyedProcessFunction):
             return
 
         state = self._state.value() or SenderState()
-        # Looked up by the identity this deployment can actually pin the payee
-        # to - the destination PAN by default. See features.payee_key.
-        receiver_age = self._enrich.lookup(F.payee_key(event))
-
         # SIMULATED clock, like the windows it is compared against. The
         # wall-clock stamps below measure the pipeline and never enter a feature.
         event_epoch = _event_epoch(event)
         receiver_state = self._receivers.load(F.payee_key(event), event_epoch)
 
-        result = evaluate(event, receiver_age, state, event_epoch, receiver_state,
+        result = evaluate(event, state, event_epoch, receiver_state,
                           population=self._population)
         self._state.update(state)
         self._receivers.record(event, event_epoch)
@@ -161,7 +152,6 @@ class FraudDetector(KeyedProcessFunction):
             "amount_uzs": event.get("amount_uzs"),
             "sender_region": event.get("sender_region"),
             "is_new_payee": result["is_new_payee"],
-            "receiver_account_age_days": result["receiver_account_age_days"],
             "cep_score": cep_score,
             "ml_score": round(ml_score, 4) if ml_score is not None else None,
             "final_score": round(final, 4),
@@ -197,8 +187,6 @@ class FraudDetector(KeyedProcessFunction):
         yield json.dumps(out)
 
     def close(self):
-        if hasattr(self, "_enrich"):
-            self._enrich.close()
         if hasattr(self, "_receivers"):
             self._receivers.close()
             self._population.close()

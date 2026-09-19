@@ -89,9 +89,9 @@ def test_an_ordinary_scenario_is_a_legitimate_transfer_with_history(tmp_path):
 
 
 def test_case_manager_phrases_split_back_into_feature_value_weight():
-    phrases = [EX.phrase("receiver_age", 3.0, 0.42), EX.phrase("hour", 14.0, 0.1)]
+    phrases = [EX.phrase("rcv_distinct_senders_1h", 3.0, 0.42), EX.phrase("hour", 14.0, 0.1)]
     assert S.split_phrases(phrases) == [
-        {"feature": "receiver_age", "label_en": "payee's account age", "shown": "3 days", "weight": 0.42},
+        {"feature": "rcv_distinct_senders_1h", "label_en": "distinct senders paying this payee in an hour", "shown": "3", "weight": 0.42},
         {"feature": "hour", "label_en": "hour of day (UTC)", "shown": "14:00", "weight": 0.1}]
 
 

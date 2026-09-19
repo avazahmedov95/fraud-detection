@@ -1,12 +1,12 @@
 {
-  "exported_at": "2026-09-19T12:51:07+00:00",
-  "commit": "71b52da28b142b9502df66799808b52577ac24ee",
+  "exported_at": "2026-09-19T13:16:11+00:00",
+  "commit": "a92fdb1a68a50f4262ed5fe40d059e5bcb4307ef",
   "artefacts": {
-    "model.onnx": "6c57483cc3ec723d60e7bf99a64a16dd7e3b23989d9dfec57d6c53f9cb5831f9",
-    "model.txt": "7ca1d38419ddddbfe6a63e07c9618ebc8339663464f0cecace1e367725269974",
-    "model.joblib": "6d97511e8c8a08ebe51f7b11d9d6d9b7f27eadd6d08f1959902e9897424b6177",
-    "feature_names.json": "9206a696e6fef3ee6457a842441f8b8e592f1f2e045e666eeac927d6df837163",
-    "thresholds.json": "3d7c9f600660b0564fcef617daa2f02fed08e66a46d3fefb3819361767299290"
+    "model.onnx": "c79a662d34c81d5139b9bc92cceddf25f2a7f175d510444d7c24399f04d046e8",
+    "model.txt": "8bb2e8bd6d552f0d9ee11b3edd4006bc29b32cc5609253c67a99c71f1406d19b",
+    "model.joblib": "4c4ba3606baa5903db584d910b0a48bd0627b671a334c0e7d52a5be318ebd0ff",
+    "feature_names.json": "a1e82fe38f096607099ed15315b391bf6ceb099f8aa1f9751a0647832628f77d",
+    "thresholds.json": "953c8a51e09927d18a9084a8f99e771d9b725b8e6b2d29d51d7e1daf7d0172f3"
   },
   "dataset": {
     "transactions.csv": {
@@ -31,18 +31,15 @@
       "secs_since_last",
       "daily_sum_ratio",
       "hour",
-      "receiver_age",
-      "receiver_is_fresh",
       "rcv_distinct_senders_1h",
       "rcv_inflow_1h",
       "geo_is_anomaly",
       "active_call",
       "secs_login_z"
     ],
-    "features_sha256": "6be46d97fd25834bdffa982744cc3e3429298b4bf6eae9de281250a3ef279963",
+    "features_sha256": "dc75f5cb44923de5686c0c0a27e70782052b735754751f03df3266b3dd045eab",
     "capability_profile": {
       "core_history": "on",
-      "receiver_age": "always",
       "myid_kinship": "off",
       "receiver_velocity": "on",
       "geo_telemetry": "on",
@@ -51,7 +48,7 @@
     }
   },
   "metrics": {
-    "roc_auc": 0.9872834214221639,
-    "pr_auc": 0.44958446574602196
+    "roc_auc": 0.9611470120137727,
+    "pr_auc": 0.32129168762924915
   }
 }

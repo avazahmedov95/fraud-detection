@@ -49,14 +49,13 @@ EXPECTED = {
         "which answers a different question - what is in this slice - and "
         "answers it identically for every arm."),
     "redis": (
-        "enrichment cache, the payee's inbound window and the population "
-        "baseline all live here. Expect: no loss, receiver_age unknown, and "
+        "the payee's inbound window and the population baseline live here. "
+        "Expect: no loss, and "
         "MULE_FAN_IN to stop firing entirely - the fan-in features read zero "
         "when the store is unreachable."),
     "neo4j": (
-        "the account-age lookup and the alert graph. Expect: no loss, "
-        "FRESH_RECEIVER to stop firing once the Redis age cache expires, and "
-        "graph writes to be DISCARDED with a running total in the log."),
+        "the alert graph. Expect: no loss, and graph writes to be DISCARDED "
+        "with a running total in the log."),
     "clickhouse": (
         "the warehouse and the audit trail. Expect: scoring unaffected and "
         "alerts still published, but rows discarded - and Kafka offsets advance "

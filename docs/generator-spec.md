@@ -100,7 +100,9 @@ A_f \sim \begin{cases}
 \end{cases}
 $$
 
-The aged 30% is what stops `receiver_age` from being a perfect separator.
+The aged 30% is what stopped `receiver_age` from being a perfect separator. The
+detector no longer reads the age (since 2026-09-19); the column stays in the
+dataset, whose hash is pinned.
 
 ---
 
