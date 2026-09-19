@@ -75,8 +75,7 @@ def test_rules_fire_on_foreign_data(paysim_df, tmp_path):
 
     saved = dict(CAP.MODES)
     try:
-        for key in ("receiver_age", "myid_kinship", "device_telemetry",
-                    "geo_telemetry", "session_telemetry"):
+        for key in ("receiver_age", "myid_kinship", "geo_telemetry", "session_telemetry"):
             CAP.MODES[key] = "off"
         CAP.MODES["payee_identity"] = "pinfl"
         res, hits = PS.run(str(path), ["TRANSFER"], None)
@@ -100,15 +99,14 @@ def test_capabilities_without_data_are_off_in_the_run(paysim_df, tmp_path):
 
     saved = dict(CAP.MODES)
     try:
-        for key in ("receiver_age", "myid_kinship", "device_telemetry",
-                    "geo_telemetry", "session_telemetry"):
+        for key in ("receiver_age", "myid_kinship", "geo_telemetry", "session_telemetry"):
             CAP.MODES[key] = "off"
         CAP.MODES["payee_identity"] = "pinfl"
         _, hits = PS.run(str(path), ["TRANSFER"], None)
     finally:
         CAP.MODES.clear(); CAP.MODES.update(saved)
 
-    forbidden = {"DEVICE_CHANGE", "GEO_ANOMALY", "IMPOSSIBLE_TRAVEL",
+    forbidden = {"GEO_ANOMALY", "IMPOSSIBLE_TRAVEL",
                  "COACHED_SESSION", "FRESH_RECEIVER"}
     fired = set(hits["fraud"]) | set(hits["legit"])
     assert not (fired & forbidden), f"fired without data: {fired & forbidden}"
@@ -186,7 +184,7 @@ def test_amlsim_receiver_age_is_read_from_accounts(amlsim_dir):
     """If open_dt were ignored, receiver_age would be None and FRESH_RECEIVER never fire."""
     saved = dict(CAP.MODES)
     try:
-        for key in ("myid_kinship", "device_telemetry", "geo_telemetry",
+        for key in ("myid_kinship", "geo_telemetry",
                     "session_telemetry"):
             CAP.MODES[key] = "off"
         CAP.MODES["payee_identity"] = "pinfl"
@@ -201,7 +199,7 @@ def test_amlsim_typology_labels_survive_to_the_result(amlsim_dir):
     """Section B needs alert_type on the rows; the fan_in/fan_out split is why this dataset."""
     saved = dict(CAP.MODES)
     try:
-        for key in ("myid_kinship", "device_telemetry", "geo_telemetry",
+        for key in ("myid_kinship", "geo_telemetry",
                     "session_telemetry"):
             CAP.MODES[key] = "off"
         CAP.MODES["payee_identity"] = "pinfl"
@@ -216,14 +214,14 @@ def test_amlsim_capabilities_without_data_are_off(amlsim_dir):
     """FRESH_RECEIVER is NOT forbidden here, unlike the PaySim test: open_dt is real."""
     saved = dict(CAP.MODES)
     try:
-        for key in ("myid_kinship", "device_telemetry", "geo_telemetry",
+        for key in ("myid_kinship", "geo_telemetry",
                     "session_telemetry"):
             CAP.MODES[key] = "off"
         CAP.MODES["payee_identity"] = "pinfl"
         _, hits = AS.run(amlsim_dir, None)
     finally:
         CAP.MODES.clear(); CAP.MODES.update(saved)
-    forbidden = {"DEVICE_CHANGE", "GEO_ANOMALY", "IMPOSSIBLE_TRAVEL",
+    forbidden = {"GEO_ANOMALY", "IMPOSSIBLE_TRAVEL",
                  "COACHED_SESSION"}
     fired = set(hits["fraud"]) | set(hits["legit"])
     assert not (fired & forbidden), f"fired without data: {fired & forbidden}"
@@ -248,9 +246,9 @@ def test_the_shared_profile_sets_the_payee_key(capsys):
     must go through it rather than setting modes itself."""
     saved = dict(CAP.MODES)
     try:
-        RP.capability_profile("device_telemetry")
+        RP.capability_profile("geo_telemetry")
         assert CAP.MODES["payee_identity"] == "pinfl"
-        assert CAP.MODES["device_telemetry"] == "off"
+        assert CAP.MODES["geo_telemetry"] == "off"
     finally:
         CAP.MODES.clear(); CAP.MODES.update(saved)
 
@@ -259,8 +257,7 @@ def test_the_shared_profile_sets_the_payee_key(capsys):
 
 def _foreign_profile():
     saved = dict(CAP.MODES)
-    for key in ("receiver_age", "myid_kinship", "device_telemetry",
-                "geo_telemetry", "session_telemetry"):
+    for key in ("receiver_age", "myid_kinship", "geo_telemetry", "session_telemetry"):
         CAP.MODES[key] = "off"
     CAP.MODES["payee_identity"] = "pinfl"
     return saved
@@ -272,11 +269,11 @@ def test_available_features_drops_exactly_what_the_profile_switched_off():
     saved = _foreign_profile()
     try:
         idx, names = RP.available_features()
-        for gone in ("receiver_age", "receiver_is_fresh", "device_is_new",
+        for gone in ("receiver_age", "receiver_is_fresh",
                      "geo_is_anomaly", "active_call", "secs_login_z"):
             assert gone not in names
         assert "rcv_distinct_senders_1h" in names and "vel_10m" in names
-        assert len(idx) == len(names) == 14
+        assert len(idx) == len(names) == 13
     finally:
         CAP.MODES.clear(); CAP.MODES.update(saved)
 

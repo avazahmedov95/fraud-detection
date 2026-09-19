@@ -137,10 +137,7 @@ def extract(event: dict, receiver_age_days, state, now: float,
     the fail-open behaviour used elsewhere."""
     amount = float(event["amount_uzs"])
     payee = payee_key(event)
-    device = event.get("device_id", "")
     region = event.get("sender_region", "")
-    s_net = event.get("sender_network", "")
-    r_net = event.get("receiver_network", "")
 
     ev = state.events
     n_hist = state.n_amt
@@ -159,7 +156,6 @@ def extract(event: dict, receiver_age_days, state, now: float,
 
     distinct = {e[2] for e in ev if now - e[0] <= C.DISTINCT_PAYEE_WINDOW_S} | {payee}
 
-    device_is_new = 1 if (state.known_devices and device not in state.known_devices) else 0
 
     geo_is_anomaly = 0
     if state.region_counts:
@@ -232,14 +228,12 @@ def extract(event: dict, receiver_age_days, state, now: float,
         "vel_1h": win_count(C.STRUCTURING_WINDOW_S),
         "distinct_payees_10m": len(distinct),
         "sub_threshold_1h": sub,
-        "device_is_new": device_is_new,
         "active_call": active_call,
         "secs_login_z": secs_login_z,
         "geo_is_anomaly": geo_is_anomaly,
         "secs_since_last": secs_since_last,
         "daily_sum_ratio": daily_sum / C.LIMIT_DAILY,
         "hour": float(datetime.datetime.fromtimestamp(now, datetime.timezone.utc).hour),
-        "cross_network": 1 if (s_net and r_net and s_net != r_net) else 0,
         # --- rule helpers (NOT model features) ---
         "travel_kmh": travel_kmh,
         "travel_distance_km": travel_distance_km,
@@ -273,11 +267,10 @@ def update_state(state, event: dict, now: float) -> None:
     # is_new_payee read 1 on every event forever.
     payee = payee_key(event)
     state.seen_payees.add(payee)
-    state.events.append((now, amount, payee, event.get("device_id", "")))
+    state.events.append((now, amount, payee))
     # Bound the window deque (memory). Stale entries are time-filtered in extract anyway.
     while state.events and now - state.events[0][0] > C.RECENT_RETENTION_S:
         state.events.popleft()
-    state.known_devices.add(event.get("device_id", ""))
     region = event.get("sender_region", "")
     state.region_counts[region] += 1
     # Last *located* event: only advanced when the event carries a region, so a

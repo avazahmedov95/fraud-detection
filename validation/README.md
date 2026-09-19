@@ -8,9 +8,9 @@ shared by both, so the results stay one measurement.
 
 ## The constraint that shapes everything here
 
-14 of this project's 20 features are **relational** - computed over the history
+14 of this project's 18 features are **relational** - computed over the history
 of a named sender and a named receiver. Measured cost of losing them (seed 42,
-held-out slice, baseline profile):
+held-out slice, baseline profile, on the 20-column vector of the time):
 
 | available | PR-AUC | precision | recall |
 |---|---|---|---|
@@ -18,7 +18,7 @@ held-out slice, baseline profile):
 | no account identifiers | 0.761 | 0.563 | 0.745 |
 | amount + hour only | 0.653 | 0.272 | 0.819 |
 
-On the realistic profile the full system scores PR-AUC 0.472 (`ml/README.md`);
+On the realistic profile the full system scores PR-AUC 0.450 (`ml/README.md`);
 the stripped configurations have not been re-run there. Public transaction
 datasets carry no account identifiers, because those are what cannot be
 published:
@@ -37,7 +37,7 @@ source.
 `paysim_adapter.py`. An agent-based mobile-money generator (Lopez-Rojas et al.)
 built for another market, with **identifiers on both sides**, so this project's
 own extractor and CEP rules run on it unchanged - `rules.evaluate()` as deployed,
-nothing retrained or tuned. Capabilities PaySim cannot support (device, geo,
+nothing retrained or tuned. Capabilities PaySim cannot support (geo,
 session, receiver age, kinship) are switched **off**, never defaulted, so no rule
 fires on a fabricated zero.
 

@@ -14,9 +14,6 @@ needs_receiver_age = pytest.mark.skipif(
 needs_geo = pytest.mark.skipif(
     not CAP.enabled("geo_telemetry"),
     reason="geo is disabled by CAP_GEO_TELEMETRY=off")
-needs_device = pytest.mark.skipif(
-    not CAP.enabled("device_telemetry"),
-    reason="device telemetry is disabled by CAP_DEVICE_TELEMETRY=off")
 
 
 def _ev(amount, payee="rcv", device="dev-1", region="Tashkent City",
@@ -71,15 +68,13 @@ def test_structuring_is_flagged():
 
 
 @needs_geo
-@needs_device
-def test_device_and_geo_change_flagged():
+def test_geo_change_flagged():
     st = SenderState()
     for i in range(4):
         evaluate(_ev(150_000, payee="friend", device="dev-A", region="Samarkand"),
                   800, st, now=1000 + i)
     res = evaluate(_ev(150_000, payee="friend", device="dev-NEW", region="Andijan"),
                     800, st, now=2000)
-    assert "DEVICE_CHANGE" in res["rule_hits"]
     assert "GEO_ANOMALY" in res["rule_hits"]
 
 

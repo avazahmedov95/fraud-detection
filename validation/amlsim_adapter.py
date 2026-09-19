@@ -147,7 +147,7 @@ def main():
 
     # receiver_age stays ON - the one capability this dataset supports and PaySim
     # did not.
-    RP.capability_profile("myid_kinship", "device_telemetry", "geo_telemetry",
+    RP.capability_profile("myid_kinship", "geo_telemetry",
                           "session_telemetry")
 
     res, hits = run(args.dir, args.limit)

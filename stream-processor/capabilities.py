@@ -36,7 +36,7 @@ REGISTRY = (
         modes=("on",),                  # cannot be switched off: it IS the input
         features=("log_amount", "amount_to_mean", "amount_z", "is_new_payee",
                   "vel_10m", "vel_1h", "distinct_payees_10m", "sub_threshold_1h",
-                  "secs_since_last", "daily_sum_ratio", "hour", "cross_network"),
+                  "secs_since_last", "daily_sum_ratio", "hour"),
         rules=("NEW_PAYEE_HIGH_AMOUNT", "VELOCITY", "STRUCTURING",
                "DISTINCT_PAYEE_BURST", "AMOUNT_DEVIATION", "DAILY_LIMIT_BREACH"),
         rationale="Every bank has its own payment history; switching this off "
@@ -74,14 +74,6 @@ REGISTRY = (
                   "receiver — and is invisible from any single sender's history. "
                   "Seeing it needs state keyed by receiver, which in a "
                   "partitioned stream means an external store.",
-    ),
-    Capability(
-        key="device_telemetry",
-        requires="a stable device identifier from the channel",
-        features=("device_is_new",),
-        rules=("DEVICE_CHANGE",),
-        rationale="Available in app and web channels; ATM and USSD traffic "
-                  "carries no device identity.",
     ),
     Capability(
         key="geo_telemetry",
@@ -209,7 +201,7 @@ def rule_enabled(rule: str) -> bool:
 # fusion._TYPE_PRIORITY, which names an alert from whichever rule fired first.
 PATTERN_SIGNATURES = {
     "APP":         ("NEW_PAYEE_HIGH_AMOUNT", "FRESH_RECEIVER", "COACHED_SESSION"),
-    "ATO":         ("DEVICE_CHANGE", "GEO_ANOMALY", "IMPOSSIBLE_TRAVEL", "VELOCITY"),
+    "ATO":         ("GEO_ANOMALY", "IMPOSSIBLE_TRAVEL", "VELOCITY"),
     "STRUCTURING": ("STRUCTURING", "VELOCITY"),
     "MULE":        ("MULE_FAN_IN", "FRESH_RECEIVER", "NEW_PAYEE_HIGH_AMOUNT"),
 }
@@ -225,7 +217,6 @@ def _rule_weights():
         "VELOCITY": "W_VELOCITY",
         "STRUCTURING": "W_STRUCTURING",
         "DISTINCT_PAYEE_BURST": "W_DISTINCT_BURST",
-        "DEVICE_CHANGE": "W_DEVICE_CHANGE",
         "GEO_ANOMALY": "W_GEO_ANOMALY",
         "IMPOSSIBLE_TRAVEL": "W_IMPOSSIBLE_TRAVEL",
         "AMOUNT_DEVIATION": "W_AMOUNT_DEVIATION",

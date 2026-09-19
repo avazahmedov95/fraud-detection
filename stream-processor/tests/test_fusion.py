@@ -62,8 +62,7 @@ def _full(profile):
 
 def _reduced(profile):
     """Own stream plus the fan-in window: the profile a single bank really has."""
-    profile(receiver_age="off", myid_kinship="off", device_telemetry="off",
-            geo_telemetry="off", session_telemetry="off")
+    profile(receiver_age="off", myid_kinship="off", geo_telemetry="off", session_telemetry="off")
 
 
 def test_full_capability_does_not_move_either_operating_point(profile):
@@ -117,7 +116,7 @@ def test_default_is_the_fused_path(profile):
 
 def test_type_priority():
     assert classify_type(["STRUCTURING", "VELOCITY"]) == "STRUCTURING"
-    assert classify_type(["DEVICE_CHANGE"]) == "ATO"
+    assert classify_type(["GEO_ANOMALY"]) == "ATO"
     assert classify_type(["NEW_PAYEE_HIGH_AMOUNT"]) == "APP"
     assert classify_type([]) is None
 

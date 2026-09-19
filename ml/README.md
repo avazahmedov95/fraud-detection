@@ -65,17 +65,18 @@ fails if this table disagrees with it.
 
 | metric                | ML model | CEP rules only |
 |-----------------------|----------|----------------|
-| ROC-AUC               | 0.991    | —              |
-| PR-AUC                | 0.472    | —              |
-| precision at REVIEW   | 0.637    | 0.024          |
-| recall at REVIEW      | 0.505    | 0.317          |
+| ROC-AUC               | 0.987    | —              |
+| PR-AUC                | 0.450    | —              |
+| precision at REVIEW   | 0.586    | 0.024          |
+| recall at REVIEW      | 0.421    | 0.317          |
 
-Recall by fraud type (ML at REVIEW): STRUCTURING 66.1%, APP 39.4%, ATO 80.0%, MULE 43.5%.
-The five fits alone scored 0.316-0.473 PR-AUC on the same slice; their committee
-0.472 - as good as the best of them, and no fit is known in advance to be the best.
+Recall by fraud type (ML at REVIEW): STRUCTURING 50.8%, APP 33.8%, ATO 80.0%, MULE 37.1%.
+The five fits alone scored 0.303-0.461 PR-AUC on the same slice; their committee
+0.450 - close to the best of them, and no fit is known in advance to be the best.
 
-Read plainly: the committee finds half the fraud in the held-out month, and about
-two alerts in three are fraud. The rules alone reach 2.4% precision on data where
+Read plainly: the committee finds about four in ten of the fraud in the held-out
+month, and about three alerts in five are fraud - with the spread one retrain
+moves (below). The rules alone reach 2.4% precision on data where
 legitimate traffic also collects, splits and changes phones. The weak patterns
 are APP and MULE.
 
@@ -100,9 +101,10 @@ reported. Three changes, each measured before it was adopted:
   `train.py` fits on the earliest 64% of rows, puts REVIEW where F1 peaks on the
   next 16% and BLOCK where precision there reaches 90%, and writes both to
   `thresholds.json`, which serve-prep ships beside `model.onnx` and the job reads
-  (`stream-processor/config.py`). This run: cut at REVIEW = 0.0353, and no BLOCK -
-  no cutoff reached 90% on the validation rows, so the model sends to review and
-  never blocks on its own. The CEP-only fallback keeps the fixed cutoffs, since an
+  (`stream-processor/config.py`). This run: cut at REVIEW = 0.0742, and BLOCK at a
+  score that rounds to 1.000: the validation rows reached 90% only at the very top,
+  and on the held-out month the model blocks 5 transfers on its own, 4 of them
+  fraud. The CEP-only fallback keeps the fixed cutoffs, since an
   additive rule score is not a probability.
 
 *IBM AML, which the gates below use, was removed from the project on 2026-09-19:
@@ -286,6 +288,24 @@ needs a known-seller flag - self-employed status is something the bank holds -
 before link_history reads a shop as a collection. link_history has since been
 removed (above); the seller caveat stands for any count of a payee's payers.
 
+### cross_network and device telemetry: removed, and what one retrain moves
+
+On 2026-09-19 the owner removed two inputs to simplify the system: `cross_network`
+(a transfer between UzCard and HUMO, which the generator draws independently of
+fraud) and device telemetry (`device_is_new` and the `DEVICE_CHANGE` rule - the
+bank's app now blocks a new device outright, CBU 3759). The vector is 18 columns.
+
+Twenty paired fits of train.py's recipe on the realistic profile, with both and
+without both (seeds 0-19): validation PR-AUC 0.489 -> 0.498, paired +0.009
+[-0.033, +0.052], worse on 7 of 20 seeds - no measurable difference. The served
+committee nevertheless moved: recall at REVIEW 0.505 -> 0.421, precision 0.637 ->
+0.586, and a BLOCK cutoff appeared. That is not the two columns; it is what one
+retrain does here. With 570 fraud to learn from, the five fits scatter (0.303-0.461
+PR-AUC) and the F1-chosen cutoff lands on a different alert count each time:
+removing either column alone moved the served recall to 0.421 or 0.436 with PR-AUC
+unchanged (0.476, 0.469). **The headline figures carry about eight points of
+retrain-to-retrain spread in recall, and are quoted with it.**
+
 **Everything below is the baseline profile, the dataset of record until
 2026-09-14, unless it says otherwise.**
 
@@ -310,8 +330,8 @@ alarms, on every seed. The new one undoes most of that, not all: the verdict fix
 before the run - no more false alarms without the ages than with them - fails, at
 14 against 10. The outage's price is now mostly recall (0.851 to 0.773), and with
 the ages known nothing moved. On the realistic profile, with Neo4j down for the
-whole slice, alerts go from 160 to 156 and recall from 0.505 to 0.376, while false
-alarms rise from 58 to 80. `train.py` scores the outage on every retrain, as
+whole slice, alerts go from 145 to 111 and recall from 0.421 to 0.292, while false
+alarms fall from 60 to 52. `train.py` scores the outage on every retrain, as
 `graph_outage` in `metrics.json`.
 
 **A disclaimer is not a refresh.** The table the one above replaced was measured
@@ -361,7 +381,7 @@ from 56.0% to 31.8%, five seeds, delta −25.3 pp [−47.5, −3.1]
 revision reported it as the #1 feature (1.29) and the core research contribution:
 the generator routed no fraud to relatives, so it separated the classes by
 construction. It was not deleted - it is the `myid_kinship` capability, which
-defaults to off, so it is absent from the deployed 20-column vector. Once the
+defaults to off, so it is absent from the deployed vector. Once the
 generator modelled both directions (25% of legitimate transfers go to relatives,
 and a realistic minority of fraud too), switching it on is worth nothing
 measurable - the `myid_kinship=on` row below. A feature that dominates SHAP on
@@ -403,7 +423,7 @@ baseline PR-AUC **0.960 ± 0.018**:
 **`channel` is gone.** It measured −0.002 [−0.006, +0.002], no rule read its four
 one-hot features, and no public dataset carries the field. It was removed on
 07.09.2026 from the model, the wire, the ingress hash, ClickHouse, Grafana and the
-case view; the contract is 20 columns. Dropping four columns of noise also
+case view; the contract was 20 columns, and is 18 since 2026-09-19. Dropping four columns of noise also
 tightened every interval, which is how `receiver_age` moved from unresolved back
 to **real**.
 
@@ -535,24 +555,25 @@ confidence interval for the mean.
 
 `metrics.json` carries a `calibration` block beside the AUCs, computed by
 `train.py` on every run. It answers a different question: not *does the model rank
-fraud above legitimate traffic* (ROC-AUC 0.991 / PR-AUC 0.472 on the realistic
+fraud above legitimate traffic* (ROC-AUC 0.987 / PR-AUC 0.450 on the realistic
 profile) but *are its probabilities usable as magnitudes*.
 
 ```
-brier               0.00155
-n_alerts            160          (>= REVIEW on the held-out slice)
-saturated_share     11.9%        rounding to 1.000
-distinct_scores     114
-review_band         160         alerts below BLOCK - all: there is no BLOCK cutoff
-median_alert_score  0.635452
+brier               0.00163
+n_alerts            145          (>= REVIEW on the held-out slice)
+saturated_share     23.4%        rounding to 1.000
+distinct_scores     97
+review_band         140         alerts below BLOCK - the other 5 are blocked outright
+median_alert_score  0.735482
 scored_with         model.onnx
 ```
 
 Read `saturated_share` and `distinct_scores` together. On the baseline profile
 they read 66.9% and 33: the model separated the classes almost perfectly and
 still could not **order** an alert queue, because the alerts piled up at the top
-of the scale. On the realistic profile 160 alerts carry 114 distinct scores, and
-the queue can be ordered again. AUC is blind to this by construction - it is a
+of the scale. On the realistic profile 145 alerts carry 97 distinct scores and
+23.4% round to 1.000 - coarser than the 20-column model's 114 among 160, but a
+queue that can still be ordered. AUC is blind to this by construction - it is a
 rank statistic - and the finding surfaced only when a real work queue tried to
 sort by score (`docs/irp-framing.md` §9.1). It is a property of near-separable
 synthetic data, not of gradient boosting.

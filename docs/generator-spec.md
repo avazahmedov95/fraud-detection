@@ -383,7 +383,7 @@ Checked on seed 42, baseline profile, 50,000 events:
 | STRUCTURING as fraction of threshold | 0.85–0.99 | 0.851–0.990 |
 | ATO events per episode | 2–8 | {2, 3, 4, 5, 6, 7, 8} |
 | travellers | $\tau$ = 0.18 selection | 17.0% realised (see §6) |
-| `device_is_new` fires | both classes, ≥ 30 rows (§4) | 570 legit / 11 fraud, 1.9% precision |
+| a first-seen device | both classes, ≥ 30 rows (§4) | 570 legit / 11 fraud, 1.9% precision |
 | receivers on >1 card | $\kappa$ = 0.20 hold one (§2) | 892 of 5,078, 9,826 rows |
 
 `verify_spec.py` regenerates these comparisons.

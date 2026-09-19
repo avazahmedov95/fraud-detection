@@ -1,6 +1,6 @@
 {
-  "review": 0.03529782208522776,
-  "block": null,
+  "review": 0.07417491026202729,
+  "block": 0.9999999962850281,
   "block_precision": 0.9,
   "chosen_on": {
     "rows": 80000,

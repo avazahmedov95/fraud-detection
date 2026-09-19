@@ -96,7 +96,6 @@ W_FRESH_RECEIVER = 0.15
 W_VELOCITY = 0.30
 W_STRUCTURING = 0.40
 W_DISTINCT_BURST = 0.25
-W_DEVICE_CHANGE = 0.20
 W_GEO_ANOMALY = 0.20
 # Reaches REVIEW alone at the CEP layer (0.45 > 0.40); the fused decision follows
 # the model unless the rule is in MANDATORY_REVIEW_RULES.

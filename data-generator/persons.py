@@ -70,7 +70,7 @@ def network_from_bin(bin6):
     raise ValueError(
         f"BIN {bin6!r} matches no network in CARD_NETWORKS ({known}). "
         f"Check {BANKS_SOURCE}: a card whose network cannot be resolved would "
-        f"silently distort the cross_network feature.")
+        f"be generated without one.")
 
 
 def gen_card(rng):

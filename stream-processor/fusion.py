@@ -59,8 +59,7 @@ def decide(score: float, rule_hits, cep_only: bool = False) -> str:
 #: name ATO, since a fast run of outbound transfers fits either pattern.
 _TYPE_PRIORITY = (
     ("STRUCTURING", ("STRUCTURING",)),
-    ("ATO",         ("DEVICE_CHANGE", "GEO_ANOMALY", "VELOCITY",
-                     "DISTINCT_PAYEE_BURST")),
+    ("ATO",         ("GEO_ANOMALY", "VELOCITY", "DISTINCT_PAYEE_BURST")),
     ("MULE",        ("MULE_FAN_IN",)),
     ("APP",         ("NEW_PAYEE_HIGH_AMOUNT", "AMOUNT_DEVIATION")),
 )

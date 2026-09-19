@@ -116,7 +116,7 @@ it can support has to be stated carefully.
   detected vulnerabilities (**22.84%**, behind public administration at 25.84%).
 - *Session persistence is a real defect.* "Session retained" is the second most
   common high-severity finding in information systems (82 instances) and appears
-  in mobile apps (8). `COACHED_SESSION` and `DEVICE_CHANGE` assume a session
+  in mobile apps (8). `COACHED_SESSION` assumes a session
   boundary means something; where sessions do not expire, that assumption is
   weaker than §4 implies.
 
@@ -149,7 +149,6 @@ the bet makes it falsifiable — and shows which controls are load-bearing.
 | `STRUCTURING` | keep amounts away from the threshold band | n/a | n/a | no | **low** — but structuring *is* the evasion; the rule catches the evasive form |
 | `DAILY_LIMIT_BREACH` | stay under the daily limit | no | no | no | **low** — regulatory floor, not a detection claim |
 | `COACHED_SESSION` (`active_call`, `secs_login_z`) | be on a call, or hesitate, while confirming | **no** | n/a | n/a | **very low once known** — "hang up before you confirm" |
-| `DEVICE_CHANGE` | present a known device | yes | **no** | yes | **medium** — malware on the victim's own device defeats it |
 | `GEO_ANOMALY` | appear from the victim's usual region | yes | **no** | yes | **low** — a proxy in the right city |
 | `IMPOSSIBLE_TRAVEL` | be in two places at once | yes | **yes** | yes | **high** — requires a proxy geographically consistent with the victim's *recent* activity, which the attacker cannot observe |
 | `FRESH_RECEIVER`, `receiver_age` | use an aged destination account | no | no | **no** | **medium** — account farming; real cost, real lead time |
@@ -310,7 +309,9 @@ account is used from a different device or after a password reset.
 `DEVICE_CHANGE` measures exactly that event as a *signal*; the regulation converts
 it into a *hard control*. And `device_telemetry=off` measured **+0.002 [−0.001,
 +0.005]** over five seeds - no effect. The capability worth nothing to the
-detector is the one regulation found worth mandating as prevention.
+detector is the one regulation found worth mandating as prevention - and on
+2026-09-19 it was removed from this system: twenty paired fits on the realistic
+profile show no measurable difference without it.
 
 That is the substitution stated from the other end: a signal contributes nothing
 to a *detector* precisely when the event it marks is rare or already handled, and

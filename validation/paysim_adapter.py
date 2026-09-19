@@ -241,16 +241,14 @@ def main():
     if args.our_model:
         # Only what PaySim actually carries; the rest are switched off rather
         # than defaulted, so no feature is computed from a fabricated value.
-        RP.capability_profile("receiver_age", "myid_kinship", "device_telemetry",
-                              "geo_telemetry", "session_telemetry")
+        RP.capability_profile("receiver_age", "myid_kinship", "geo_telemetry", "session_telemetry")
         return our_model(args.file, args.limit)
     if args.baseline:
         return baseline(args.file)
 
     # PaySim has account ids, amounts and a clock, nothing else this project uses. What
     # is not backed by real data is switched off, not defaulted: nothing fires on a zero.
-    RP.capability_profile("receiver_age", "myid_kinship", "device_telemetry",
-                          "geo_telemetry", "session_telemetry")
+    RP.capability_profile("receiver_age", "myid_kinship", "geo_telemetry", "session_telemetry")
 
     types = [t.strip() for t in args.types.split(",") if t.strip()]
     res, hits = run(args.file, types, args.limit)

@@ -66,7 +66,7 @@ data - design targets, not validated findings.
 | mobile-app session telemetry | −0.034 [−0.051, −0.016] | 5/5 | real |
 | receiver account age | −0.022 [−0.040, −0.004] | 4/5 | real |
 | MyID kinship (added) | +0.002 [−0.000, +0.004] | 4/5 | negligible |
-| device identity | +0.002 [−0.001, +0.005] | 4/5 | negligible |
+| device identity | +0.002 [−0.001, +0.005] | 4/5 | negligible - removed 2026-09-19 |
 | payee keyed by person, not card | +0.001 [−0.004, +0.007] | 2/5 | negligible |
 | geo telemetry | +0.000 [−0.002, +0.002] | 2/5 | negligible (see caveat) |
 
@@ -158,7 +158,8 @@ Everything owed to the review is now done; the items keep their numbers.
 7. **External validation** - `validation/README.md`. The result worth putting in
    the thesis: **relational fraud detection cannot be validated end-to-end on
    public real data, because the account identifiers that make it relational are
-   exactly what cannot be published.** 14 of 20 features here are relational;
+   exactly what cannot be published.** 14 of the 20 features measured here are
+   relational (18 features since 2026-09-19);
    removing them costs 0.937 → 0.761 PR-AUC on the baseline profile. So the
    question is split:
    - **PaySim** (`paysim_adapter.py`), the one public dataset with identifiers on

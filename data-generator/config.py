@@ -19,7 +19,7 @@ SECS_LOGIN_FLOOR = 3.0                # physical minimum
 
 # --- Devices ----------------------------------------------------------------
 # Legitimate people own a second device and replace phones; with one device each,
-# device_is_new fired only on fraud - the label wearing a feature's name.
+# a first-seen device marked only fraud - the label wearing a feature's name.
 SECOND_DEVICE_SHARE = 0.25    # people who use a second device at all
 SECOND_DEVICE_USE_RATE = 0.15 # share of THEIR transactions sent from it
 

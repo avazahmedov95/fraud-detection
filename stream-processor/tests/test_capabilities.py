@@ -94,8 +94,7 @@ def test_disabling_a_capability_drops_its_rules(set_mode):
 
 def test_core_rules_stay_enabled_when_integrations_are_off(set_mode):
     """A bank with no telemetry at all still runs its own-history rules."""
-    set_mode(geo_telemetry="off", device_telemetry="off",
-             session_telemetry="off", receiver_age="off")
+    set_mode(geo_telemetry="off", session_telemetry="off", receiver_age="off")
     for rule in ("VELOCITY", "STRUCTURING", "AMOUNT_DEVIATION",
                  "DAILY_LIMIT_BREACH", "DISTINCT_PAYEE_BURST",
                  "NEW_PAYEE_HIGH_AMOUNT"):
@@ -125,7 +124,7 @@ def test_minimal_deployment_still_has_a_usable_contract(set_mode):
     set_mode(**{cap.key: "off" for cap in CAP.REGISTRY if "off" in cap.modes})
     names = CAP.feature_names()
     assert names == list(CAP.BY_KEY["core_history"].features)
-    assert len(names) == 12
+    assert len(names) == 11
 
 
 # --- a write that configures nothing must fail -----------------------------

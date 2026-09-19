@@ -83,8 +83,7 @@ class PopulationBaseline:
 @dataclass
 class SenderState:
     seen_payees: set = field(default_factory=set)
-    events: deque = field(default_factory=deque)        # (ts, amount, payee, device)
-    known_devices: set = field(default_factory=set)
+    events: deque = field(default_factory=deque)        # (ts, amount, payee)
     region_counts: Counter = field(default_factory=Counter)
     # Where and when the sender was last seen, for the travel-speed check.
     last_region: str = ""
@@ -139,8 +138,6 @@ def evaluate(event: dict, receiver_age_days, state: SenderState, now: float,
         hits.append("STRUCTURING"); score += C.W_STRUCTURING
     if on("DISTINCT_PAYEE_BURST") and f["distinct_payees_10m"] > C.DISTINCT_PAYEE_MAX:
         hits.append("DISTINCT_PAYEE_BURST"); score += C.W_DISTINCT_BURST
-    if on("DEVICE_CHANGE") and f["device_is_new"]:
-        hits.append("DEVICE_CHANGE"); score += C.W_DEVICE_CHANGE
     if on("GEO_ANOMALY") and f["geo_is_anomaly"]:
         hits.append("GEO_ANOMALY"); score += C.W_GEO_ANOMALY
     # Distinct from GEO_ANOMALY: that flags ordinary travellers on any

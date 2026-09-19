@@ -91,7 +91,7 @@ def main():
                      1.0, 0))
 
     print("\ndevices (legitimate senders must change device - see spec section 3)")
-    # Stream-derived, as features.py computes device_is_new: first use of a device.
+    # Stream-derived: the first use of a device by its sender.
     seen, legit_new, fraud_new = {}, 0, 0
     for pinfl, dev, lab in zip(d.sender_pinfl, d.device_id, d.label_is_fraud):
         known = seen.setdefault(pinfl, set())
@@ -104,7 +104,7 @@ def main():
     fires = legit_new + fraud_new
     precision = fraud_new / fires if fires else 0.0
     base = d.label_is_fraud.mean()
-    print(f"       device_is_new fires on {legit_new} legitimate events "
+    print(f"       a first-seen device on {legit_new} legitimate events "
           f"and {fraud_new} fraudulent")
     print(f"       as a fraud predictor: precision {precision:.1%} against a "
           f"{base:.1%} base rate ({precision/base if base else 0:.1f}x lift)")
