@@ -23,7 +23,6 @@ from pyflink.datastream.connectors.kafka import (
     DeliveryGuarantee, KafkaOffsetResetStrategy,
 )
 
-import capabilities as CAP
 import config as C
 from rules import SenderState, evaluate
 import features as F
@@ -78,15 +77,10 @@ class FraudDetector(KeyedProcessFunction):
         # Outside Flink state: keyed by sender, so a payee's inbound transfers
         # are spread across every partition (receiver_store.py).
         self._receivers = ReceiverStore(C.REDIS_HOST, C.REDIS_PORT)
-        # link_history: every card's outbound transfers, the other half of who paid whom.
-        self._outbound = (ReceiverStore(C.REDIS_HOST, C.REDIS_PORT, prefix="out")
-                          if CAP.enabled("link_history") else None)
         # Opened in every mode: inert in "absolute", never missing in "relative".
         self._population = PopulationStore(C.REDIS_HOST, C.REDIS_PORT)
         self._enrich.open()
         self._receivers.open()
-        if self._outbound is not None:
-            self._outbound.open()
         self._population.open()
 
         # Absent is legitimate (the plaintext arm); present-and-unusable is not,
@@ -143,21 +137,11 @@ class FraudDetector(KeyedProcessFunction):
         # wall-clock stamps below measure the pipeline and never enter a feature.
         event_epoch = _event_epoch(event)
         receiver_state = self._receivers.load(F.payee_key(event), event_epoch)
-        # link_history: what reached the sender, whom the sender paid, whom the payee
-        # paid - three more reads of the shared stores, each failing open.
-        links = {}
-        if self._outbound is not None:
-            payer = F.payer_key(event)
-            links = dict(sender_inbound=self._receivers.load(payer, event_epoch),
-                         sender_outbound=self._outbound.load(payer, event_epoch),
-                         payee_outbound=self._outbound.load(F.payee_key(event), event_epoch))
 
         result = evaluate(event, receiver_age, state, event_epoch, receiver_state,
-                          population=self._population, **links)
+                          population=self._population)
         self._state.update(state)
         self._receivers.record(event, event_epoch)
-        if self._outbound is not None:
-            self._outbound.record(event, event_epoch)
 
         cep_score = result["cep_score"]
         ml_score = self._ml_score(result["features"])
@@ -218,8 +202,6 @@ class FraudDetector(KeyedProcessFunction):
         if hasattr(self, "_receivers"):
             self._receivers.close()
             self._population.close()
-            if self._outbound is not None:
-                self._outbound.close()
 
 
 def _apply_security(builder):

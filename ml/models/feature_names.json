@@ -18,10 +18,5 @@
   "device_is_new",
   "geo_is_anomaly",
   "active_call",
-  "secs_login_z",
-  "payee_payers_96h",
-  "sender_payers_96h",
-  "sender_payees_96h",
-  "payee_payees_96h",
-  "money_back_96h"
+  "secs_login_z"
 ]

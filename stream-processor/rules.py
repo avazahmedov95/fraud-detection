@@ -15,16 +15,8 @@ import capabilities as CAP
 @dataclass
 class ReceiverState:
     """Inbound history for ONE receiver, keyed by payee: the stream is partitioned
-    by sender, so this lives in a shared Redis store, not Flink keyed state. The same
-    shape holds a card's OUTBOUND transfers for link_history, the middle field then
-    naming the payee by its key."""
+    by sender, so this lives in a shared Redis store, not Flink keyed state."""
     inbound: deque = field(default_factory=deque)     # (ts, sender_pinfl, amount)
-    # Entries per counterparty over `inbound`, kept by features' update functions so
-    # a four-day read costs the stale head, not four days: an IBM AML hub receives
-    # thousands a day. `n` says whether they are current - a state built by a store
-    # read, not by an update, is scanned instead.
-    counts: Counter = field(default_factory=Counter)
-    n: int = 0
 
 
 #: Below this a "receiver with many senders" is not a claim anyone would make.
@@ -124,16 +116,10 @@ def _thresholds():
 
 def evaluate(event: dict, receiver_age_days, state: SenderState, now: float,
              receiver_state: "ReceiverState | None" = None,
-             population: "PopulationBaseline | None" = None,
-             sender_inbound: "ReceiverState | None" = None,
-             sender_outbound: "ReceiverState | None" = None,
-             payee_outbound: "ReceiverState | None" = None) -> dict:
+             population: "PopulationBaseline | None" = None) -> dict:
     """Score one event from the shared features. Mutates state (after extraction).
-    `receiver_state` is optional: an unreachable shared store fails open here. The
-    last three are link_history's reads: what reached the sender, whom the sender
-    paid, and whom the payee paid."""
-    f = F.extract(event, receiver_age_days, state, now, receiver_state,
-                  sender_inbound, sender_outbound, payee_outbound)
+    `receiver_state` is optional: an unreachable shared store fails open here."""
+    f = F.extract(event, receiver_age_days, state, now, receiver_state)
 
     hits = []
     score = 0.0
@@ -197,7 +183,6 @@ def evaluate(event: dict, receiver_age_days, state: SenderState, now: float,
     vector = F.to_vector(f)
     F.update_state(state, event, now)
     F.update_receiver_state(receiver_state, event, now)
-    F.update_outbound_state(sender_outbound, event, now)
     if population is not None:
         # After the decision: an event must not join the baseline it is judged against.
         population.observe(f["rcv_distinct_senders_1h"])

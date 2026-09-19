@@ -10,7 +10,6 @@ from collections import defaultdict
 import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "stream-processor"))
-import capabilities as CAP
 import features as F          # noqa: E402
 import rules as R             # noqa: E402
 
@@ -28,9 +27,6 @@ def build_matrix(csv_path: str, age_unknown=None, nrows=None) -> pd.DataFrame:
     states = defaultdict(R.SenderState)
     # Keyed by payee, mirroring the shared store the live job reads.
     receiver_states = defaultdict(R.ReceiverState)
-    # link_history: every card's outbound transfers, keyed like the inbound store.
-    outbound_states = defaultdict(R.ReceiverState)
-    link_history = CAP.enabled("link_history")
     # cep_score depends on MULE_FAN_IN's population baseline; one in-process baseline
     # here sees what PopulationStore reads from Redis live, so no train/serve skew.
     population = R.PopulationBaseline()
@@ -40,18 +36,12 @@ def build_matrix(csv_path: str, age_unknown=None, nrows=None) -> pd.DataFrame:
         event = F.event_from(d)
         now = pd.Timestamp(d["event_time"]).timestamp()
         withheld = unknown is not None and unknown[i]
-        links = {}
-        if link_history:
-            payer = F.payer_key(event)
-            links = dict(sender_inbound=receiver_states[payer],
-                         sender_outbound=outbound_states[payer],
-                         payee_outbound=outbound_states[F.payee_key(event)])
         res = R.evaluate(event,
                          None if withheld else
                          F.age_or_none(d.get("receiver_account_age_days")),
                          states[d["sender_card"]], now,
                          receiver_states[F.payee_key(event)],
-                         population=population, **links)
+                         population=population)
         row = dict(zip(FEATURE_NAMES, res["features"]))
         row["cep_score"] = res["cep_score"]
         row["label"] = int(d["label_is_fraud"])

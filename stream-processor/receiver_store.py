@@ -13,13 +13,9 @@ log = logging.getLogger("receiver_store")
 
 
 class ReceiverStore:
-    def __init__(self, host, port, window_s=None, prefix="rcv"):
+    def __init__(self, host, port, window_s=None):
         self._host, self._port = host, port
-        # Four days is also what a hub costs: one load returns every member in the window.
-        self._window_s = window_s or F.kept_window_s()
-        # "rcv": under the payee, naming the sender. "out" (link_history): under the
-        # sender, naming the payee by the key its own inbound is recorded under.
-        self._prefix = prefix
+        self._window_s = window_s or C.RECEIVER_WINDOW_S
         self._redis = None
 
     def open(self):
@@ -41,7 +37,7 @@ class ReceiverStore:
         state = ReceiverState()
         try:
             members = self._redis.zrangebyscore(
-                f"{self._prefix}:{payee}", now - self._window_s, now)
+                f"rcv:{payee}", now - self._window_s, now)
         except Exception as exc:                       # noqa: BLE001
             log.warning("fan-in lookup failed, failing open: %s", exc)
             return None
@@ -61,19 +57,16 @@ class ReceiverStore:
         """Append this transfer to the payee's window and prune what expired."""
         if self._redis is None:
             return
-        # The same helpers the job loads with, so a write cannot land under a key the
-        # read ignores.
-        if self._prefix == "out":
-            owner, counterparty = F.payer_key(event), F.payee_key(event)
-        else:
-            owner, counterparty = F.payee_key(event), event.get("sender_pinfl", "")
-        if not owner:
+        # Same helper load() uses, so a write cannot land under a key the read ignores.
+        payee = F.payee_key(event)
+        if not payee:
             return
-        key = f"{self._prefix}:{owner}"
+        key = f"rcv:{payee}"
         # The transaction id makes replays idempotent - this store does not roll back
         # with a checkpoint - and keeps two identical transfers distinct.
         txid = event.get("transaction_id") or ""
-        member = f"{now}|{counterparty}|{float(event['amount_uzs'])}|{txid}"
+        member = (f"{now}|{event.get('sender_pinfl', '')}|"
+                  f"{float(event['amount_uzs'])}|{txid}")
         try:
             pipe = self._redis.pipeline()
             pipe.zadd(key, {member: now})

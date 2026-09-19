@@ -65,17 +65,17 @@ fails if this table disagrees with it.
 
 | metric                | ML model | CEP rules only |
 |-----------------------|----------|----------------|
-| ROC-AUC               | 0.973    | —              |
-| PR-AUC                | 0.522    | —              |
-| precision at REVIEW   | 0.694    | 0.024          |
-| recall at REVIEW      | 0.540    | 0.317          |
+| ROC-AUC               | 0.991    | —              |
+| PR-AUC                | 0.472    | —              |
+| precision at REVIEW   | 0.637    | 0.024          |
+| recall at REVIEW      | 0.505    | 0.317          |
 
-Recall by fraud type (ML at REVIEW): STRUCTURING 64.4%, APP 49.3%, ATO 70.0%, MULE 46.8%.
-The five fits alone scored 0.308-0.533 PR-AUC on the same slice; their committee
-0.522 - close to the best of them, and no fit is known in advance to be the best.
+Recall by fraud type (ML at REVIEW): STRUCTURING 66.1%, APP 39.4%, ATO 80.0%, MULE 43.5%.
+The five fits alone scored 0.316-0.473 PR-AUC on the same slice; their committee
+0.472 - as good as the best of them, and no fit is known in advance to be the best.
 
-Read plainly: the committee finds just over half the fraud in the held-out month,
-and about seven alerts in ten are fraud. The rules alone reach 2.4% precision on data where
+Read plainly: the committee finds half the fraud in the held-out month, and about
+two alerts in three are fraud. The rules alone reach 2.4% precision on data where
 legitimate traffic also collects, splits and changes phones. The weak patterns
 are APP and MULE.
 
@@ -101,7 +101,7 @@ reported. Three changes, each measured before it was adopted:
   `train.py` fits on the earliest 64% of rows, puts REVIEW where F1 peaks on the
   next 16% and BLOCK where precision there reaches 90%, and writes both to
   `thresholds.json`, which serve-prep ships beside `model.onnx` and the job reads
-  (`stream-processor/config.py`). This run: cut at REVIEW = 0.0605, and no BLOCK -
+  (`stream-processor/config.py`). This run: cut at REVIEW = 0.0353, and no BLOCK -
   no cutoff reached 90% on the validation rows, so the model sends to review and
   never blocks on its own. The CEP-only fallback keeps the fixed cutoffs, since an
   additive rule score is not a probability.
@@ -122,7 +122,7 @@ owner's "adopt only if it does not get worse", on validation rows over five seed
 The code was removed rather than kept switched off; commit `bfe556f` holds all of
 it, with its harness and both gates.
 
-### Multi-day link shapes: built as link_history, switched on 2026-09-19
+### Multi-day link shapes: built as link_history, then removed
 
 Seven columns over the 96 hours before each transfer (`experiments/shapes.py`):
 fan-in and fan-out, the payers of the sender and the payees of the payee, money
@@ -230,7 +230,7 @@ repeat and it has no circles, so every column but the payee's distinct payers ov
 the realistic profile, the payee's multi-day payers weakly on PaySim, and circles
 and split-and-gather only at the top of the list on IBM AML.
 
-### link_history as built: exact, and switched on
+### link_history as built: exact, switched on, then removed
 
 Step 1 went into the stream as the `link_history` capability - five of the seven
 columns, without the three-step circles and split-and-gather - and was measured
@@ -247,14 +247,14 @@ changes none of the existing twenty. The five columns pass on the realistic prof
 and on PaySim - there now with an interval clear of zero - and lift IBM AML's
 PR-AUC, but find less laundering in IBM AML's top 0.1%: the top-of-the-list gain
 the seven columns had there came from the circles and split-and-gather, which step
-1 does not build. By that rule it stayed off. **On 2026-09-19 the owner switched
-it on**: IBM AML's accounts include banks and companies and this project is about
-transfers between people, so IBM AML no longer decides - its results stay above,
-for information - and both datasets that remain passed. The served model was
-retrained with the five columns (the table at the top): PR-AUC 0.472 -> 0.522, and
-at its REVIEW cutoff recall 0.505 -> 0.540 with precision 0.637 -> 0.694. ROC-AUC
-fell, 0.991 -> 0.973, and the alert queue orders more coarsely (Calibration). Both
-harnesses are deleted
+1 does not build. By that rule it stayed off. On 2026-09-19 the owner switched it
+on - IBM AML, whose accounts include banks and companies, no longer deciding - and
+the served model was retrained with it: PR-AUC 0.472 -> 0.522, recall at REVIEW
+0.505 -> 0.540, precision 0.637 -> 0.694, ROC-AUC 0.991 -> 0.973. **The same day
+the owner removed it, to keep the project simple**: the gain was modest, confirmed
+outside this project's own generator only weakly, and it doubled the receiver-side
+state. The code is in git history (`git show 43962d5`, the last commit with it);
+both harnesses are deleted
 (`git show 77e6dad:ml/experiments/links.py`, `git show 77e6dad:ml/experiments/shapes.py`).
 
 ### Honest collections are not mistaken for mules
@@ -280,7 +280,8 @@ one or two payers. What this cannot test is the seller paid by strangers all day
 the generator draws no merchant flows (`docs/generator-spec.md` 8), and such a
 payee would sit far above the fifteen payers the model has seen. A deployment
 needs a known-seller flag - self-employed status is something the bank holds -
-before link_history reads a shop as a collection.
+before link_history reads a shop as a collection. link_history has since been
+removed (above); the seller caveat stands for any count of a payee's payers.
 
 **Everything below is the baseline profile, the dataset of record until
 2026-09-14, unless it says otherwise.**
@@ -306,8 +307,8 @@ alarms, on every seed. The new one undoes most of that, not all: the verdict fix
 before the run - no more false alarms without the ages than with them - fails, at
 14 against 10. The outage's price is now mostly recall (0.851 to 0.773), and with
 the ages known nothing moved. On the realistic profile, with Neo4j down for the
-whole slice, alerts go from 157 to 152 and recall from 0.540 to 0.436, while false
-alarms rise from 48 to 64. `train.py` scores the outage on every retrain, as
+whole slice, alerts go from 160 to 156 and recall from 0.505 to 0.376, while false
+alarms rise from 58 to 80. `train.py` scores the outage on every retrain, as
 `graph_outage` in `metrics.json`.
 
 **A disclaimer is not a refresh.** The table the one above replaced was measured
@@ -357,7 +358,7 @@ from 56.0% to 31.8%, five seeds, delta −25.3 pp [−47.5, −3.1]
 revision reported it as the #1 feature (1.29) and the core research contribution:
 the generator routed no fraud to relatives, so it separated the classes by
 construction. It was not deleted - it is the `myid_kinship` capability, which
-defaults to off, so it is absent from the deployed vector. Once the
+defaults to off, so it is absent from the deployed 20-column vector. Once the
 generator modelled both directions (25% of legitimate transfers go to relatives,
 and a realistic minority of fraud too), switching it on is worth nothing
 measurable - the `myid_kinship=on` row below. A feature that dominates SHAP on
@@ -399,7 +400,7 @@ baseline PR-AUC **0.960 ± 0.018**:
 **`channel` is gone.** It measured −0.002 [−0.006, +0.002], no rule read its four
 one-hot features, and no public dataset carries the field. It was removed on
 07.09.2026 from the model, the wire, the ingress hash, ClickHouse, Grafana and the
-case view; the contract was 20 columns, and is 25 since link_history. Dropping four columns of noise also
+case view; the contract is 20 columns. Dropping four columns of noise also
 tightened every interval, which is how `receiver_age` moved from unresolved back
 to **real**.
 
@@ -531,25 +532,24 @@ confidence interval for the mean.
 
 `metrics.json` carries a `calibration` block beside the AUCs, computed by
 `train.py` on every run. It answers a different question: not *does the model rank
-fraud above legitimate traffic* (ROC-AUC 0.973 / PR-AUC 0.522 on the realistic
+fraud above legitimate traffic* (ROC-AUC 0.991 / PR-AUC 0.472 on the realistic
 profile) but *are its probabilities usable as magnitudes*.
 
 ```
-brier               0.00141
-n_alerts            157          (>= REVIEW on the held-out slice)
-saturated_share     28.7%        rounding to 1.000
-distinct_scores     98
-review_band         157         alerts below BLOCK - all: there is no BLOCK cutoff
-median_alert_score  0.766477
+brier               0.00155
+n_alerts            160          (>= REVIEW on the held-out slice)
+saturated_share     11.9%        rounding to 1.000
+distinct_scores     114
+review_band         160         alerts below BLOCK - all: there is no BLOCK cutoff
+median_alert_score  0.635452
 scored_with         model.onnx
 ```
 
 Read `saturated_share` and `distinct_scores` together. On the baseline profile
 they read 66.9% and 33: the model separated the classes almost perfectly and
 still could not **order** an alert queue, because the alerts piled up at the top
-of the scale. On the realistic profile 157 alerts carry 98 distinct scores and
-28.7% round to 1.000 - coarser than before link_history (115 scores among 160
-alerts, 11.9%), but a queue that can still be ordered. AUC is blind to this by construction - it is a
+of the scale. On the realistic profile 160 alerts carry 114 distinct scores, and
+the queue can be ordered again. AUC is blind to this by construction - it is a
 rank statistic - and the finding surfaced only when a real work queue tried to
 sort by score (`docs/irp-framing.md` §9.1). It is a property of near-separable
 synthetic data, not of gradient boosting.

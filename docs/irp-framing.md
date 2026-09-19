@@ -158,8 +158,7 @@ Everything owed to the review is now done; the items keep their numbers.
 7. **External validation** - `validation/README.md`. The result worth putting in
    the thesis: **relational fraud detection cannot be validated end-to-end on
    public real data, because the account identifiers that make it relational are
-   exactly what cannot be published.** 14 of the 20 features measured here are
-   relational (19 of 25 since link_history);
+   exactly what cannot be published.** 14 of 20 features here are relational;
    removing them costs 0.937 → 0.761 PR-AUC on the baseline profile. So the
    question is split:
    - **PaySim** (`paysim_adapter.py`), the one public dataset with identifiers on
