@@ -126,7 +126,7 @@ REGISTRY = (
         key="link_history",
         requires="the shared store holding four days of every card's inbound and "
                  "outbound transfers, read for the sender as well as the payee",
-        modes=("off", "on"),            # off: less in IBM AML's top 0.1% (ml/README.md)
+        modes=("on", "off"),            # on since 2026-09-19 (ml/README.md)
         features=("payee_payers_96h", "sender_payers_96h", "sender_payees_96h",
                   "payee_payees_96h", "money_back_96h"),
         rules=(),
@@ -136,8 +136,10 @@ REGISTRY = (
                   "money going straight back. Measured offline on three datasets "
                   "(ml/README.md, multi-day link shapes); the three-step circles "
                   "and split-and-gather that need more than a count are not "
-                  "built. Last in the registry, so switching it on appends to the "
-                  "vector instead of shifting every trained model's columns.",
+                  "built. On since 2026-09-19: it passed on the realistic profile "
+                  "and on PaySim; IBM AML, whose accounts include banks and "
+                  "companies, is reported and does not decide. Last in the "
+                  "registry, so it appends to the vector.",
     ),
 )
 

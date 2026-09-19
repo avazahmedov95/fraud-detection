@@ -5,7 +5,6 @@ Fails open."""
 
 import logging
 
-import capabilities as CAP
 import config as C
 import features as F
 from rules import ReceiverState, quantile_threshold
@@ -16,11 +15,8 @@ log = logging.getLogger("receiver_store")
 class ReceiverStore:
     def __init__(self, host, port, window_s=None, prefix="rcv"):
         self._host, self._port = host, port
-        # Four days when link_history reads that far back; the hour MULE_FAN_IN needs
-        # otherwise. Four days is also what a hub costs: one load returns every
-        # member in the window.
-        self._window_s = window_s or (C.LINK_WINDOW_S if CAP.enabled("link_history")
-                                      else C.RECEIVER_WINDOW_S)
+        # Four days is also what a hub costs: one load returns every member in the window.
+        self._window_s = window_s or F.kept_window_s()
         # "rcv": under the payee, naming the sender. "out" (link_history): under the
         # sender, naming the payee by the key its own inbound is recorded under.
         self._prefix = prefix

@@ -85,6 +85,6 @@ def test_missing_receiver_state_fails_open():
 def test_receiver_state_is_pruned_to_the_window():
     """Unbounded growth would be a memory leak in the shared store."""
     rs = ReceiverState()
-    _fan_in(5, rs, spacing_s=C.RECEIVER_WINDOW_S // 2)
-    assert all(rs.inbound[-1][0] - ts <= C.RECEIVER_WINDOW_S
+    _fan_in(5, rs, spacing_s=F.kept_window_s() // 2)
+    assert all(rs.inbound[-1][0] - ts <= F.kept_window_s()
                for ts, _, _ in rs.inbound)

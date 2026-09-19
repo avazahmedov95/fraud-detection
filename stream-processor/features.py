@@ -313,6 +313,12 @@ def _recent(state, now, of=""):
     return distinct, ((state.counts.get(of, 0) - gone.get(of, 0)) if of else 0)
 
 
+def kept_window_s() -> float:
+    """How long the receiver-side stores keep a transfer: four days when link_history
+    reads that far back, the hour MULE_FAN_IN needs otherwise."""
+    return C.LINK_WINDOW_S if CAP.enabled("link_history") else C.RECEIVER_WINDOW_S
+
+
 def update_receiver_state(receiver_state, event: dict, now: float) -> None:
     """Advance the payee's inbound history (call AFTER extract)."""
     _record(receiver_state, event.get("sender_pinfl", ""), event, now)
@@ -329,8 +335,7 @@ def _record(state, counterparty, event, now):
         return
     current = state.n == len(state.inbound)
     state.inbound.append((now, counterparty, float(event["amount_uzs"])))
-    # Four days when link_history reads that far back; the hour MULE_FAN_IN needs otherwise.
-    keep = C.LINK_WINDOW_S if CAP.enabled("link_history") else C.RECEIVER_WINDOW_S
+    keep = kept_window_s()
     dropped = []
     while state.inbound and now - state.inbound[0][0] > keep:
         dropped.append(state.inbound.popleft())

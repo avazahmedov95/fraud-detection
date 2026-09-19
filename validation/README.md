@@ -8,8 +8,10 @@ shared by all three, so the results stay one measurement.
 
 ## The constraint that shapes everything here
 
-14 of this project's 20 features are **relational** - computed over the history
-of a named sender and a named receiver. Measured cost of losing them (seed 42,
+14 of this project's 20 features were **relational** when the tables below were
+measured - computed over the history of a named sender and a named receiver.
+link_history's five, added on 2026-09-19, are relational too: 19 of 25, and a
+re-run on PaySim or IBM AML computes 19 columns where the tables say 14. Measured cost of losing them (seed 42,
 held-out slice, baseline profile):
 
 | available | PR-AUC | precision | recall |
@@ -18,7 +20,7 @@ held-out slice, baseline profile):
 | no account identifiers | 0.761 | 0.563 | 0.745 |
 | amount + hour only | 0.653 | 0.272 | 0.819 |
 
-On the realistic profile the full system scores PR-AUC 0.472 (`ml/README.md`);
+On the realistic profile the full system scores PR-AUC 0.522 (`ml/README.md`);
 the stripped configurations have not been re-run there. Public transaction
 datasets carry no account identifiers, because those are what cannot be
 published:
@@ -276,6 +278,10 @@ anything is downloaded.
 ---
 
 ## 4. IBM AML - the collection stage on a clock that can see it
+
+*Since 2026-09-19 reported for information only: IBM AML's accounts include banks
+and companies, and this project is about transfers between people, so it no longer
+decides whether a feature is adopted.*
 
 `ibm_aml_adapter.py`. AMLSim left two readings of its inverted fan-in result: the
 rule detects a rate, or the window cannot see a 363-day pattern. Separating them

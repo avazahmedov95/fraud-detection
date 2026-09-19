@@ -106,8 +106,8 @@ def test_distinct_senders_are_counted_separately(store):
 
 def test_entries_outside_the_window_are_dropped(store):
     store.record(_ev("tx-old"), now=1000)
-    store.record(_ev("tx-new"), now=1000 + C.RECEIVER_WINDOW_S + 10)
-    state = store.load(_payee(), now=1000 + C.RECEIVER_WINDOW_S + 10)
+    store.record(_ev("tx-new"), now=1000 + F.kept_window_s() + 10)
+    state = store.load(_payee(), now=1000 + F.kept_window_s() + 10)
     assert len(state.inbound) == 1
 
 

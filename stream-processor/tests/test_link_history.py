@@ -47,9 +47,11 @@ class World:
         return f
 
 
-def test_off_by_default_so_no_trained_model_changes():
-    assert CAP.MODES["link_history"] == "off"
-    assert "money_back_96h" not in F.FEATURE_NAMES
+def test_on_by_default_and_last_in_the_vector():
+    assert CAP.MODES["link_history"] == "on"
+    assert F.FEATURE_NAMES[-5:] == ["payee_payers_96h", "sender_payers_96h",
+                                    "sender_payees_96h", "payee_payees_96h",
+                                    "money_back_96h"]
 
 
 def test_a_mule_collecting_for_days_then_paying_on(links):
@@ -108,6 +110,15 @@ def test_an_unreachable_store_reads_as_zero(links):
 
 
 def test_switched_off_the_store_keeps_an_hour():
+    original = CAP.MODES["link_history"]
+    CAP.MODES["link_history"] = "off"
+    try:
+        _keeps_an_hour()
+    finally:
+        CAP.MODES["link_history"] = original
+
+
+def _keeps_an_hour():
     rcv = ReceiverState()
     F.update_receiver_state(rcv, _ev("p0", "r"), 0.0)
     F.update_receiver_state(rcv, _ev("p1", "r"), 2 * HOUR)

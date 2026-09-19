@@ -442,7 +442,9 @@ def test_available_features_drops_exactly_what_the_profile_switched_off():
                      "geo_is_anomaly", "active_call", "secs_login_z"):
             assert gone not in names
         assert "rcv_distinct_senders_1h" in names and "vel_10m" in names
-        assert len(idx) == len(names) == 14
+        # link_history stays: these datasets name the account on both sides.
+        assert "money_back_96h" in names
+        assert len(idx) == len(names) == 19
     finally:
         CAP.MODES.clear(); CAP.MODES.update(saved)
 
