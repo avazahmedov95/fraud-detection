@@ -405,9 +405,8 @@ reports each delta paired within seed, with a 95% CI for the mean;
 `--only payee_identity` sweeps one capability across **all** its declared modes. It
 fingerprints the feature set and the generator sources and refuses to mix results
 across versions, since either change moves the baseline and invalidates every
-stored delta. Older runs - `models/ablation/seeds_pre_*.json`, and the
-`always/on_us/off.json` files that predate the capability registry - are history,
-not current figures. The receiver_age and device_telemetry rows are history too:
+stored delta. Older runs are in the git history, not the tree (removed
+2026-09-19). The receiver_age and device_telemetry rows below are history too:
 both capabilities were removed on 2026-09-19 (above).
 
 All rows measured on one feature set and one generator version, 5 seeds,

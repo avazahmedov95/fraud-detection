@@ -27,11 +27,9 @@ CH_USER = os.getenv("CLICKHOUSE_USER", "fraud")
 CH_PASSWORD = os.getenv("CLICKHOUSE_PASSWORD", "fraud_ch")
 CH_DB = os.getenv("CLICKHOUSE_DB", "fraud")
 
-# Anchored to the package: .gitignore names both state files at stream-processor/.
+# Anchored to the package: .gitignore names the state file at stream-processor/.
 _PKG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATE = os.path.join(_PKG, "fault_injection_state.json")
-#: Where the dependency arms kept baselines as a separate script; read, never written.
-LEGACY_STATE = os.path.join(_PKG, "dependency_failure_state.json")
 
 #: What each dependency is expected to take away, written before the run.
 EXPECTED = {
@@ -156,17 +154,11 @@ def offered_count(args):
 
 
 def _load_state():
-    """Baselines, keyed by service; a bare {"total", "distinct"} from the old
-    single-arm script is read as the scorer's."""
-    state = {}
-    if os.path.exists(LEGACY_STATE):
-        with open(LEGACY_STATE, encoding="utf-8") as fh:
-            state.update(json.load(fh))
-    if os.path.exists(STATE):
-        with open(STATE, encoding="utf-8") as fh:
-            blob = json.load(fh)
-        state.update({"scorer": blob} if "total" in blob else blob)
-    return state
+    """Baselines, keyed by service."""
+    if not os.path.exists(STATE):
+        return {}
+    with open(STATE, encoding="utf-8") as fh:
+        return json.load(fh)
 
 
 def _save_state(state):
