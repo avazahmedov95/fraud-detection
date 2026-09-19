@@ -122,7 +122,7 @@ owner's "adopt only if it does not get worse", on validation rows over five seed
 The code was removed rather than kept switched off; commit `bfe556f` holds all of
 it, with its harness and both gates.
 
-### Multi-day link shapes: built as link_history, and left off
+### Multi-day link shapes: built as link_history, switched on 2026-09-19
 
 Seven columns over the 96 hours before each transfer (`experiments/shapes.py`):
 fan-in and fan-out, the payers of the sender and the payees of the payee, money
