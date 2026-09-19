@@ -20,8 +20,6 @@ experiments/      harnesses - each produces a NUMBER, not an artefact the
                   intervals; --only <capability> sweeps all of its modes
   layers.py       CEP-only vs ML-only vs fused on the held-out slice
   recall.py       per-type recall across seeds (budgeted; resumes)
-  collectors.py   false alarms on honest collections against catches on mules,
-                  by the payee's payers over four days
                   One-off experiments are deleted once their decision is
                   written below: git log --diff-filter=D -- ml/experiments
 
@@ -258,6 +256,31 @@ at its REVIEW cutoff recall 0.505 -> 0.540 with precision 0.637 -> 0.694. ROC-AU
 fell, 0.991 -> 0.973, and the alert queue orders more coarsely (Calibration). Both
 harnesses are deleted
 (`git show 77e6dad:ml/experiments/links.py`, `git show 77e6dad:ml/experiments/shapes.py`).
+
+### Honest collections are not mistaken for mules
+
+`experiments/collectors.py` (`git show 241ecac:ml/experiments/collectors.py`)
+refitted the served committee with and without link_history - reproducing both
+exactly, 160 alerts at 0.637 / 0.505 and 157 at 0.694 / 0.540 - and read the
+held-out month by the payee's distinct payers over the 96 hours before each
+transfer:
+
+| payee's payers, 96 h | legitimate transfers | false alarms without | with | MULE transfers | caught without | with |
+|---|---|---|---|---|---|---|
+| none | 26,722 | 30 (0.11%) | 30 (0.11%) | 14 | 5 | 8 |
+| 1-2 | 58,973 | 18 (0.03%) | 7 (0.01%) | 15 | 7 | 7 |
+| 3-4 | 12,452 | 5 (0.04%) | 4 (0.03%) | 13 | 6 | 5 |
+| 5 or more | 1,651 | 5 (0.30%) | 7 (0.42%) | 20 | 9 | 9 |
+
+Transfers into an account collecting from five or more people - the realistic
+profile's weddings, gifts and joint purchases - are flagged about ten times as
+often as other legitimate transfers, and still rarely: 7 of 1,651, two more than
+without link_history. False alarms fall overall, 58 to 48, mostly on payees with
+one or two payers. What this cannot test is the seller paid by strangers all day:
+the generator draws no merchant flows (`docs/generator-spec.md` 8), and such a
+payee would sit far above the fifteen payers the model has seen. A deployment
+needs a known-seller flag - self-employed status is something the bank holds -
+before link_history reads a shop as a collection.
 
 **Everything below is the baseline profile, the dataset of record until
 2026-09-14, unless it says otherwise.**
