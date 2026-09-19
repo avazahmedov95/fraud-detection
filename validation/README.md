@@ -243,6 +243,24 @@ tested at all. Also rejected: the Kaggle credit-card set,
 PCA-anonymised into V1..V28, which makes the SHAP explanations CBU 3759 requires
 meaningless.
 
+## Rejected: Kaggle aryan208, "Financial Transactions Dataset for Fraud Detection"
+
+5,000,000 transactions over 2023 naming a sender and a receiver account - the shape this
+project needs - and a label that carries nothing. Screened on 2026-09-19:
+
+| check | result |
+|---|---|
+| fraud | 3.59%, one type only: card_not_present |
+| fraud share by transaction type | 3.56-3.63% for deposit, payment, transfer and withdrawal alike |
+| history per account | median 5 transactions in the year |
+| each supplied column alone against the label, AUC | amount, velocity, geo-anomaly, spending-deviation, time-since-last: 0.500-0.501 |
+| time_since_last_transaction against the sender's real previous transaction | correlation 0.002 |
+
+The label is independent of every column, including the ones named after fraud
+signals, and the time-since-last column does not describe the file it is in: there is
+nothing to detect. The Mendeley set of section 5 was downloaded again the same day and
+is the one already rejected.
+
 ---
 
 ## Tests
