@@ -55,7 +55,6 @@ def main():
     cep_flag = (cep >= C.REVIEW_THRESHOLD).astype(int)
     ml_flag = (ml >= 0.50).astype(int)
     fused_flag = ((final >= C.FINAL_REVIEW_THRESHOLD) | mandatory).astype(int)
-    block = int((final >= C.FINAL_BLOCK_THRESHOLD).sum())
 
     print(f"test events: {len(y):,}   positives: {int(y.sum())}\n")
     print(f"final_score ranking quality:  ROC-AUC {roc_auc_score(y, final):.3f}   "
@@ -70,7 +69,7 @@ def main():
 
     flagged = int(fused_flag.sum())
     print(f"\nfused decision split:  ALLOW {len(y)-flagged}   "
-          f"REVIEW {flagged-block}   BLOCK {block}")
+          f"REVIEW {flagged}")
 
     print("\nfused recall by fraud type:")
     tdf = test.copy(); tdf["flag"] = fused_flag

@@ -107,7 +107,8 @@ W_DAILY_LIMIT = 0.30
 # --- Decision thresholds ----------------------------------------------------
 # Calibrated against the FULL capability set; reduced deployments scale them.
 REVIEW_THRESHOLD = 0.40
-BLOCK_THRESHOLD = 0.70
+# No BLOCK anywhere: the system never blocks on its own - every alert goes to a
+# person (the owner's decision, 2026-09-19).
 
 # Off restores the pre-2026 fixed cutoffs, kept so the two can be compared.
 # Why they are scaled at all: capabilities.scaled_threshold.
@@ -173,23 +174,20 @@ BANKS_CSV_PATH = _resolve_artefact(
 
 # Fusion happens at the DECISION layer - fusion.py says why every blend degraded.
 FINAL_REVIEW_THRESHOLD = 0.40
-FINAL_BLOCK_THRESHOLD = 0.80
 
 
-def _model_thresholds(path):
-    """The model's REVIEW / BLOCK cutoffs, chosen on validation rows by ml/train.py
-    and shipped beside model.onnx; a null BLOCK means the model never blocks alone.
-    Without the file the fixed cutoffs stand, as they do for the CEP-only fallback."""
+def _model_review_threshold(path):
+    """The model's REVIEW cutoff, chosen on validation rows by ml/train.py and
+    shipped beside model.onnx. Without the file the fixed cutoff stands, as it does
+    for the CEP-only fallback."""
     try:
         with open(path, encoding="utf-8") as fh:
-            t = json.load(fh)
-        block = t["block"]
-        return float(t["review"]), (float("inf") if block is None else float(block))
+            return float(json.load(fh)["review"])
     except (OSError, KeyError, TypeError, ValueError):
-        return FINAL_REVIEW_THRESHOLD, FINAL_BLOCK_THRESHOLD
+        return FINAL_REVIEW_THRESHOLD
 
 
-MODEL_REVIEW_THRESHOLD, MODEL_BLOCK_THRESHOLD = _model_thresholds(THRESHOLDS_PATH)
+MODEL_REVIEW_THRESHOLD = _model_review_threshold(THRESHOLDS_PATH)
 
 # Force at least REVIEW regardless of the model score (AML / Regulation 3759).
 # High-precision on the synthetic slice: 38 fraud vs 2 legit.

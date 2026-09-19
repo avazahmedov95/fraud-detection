@@ -1,8 +1,8 @@
-"""Turns two scores into one decision - ALLOW / REVIEW / BLOCK - plus reason codes.
+"""Turns two scores into one decision - ALLOW / REVIEW - plus reason codes.
 
 Fused at the decision, never blended: every blend tried degraded ranking. The
 rule layer reaches the decision only through MANDATORY_REVIEW_RULES and the
-fallback cutoffs in `cutoffs()`.
+fallback cutoff in `review_cutoff()`.
 """
 
 import config as C
@@ -18,20 +18,19 @@ def final_score(cep_score, ml_score) -> float:
 _CUTOFF_CACHE = {}
 
 
-def cutoffs(cep_only: bool):
-    """REVIEW / BLOCK cutoffs for the score being decided on. The model's come from
+def review_cutoff(cep_only: bool):
+    """The REVIEW cutoff for the score being decided on. The model's comes from
     thresholds.json; only the CEP-only fallback scales with capability, because an
     additive rule score goes silent as rules are switched off
-    (capabilities.scaled_threshold). At full capability the constants stand."""
+    (capabilities.scaled_threshold). At full capability the constant stands."""
     if not cep_only:
-        # The model's own cutoffs, shipped with it (config._model_thresholds).
-        return C.MODEL_REVIEW_THRESHOLD, C.MODEL_BLOCK_THRESHOLD
+        # The model's own cutoff, shipped with it (config._model_review_threshold).
+        return C.MODEL_REVIEW_THRESHOLD
     if not C.SCALE_THRESHOLDS_BY_CAPABILITY:
-        return C.FINAL_REVIEW_THRESHOLD, C.FINAL_BLOCK_THRESHOLD
+        return C.FINAL_REVIEW_THRESHOLD
     key = tuple(sorted(CAP.MODES.items()))
     if key not in _CUTOFF_CACHE:
-        _CUTOFF_CACHE[key] = (CAP.scaled_threshold(C.FINAL_REVIEW_THRESHOLD),
-                              CAP.scaled_threshold(C.FINAL_BLOCK_THRESHOLD))
+        _CUTOFF_CACHE[key] = CAP.scaled_threshold(C.FINAL_REVIEW_THRESHOLD)
     return _CUTOFF_CACHE[key]
 
 
@@ -43,13 +42,10 @@ def score_and_decide(cep_score, ml_score, rule_hits):
 
 
 def decide(score: float, rule_hits, cep_only: bool = False) -> str:
-    """ALLOW / REVIEW / BLOCK. `cep_only`: the score is the rule layer's because no
-    model is loaded."""
-    review_at, block_at = cutoffs(cep_only)
-    if score >= block_at:
-        return "BLOCK"
+    """ALLOW or REVIEW - never BLOCK: every alert goes to a person. `cep_only`: the
+    score is the rule layer's because no model is loaded."""
     mandatory = any(r in C.MANDATORY_REVIEW_RULES for r in rule_hits)
-    if score >= review_at or mandatory:
+    if score >= review_cutoff(cep_only) or mandatory:
         return "REVIEW"
     return "ALLOW"
 

@@ -96,4 +96,4 @@ def test_missing_baseline_falls_back_rather_than_failing(relative_mode):
     ev = {"amount_uzs": 100_000.0, "sender_pinfl": "A", "receiver_pinfl": "B"}
     res = evaluate(ev, None, SenderState(), 1_700_000_000.0, ReceiverState(),
                    population=None)
-    assert res["decision"] in ("ALLOW", "REVIEW", "BLOCK")
+    assert res["decision"] in ("ALLOW", "REVIEW")

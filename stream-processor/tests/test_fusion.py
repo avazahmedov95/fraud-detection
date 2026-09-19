@@ -16,7 +16,6 @@ def _fixed_model_cutoffs(monkeypatch):
     last copied beside the job: the model's cutoffs are pinned to the fixed ones.
     The two tests at the end read the shipped file through its loader instead."""
     monkeypatch.setattr(C, "MODEL_REVIEW_THRESHOLD", C.FINAL_REVIEW_THRESHOLD)
-    monkeypatch.setattr(C, "MODEL_BLOCK_THRESHOLD", C.FINAL_BLOCK_THRESHOLD)
 
 
 def test_final_score_is_model_with_cep_fallback():
@@ -30,7 +29,7 @@ def test_final_score_is_model_with_cep_fallback():
 
 
 def test_decision_thresholds():
-    assert decide(0.90, []) == "BLOCK"
+    assert decide(0.999, []) == "REVIEW"        # never BLOCK, however sure
     assert decide(0.50, []) == "REVIEW"
     assert decide(0.10, []) == "ALLOW"
 
@@ -67,25 +66,20 @@ def _reduced(profile):
 
 def test_full_capability_does_not_move_either_operating_point(profile):
     _full(profile)
-    assert fusion.cutoffs(cep_only=False) == (
-        C.MODEL_REVIEW_THRESHOLD, C.MODEL_BLOCK_THRESHOLD)
-    assert fusion.cutoffs(cep_only=True) == pytest.approx(
-        (C.FINAL_REVIEW_THRESHOLD, C.FINAL_BLOCK_THRESHOLD), abs=1e-6)
+    assert fusion.review_cutoff(cep_only=False) == C.MODEL_REVIEW_THRESHOLD
+    assert fusion.review_cutoff(cep_only=True) == pytest.approx(
+        C.FINAL_REVIEW_THRESHOLD, abs=1e-6)
 
 
 def test_a_probability_is_never_rescaled(profile):
     """Retraining recalibrates the model, so the fused cutoff must stay put."""
     _reduced(profile)
-    assert fusion.cutoffs(cep_only=False) == (
-        C.MODEL_REVIEW_THRESHOLD, C.MODEL_BLOCK_THRESHOLD)
+    assert fusion.review_cutoff(cep_only=False) == C.MODEL_REVIEW_THRESHOLD
 
 
 def test_reduced_capability_lowers_the_fallback_cutoff(profile):
     _reduced(profile)
-    review_at, block_at = fusion.cutoffs(cep_only=True)
-    assert review_at < C.FINAL_REVIEW_THRESHOLD
-    assert block_at < C.FINAL_BLOCK_THRESHOLD
-    assert review_at < block_at              # ordering survives the rescale
+    assert fusion.review_cutoff(cep_only=True) < C.FINAL_REVIEW_THRESHOLD
 
 
 def test_the_silent_layer_is_what_this_prevents(profile):
@@ -97,15 +91,14 @@ def test_the_silent_layer_is_what_this_prevents(profile):
     assert decide(lone_rule_score, ["NEW_PAYEE_HIGH_AMOUNT"]) == "ALLOW"
     # On the fallback there IS no model, and going silent is the failure.
     assert decide(lone_rule_score, ["NEW_PAYEE_HIGH_AMOUNT"],
-                  cep_only=True) in ("REVIEW", "BLOCK")
+                  cep_only=True) == "REVIEW"
 
 
 def test_scaling_can_be_switched_off(profile, monkeypatch):
     """The previous fixed-cutoff behaviour stays available for comparison."""
     monkeypatch.setattr(C, "SCALE_THRESHOLDS_BY_CAPABILITY", False)
     _reduced(profile)
-    assert fusion.cutoffs(cep_only=True) == (
-        C.FINAL_REVIEW_THRESHOLD, C.FINAL_BLOCK_THRESHOLD)
+    assert fusion.review_cutoff(cep_only=True) == C.FINAL_REVIEW_THRESHOLD
 
 
 def test_default_is_the_fused_path(profile):
@@ -183,7 +176,7 @@ def test_no_model_reaches_the_scaled_cutoffs(profile):
     lone = C.W_NEW_PAYEE_HIGH                      # 0.35, under the 0.40 cutoff
     final, dec = fusion.score_and_decide(lone, None, ["NEW_PAYEE_HIGH_AMOUNT"])
     assert final == lone
-    assert dec in ("REVIEW", "BLOCK")
+    assert dec == "REVIEW"
     # and with a model present the same score is correctly left alone
     _, fused = fusion.score_and_decide(lone, 0.05, ["NEW_PAYEE_HIGH_AMOUNT"])
     assert fused == "ALLOW"
@@ -220,10 +213,10 @@ def test_every_label_is_reachable_by_some_rule_that_can_fire():
 
 def test_the_model_cutoffs_come_from_the_file_shipped_with_it(tmp_path):
     path = tmp_path / "thresholds.json"
-    path.write_text('{"review": 0.061, "block": null}', encoding="utf-8")
-    assert C._model_thresholds(str(path)) == (0.061, float("inf"))
+    path.write_text('{"review": 0.061}', encoding="utf-8")
+    assert C._model_review_threshold(str(path)) == 0.061
 
 
 def test_without_that_file_the_fixed_cutoffs_stand(tmp_path):
-    assert C._model_thresholds(str(tmp_path / "absent.json")) == (
-        C.FINAL_REVIEW_THRESHOLD, C.FINAL_BLOCK_THRESHOLD)
+    assert C._model_review_threshold(str(tmp_path / "absent.json")) == \
+        C.FINAL_REVIEW_THRESHOLD

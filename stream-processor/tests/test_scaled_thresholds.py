@@ -70,12 +70,6 @@ def test_threshold_never_goes_negative_or_above_the_base(profile):
     assert 0.0 <= t <= C.REVIEW_THRESHOLD
 
 
-def test_ordering_of_review_and_block_is_preserved(profile):
-    profile(session_telemetry="off", geo_telemetry="off")
-    assert (CAP.scaled_threshold(C.REVIEW_THRESHOLD)
-            < CAP.scaled_threshold(C.BLOCK_THRESHOLD))
-
-
 # --- the behaviour that motivated this --------------------------------------
 
 def _ev(amount, payee, bank="BankA"):
@@ -97,19 +91,18 @@ def test_single_rule_can_flag_when_it_is_all_that_is_available(profile):
     assert "NEW_PAYEE_HIGH_AMOUNT" in res["rule_hits"]
     assert res["cep_score"] == pytest.approx(C.W_NEW_PAYEE_HIGH, abs=1e-6)
     assert res["cep_score"] < C.REVIEW_THRESHOLD      # would be silent unscaled
-    assert res["decision"] in ("REVIEW", "BLOCK")     # but is not
+    assert res["decision"] == "REVIEW"                # but is not
 
 
 def test_scaling_can_be_switched_off(profile, monkeypatch):
     """The previous fixed-threshold behaviour stays available for comparison."""
     monkeypatch.setattr(C, "SCALE_THRESHOLDS_BY_CAPABILITY", False)
     profile(receiver_age="off", myid_kinship="off", geo_telemetry="off", session_telemetry="off")
-    assert R._thresholds() == (C.REVIEW_THRESHOLD, C.BLOCK_THRESHOLD)
+    assert R._review_threshold() == C.REVIEW_THRESHOLD
 
 
 def test_scaling_does_not_change_the_full_profile_decision(profile):
     """Regression guard: the deployed configuration must behave as before."""
     profile(**{c.key: ("on" if "on" in c.modes else c.modes[0])
                for c in CAP.REGISTRY if not c.always_on})
-    assert R._thresholds() == pytest.approx(
-        (C.REVIEW_THRESHOLD, C.BLOCK_THRESHOLD), abs=1e-6)
+    assert R._review_threshold() == pytest.approx(C.REVIEW_THRESHOLD, abs=1e-6)

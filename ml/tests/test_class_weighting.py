@@ -29,17 +29,8 @@ def test_an_unknown_setting_is_refused_not_read_as_auto():
         T.class_weight(15, 985, "yes")
 
 
-def test_cutoffs_review_maximises_f1_and_block_demands_precision():
+def test_the_review_cutoff_maximises_f1():
     import numpy as np
     y = np.array([0] * 90 + [1] * 10)
     p = np.concatenate([np.linspace(0, 0.5, 90), np.linspace(0.4, 1.0, 10)])
-    review, block = T.choose_cutoffs(y, p, block_precision=0.9)
-    assert 0.4 <= review <= 1.0
-    assert block is None or block >= review
-
-
-def test_without_a_precise_enough_cutoff_there_is_no_block():
-    import numpy as np
-    y = np.array([1, 0] * 50)          # the top score is a legitimate row, so no
-    p = np.linspace(0, 1, 100)         # cutoff reaches beyond half precision
-    assert T.choose_cutoffs(y, p, block_precision=0.99)[1] is None
+    assert 0.4 <= T.choose_review_cutoff(y, p) <= 1.0

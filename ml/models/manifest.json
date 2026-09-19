@@ -1,12 +1,12 @@
 {
-  "exported_at": "2026-09-19T12:25:01+00:00",
-  "commit": "69124e6205b4fe8a741846d57211f9d28071af35",
+  "exported_at": "2026-09-19T12:51:07+00:00",
+  "commit": "71b52da28b142b9502df66799808b52577ac24ee",
   "artefacts": {
-    "model.onnx": "7132b9a5598e1be65616f89823f8d9638e15f6fadb1db9c37ff59a2d3ca98366",
-    "model.txt": "ba08c956c7ffea15c3f91497f7545f65e6cec3ab797594493439dd999b82245b",
-    "model.joblib": "e2348273d74516baa7b5d0cd44dcfadd2d8a34c511df20ff643d2082b8117a14",
+    "model.onnx": "6c57483cc3ec723d60e7bf99a64a16dd7e3b23989d9dfec57d6c53f9cb5831f9",
+    "model.txt": "7ca1d38419ddddbfe6a63e07c9618ebc8339663464f0cecace1e367725269974",
+    "model.joblib": "6d97511e8c8a08ebe51f7b11d9d6d9b7f27eadd6d08f1959902e9897424b6177",
     "feature_names.json": "9206a696e6fef3ee6457a842441f8b8e592f1f2e045e666eeac927d6df837163",
-    "thresholds.json": "d7fea413cc79a216cfaff6f8574c20ed4c21df19e60311e1916dbca8e22bce52"
+    "thresholds.json": "3d7c9f600660b0564fcef617daa2f02fed08e66a46d3fefb3819361767299290"
   },
   "dataset": {
     "transactions.csv": {

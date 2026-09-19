@@ -101,15 +101,13 @@ class SenderState:
 _THRESHOLD_CACHE = {}
 
 
-def _thresholds():
-    """Decision cutoffs for the active capability profile, cached per profile."""
+def _review_threshold():
+    """The REVIEW cutoff for the active capability profile, cached per profile."""
     if not C.SCALE_THRESHOLDS_BY_CAPABILITY:
-        return C.REVIEW_THRESHOLD, C.BLOCK_THRESHOLD
+        return C.REVIEW_THRESHOLD
     key = tuple(sorted(CAP.MODES.items()))
     if key not in _THRESHOLD_CACHE:
-        _THRESHOLD_CACHE[key] = (
-            CAP.scaled_threshold(C.REVIEW_THRESHOLD),
-            CAP.scaled_threshold(C.BLOCK_THRESHOLD))
+        _THRESHOLD_CACHE[key] = CAP.scaled_threshold(C.REVIEW_THRESHOLD)
     return _THRESHOLD_CACHE[key]
 
 
@@ -169,13 +167,8 @@ def evaluate(event: dict, receiver_age_days, state: SenderState, now: float,
 
     score = min(1.0, score)
 
-    review_at, block_at = _thresholds()
-    if score >= block_at:
-        decision = "BLOCK"
-    elif score >= review_at:
-        decision = "REVIEW"
-    else:
-        decision = "ALLOW"
+    # No BLOCK: the system never blocks on its own (config.py).
+    decision = "REVIEW" if score >= _review_threshold() else "ALLOW"
 
     vector = F.to_vector(f)
     F.update_state(state, event, now)

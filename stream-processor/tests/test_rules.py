@@ -45,7 +45,7 @@ def test_app_pattern_new_large_fresh_payee_is_flagged():
         evaluate(_ev(150_000, payee="friend"),  800, st, now=1000 + i)
     res = evaluate(_ev(9_000_000, payee="fraudster"),
                    receiver_age_days=5, state=st, now=5000)
-    assert res["decision"] in ("REVIEW", "BLOCK")
+    assert res["decision"] == "REVIEW"
     assert "NEW_PAYEE_HIGH_AMOUNT" in res["rule_hits"]
     assert "FRESH_RECEIVER" in res["rule_hits"]
 
@@ -87,7 +87,7 @@ def test_impossible_travel_is_flagged():
                    800, st, now=1000 + 600)
     assert "IMPOSSIBLE_TRAVEL" in res["rule_hits"]
     # On its own the rule must be decisive enough to reach REVIEW.
-    assert res["decision"] in ("REVIEW", "BLOCK")
+    assert res["decision"] == "REVIEW"
 
 
 @needs_geo

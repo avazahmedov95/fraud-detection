@@ -184,12 +184,10 @@ def section_decision(res, hits, positive="fraud", width=70):
 
     # The threshold actually applied - under capability scaling this is not the
     # configured constant, and printing the constant hid the mechanism.
-    review_at, block_at = _R._thresholds()
+    review_at = _R._review_threshold()
     if abs(review_at - C.REVIEW_THRESHOLD) > 1e-9:
         print(f"\n  REVIEW threshold : {review_at:.2f}  "
               f"(scaled from {C.REVIEW_THRESHOLD:.2f} for this profile)")
-        print(f"  BLOCK  threshold : {block_at:.2f}  "
-              f"(scaled from {C.BLOCK_THRESHOLD:.2f})")
     else:
         print(f"\n  REVIEW threshold : {review_at:.2f}")
 

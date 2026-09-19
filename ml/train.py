@@ -1,8 +1,8 @@
 """Trains the scoring committee on a time-ordered split and writes the model, the
-cutoffs the job decides with, and metrics.json.
+cutoff the job decides with, and metrics.json.
 
-The earliest 64% of rows fit the committee, the next 16% choose the REVIEW and
-BLOCK cutoffs, and every printed figure is measured on the last 20%. Calibration
+The earliest 64% of rows fit the committee, the next 16% choose the REVIEW
+cutoff, and every printed figure is measured on the last 20%. Calibration
 is reported beside the AUCs because a rank statistic cannot see a score that
 ranks well yet cannot order a queue.
 """
@@ -46,9 +46,6 @@ CLASS_WEIGHTING = os.getenv("CLASS_WEIGHTING", "auto")
 
 #: Five fits averaged into one booster (committee.py).
 COMMITTEE_SEEDS = tuple(range(42, 47))
-#: BLOCK stops a customer, so it asks more than REVIEW: the lowest cutoff at or
-#: above REVIEW whose validation precision is at least this.
-BLOCK_PRECISION = 0.90
 
 
 def cut_index(n):
@@ -83,15 +80,12 @@ def make_model(scale_pos_weight, random_state=42):
         n_jobs=-1, verbose=-1)
 
 
-def choose_cutoffs(y, p, block_precision=BLOCK_PRECISION):
-    """REVIEW maximises F1 on validation rows; BLOCK is the lowest cutoff at or above
-    it with validation precision >= `block_precision`, or None - the model then never
-    blocks on its own."""
+def choose_review_cutoff(y, p):
+    """REVIEW maximises F1 on the validation rows. There is no BLOCK: the system
+    never blocks on its own."""
     prec, rec, thr = precision_recall_curve(y, p)
     f1 = 2 * prec[:-1] * rec[:-1] / np.maximum(prec[:-1] + rec[:-1], 1e-12)
-    review = float(thr[int(np.argmax(f1))])
-    sure = [t for t, pr in zip(thr, prec[:-1]) if t >= review and pr >= block_precision]
-    return review, (float(min(sure)) if sure else None)
+    return float(thr[int(np.argmax(f1))])
 
 
 def _metrics(y, proba, thr):
@@ -102,19 +96,16 @@ def _metrics(y, proba, thr):
                 tp=int(tp), fp=int(fp), fn=int(fn), tn=int(tn))
 
 
-def _calibration(y, proba, review_thr, block_thr):
-    """How usable the probabilities are as magnitudes, not just as a ranking; the
-    review band is the alerts below BLOCK (all of them when there is no BLOCK)."""
+def _calibration(y, proba, review_thr):
+    """How usable the probabilities are as magnitudes, not just as a ranking."""
     alert = proba >= review_thr
     n_alert = int(alert.sum())
     pa = proba[alert]
-    top = np.inf if block_thr is None else block_thr
     return dict(
         brier=float(np.mean((proba - y) ** 2)),
         n_alerts=n_alert,
         saturated_share=(float(np.mean(pa >= 0.9995)) if n_alert else None),
         distinct_scores=(int(len(np.unique(np.round(pa, 3)))) if n_alert else 0),
-        review_band=int((pa < top).sum()) if n_alert else 0,
         median_alert_score=(float(np.median(pa)) if n_alert else None),
     )
 
@@ -161,7 +152,7 @@ def main():
     model = committee.merge(members)
     committee.check(model, members, Xte[:5000])
 
-    review, block = choose_cutoffs(y[fit:cut], model.predict(X[fit:cut]))
+    review = choose_review_cutoff(y[fit:cut], model.predict(X[fit:cut]))
     proba = model.predict(Xte)
     auc = roc_auc_score(yte, proba)
     ap = average_precision_score(yte, proba)
@@ -175,13 +166,6 @@ def main():
     print(f"REVIEW at {review:.4f}  precision={mr['precision']:.3f}  "
           f"recall={mr['recall']:.3f}  f1={mr['f1']:.3f}  "
           f"(tp={mr['tp']} fp={mr['fp']} fn={mr['fn']})")
-    mb = _metrics(yte, proba, block) if block is not None else None
-    if mb:
-        print(f"BLOCK  at {block:.4f}  precision={mb['precision']:.3f}  "
-              f"recall={mb['recall']:.3f}")
-    else:
-        print(f"BLOCK  none: no cutoff reached {BLOCK_PRECISION:.0%} precision on "
-              f"the validation rows, so the model only ever sends to review")
 
     cep_flag = (test["cep_score"].values >= REVIEW_THRESHOLD).astype(int)
     cep = _metrics(yte, cep_flag.astype(float), 0.5)
@@ -190,14 +174,13 @@ def main():
     print(f"ML at REVIEW : precision={mr['precision']:.3f}  recall={mr['recall']:.3f}"
           f"   <- fusion (phase 6) combines both")
 
-    cal = _calibration(yte, proba, review, block)
+    cal = _calibration(yte, proba, review)
     print("\n=== calibration - are the probabilities usable as MAGNITUDES? ===")
     print(f"Brier score            : {cal['brier']:.5f}")
     if cal["n_alerts"]:
         print(f"alerts (>= REVIEW)     : {cal['n_alerts']}")
         print(f"  rounding to 1.000    : {cal['saturated_share']:.1%}")
         print(f"  distinct scores      : {cal['distinct_scores']}")
-        print(f"  in the REVIEW band   : {cal['review_band']}")
         print(f"  median alert score   : {cal['median_alert_score']:.6f}")
 
     print("\nrecall by fraud type (ML at REVIEW):")
@@ -222,12 +205,12 @@ def main():
     with open(os.path.join(MODELS_DIR, "feature_names.json"), "w") as fh:
         json.dump(feats, fh, indent=2)
     with open(os.path.join(MODELS_DIR, "thresholds.json"), "w") as fh:
-        json.dump(dict(review=review, block=block, block_precision=BLOCK_PRECISION,
+        json.dump(dict(review=review,
                        chosen_on=dict(rows=cut - fit, fraud=int(y[fit:cut].sum())),
                        committee=len(members)), fh, indent=2)
     with open(os.path.join(MODELS_DIR, "metrics.json"), "w") as fh:
-        json.dump(dict(roc_auc=auc, pr_auc=ap, thresholds=dict(review=review, block=block),
-                       at_review=mr, at_block=mb, cep_only=cep, calibration=cal,
+        json.dump(dict(roc_auc=auc, pr_auc=ap, thresholds=dict(review=review),
+                       at_review=mr, cep_only=cep, calibration=cal,
                        by_fraud_type=by_type, graph_outage=outage,
                        committee=dict(seeds=list(COMMITTEE_SEEDS),
                                       member_pr_auc=member_ap)),

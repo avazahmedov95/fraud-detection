@@ -97,15 +97,13 @@ reported. Three changes, each measured before it was adopted:
   against 0.422). Row bagging was tested the same way and not adopted: +0.004 on
   the baseline profile.
 - **Cutoffs chosen on data and shipped with the model.** An unweighted model's
-  probabilities sit near the base rate, so a fixed 0.40 / 0.80 means nothing.
+  probabilities sit near the base rate, so a fixed 0.40 means nothing.
   `train.py` fits on the earliest 64% of rows, puts REVIEW where F1 peaks on the
-  next 16% and BLOCK where precision there reaches 90%, and writes both to
-  `thresholds.json`, which serve-prep ships beside `model.onnx` and the job reads
-  (`stream-processor/config.py`). This run: cut at REVIEW = 0.0742, and BLOCK at a
-  score that rounds to 1.000: the validation rows reached 90% only at the very top,
-  and on the held-out month the model blocks 5 transfers on its own, 4 of them
-  fraud. The CEP-only fallback keeps the fixed cutoffs, since an
-  additive rule score is not a probability.
+  next 16%, and writes it to `thresholds.json`, which serve-prep ships beside
+  `model.onnx` and the job reads (`stream-processor/config.py`). This run: cut at REVIEW = 0.0742, and
+  **there is no BLOCK**: since 2026-09-19 the system never blocks on its own - the
+  owner's decision - and every alert goes to a person. The CEP-only fallback keeps
+  its fixed cutoff, since an additive rule score is not a probability.
 
 *IBM AML, which the gates below use, was removed from the project on 2026-09-19:
 its accounts include banks and companies, and this project is about transfers
@@ -299,7 +297,8 @@ Twenty paired fits of train.py's recipe on the realistic profile, with both and
 without both (seeds 0-19): validation PR-AUC 0.489 -> 0.498, paired +0.009
 [-0.033, +0.052], worse on 7 of 20 seeds - no measurable difference. The served
 committee nevertheless moved: recall at REVIEW 0.505 -> 0.421, precision 0.637 ->
-0.586, and a BLOCK cutoff appeared. That is not the two columns; it is what one
+0.586, and a BLOCK cutoff appeared (auto-blocking was then prohibited, above).
+That is not the two columns; it is what one
 retrain does here. With 570 fraud to learn from, the five fits scatter (0.303-0.461
 PR-AUC) and the F1-chosen cutoff lands on a different alert count each time:
 removing either column alone moved the served recall to 0.421 or 0.436 with PR-AUC
@@ -563,7 +562,6 @@ brier               0.00163
 n_alerts            145          (>= REVIEW on the held-out slice)
 saturated_share     23.4%        rounding to 1.000
 distinct_scores     97
-review_band         140         alerts below BLOCK - the other 5 are blocked outright
 median_alert_score  0.735482
 scored_with         model.onnx
 ```

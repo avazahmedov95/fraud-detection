@@ -539,7 +539,6 @@ _TRACKED_FIGURES = [
     ("ml/README.md", r"^n_alerts\s+(\d+)", ("metrics", "calibration", "n_alerts"), str),
     ("ml/README.md", r"^saturated_share\s+([\d.]+)%", ("metrics", "calibration", "saturated_share"), _pct1),
     ("ml/README.md", r"^distinct_scores\s+(\d+)", ("metrics", "calibration", "distinct_scores"), str),
-    ("ml/README.md", r"^review_band\s+(\d+)", ("metrics", "calibration", "review_band"), str),
     ("ml/README.md", r"^median_alert_score\s+([\d.]+)", ("metrics", "calibration", "median_alert_score"), lambda v: f"{v:.6f}"),
     ("ml/README.md", r"baseline PR-AUC \*\*([\d.]+) ±", ("seeds", "mean"), _f3),
     ("ml/README.md", r"baseline PR-AUC \*\*[\d.]+ ± ([\d.]+)\*\*", ("seeds", "sd"), _f3),
