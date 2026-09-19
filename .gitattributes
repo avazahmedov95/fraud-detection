@@ -14,11 +14,10 @@
 # (docs/generator-spec.md 7), and a reader who clones and runs `run.ps1 up`
 # would meet the failure, not the author.
 #
-# Learned from IBM/AMLSim on 2026-08-31, whose six shell scripts arrived as CRLF
-# from a Windows clone and failed exactly this way inside a container.
+# Learned on 2026-08-31, when six cloned shell scripts arrived as CRLF from a
+# Windows clone and failed exactly this way inside a container.
 *.sh            text eol=lf
 Dockerfile      text eol=lf
-*.Dockerfile    text eol=lf
 docker-compose.yml text eol=lf
 
 # PowerShell is the Windows-side entry point and stays native.

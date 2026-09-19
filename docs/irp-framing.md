@@ -196,7 +196,8 @@ different data access needs thresholds relative to what is observable.
 ### RQ3, third result: a rule threshold can encode the population it was tuned on
 
 `MULE_FAN_IN` fires at six distinct senders converging on one payee in an hour.
-On IBM AMLSim (`validation/README.md` §3) it fired on **3.12% of legitimate
+On IBM's AMLSim simulator (run 2026-08-31, removed 2026-09-19; `validation/README.md`)
+it fired on **3.12% of legitimate
 traffic and caught 0.0% of the fan-in typology**: in a scale-free graph 2.69% of
 receiver-days exceed six as ordinary hub behaviour. The constant encoded the
 density of the population it was tuned on. `MULE_FAN_IN_MODE = relative`

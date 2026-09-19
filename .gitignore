@@ -60,12 +60,6 @@ infra/kafka/certs/
 stream-processor/fault_injection_state.json
 stream-processor/throughput_windows.json
 
-# Vendored external simulator for the receiver-side cross-check
-# (validation/README.md 3). Cloned, not authored here, and its outputs
-# for the 100K profile run to hundreds of MB. Regenerate with
-# validation/amlsim.Dockerfile rather than tracking it.
-AMLSim/
-
 # Warehouse export taken before the 2026-09-07 truncation, so the audit anchor
 # in docs/audit-anchors.md stays recomputable. See that file.
 _warehouse_backup_*/

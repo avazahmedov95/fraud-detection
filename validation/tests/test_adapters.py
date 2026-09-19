@@ -13,7 +13,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "..", "stream-processor"))
 
 import paysim_adapter as PS      # noqa: E402
-import amlsim_adapter as AS      # noqa: E402
 import capabilities as CAP       # noqa: E402
 import harness as RP             # noqa: E402
 
@@ -106,106 +105,6 @@ def test_capabilities_without_data_are_off_in_the_run(paysim_df, tmp_path):
     finally:
         CAP.MODES.clear(); CAP.MODES.update(saved)
 
-    forbidden = {"GEO_ANOMALY", "IMPOSSIBLE_TRAVEL",
-                 "COACHED_SESSION"}
-    fired = set(hits["fraud"]) | set(hits["legit"])
-    assert not (fired & forbidden), f"fired without data: {fired & forbidden}"
-
-
-
-# --- AMLSim ----------------------------------------------------------------
-# Fixtures shaped like its output files.
-
-@pytest.fixture
-def amlsim_dir(tmp_path):
-    """AMLSim's three files, with fan_in and fan_out labelled separately."""
-    rng = np.random.default_rng(0)
-    base = pd.Timestamp("2017-01-01")
-
-    accts = []
-    for i in range(1, 181):
-        fresh = rng.random() < 0.25
-        off = int(rng.integers(1, 25)) if fresh else int(rng.integers(1, 900))
-        accts.append(dict(acct_id=f"A{i}", dsply_nm=f"n{i}", type="I",
-                          acct_stat="A",
-                          open_dt=(base - pd.Timedelta(days=off)).date(),
-                          initial_deposit=50000, tx_behavior_id=1, bank_id=0))
-
-    tx, al, tid = [], [], [0]
-
-    def add(step, orig, bene, amt, sar, aid="", atype=""):
-        tid[0] += 1
-        row = dict(tran_id=f"T{tid[0]}",
-                   tran_timestamp=(base + pd.Timedelta(days=int(step))).date(),
-                   base_amt=round(float(amt), 2), tx_type="TRANSFER",
-                   orig_acct=orig, bene_acct=bene, is_sar=bool(sar), alert_id=aid)
-        tx.append(row)
-        if aid:
-            al.append(dict(alert_id=aid, alert_type=atype, is_sar=True,
-                           tran_id=row["tran_id"], orig_acct=orig, bene_acct=bene,
-                           tx_type="TRANSFER", base_amt=row["base_amt"],
-                           tran_timestamp=row["tran_timestamp"]))
-
-    for step in range(1, 120):
-        for _ in range(6):
-            add(step, f"A{rng.integers(1, 90)}", f"A{rng.integers(90, 180)}",
-                np.exp(rng.normal(5.5, 0.6)), 0)
-    for k in range(12):                       # collection stage: 6 senders -> 1 drop
-        drop = f"A{170 + k % 10}"
-        for _ in range(6):
-            add(rng.integers(1, 119), f"A{rng.integers(1, 90)}", drop,
-                np.exp(rng.normal(7.4, 0.3)), 1, f"FI{k}", "fan_in")
-    for k in range(12):                       # dispersal stage: 1 mule -> 6 dests
-        mule, st = f"A{rng.integers(1, 90)}", int(rng.integers(1, 119))
-        for _ in range(6):
-            add(st, mule, f"A{90 + rng.integers(0, 80)}",
-                np.exp(rng.normal(7.4, 0.3)), 1, f"FO{k}", "fan_out")
-
-    pd.DataFrame(accts).to_csv(tmp_path / "accounts.csv", index=False)
-    pd.DataFrame(tx).to_csv(tmp_path / "transactions.csv", index=False)
-    pd.DataFrame(al).to_csv(tmp_path / "alert_transactions.csv", index=False)
-    return str(tmp_path)
-
-
-def test_amlsim_missing_directory_is_refused(tmp_path):
-    """A silently empty run would look like 'the rules found nothing'."""
-    with pytest.raises(SystemExit):
-        AS.load(str(tmp_path / "nope"))
-
-
-def test_amlsim_daily_timestamps_become_epoch_seconds(amlsim_dir):
-    tx, _, _ = AS.load(amlsim_dir)
-    ts = AS._epoch(tx["tran_timestamp"])
-    assert (ts % 86400 == 0).all(), "AMLSim steps are whole days"
-    assert ts.is_monotonic_increasing or ts.min() > 0
-
-
-def test_amlsim_typology_labels_survive_to_the_result(amlsim_dir):
-    """Section B needs alert_type on the rows; the fan_in/fan_out split is why this dataset."""
-    saved = dict(CAP.MODES)
-    try:
-        for key in ("myid_kinship", "geo_telemetry",
-                    "session_telemetry"):
-            CAP.MODES[key] = "off"
-        CAP.MODES["payee_identity"] = "pinfl"
-        res, _ = AS.run(amlsim_dir, None)
-    finally:
-        CAP.MODES.clear(); CAP.MODES.update(saved)
-    assert {"fan_in", "fan_out"} <= set(res.typology.unique())
-    assert (res[res.typology == "fan_in"].label == 1).all()
-
-
-def test_amlsim_capabilities_without_data_are_off(amlsim_dir):
-    """AMLSim carries no geo, session or kinship; a rule firing means invented data."""
-    saved = dict(CAP.MODES)
-    try:
-        for key in ("myid_kinship", "geo_telemetry",
-                    "session_telemetry"):
-            CAP.MODES[key] = "off"
-        CAP.MODES["payee_identity"] = "pinfl"
-        _, hits = AS.run(amlsim_dir, None)
-    finally:
-        CAP.MODES.clear(); CAP.MODES.update(saved)
     forbidden = {"GEO_ANOMALY", "IMPOSSIBLE_TRAVEL",
                  "COACHED_SESSION"}
     fired = set(hits["fraud"]) | set(hits["legit"])

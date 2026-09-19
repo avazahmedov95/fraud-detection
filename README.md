@@ -40,8 +40,7 @@ fraud-detection/
 │   └── queue_cli.py        list / show / resolve / stats
 ├── validation/             the deployed rules run on FOREIGN datasets
 │   ├── paysim_adapter.py   PaySim, and what transfers from it
-│   ├── amlsim_adapter.py   IBM AMLSim + amlsim.Dockerfile toolchain
-│   └── harness.py          the replay loop every adapter shares
+│   └── harness.py          the replay loop and report the adapter uses
 ├── tools/
 │   └── boundary_audit.py   what one component produces vs what the next expects
 ├── demo/                   one page to show it working: stream, replayed episodes, queue
@@ -75,7 +74,7 @@ run **one at a time**:
 python -m pytest stream-processor -q     # 159
 python -m pytest data-generator   -q     #  25
 python -m pytest sink-writer      -q     #  23
-python -m pytest validation       -q     #  14
+python -m pytest validation       -q     #  10
 python -m pytest case-manager     -q     #  44
 python -m pytest ml               -q     #  9
 python -m pytest demo             -q     #   8

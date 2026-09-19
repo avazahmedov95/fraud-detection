@@ -267,7 +267,8 @@ Extends the table in `generator-spec.md` §0; the datasets actually run are in
   P2P data is an accepted industry instrument.
 - **Kaggle UPI datasets** (e.g. `skullagos5246/upi-transactions-2024`) - themselves
   synthetic, with no generating specification.
-- **AMLSim** (IBM, open source) - run: `validation/README.md` §3.
+- **AMLSim** (IBM, open source) - run, then removed with IBM AML-Data on
+  2026-09-19 (`validation/README.md`, Removed).
 - **The AI4FCF catalogue** (`sites.google.com/view/ai4fcf/open-datasets`): BankSim
   (customer→merchant, so receiver concentration is normal), IBM AML-Data (run, then
   removed: it includes banks and companies - `validation/README.md`, Rejected), Amaretto (capital markets), the Czech financial
@@ -299,7 +300,8 @@ Extends the table in `generator-spec.md` §0; the datasets actually run are in
   anchors the difficulty of the *data*, not a comparison of *systems*.
 - **No external evidence for receiver-side aggregation.** IBM AML supplied the only
   one and was removed as not P2P (`validation/README.md`, Rejected); PaySim has no
-  collection stage, and AMLSim's daily clock cannot see one.
+  collection stage, and AMLSim, removed too, ran on a daily clock that cannot see
+  one.
 
 ---
 
@@ -311,7 +313,7 @@ Extends the table in `generator-spec.md` §0; the datasets actually run are in
 |---|---|---|
 | **PaySim** (§6) | The rule layer went **mute** on foreign data: the highest score any fraud reached was 0.35 against a 0.40 cutoff, while the rules separated the classes 4:1. | `capabilities.scaled_threshold`, reached through `fusion.cutoffs`; adapter `validation/paysim_adapter.py`. |
 | **PaySim, via `ris3abh`** (§6) | PR-AUC **0.380** on the public benchmark, reproduced at 0.397; the leaky 0.988 reproduced at 1.000. | The decomposition of the gap into features and separability - `generator-spec.md` §0, §7. |
-| **IBM AMLSim** (§7) | `MULE_FAN_IN` at six senders fired on **3.12%** of legitimate traffic and caught **0.0%** of the fan-in typology. | `rules.PopulationBaseline`, `MULE_FAN_IN_MODE=relative`, +6.9 pp - `irp-framing.md` §6, third RQ3 result. |
+| **IBM AMLSim** (§7; removed 2026-09-19) | `MULE_FAN_IN` at six senders fired on **3.12%** of legitimate traffic and caught **0.0%** of the fan-in typology. | `rules.PopulationBaseline`, `MULE_FAN_IN_MODE=relative`, +6.9 pp - `irp-framing.md` §6, third RQ3 result. |
 | **CBU Regulation No. 3759** | The BRV-denominated threshold, and the fact that the project's earlier citation of it was wrong. | `data-generator/config.STRUCTURING_THRESHOLD`, mirrored in `stream-processor/config.py`. |
 | **Cybersecurity Centre of Uzbekistan, 2025** (§6d) | **54 of 157** high-severity mobile findings are transport security. | Why transport overhead was measured at all - `irp-framing.md` §7.5, `threat-model.md` §3a. |
 | **Tritscher et al. 2022** (§6b) | The published criterion a generator must meet, and the criticism of post-hoc fraud injection. | `generator-spec.md` §0 and §5. |

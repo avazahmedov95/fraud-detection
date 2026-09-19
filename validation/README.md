@@ -1,10 +1,9 @@
 # External validation
 
-Two datasets answering two different questions, and more examined and rejected.
-Each has its own adapter, because each file has its own shape;
-everything downstream of a translated event - the unit conversion, the replay
-over the deployed rule engine, the report sections - is in **`harness.py`**,
-shared by both, so the results stay one measurement.
+One dataset used, and more examined and rejected. The adapter owns the file's
+shape; everything downstream of a translated event - the unit conversion, the
+replay over the deployed rule engine, the report sections - is in
+**`harness.py`**, so another dataset would be one measurement with it.
 
 ## The constraint that shapes everything here
 
@@ -27,8 +26,9 @@ published:
 > data, because the identifiers that make it relational are the reason such data
 > stays private.**
 
-So the two halves are validated separately, each against the best available
-source.
+So only one half is validated here: PaySim tests the sender-side relational
+features. The receiver side (fan-in) has no usable public source - the ones
+tried are recorded below.
 
 ---
 
@@ -90,7 +90,7 @@ not create signal.
 
 ### Result (`--our-model`): this project's model trained on PaySim
 
-14 of the 20 features compute here (13 informative: PaySim names no bank, so
+14 of the 20 features of the time compute here (13 informative: PaySim names no bank, so
 `cross_network` is constant), on the published baseline's own split (24 days / 7
 days).
 
@@ -112,7 +112,7 @@ days).
    unweighted below 0.5% fraud.
 2. **Receiver aggregation reverses on PaySim**: removing it *improves* PR-AUC by
    0.049, where on this project's data it costs the most. PaySim has no fan-in to
-   find, so no run on PaySim can validate that finding - section 4 does.
+   find, so no run on PaySim can validate that finding, and no dataset here does.
 3. **With matching recipes the feature set is competitive**: 0.373 against the
    baseline's 0.380, once PaySim's transaction type is added.
 
@@ -152,88 +152,6 @@ directly.
 
 ---
 
-## 3. AMLSim - the adapter, and how to run it
-
-`amlsim_adapter.py`, the same contract: the deployed `rules.evaluate()`, nothing
-retrained. Its alerts label `fan_in` and `fan_out` separately.
-
-```powershell
-git clone https://github.com/IBM/AMLSim.git          # once, outside this repo
-docker build -f amlsim.Dockerfile -t amlsim:1.0 .    # the toolchain
-docker run --rm -e MAVEN_OPTS="-Xms1g -Xmx4g" `
-  -v "C:/path/to/AMLSim:/amlsim" -w /amlsim amlsim:1.0 bash -lc `
-  "bash scripts/build_AMLSim.sh && \
-   python scripts/transaction_graph_generator.py conf.json && \
-   bash scripts/run_AMLSim.sh conf.json && \
-   python scripts/convert_logs.py conf.json"
-python amlsim_adapter.py --dir C:/path/to/AMLSim/outputs/<simulation_name>
-```
-
-The container pins AMLSim's own interpreter (`networkx==1.11`) rather than
-patching it, and `convert_logs.py` is required - the run script leaves only the
-raw log. Raise the alert count for statistical power if needed, but not
-`min_period` / `max_period`: that would tune the dataset to the rule's window.
-
-AMLSim's clock advances one day per step against a one-hour window, so a null
-fan-in result here is **ambiguous** between "the rule does not transfer" and "the
-window is shorter than the pattern"; section D of the report says so on every run.
-
-### Result, 10K profile, 2026-08-31
-
-197,905 transactions, 671 SAR-labelled (0.339%): `cycle` 291 / `fan_in` 199 /
-`fan_out` 181.
-
-| rule | on SAR | on legit | lift |
-|---|---|---|---|
-| `AMOUNT_DEVIATION` | 0.15% | 0.02% | 7.7x |
-| `MULE_FAN_IN` | 0.15% | **3.12%** | **0.0x** |
-
-| typology | n | flagged | recall |
-|---|---|---|---|
-| cycle | 291 | 1 | 0.3% |
-| fan_in | **199** | **0** | **0.0%** |
-| fan_out | 181 | 1 | 0.6% |
-
-The decision layer flagged 2 of 671 SAR against 6,185 legitimate - worse than
-chance, because **the rule is anti-correlated with the label**: 2.69% of all
-receiver-days exceed six senders against 1.16% of `fan_in` targets, and the
-median `fan_in` alert spans **363 days** against a one-hour window. So:
-
-1. **`MULE_FAN_IN` detects a rate, not a topology** - AML collection is
-   deliberately slower than background, and the lift inverts.
-2. **Six senders is not portable**: in a scale-free graph 2.69% of receiver-days
-   exceed it as ordinary hub behaviour.
-3. **Widening the window would not rescue it**: the population's p95 (26 senders
-   over the run) sits above the targets' median (16).
-
-The idea of receiver-side aggregation transfers; this rule's window and absolute
-threshold do not - they encode a local baseline never written down as an
-assumption. `MULE_FAN_IN_MODE = relative` now addresses it
-(`docs/irp-framing.md` §6, third RQ3 result).
-
-### The ablation was run, and AMLSim cannot answer the question
-
-| run | PR-AUC with receiver block | without | delta |
-|---|---|---|---|
-| first, no bagging | 0.9507 | 0.8816 | **+0.069**, CI of *zero width* |
-| bagging on | 0.0153 | 0.2263 | −0.211 [−0.573, +0.151] |
-| bagging on, `is_new_payee` dropped | 0.0273 | 0.3629 | −0.336 [−0.643, −0.028] |
-
-**A sixty-fold swing in PR-AUC from a bagging parameter.** Three findings behind
-it: the zero-width interval was five identical models, not precision;
-`is_new_payee` separates the classes at rank-AUC 0.906 because AMLSim plants each
-alert as fresh edges - an injection artefact, like `is_family` here; and the
-receiver features are strongly non-stationary across time. AMLSim cannot validate
-the receiver-side effect, and adjusting until a positive delta appeared would be
-the failure this directory exists to prevent.
-
-**What survives.** Every dataset examined - this generator, PaySim, Zenodo,
-AMLSim - placed its positive class where the method of placement is itself the
-strongest predictor. So the rule for foreign data is:
-**the first step in using a foreign dataset is a screen for it, not the last.**
-
----
-
 ## Rejected: IEEE-CIS
 
 590k real transactions with pseudo card identifiers, but card-not-present
@@ -257,7 +175,7 @@ project needs - and a label that carries nothing. Screened on 2026-09-19:
 
 The label is independent of every column, including the ones named after fraud
 signals, and the time-since-last column does not describe the file it is in: there is
-nothing to detect. The Mendeley set of section 4 was downloaded again the same day and
+nothing to detect. The Mendeley set of section 3 was downloaded again the same day and
 is the one already rejected.
 
 ---
@@ -287,7 +205,25 @@ people. The decisions made with it stay recorded where they were made
 
 ---
 
-## 4. Mendeley ktbthg777x - examined and NOT used
+## Removed: IBM AMLSim
+
+IBM's open-source laundering simulator, run here from 2026-08-31 and **removed on
+2026-09-19 at the owner's decision**, with IBM AML: this project is about card
+transfers between people. What it showed stays where it was used: the fixed
+six-sender `MULE_FAN_IN` fired on 3.12% of its legitimate traffic and caught none
+of its fan-in typology, which is why the relative mode exists
+(`docs/irp-framing.md` §6, third RQ3 result). The adapter, its Docker toolchain
+and the full results are in git history (`git show 71c3cdc:validation/README.md`,
+section 3).
+
+The lesson it left holds for every dataset here - this generator, PaySim, Zenodo,
+AMLSim: each placed its positive class where the method of placement is itself the
+strongest predictor. **The first step in using a foreign dataset is a screen for
+it, not the last.**
+
+---
+
+## 3. Mendeley ktbthg777x - examined and NOT used
 
 *"Synthetic Banking Transaction Dataset with Multi-Pattern Fraud Labels for
 Machine Learning Research"*, [doi 10.17632/ktbthg777x.1](https://data.mendeley.com/datasets/ktbthg777x/1),
