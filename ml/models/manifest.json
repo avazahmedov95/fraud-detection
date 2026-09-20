@@ -1,16 +1,16 @@
 {
-  "exported_at": "2026-09-20T06:34:19+00:00",
-  "commit": "7247a796a8141984e95851f6cc7a0a380578a4c5",
+  "exported_at": "2026-09-20T13:51:06+00:00",
+  "commit": "6ed678d9042a013715b17722bcc1dad462ef71e5",
   "artefacts": {
-    "model.onnx": "6d065df8a91c3f1cd584547f346881ca03850c8f1885af9112410505a7337816",
-    "model.txt": "03bc61a9480c37fd424e81e9a76debb63901d9f6a0c0a08fb2c88671cfc149ba",
-    "model.joblib": "1658d405f9626b29f276a0e4b47aa942bcb46f688b35c87ecdad5defe0648865",
+    "model.onnx": "befa68104e18bf87defad73583ef428871decdabfadddcc624d15f8ccad36a5a",
+    "model.txt": "4b1b70fdf6ba1a31f8ea86d9cbe07f097f8cd67e3c0a12ac63ac1935fff67eef",
+    "model.joblib": "7465941aa99a0f0c61d047bd5d195717050a20e40ac9790c851c1a92d101cc85",
     "feature_names.json": "61dd792f88f9d2120488386aaf39b0edb781b36ddc78c7b74bae35ef42cb8a46",
-    "thresholds.json": "04965415ca0374bb86f02bcd441afe6e2af4e70e001fe75b4f73c9decc1fd5e5"
+    "thresholds.json": "4785123179a0e921940f12482755692cd0ce8418ac9cec7c7f3bf9c85b03ff7d"
   },
   "dataset": {
     "transactions.csv": {
-      "sha256": "0338db95c10a264c5154605811a890be9eeb55f212665344642a0477c2c7380f",
+      "sha256": "7406cce51a1063d4cdee0d1882dbeb3025f89efa38434dcbfc250c5473f5e9e1",
       "path": "data-generator/out/transactions.csv"
     },
     "persons.csv": {
@@ -54,7 +54,7 @@
     }
   },
   "metrics": {
-    "roc_auc": 0.9918539410004248,
-    "pr_auc": 0.4802081903242833
+    "roc_auc": 0.9876829526785323,
+    "pr_auc": 0.5728927373738417
   }
 }

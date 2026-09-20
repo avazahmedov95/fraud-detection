@@ -42,11 +42,26 @@ def gen_session_signals(sender, fraud_type, rng):
     return call, round(max(C.SECS_LOGIN_FLOOR, secs), 1)
 
 
-def round_like_a_person(amount):
+def round_like_a_person(amount, rng, down=False):
     """People send round sums - to 10,000, 50,000 or 100,000 UZS, the step growing
-    with the amount (generator-spec.md 8, item 6)."""
-    step = 10_000 if amount < 500_000 else 50_000 if amount < 5_000_000 else 100_000
-    return float(max(step, round(amount / step) * step))
+    with the amount (generator-spec.md 8, item 6).
+
+    `down` where the amount has a ceiling it must not cross: a mule cannot pay on
+    more than it collected, a structuring transfer must stay under the reporting
+    threshold, and a drain cannot exceed the balance. Rounding up there would
+    invent money or break the pattern it belongs to."""
+    # The step is drawn, not fixed: people round to 100,000 and to a million alike,
+    # and a fixed ladder puts a seam at its band edges that separates nothing real.
+    if amount >= 1_000_000:
+        steps, weights = (100_000, 500_000, 1_000_000), (0.55, 0.30, 0.15)
+    elif amount >= 100_000:
+        steps, weights = (10_000, 50_000, 100_000), (0.55, 0.30, 0.15)
+    else:
+        steps, weights = (1_000, 5_000, 10_000), (0.50, 0.25, 0.25)
+    step = int(rng.choice(steps, p=weights))
+    scaled = amount / step
+    r = int(scaled) * step if down else round(scaled) * step
+    return float(max(step, r))
 
 def _payee_card(receiver, rng):
     """Which of the payee's cards this transfer lands on - what lets PAN and PINFL

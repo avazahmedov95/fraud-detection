@@ -34,6 +34,18 @@ def test_a_small_realistic_dataset_carries_what_the_profile_adds(restore_profile
                                       fraud_rate=0.02, seed=3))
     legit = df[df.label_is_fraud == 0]
     assert legit.device_id.str.endswith("-n").any()                # phones changed
-    assert (legit.amount_uzs % 10_000 == 0).mean() > 0.2           # round sums
+    assert (legit.amount_uzs % 1_000 == 0).mean() > 0.85           # round sums
     # a tenth of fraud goes unreported, so fewer rows are labelled than injected
     assert 0.010 < df.label_is_fraud.mean() < 0.021
+
+
+def test_roundness_does_not_mark_the_class(restore_profile):
+    """A person sends round sums whether or not they are being defrauded. If the
+    two classes rounded differently, a model could separate them on that alone -
+    the artefact is_family once was (ml/README.md)."""
+    df, _ = build_dataset(C.realistic(n_persons=800, n_transactions=8000,
+                                      fraud_rate=0.05, seed=3))
+    rounded = df.amount_uzs % 1_000 == 0
+    legit = rounded[df.label_is_fraud == 0].mean()
+    fraud = rounded[df.label_is_fraud == 1].mean()
+    assert abs(legit - fraud) < 0.10, (legit, fraud)

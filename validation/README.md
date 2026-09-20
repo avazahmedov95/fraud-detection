@@ -17,7 +17,7 @@ held-out slice, baseline profile, on the 20-column vector of the time):
 | no account identifiers | 0.761 | 0.563 | 0.745 |
 | amount + hour only | 0.653 | 0.272 | 0.819 |
 
-On the realistic profile the full system scores PR-AUC 0.480 (`ml/README.md`);
+On the realistic profile the full system scores PR-AUC 0.573 (`ml/README.md`);
 the stripped configurations have not been re-run there. Public transaction
 datasets carry no account identifiers, because those are what cannot be
 published:

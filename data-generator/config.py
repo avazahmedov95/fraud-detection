@@ -125,7 +125,7 @@ def realistic(**overrides):
         structuring_events=(3, 9), structuring_gap_minutes=(10, 90),
         structuring_fraction=(0.70, 0.99),
         phone_change_share=0.04, collector_share=0.01, split_payment_share=0.003,
-        round_amount_share=0.40, unreported_fraud_share=0.10)
+        round_amount_share=0.90, unreported_fraud_share=0.10)
     values.update(overrides)
     return GeneratorConfig(**values)
 

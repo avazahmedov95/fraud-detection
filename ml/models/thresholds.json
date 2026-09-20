@@ -1,8 +1,8 @@
 {
-  "review": 0.04705155542145777,
+  "review": 0.17146546103839388,
   "chosen_on": {
     "rows": 80000,
-    "fraud": 155
+    "fraud": 171
   },
   "committee": 5
 }

@@ -104,20 +104,31 @@ The aged 30% is what stopped `receiver_age` from being a perfect separator. The
 detector no longer reads the age (since 2026-09-19); the column stays in the
 dataset, whose hash is pinned.
 
-**Amounts are not round, and real ones are.** The owner's reading of the market on
-2026-09-20: a person almost always sends a round sum - 350,000 or 6,000,000 - and
-rarely 435,345. This generator draws amounts from continuous distributions, so
-only 39.6% of legitimate transfers are multiples of 1,000 and 5.1% of 100,000. The
-deviation is not symmetric, which is the part that matters: **ATO, MULE and
-STRUCTURING amounts are 0.0% multiples of 1,000** against 39.6% of legitimate
-traffic and 40.0% of APP, because those patterns compute their amounts from
-balances, collected sums and threshold bands. Roundness is therefore a near-perfect
-class separator in this data **by construction**, exactly as `is_family` once was
-(`ml/README.md`). No feature reads it today and none should be added while this
-holds: it would separate the classes without detecting anything. Fixing it means
-rounding amounts on both sides - the legitimate ones and the fraudulent ones whose
-mechanism would still produce round numbers - and regenerating the dataset of
-record, which re-opens every figure pinned to its hash.
+**Amounts are round, on both sides - fixed 2026-09-20.** The owner's reading of the
+market: a person almost always sends a round sum - 350,000 or 6,000,000 - and
+rarely 435,345. Until this date the generator rounded only 40% of legitimate
+transfers and of APP, and **0.0% of ATO, MULE and STRUCTURING amounts were even
+multiples of 1,000**, because those patterns compute their amounts from balances,
+collected sums and threshold bands. Roundness was therefore a near-perfect class
+separator by construction - the artefact `is_family` once was (`ml/README.md`), and
+the third of its kind found here.
+
+The fix makes rounding a property of the **person**, not of the pattern: one helper
+(`events.round_like_a_person`, applied through `fraud_patterns.maybe_round`) is used
+by legitimate traffic, by every fraud pattern and by the legitimate look-alikes, at
+the same 90% share (`round_amount_share`). The step is drawn rather than fixed -
+100,000 / 500,000 / 1,000,000 above a million, 10,000 / 50,000 / 100,000 above
+100,000, 1,000 / 5,000 / 10,000 below it - because a fixed ladder leaves a seam at
+its band edges that separates nothing real. Where an amount has a ceiling it rounds
+**down**: a mule cannot pay on more than it collected, a structuring transfer must
+stay under the reporting threshold, and the operator's chunks look like 10,000,000
+then 9,500,000. The remaining 10% stay exact, on both sides: a person can send their
+whole balance to the tiyin, and so can a fraudster.
+
+Measured on the regenerated dataset - multiples of 1,000, legitimate against fraud:
+89.7% / — below 100,000; 90.2% / 90.3% to a million; 90.1% / 90.9% to five million;
+91.3% / 89.5% above it. `test_profiles.py` fails if the two classes ever drift more
+than ten points apart again.
 
 ---
 
@@ -322,7 +333,8 @@ design target, measured on a held-out slice at 1.23% fraud.
 5. **Legitimate account takeover-like behaviour.** A user genuinely switching
    phone and city at once is rare here and would be a false positive.
 6. **Amount rounding.** Real transfers cluster on round numbers; the baseline
-   profile's amounts are continuous (the realistic profile rounds 40%, §10).
+   profile's amounts are continuous (the realistic profile rounds 90% of them,
+   on both sides of the label, §10 and the note above).
 7. **Label noise.** The baseline profile's ground truth is exact; real labels
    arrive late and incomplete (the realistic profile leaves 10% unreported, §10).
 
@@ -358,14 +370,23 @@ no analytical content and is excluded from every comparison.
 
 `data-generator/out/` is gitignored, so the files every reported figure was
 computed on are pinned here. **Since 2026-09-14 it is the realistic profile**
-(§10), seed 42, `generator.py --profile realistic`:
+(§10), seed 42, `generator.py --profile realistic`, **regenerated 2026-09-20 with
+round amounts** (§8, item 6):
 
 ```
-transactions.csv  500,000 rows  157,241,920 bytes
-  sha256  0338db95c10a264c5154605811a890be9eeb55f212665344642a0477c2c7380f
+transactions.csv  500,000 rows  157,259,486 bytes
+  sha256  7406cce51a1063d4cdee0d1882dbeb3025f89efa38434dcbfc250c5473f5e9e1
 persons.csv        52,000 rows    5,782,987 bytes
   sha256  c80f44e2e7403d803f51275c1e854f1cd7ae5cb20c12ad60e713873c457414bc
 ```
+
+The population is unchanged - `persons.csv` keeps its hash - and the transfers are
+not: every figure dated 2026-09-14 to 2026-09-19 was measured on the previous file
+(`0338db95c10a…`), which this repository can reproduce by checking out the commit
+before `round amounts on both sides of the label` and running the same command. The
+held-out month differs in more than roundness: it carries 176 fraud against 202, and
+its mix moved - 49 ATO against 10 - so figures across the two files are not
+comparable point to point.
 
 Every figure dated before 2026-09-14 was measured on the baseline dataset,
 regenerated 2026-09-07 and kept at `data-generator/out_frozen_2026-09-07/`:
@@ -436,7 +457,7 @@ This profile keeps every mechanism and moves each parameter toward overlap:
 | legitimate collections | 0 | 1% of persons | 5-15 senders within hours: a wedding, a gift, a joint purchase |
 | legitimate split payments | 0 | 0.3% of persons | 3-5 large parts to one payee |
 | phone changes | 0 | 4% of persons | a new phone, kept from then on |
-| round sums | 0 | 40% | people send round amounts (§8, item 6) |
+| round sums | 0 | 90% | people send round amounts, fraud and legitimate alike (§8, item 6) |
 
 A harder benchmark on the same machinery, not a calibration: no row comes from
 Uzbek data; each moves a parameter the baseline set at its easiest, in the

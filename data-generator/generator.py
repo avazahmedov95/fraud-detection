@@ -12,11 +12,11 @@ import pandas as pd
 import config as C
 from config import (GeneratorConfig, AMOUNT_MIN, AMOUNT_MAX, STRUCTURING_THRESHOLD,
                     FAMILY_PAYEE_SHARE, SECOND_DEVICE_USE_RATE)
-from events import EVENT_FIELDS, make_event, round_like_a_person
+from events import EVENT_FIELDS, make_event
 import persons as P
 import travel as T
 from persons import build_population, build_fraud_accounts, _normalise
-from fraud_patterns import inject_fraud
+from fraud_patterns import inject_fraud, maybe_round
 
 
 def _assign_payees(persons, rng):
@@ -66,15 +66,20 @@ def _lookalikes(config, persons, known, rng, start_dt, trips):
             for i in range(int(rng.integers(5, 16))):
                 s = persons[int(rng.integers(len(persons)))]
                 if s.pinfl != p.pinfl:
-                    one(s, p, float(np.clip(np.exp(rng.normal(12.3, 0.6)),
-                                            AMOUNT_MIN, AMOUNT_MAX)),
+                    one(s, p, maybe_round(
+                        float(np.clip(np.exp(rng.normal(12.3, 0.6)),
+                                      AMOUNT_MIN, AMOUNT_MAX)), config, rng),
                         t0 + timedelta(minutes=float(i * rng.uniform(5, 120))))
         if config.split_payment_share > 0 and rng.random() < config.split_payment_share:
             q = persons[int(rng.integers(len(persons)))]
             t0 = start_dt + timedelta(seconds=float(rng.random() * span))
             if q.pinfl != p.pinfl:
                 for i in range(int(rng.integers(3, 6))):
-                    one(p, q, float(STRUCTURING_THRESHOLD * rng.uniform(0.60, 0.99)),
+                    # Down, like the fraudulent instalments they look like: a
+                    # person pays 9,500,000, not 9,437,182.
+                    one(p, q, maybe_round(
+                        float(STRUCTURING_THRESHOLD * rng.uniform(0.60, 0.99)),
+                        config, rng, down=True),
                         t0 + timedelta(minutes=float(i * rng.uniform(10, 120))))
     return events
 
@@ -127,8 +132,7 @@ def generate_normal(config, persons, by_pinfl, n_normal, rng, start_dt, trips):
             AMOUNT_MIN, AMOUNT_MAX))
         if hard_neg and rng.random() < 0.5:          # a large legitimate one-off
             amount = float(np.clip(np.exp(rng.normal(15.0, 0.5)), AMOUNT_MIN, AMOUNT_MAX))
-        if config.round_amount_share > 0 and rng.random() < config.round_amount_share:
-            amount = round_like_a_person(amount)
+        amount = maybe_round(amount, config, rng)
 
         ts = start_dt + timedelta(seconds=float(rng.random() * span_seconds))
         ts = ts.replace(

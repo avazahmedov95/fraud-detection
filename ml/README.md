@@ -59,24 +59,25 @@ it, every weight measured did worse than none, so it fits unweighted.
 ## Design targets on synthetic data (NOT validated production findings)
 
 The held-out (later) time slice - the last 20% of the realistic profile, 100,000
-transfers with 202 fraud - at the REVIEW cutoff chosen on the validation rows.
+transfers with 176 fraud - at the REVIEW cutoff chosen on the validation rows.
 `models/metrics.json` is the authoritative copy, and `tools/boundary_audit.py`
 fails if this table disagrees with it.
 
 | metric                | ML model | CEP rules only |
 |-----------------------|----------|----------------|
-| ROC-AUC               | 0.992    | —              |
-| PR-AUC                | 0.480    | —              |
-| precision at REVIEW   | 0.571    | 0.013          |
-| recall at REVIEW      | 0.436    | 0.149          |
+| ROC-AUC               | 0.988    | —              |
+| PR-AUC                | 0.573    | —              |
+| precision at REVIEW   | 0.733    | 0.011          |
+| recall at REVIEW      | 0.545    | 0.142          |
 
-Recall by fraud type (ML at REVIEW): STRUCTURING 61.0%, APP 29.6%, ATO 70.0%, MULE 38.7%.
-The five fits alone scored 0.389-0.436 PR-AUC on the same slice; their committee
-0.480 - above every one of them, and no fit is known in advance to be the best.
+Recall by fraud type (ML at REVIEW): STRUCTURING 65.5%, APP 42.9%, ATO 79.6%, MULE 31.4%.
+The five fits alone scored 0.392-0.539 PR-AUC on the same slice; their committee
+0.573 - above every one of them, and no fit is known in advance to be the best.
 
-Read plainly: the committee finds about four in ten of the fraud in the held-out
-month, and a little over half its alerts are fraud - with the spread one retrain
-moves (below). The rules alone reach 1.3% precision on data where
+Read plainly: the committee finds about half the fraud in the held-out month, and
+about three alerts in four are fraud - with the spread one retrain moves (below),
+and on a dataset regenerated the same day (below). The rules alone reach 1.1%
+precision on data where
 legitimate traffic also collects, splits and changes phones. The weak patterns
 are APP and MULE.
 
@@ -100,7 +101,7 @@ reported. Three changes, each measured before it was adopted:
   probabilities sit near the base rate, so a fixed 0.40 means nothing.
   `train.py` fits on the earliest 64% of rows, puts REVIEW where F1 peaks on the
   next 16%, and writes it to `thresholds.json`, which serve-prep ships beside
-  `model.onnx` and the job reads (`stream-processor/config.py`). This run: cut at REVIEW = 0.0471, and
+  `model.onnx` and the job reads (`stream-processor/config.py`). This run: cut at REVIEW = 0.1715, and
   **there is no BLOCK**: since 2026-09-19 the system never blocks on its own - the
   owner's decision - and every alert goes to a person. The CEP-only fallback keeps
   its fixed cutoff, since an additive rule score is not a probability.
@@ -367,32 +368,33 @@ are in git history: `git show 7d16c19` (attempt 1), `git show 8ba52f9` (attempt 
 ### Honest collections are not mistaken for mules
 
 `experiments/collectors.py` refits the served committee without the counterparty
-counters and with them - reproducing both exactly, 132 alerts at 0.538 / 0.351 and
-154 at 0.571 / 0.436 - and reads the held-out month by the payee's **other** payers
-over the 7 days before each transfer (2026-09-20):
+counters and with them - reproducing both exactly, 131 alerts at 0.664 / 0.494 and
+131 at 0.733 / 0.545 - and reads the held-out month by the payee's **other** payers
+over the 7 days before each transfer (re-run 2026-09-20 on the regenerated
+dataset):
 
 | payee's other payers, 7 d | legitimate transfers | false alarms without | with | MULE transfers | caught without | with |
 |---|---|---|---|---|---|---|
-| none | 22,715 | 20 (0.09%) | 45 (0.20%) | 13 | 3 | 4 |
-| 1-2 | 56,723 | 24 (0.04%) | 3 (0.01%) | 15 | 4 | 4 |
-| 3-4 | 17,387 | 7 (0.04%) | 6 (0.03%) | 14 | 3 | 4 |
-| 5 or more | 2,973 | 10 (0.34%) | 12 (0.40%) | 20 | 8 | 12 |
+| none | 22,807 | 14 (0.06%) | 19 (0.08%) | 9 | 2 | 3 |
+| 1-2 | 56,587 | 17 (0.03%) | 12 (0.02%) | 10 | 1 | 1 |
+| 3-4 | 17,617 | 6 (0.03%) | 2 (0.01%) | 8 | 3 | 4 |
+| 5 or more | 2,813 | 7 (0.25%) | **2 (0.07%)** | 8 | 4 | 3 |
 
-**The collection case is the one to watch, and it held.** Transfers into an account
-collecting from five or more people - the realistic profile's weddings, gifts and
-joint purchases - are flagged about five times as often as other legitimate
-transfers, and still rarely: 12 of 2,973 against 10 without the counters, two more
-in a month. In that same group the committee now catches 12 of 20 mule transfers
-rather than 8, so the columns that could have punished collections mostly found
-mules in them.
+**The collection case is the one to watch, and the counters improve it.** Transfers
+into an account collecting from five or more people - the realistic profile's
+weddings, gifts and joint purchases - draw **2 false alarms of 2,813 with the
+counters against 7 without**, and the committee still catches 3 of that group's 8
+mule transfers against 4. Across the whole slice the false alarms fall 44 to 35
+while the catch rises 87 to 96: on this dataset the columns that could have
+punished collections mostly sharpened them.
 
-**Where the false alarms moved is the finding.** The total rose 61 to 66 while the
-catch rose 71 to 88, but the composition changed: alarms on payees with one or two
-payers fell 24 to 3, and alarms on payees **nobody else paid** rose 20 to 45. Those
-are not collection mistakes - with no inbound history on the payee, the two columns
-that can still speak are the sender's own: how many payees it paid this week, and
-how recently it was itself paid. The counters moved the model's attention from the
-payee's side to the sender's, which is the half a sending bank always has.
+On the **previous** dataset the same table read the other way round - 12 false
+alarms of 2,973 against 10, with the total rising 61 to 66 - and the difference is
+worth keeping in view: a 35-alert queue and a 66-alert queue are two draws of the
+same system, not two systems. What held on both files is where the alarms sit: on
+payees with one or two payers they fall, and on payees nobody else paid they rise,
+because with no inbound history the only columns that can speak are the sender's
+own - how many payees it paid this week, and how recently it was itself paid.
 
 The same question was asked of `link_history` on 2026-09-19 with the same shape of
 answer (5 to 7 false alarms of 1,651), before that capability was removed. What
@@ -485,6 +487,21 @@ PR-AUC:
 | realistic profile | 0.426 | 0.542 | **+0.116 [+0.010, +0.222]**, better on 5 of 5 seeds |
 | PaySim, published split | 0.135 | 0.165 | +0.030 [-0.013, +0.073], better on 4 of 5 |
 
+**Re-measured on the regenerated dataset, 2026-09-20.** Rounding the amounts moved
+the dataset of record (below), so the gate was run again on it. **Five seeds now
+fail it**: +0.027 [-0.077, +0.132], better on 4 of 5 - the mean is positive and the
+interval is nowhere near clear of zero. Twenty seeds, which is this project's own
+remedy for a wide interval rather than a second look for a better answer, give
+**+0.047 [+0.009, +0.085], better on 15 of 20**, with the averaged committee 0.421
+-> 0.487 and its top 0.1% 33.9% -> 35.1%. By the conditions as written that is a
+pass, and the capability stays on.
+
+Read it as the correction it is: **the effect is real and about half the size the
+first five seeds suggested.** The +0.116 above belongs to a file that no longer
+exists, measured with too few seeds to pin an effect of this size; +0.047 on the
+current data is the figure to quote. The decomposition below - counts against
+transit - was measured on that older file and has not been re-run.
+
 On PaySim the averaged committee went 0.155 -> 0.196 and its top 0.1% of the
 validation transfers held 18.5% -> 19.5% of the fraud, so condition 3 holds - but
 the interval spans zero: *not worse, probably a little better*, not a proven gain.
@@ -493,8 +510,8 @@ retrained on 21 columns: PR-AUC 0.321 -> 0.480, recall at REVIEW 0.351 -> 0.436,
 precision 0.538 -> 0.571. That is more than the payee's account age was worth
 before it was removed (PR-AUC 0.450 then), on data a sending bank actually has.
 
-**Neither half does it alone.** Measured apart on the realistic profile, after the
-gate: the four counts +0.067 [-0.072, +0.205], better on 4 of 5 seeds; the transit
+**Neither half does it alone.** Measured apart on the realistic profile of the
+time, after the gate: the four counts +0.067 [-0.072, +0.205], better on 4 of 5 seeds; the transit
 interval alone **-0.042** [-0.140, +0.056], better on 1 of 5. Together they are
 +0.116 on 5 of 5. The shape is the pair - this payee collects from many people,
 *and* this sender was paid minutes ago - not either column. Dropping the transit
@@ -507,6 +524,25 @@ more regular here than in real traffic. The shape is the regulator's - the CBU
 counts counterparties over a day and a month, and the Bank of Russia's equivalent
 list treats money leaving within a minute of arriving as a sign - but its strength
 on this data is partly the generator's.
+
+### The dataset changed under these figures, 2026-09-20
+
+The amounts were made round on both sides of the label (`docs/generator-spec.md` §8,
+item 6), which meant regenerating the dataset of record. Two things moved with it,
+and only the first is the fix:
+
+- **roundness stopped marking the class**: 0.0% of ATO, MULE and STRUCTURING amounts
+  used to be multiples of 1,000 against 39.6% of legitimate traffic; both sides now
+  round about 90% of the time, within a point of each other in every size band;
+- **the held-out month is a different draw**: 176 fraud against 202, mixed
+  differently - **49 ATO against 10** - because the extra random numbers rounding
+  consumes shift every episode's placement. ATO is the best-caught pattern here, so
+  a good part of the jump below is that mix, not detection getting better.
+
+So the figures across the two files are **not comparable point to point**. What can
+be said is that the model is no longer able to separate the classes on an artefact
+nobody intended, and that the data got easier in the process: the score distribution
+is more saturated than it was (47.3% of alerts round to 1.000 against 23.4%).
 
 **Everything below is the baseline profile, the dataset of record until
 2026-09-14, unless it says otherwise.**
@@ -775,24 +811,25 @@ confidence interval for the mean.
 
 `metrics.json` carries a `calibration` block beside the AUCs, computed by
 `train.py` on every run. It answers a different question: not *does the model rank
-fraud above legitimate traffic* (ROC-AUC 0.992 / PR-AUC 0.480 on the realistic
+fraud above legitimate traffic* (ROC-AUC 0.988 / PR-AUC 0.573 on the realistic
 profile) but *are its probabilities usable as magnitudes*.
 
 ```
-brier               0.00149
-n_alerts            154          (>= REVIEW on the held-out slice)
-saturated_share     23.4%        rounding to 1.000
-distinct_scores     101
-median_alert_score  0.752841
+brier               0.00107
+n_alerts            131          (>= REVIEW on the held-out slice)
+saturated_share     47.3%        rounding to 1.000
+distinct_scores     64
+median_alert_score  0.998788
 scored_with         model.onnx
 ```
 
 Read `saturated_share` and `distinct_scores` together. On the baseline profile
 they read 66.9% and 33: the model separated the classes almost perfectly and
 still could not **order** an alert queue, because the alerts piled up at the top
-of the scale. On the realistic profile 154 alerts carry 101 distinct scores and
-23.4% round to 1.000 - coarser than the 20-column model's 114 among 160, but a
-queue that can still be ordered. AUC is blind to this by construction - it is a
+of the scale. On the realistic profile 131 alerts carry 64 distinct scores and
+**47.3% round to 1.000** - much coarser than the 101 among 154 of the previous
+dataset, and the sharpest reminder that rounding the amounts made this data
+easier: a queue of 131 with 64 distinct scores can be ordered, but barely. AUC is blind to this by construction - it is a
 rank statistic - and the finding surfaced only when a real work queue tried to
 sort by score (`docs/irp-framing.md` §9.1). It is a property of near-separable
 synthetic data, not of gradient boosting.

@@ -16,6 +16,16 @@ from travel import hijack_origin
 FRAUD_MIX = {"APP": 0.35, "ATO": 0.20, "STRUCTURING": 0.20, "MULE": 0.25}
 
 
+def maybe_round(amount, config, rng, down=False):
+    """Most people send round sums; a minority send an exact one - the whole
+    balance, or what someone asked for to the tiyin. The share is the same for
+    every pattern and for legitimate traffic, so roundness cannot mark the class
+    (generator-spec.md 8, item 6)."""
+    if config.round_amount_share > 0 and rng.random() < config.round_amount_share:
+        return round_like_a_person(amount, rng, down=down)
+    return amount
+
+
 def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_dt,
                  legit_activity=None):
     """Generate fraud episodes until each pattern hits its transaction budget.
@@ -82,8 +92,7 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
                 amount = float(np.clip(np.exp(rng.normal(14.0, 0.5)), AMOUNT_MIN, AMOUNT_MAX))
             else:
                 amount = float(np.clip(balance * rng.uniform(0.5, 0.95), AMOUNT_MIN, AMOUNT_MAX))
-            if config.round_amount_share > 0 and rng.random() < config.round_amount_share:
-                amount = round_like_a_person(amount)       # "send me five million"
+            amount = maybe_round(amount, config, rng, down=True)   # "send me five million"
             ts = rand_time()
             maybe_seed_payee(victim, fraudster, ts, balance)
             events.append(make_event(
@@ -119,7 +128,9 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
             # that paces itself is the modelled behaviour.
             for i in range(int(rng.integers(2, 9))):
                 fraudster = pick(fraud_accounts)
-                amount = float(np.clip(np.exp(rng.normal(14.5, 0.5)), AMOUNT_MIN, AMOUNT_MAX))
+                amount = maybe_round(
+                    float(np.clip(np.exp(rng.normal(14.5, 0.5)), AMOUNT_MIN, AMOUNT_MAX)),
+                    config, rng, down=True)
                 ts = base + timedelta(minutes=float(i * rng.uniform(1, 4)))
                 ev = make_event(
                     victim, fraudster, amount, ts,
@@ -135,8 +146,12 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
             base = rand_time()
             for i in range(int(rng.integers(*config.structuring_events))):
                 fraudster = pick(fraud_accounts)
-                amount = float(STRUCTURING_THRESHOLD
-                               * rng.uniform(*config.structuring_fraction))  # just under
+                # Rounded DOWN: 9,500,000 under a 10,000,000 threshold is what a
+                # person sends, and rounding up could cross the band.
+                amount = maybe_round(
+                    float(STRUCTURING_THRESHOLD
+                          * rng.uniform(*config.structuring_fraction)),
+                    config, rng, down=True)
                 ts = base + timedelta(
                     minutes=float(i * rng.uniform(*config.structuring_gap_minutes)))
                 events.append(make_event(
@@ -157,7 +172,9 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
             for i in range(n_in):
                 # Recruitment runs through personal networks: some senders are relatives.
                 sender = maybe_relative(mule, pick(persons))
-                amount = float(np.clip(np.exp(rng.normal(13.5, 0.6)), AMOUNT_MIN, AMOUNT_MAX))
+                amount = maybe_round(
+                    float(np.clip(np.exp(rng.normal(13.5, 0.6)), AMOUNT_MIN, AMOUNT_MAX)),
+                    config, rng)
                 collected += amount
                 ts = base + timedelta(minutes=float(i * rng.uniform(*config.mule_gap_minutes)))
                 events.append(make_event(
@@ -169,7 +186,11 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
             n_out = int(rng.integers(1, 3))
             for j in range(n_out):
                 dest = pick(fraud_accounts)
-                amount = float(collected / n_out * rng.uniform(0.80, 0.98))
+                # Down: the operator moves round chunks - 10,000,000, then 9,500,000 -
+                # and cannot pay on more than came in.
+                amount = maybe_round(
+                    float(collected / n_out * rng.uniform(0.80, 0.98)),
+                    config, rng, down=True)
                 ts = base + timedelta(minutes=float((n_in + j) * rng.uniform(*config.mule_gap_minutes)))
                 events.append(make_event(
                     mule, dest, amount, ts,
