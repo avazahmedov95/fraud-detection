@@ -108,11 +108,10 @@ def payee_key(event: dict) -> str:
 
 
 def extract(event: dict, state, now: float, receiver_state=None,
-            sender_state=None) -> dict:
-    """Read-only feature extraction; does NOT mutate any state. `receiver_state` is
-    the payee's inbound view and `sender_state` the SENDER's own - what was paid
-    into this account, for the transit shape. Either may be None when the shared
-    store is down, and those features then read as zero: fail open."""
+            sender_inbound_ts=None) -> dict:
+    """Read-only feature extraction; does NOT mutate either state. `receiver_state`
+    may be None when the shared store is down - inbound features then read as zero,
+    the fail-open behaviour used elsewhere."""
     amount = float(event["amount_uzs"])
     payee = payee_key(event)
     region = event.get("sender_region", "")
@@ -188,17 +187,9 @@ def extract(event: dict, state, now: float, receiver_state=None,
     # Capped, never NaN: 'never paid' and 'the store is down' are the same
     # observation here, and the cap keeps the column finite for every model.
     secs_since_sender_inbound = float(C.LINK_WEEK_S)
-    sender_inflow_recent = 0.0
-    if sender_state is not None:
-        if sender_state.last_inbound_ts:
-            secs_since_sender_inbound = max(
-                0.0, min(now - float(sender_state.last_inbound_ts),
-                         float(C.LINK_WEEK_S)))
-        # Rule helper: what was paid INTO this sender in the transit window, so a
-        # rule can ask whether all of it is leaving again rather than a slice.
-        sender_inflow_recent = sum(
-            e[2] for e in sender_state.inbound
-            if 0 <= now - e[0] <= C.PASS_THROUGH_WINDOW_S)
+    if sender_inbound_ts:
+        secs_since_sender_inbound = max(0.0, min(now - float(sender_inbound_ts),
+                                                 float(C.LINK_WEEK_S)))
 
     active_call = truthy(event.get("active_call"))
     secs_login = float(event.get("secs_login_to_confirm") or 0.0)
@@ -240,7 +231,6 @@ def extract(event: dict, state, now: float, receiver_state=None,
         "travel_kmh": travel_kmh,
         "travel_distance_km": travel_distance_km,
         "amount": amount,
-        "sender_inflow_recent": sender_inflow_recent,
         "has_history": 1 if has_history else 0,
         "amount_gt_factor_mean": 1 if ((not has_history) or (amount > C.NEW_PAYEE_AMOUNT_FACTOR * mean)) else 0,
     }

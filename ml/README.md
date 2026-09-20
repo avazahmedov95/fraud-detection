@@ -329,60 +329,40 @@ mule collections it does catch are already corroborated by other rules. A
 population-relative threshold, as `MULE_FAN_IN_MODE=relative` does for the hour
 window, is the version worth gating next; it needs its own baseline in Redis.
 
-### A rule on the other leg: the gate, fixed before the run
-
-`PASS_THROUGH` fires when the sender's own account was paid within the transit
-window and
-at least 80% of what came in is going straight out again. The window and the share
-are the owner's statement of the shape - *the whole sum, not a part* - rather than
-numbers fitted here; the weight is 0.35, level with the fan-in burst and below the
-0.40 cutoff, so it corroborates rather than decides. It reads the **paying-on leg**,
-which no sender-keyed feature sees and neither fan-in rule can reach. Like COLLECTOR
-it stays out of `MANDATORY_REVIEW_RULES` and out of `PATTERN_SIGNATURES`: a rule on
-trial must not move a fused decision or another profile's scaled threshold.
-
-**Attempts are counted, not hidden.** This shape was tried twice - ten minutes,
-then an hour - after COLLECTOR failed above. Every attempt raises the chance that
-one passes by luck, so the conditions are not softened and every run is recorded.
-
-The rule, fixed before the run:
-
-1. CEP-only recall on the held-out slice rises by at least 5 points (0.149 -> 0.199
-   or better) - the same bar COLLECTOR was held to.
-2. Of the decisions it alone lifts to REVIEW, at least **20%** are fraud. COLLECTOR
-   cleared its own bar at 9.5% and still failed on volume; a shape this specific
-   should not fill a queue with the innocent, and a fifth is what would make the
-   fallback worth reading.
-3. It fires on at most **0.1%** of the legitimate transfers in the held-out slice -
-   about 100 of them - the cap the fixed fan-in threshold failed abroad at 3.12%.
-
-All three hold: the rule stays on. Any fails: it comes out, and the numbers are
-written here. `stream-processor/experiments/replay.py rule-value` runs it.
-
-### Rules on the counters: three attempts, and what they cost to try
+### Rules on the counters: three attempts, none of them stays
 
 The counters are worth +0.116 PR-AUC to the model (above). Turning the same shapes
-into a CEP rule was tried three times, each gated before its run:
+into a CEP rule was tried three times, each with its conditions committed before its
+run, and each removed by them. The fallback they were meant to strengthen catches
+14.9% of the held-out month's fraud at 1.3% precision, where `FRESH_RECEIVER` left
+it.
 
-| attempt | rule | CEP-only recall | fires on legitimate | decisions it alone lifts | verdict |
+| attempt | rule | CEP-only recall | fires on legitimate rows | decisions it alone lifts | verdict |
 |---|---|---|---|---|---|
-| 1 | `COLLECTOR` - six payers in a day, where the hour rule is silent | 0.149 -> 0.168 | 2.3% | 42, 4 fraud (9.5%) | **out**: +1.9 points where 5 were asked, 38 lifted collections against a cap of 30 |
-| 2 | `PASS_THROUGH`, 10-minute window | 0.149 -> 0.153 | 0.195%, cap 0.1% | 5, 1 fraud (20.0%) | **out**: +0.4 points, twice the legitimate traffic allowed |
-| 3 | `PASS_THROUGH`, **hour** window | | | | *(below)* |
+| 1 | `COLLECTOR` - six payers in a day, where the hour rule is silent | 0.149 -> 0.168 | 2.3% | 42, 4 fraud (9.5%) | **out**: +1.9 points where 5 were asked, and 38 lifted collections against a cap of 30 |
+| 2 | `PASS_THROUGH` - paid within **10 minutes**, 80% of it leaving again | 0.149 -> 0.153 | 0.195% (cap 0.1%) | 5, 1 fraud (20.0%) | **out**: +0.4 points, and twice the legitimate traffic allowed |
+| 3 | the same rule, **hour** window | 0.149 -> 0.168 | **1.18%** (cap 0.1%) | 59, 4 fraud (6.8%) | **out**: every condition failed |
 
-Attempt 2 fired on 196 transfers in the held-out month and one was fraud. The window
-is why: on the realistic profile a mule pays on **5 to 60 minutes** after its last
-inbound (`data-generator/config.py`, `mule_gap_minutes`), so ten minutes sees the
-short end of that spread.
+Attempt 2 fired on 196 transfers in the held-out month and one was fraud, because on
+the realistic profile a mule pays on **5 to 60 minutes** after its last inbound
+(`data-generator/config.py`, `mule_gap_minutes`) and ten minutes sees the short end.
+**Attempt 3 was declared as fitted**: the owner asked for the hour after reading that
+sentence, so the window came from the generator's own parameter rather than from the
+shape. It was run with the same unsoftened conditions and a prediction written first
+- more payouts caught, far more legitimate traffic touched, condition 3 the one to
+fail. It caught four more fraud and touched twelve hundred legitimate transfers: the
+prediction held, and conditions 1 and 2 failed with it.
 
-**Attempt three is declared, and it is weaker evidence than the first two.** The
-owner asked for it after reading that sentence, so the hour was chosen from the
-generator's own parameter - a rule fitted to how this data was made, not one
-validated on it. The three conditions are unchanged and unsoftened (recall +5 points
-or better, a fifth of the lifted decisions fraud, at most 0.1% of the legitimate
-rows), and whatever it produces is recorded here as conditional on that choice. The
-prediction written down before the run: it will catch more mule payouts and fire on
-far more legitimate traffic, so condition 3 is the one expected to fail.
+**What three attempts say together.** The model reads these counts and gains from
+them; a rule has to cut them at a number, and at every number tried - six payers a
+day, ten minutes, an hour - the honest traffic of the same shape outnumbers the
+fraud. This is the fan-in threshold's finding in two more shapes: *an additive rule
+layer wants thresholds relative to what is observable, not constants*
+(`docs/irp-framing.md` §6, third RQ3 result). It is also the cost of trying: three
+gated attempts on one idea, all recorded, is the honest denominator for any rule
+that does pass here later. The rules, the tests and the harness that measured them
+are in git history: `git show 7d16c19` (attempt 1), `git show 8ba52f9` (attempt 2),
+`git show 019fee8` (attempt 3).
 
 ### Honest collections are not mistaken for mules
 

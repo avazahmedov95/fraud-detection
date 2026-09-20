@@ -62,7 +62,8 @@ def replay(events, total=None):
         paid_sender = receivers.get(e.ev["sender_pinfl"])
         res = evaluate(e.ev, senders[e.ev["sender_pinfl"]],
                        e.ts, receivers[e.ev["receiver_pinfl"]],
-                       sender_state=paid_sender)
+                       sender_inbound_ts=(paid_sender.last_inbound_ts
+                                          if paid_sender else None))
         rows.append((e.label, res["cep_score"], res["decision"]))
         for hit in res["rule_hits"]:
             hits_by_class["fraud" if e.label else "legit"][hit] += 1
@@ -234,7 +235,8 @@ def extract_features(events, total):
         paid_sender = receivers.get(e.ev["sender_pinfl"])
         X[n - 1] = F.to_vector(F.extract(
             e.ev, sender, e.ts, receivers[key],
-            sender_state=paid_sender))
+            sender_inbound_ts=(paid_sender.last_inbound_ts
+                               if paid_sender else None)))
         F.update_state(sender, e.ev, e.ts)
         F.update_receiver_state(receivers[key], e.ev, e.ts)
         y[n - 1], ts[n - 1] = e.label, e.ts

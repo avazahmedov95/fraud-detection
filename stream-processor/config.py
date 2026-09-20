@@ -104,15 +104,6 @@ W_GEO_ANOMALY = 0.20
 # the model unless the rule is in MANDATORY_REVIEW_RULES.
 W_IMPOSSIBLE_TRAVEL = 0.45
 W_MULE_FAN_IN = 0.35
-#: Transit: paid, and nearly all of it going straight out again. The share is the
-#: owner's specification of "the whole sum, not a part". The WINDOW is not: ten
-#: minutes was tried first and missed, and an hour was chosen afterwards from the
-#: generator's own 5-60 minute spread - see the third attempt in ml/README.md, and
-#: read any result it produces as conditional on that. Weight level with the
-#: fan-in burst: the same pattern from the other leg, still below the cutoff.
-PASS_THROUGH_WINDOW_S = 3600
-PASS_THROUGH_SHARE = 0.80
-W_PASS_THROUGH = 0.35
 W_AMOUNT_DEVIATION = 0.25
 W_DAILY_LIMIT = 0.30
 
