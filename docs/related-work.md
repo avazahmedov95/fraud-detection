@@ -244,6 +244,35 @@ fraud within it**; counterparty names are masked. The liability clause moves the
 loss onto the institution and makes detection quality set a revenue-bearing limit
 (`threat-model.md` §2).
 
+### The AML rules already count counterparties over days
+
+Internal-control rules against money laundering for commercial banks, amended by
+the Central Bank of Uzbekistan and the economic-crime department of the
+Prosecutor General's Office (resolution No. 343-В-12 of 3 March 2023, registered
+2886-10 on 3 April 2023, amending the rules of 17 April 2017 No. 343-В / 14).
+Point 49 adds operations a bank must treat as subject to control, all of them
+**counted over a period of up to 30 days**, once or repeatedly:
+
+- money sent from one card via a mobile application to **one or several** cards or
+  e-wallets totalling **500 BRV or more** - and the same total received on one card
+  from one or several cards;
+- transfers from **5 or more** cards to one **foreign** e-wallet, and receipts on
+  5 or more cards from one foreign wallet;
+- transfers from one card to 5 or more foreign cards, and receipts on one card
+  from 5 or more foreign cards.
+
+Point 55 adds to the higher-risk clients **"persons with 20 or more bank cards
+attached to their account"**.
+
+This is the regulator of this project's own market defining suspicious P2P
+activity as **counts of distinct counterparties and their totals over days**, not
+as a property of one transfer. The receiver-side features here are the same
+measurement over one hour. Two limits worth stating in the thesis: the rules are
+applied by the bank that **services the collecting account**, not by the sending
+bank this detector sits in (§9.1 of `docs/irp-framing.md`, and `threat-model.md` §4); and both datasets
+here span 30 days, so a 30-day window cannot be measured on them - it would be
+"everything since the file began".
+
 ### P2P monitoring is also a tax programme, and that is a confound
 
 kun.uz, 13 May 2026: from April 2026 the **Tax Committee** monitors individuals'

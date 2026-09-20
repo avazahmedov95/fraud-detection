@@ -178,6 +178,20 @@ aggregates over the card, not the person. Two consequences:
 why resolving the payee per-transfer where the bank *can* makes detection worse
 (−17.4% of `MULE_FAN_IN`'s true positives).
 
+### The same counting is what the AML rules require
+
+The CBU's internal-control rules for commercial banks (resolution No. 343-В-12 of
+3 March 2023 with the Prosecutor General's economic-crime department, registered
+2886-10; `related-work.md` §6e) define suspicious P2P activity as counts over
+days: 500 BRV or more received on one card from one or several cards within 30
+days, five or more cards paying one foreign wallet in that period, and a client
+with 20 or more cards attached to one account as higher-risk. `MULE_FAN_IN` and
+the receiver-side features are the same measurement over one hour, which is why
+receiver-side aggregation is treated here as the load-bearing control rather than
+an invention of this project. The rules are written for the bank that services
+the collecting account; this detector sits at the sending bank, which is the gap
+above.
+
 ### One of those "cost to evade" ratings is now measured rather than reasoned
 
 Every rating above was an argument. `NEW_PAYEE_HIGH_AMOUNT` is the first with a
