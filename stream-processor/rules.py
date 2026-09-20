@@ -153,26 +153,20 @@ def evaluate(event: dict, state: SenderState, now: float,
         hits.append("COACHED_SESSION"); score += C.W_COACHED_SESSION
     if on("DAILY_LIMIT_BREACH") and f["daily_sum_ratio"] > 1.0:
         hits.append("DAILY_LIMIT_BREACH"); score += C.W_DAILY_LIMIT
-    # Fan-IN: the only rules here that look at the payee's history, not the sender's.
-    # Constant, or a quantile of the live population - see MULE_FAN_IN_MODE.
-    fan_in_thr = C.MULE_FAN_IN_MIN_SENDERS
-    if C.MULE_FAN_IN_MODE == "relative":
-        if population is not None:
-            fan_in_thr = population.threshold(C.MULE_FAN_IN_QUANTILE,
-                                              C.MULE_FAN_IN_MIN_SENDERS)
-        else:
-            # Relative asked for, no baseline given: a silent fallback leaves the
-            # knob set while the rule runs on the constant it exists to replace.
-            _warn_relative_without_baseline()
-    burst = f["rcv_distinct_senders_1h"] >= fan_in_thr
-    if on("MULE_FAN_IN") and burst:
-        hits.append("MULE_FAN_IN"); score += C.W_MULE_FAN_IN
-    # The same collection spread over a day, which the one-hour window sees a slice
-    # of - and only where the burst rule is silent, so one collection cannot score
-    # twice. A store that is down leaves the count at zero, and the rule with it.
-    if (on("COLLECTOR") and not burst
-            and f["payee_payers_24h"] >= C.COLLECTOR_MIN_PAYERS):
-        hits.append("COLLECTOR"); score += C.W_COLLECTOR
+    # Fan-IN: the only rule here that looks at the payee's history, not the sender's.
+    if on("MULE_FAN_IN"):
+        # Constant, or a quantile of the live population - see MULE_FAN_IN_MODE.
+        fan_in_thr = C.MULE_FAN_IN_MIN_SENDERS
+        if C.MULE_FAN_IN_MODE == "relative":
+            if population is not None:
+                fan_in_thr = population.threshold(C.MULE_FAN_IN_QUANTILE,
+                                                  C.MULE_FAN_IN_MIN_SENDERS)
+            else:
+                # Relative asked for, no baseline given: a silent fallback leaves the
+                # knob set while the rule runs on the constant it exists to replace.
+                _warn_relative_without_baseline()
+        if f["rcv_distinct_senders_1h"] >= fan_in_thr:
+            hits.append("MULE_FAN_IN"); score += C.W_MULE_FAN_IN
 
     score = min(1.0, score)
 

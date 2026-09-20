@@ -104,11 +104,6 @@ W_GEO_ANOMALY = 0.20
 # the model unless the rule is in MANDATORY_REVIEW_RULES.
 W_IMPOSSIBLE_TRAVEL = 0.45
 W_MULE_FAN_IN = 0.35
-#: The same collection spread over a day. The count is the hour rule's - no new
-#: number - and the weight is lower: a slow collection is weaker evidence than a
-#: burst, so on its own it does not reach REVIEW.
-COLLECTOR_MIN_PAYERS = 6
-W_COLLECTOR = 0.25
 W_AMOUNT_DEVIATION = 0.25
 W_DAILY_LIMIT = 0.30
 

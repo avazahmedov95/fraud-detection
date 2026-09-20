@@ -109,7 +109,7 @@ REGISTRY = (
         modes=("on", "off"),            # on since 2026-09-20: both gates passed
         features=("payee_payers_24h", "payee_payers_7d", "sender_payees_24h",
                   "sender_payees_7d", "secs_since_sender_inbound"),
-        rules=("COLLECTOR",),
+        rules=(),
         rationale="The CBU's internal-control rules define P2P activity subject "
                   "to control as counts of distinct counterparties over up to 30 "
                   "days (docs/related-work.md 6e); the one-hour fan-in window "
@@ -118,10 +118,7 @@ REGISTRY = (
                   "was last paid is the other half of the shape. A month cannot "
                   "be measured on 30-day datasets, so the windows are a day and "
                   "a week. Last in the registry, so switching it on appends to "
-                  "the vector instead of shifting every trained model's columns. "
-                  "COLLECTOR is deliberately absent from PATTERN_SIGNATURES: it "
-                  "fires only where MULE_FAN_IN does not, so counting both would "
-                  "inflate the reachable score the scaled thresholds derive from.",
+                  "the vector instead of shifting every trained model's columns. A rule on these counts was built and measured (ml/README.md) and did not pass its gate.",
     ),)
 
 BY_KEY = {c.key: c for c in REGISTRY}

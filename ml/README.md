@@ -304,6 +304,31 @@ The rule, fixed before the run:
 All three hold: the rule stays on. Any fails: it comes out, and the numbers are
 written here. `stream-processor/experiments/replay.py rule-value` runs it.
 
+**Measured on 2026-09-20, and it comes out.** `replay.py rule-value` (in git
+history, `git show 7d16c19`) replayed the 500,000 rows and read the held-out slice,
+the arm without the rule being the same score minus its weight:
+
+| | alerts | fraud | recall | precision |
+|---|---|---|---|---|
+| CEP-only, without | 2,309 | 30 | 0.149 | 0.013 |
+| CEP-only, with | 2,351 | 34 | **0.168** | 0.014 |
+
+Condition 2 held and held well: of the 42 decisions the rule alone lifts, 4 are
+fraud - 9.5%, seven times the precision of the fallback it is added to. Conditions
+1 and 3 failed: recall rose 1.9 points where the rule asked for 5, and the 38
+legitimate transfers it lifted are all into accounts collecting from five or more
+other people in a week, above the 30 the rule allowed. **So the rule is removed.**
+Lowering the count to five, raising the weight or widening the window would each
+have been chosen after seeing this table, which is the failure the gate exists to
+prevent.
+
+What the measurement says is not that the shape is wrong - the model reads the same
+counts and they are worth +0.116 PR-AUC - but that a **fixed count over a day is
+too blunt a cutoff** for a rule layer: at six payers it is mostly weddings, and the
+mule collections it does catch are already corroborated by other rules. A
+population-relative threshold, as `MULE_FAN_IN_MODE=relative` does for the hour
+window, is the version worth gating next; it needs its own baseline in Redis.
+
 ### Honest collections are not mistaken for mules
 
 `experiments/collectors.py` refits the served committee without the counterparty
