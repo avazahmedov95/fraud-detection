@@ -40,10 +40,12 @@ def scale_factor(amounts, our_median_uzs=OUR_MEDIAN_UZS):
 
 
 class Event(NamedTuple):
-    """One foreign row, translated: `ev` carries only fields the dataset has."""
+    """One foreign row, translated: `ev` carries only fields the dataset has, and
+    `typology` is an optional per-row pattern label for `section_by_group`."""
     ev: dict
     ts: int
     label: int
+    typology: str = ""
 
 
 def replay(events, total=None):
@@ -64,7 +66,7 @@ def replay(events, total=None):
                        e.ts, receivers[e.ev["receiver_pinfl"]],
                        sender_inbound_ts=(paid_sender.last_inbound_ts
                                           if paid_sender else None))
-        rows.append((e.label, res["cep_score"], res["decision"]))
+        rows.append((e.label, res["cep_score"], res["decision"], e.typology))
         for hit in res["rule_hits"]:
             hits_by_class["fraud" if e.label else "legit"][hit] += 1
         if n % PROGRESS_EVERY == 0:
@@ -73,7 +75,7 @@ def replay(events, total=None):
         _progress(n, total, started, final=True)
 
     return (pd.DataFrame(rows,
-                         columns=["label", "cep_score", "decision"]),
+                         columns=["label", "cep_score", "decision", "typology"]),
             hits_by_class)
 
 
@@ -142,8 +144,26 @@ def section_lift(res, hits, positive="fraud", width=70):
     return lifts
 
 
+def section_by_group(res, title, notes, width=70):
+    """B. Recall by the dataset's own typology labels, when it has them - which
+    pattern the system misses."""
+    _head(title, width)
+    for line in notes:
+        print(line)
+    print()
+    labelled = res[(res.label == 1) & (res.typology != "")]
+    if labelled.empty:
+        print("  No typology labels available; this section is empty.")
+        return
+    print(f"{'typology':<20}{'n':>8}{'flagged':>10}{'recall':>10}")
+    for name, g in labelled.groupby("typology"):
+        flagged = g.decision == "REVIEW"
+        print(f"{name:<20}{len(g):>8,}{int(flagged.sum()):>10,}"
+              f"{flagged.mean():>10.1%}")
+
+
 def section_decision(res, hits, positive="fraud", width=70):
-    """B. What the deployed decision layer did. Last on purpose: the threshold is
+    """C. What the deployed decision layer did. Last on purpose: the threshold is
     calibrated for this project's profile and base rate, the least transferable part."""
     n_pos = int((res.label == 1).sum())
     n_neg = int((res.label == 0).sum())
@@ -151,7 +171,7 @@ def section_decision(res, hits, positive="fraud", width=70):
     pos_rate = flagged[res.label == 1].mean() if n_pos else 0.0
     neg_rate = flagged[res.label == 0].mean() if n_neg else 0.0
 
-    _head("B. DECISION LAYER - does the deployed threshold still work?", width)
+    _head("C. DECISION LAYER - does the deployed threshold still work?", width)
     print(f"  {positive + ' flagged':<17}: {int(flagged[res.label==1].sum()):>7,}"
           f" / {n_pos:<9,} ({pos_rate:.1%})")
     print(f"  {'legit flagged':<17}: {int(flagged[res.label==0].sum()):>7,}"
