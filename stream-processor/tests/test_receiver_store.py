@@ -206,13 +206,13 @@ def test_the_store_path_and_the_in_process_replay_agree(store, counters_on):
         paid = receivers_a.get(sk)                    # .get: never invent a state
         rows_a.append(F.to_vector(F.extract(
             ev, senders_a[ev["sender_pinfl"]], ts, receivers_a[pk],
-            sender_inbound_ts=(paid.last_inbound_ts if paid else None))))
+            sender_state=paid)))
         F.update_state(senders_a[ev["sender_pinfl"]], ev, ts)
         F.update_receiver_state(receivers_a[pk], ev, ts)
 
         rows_b.append(F.to_vector(F.extract(
             ev, senders_b[ev["sender_pinfl"]], ts, store.load(pk, ts),
-            sender_inbound_ts=store.last_inbound(sk, ts))))
+            sender_state=store.load(sk, ts))))
         F.update_state(senders_b[ev["sender_pinfl"]], ev, ts)
         store.record(ev, ts)
 

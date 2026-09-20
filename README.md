@@ -71,7 +71,7 @@ Each package keeps its tests in its own `tests/` directory, and the packages are
 run **one at a time**:
 
 ```bash
-python -m pytest stream-processor -q     # 174
+python -m pytest stream-processor -q     # 181
 python -m pytest data-generator   -q     #  25
 python -m pytest sink-writer      -q     #  23
 python -m pytest validation       -q     #  10

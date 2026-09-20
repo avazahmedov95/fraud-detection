@@ -329,33 +329,60 @@ mule collections it does catch are already corroborated by other rules. A
 population-relative threshold, as `MULE_FAN_IN_MODE=relative` does for the hour
 window, is the version worth gating next; it needs its own baseline in Redis.
 
-### Two rules tried on the counters, and neither stays
+### A rule on the other leg: the gate, fixed before the run
 
-The counters are worth +0.116 PR-AUC to the model (above). Two attempts to turn the
-same shapes into a CEP rule, each gated before its run, each removed by its own
-conditions:
+`PASS_THROUGH` fires when the sender's own account was paid within the transit
+window and
+at least 80% of what came in is going straight out again. The window and the share
+are the owner's statement of the shape - *the whole sum, not a part* - rather than
+numbers fitted here; the weight is 0.35, level with the fan-in burst and below the
+0.40 cutoff, so it corroborates rather than decides. It reads the **paying-on leg**,
+which no sender-keyed feature sees and neither fan-in rule can reach. Like COLLECTOR
+it stays out of `MANDATORY_REVIEW_RULES` and out of `PATTERN_SIGNATURES`: a rule on
+trial must not move a fused decision or another profile's scaled threshold.
 
-| rule | CEP-only recall | fires on legitimate | decisions it alone lifts | verdict |
-|---|---|---|---|---|
-| `COLLECTOR` - six payers in a day, where the hour rule is silent | 0.149 -> 0.168 | 2.3% of them | 42, 4 fraud (9.5%) | **out**: +1.9 points where 5 were asked, and 38 lifted collections against a cap of 30 |
-| `PASS_THROUGH` - paid within 10 minutes, 80% of it leaving again | 0.149 -> **0.153** | 0.195%, cap 0.1% | 5, 1 fraud (20.0%) | **out**: +0.4 points, and twice the legitimate traffic the cap allowed |
+**Attempts are counted, not hidden.** This shape was tried twice - ten minutes,
+then an hour - after COLLECTOR failed above. Every attempt raises the chance that
+one passes by luck, so the conditions are not softened and every run is recorded.
 
-`PASS_THROUGH` fired on 196 transfers in the held-out month and one was fraud. The
-window is why: on the realistic profile a mule pays on **5 to 60 minutes** after its
-last inbound (`data-generator/config.py`, `mule_gap_minutes`), so a 10-minute window
-sees the short end of that spread and little else. Widening it to an hour is the
-obvious next move and is exactly what must not be done here - it would be a third
-attempt chosen after reading this table, and each attempt raises the chance that one
-passes by luck. If it is tried, it is tried as attempt three, declared, with the
-same three conditions.
+The rule, fixed before the run:
 
-**What both results say together.** The model reads these counts and gains from
-them; a rule has to cut them at a number, and at every number tried the honest
-traffic that looks the same outnumbers the fraud. That is the same finding the fan-in
-threshold produced abroad, in a second shape: *an additive rule layer wants
-thresholds relative to what is observable, not constants*. The fallback stays where
-it is - 14.9% of the fraud at 1.3% precision - and the harness that measured both is
-in git history (`git show 8ba52f9:stream-processor/experiments/replay.py`).
+1. CEP-only recall on the held-out slice rises by at least 5 points (0.149 -> 0.199
+   or better) - the same bar COLLECTOR was held to.
+2. Of the decisions it alone lifts to REVIEW, at least **20%** are fraud. COLLECTOR
+   cleared its own bar at 9.5% and still failed on volume; a shape this specific
+   should not fill a queue with the innocent, and a fifth is what would make the
+   fallback worth reading.
+3. It fires on at most **0.1%** of the legitimate transfers in the held-out slice -
+   about 100 of them - the cap the fixed fan-in threshold failed abroad at 3.12%.
+
+All three hold: the rule stays on. Any fails: it comes out, and the numbers are
+written here. `stream-processor/experiments/replay.py rule-value` runs it.
+
+### Rules on the counters: three attempts, and what they cost to try
+
+The counters are worth +0.116 PR-AUC to the model (above). Turning the same shapes
+into a CEP rule was tried three times, each gated before its run:
+
+| attempt | rule | CEP-only recall | fires on legitimate | decisions it alone lifts | verdict |
+|---|---|---|---|---|---|
+| 1 | `COLLECTOR` - six payers in a day, where the hour rule is silent | 0.149 -> 0.168 | 2.3% | 42, 4 fraud (9.5%) | **out**: +1.9 points where 5 were asked, 38 lifted collections against a cap of 30 |
+| 2 | `PASS_THROUGH`, 10-minute window | 0.149 -> 0.153 | 0.195%, cap 0.1% | 5, 1 fraud (20.0%) | **out**: +0.4 points, twice the legitimate traffic allowed |
+| 3 | `PASS_THROUGH`, **hour** window | | | | *(below)* |
+
+Attempt 2 fired on 196 transfers in the held-out month and one was fraud. The window
+is why: on the realistic profile a mule pays on **5 to 60 minutes** after its last
+inbound (`data-generator/config.py`, `mule_gap_minutes`), so ten minutes sees the
+short end of that spread.
+
+**Attempt three is declared, and it is weaker evidence than the first two.** The
+owner asked for it after reading that sentence, so the hour was chosen from the
+generator's own parameter - a rule fitted to how this data was made, not one
+validated on it. The three conditions are unchanged and unsoftened (recall +5 points
+or better, a fifth of the lifted decisions fraud, at most 0.1% of the legitimate
+rows), and whatever it produces is recorded here as conditional on that choice. The
+prediction written down before the run: it will catch more mule payouts and fire on
+far more legitimate traffic, so condition 3 is the one expected to fail.
 
 ### Honest collections are not mistaken for mules
 

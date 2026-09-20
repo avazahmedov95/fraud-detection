@@ -119,11 +119,11 @@ def _review_threshold():
 
 def evaluate(event: dict, state: SenderState, now: float,
              receiver_state: "ReceiverState | None" = None,
-             sender_inbound_ts=None,
+             sender_state: "ReceiverState | None" = None,
              population: "PopulationBaseline | None" = None) -> dict:
     """Score one event from the shared features. Mutates state (after extraction).
     `receiver_state` is optional: an unreachable shared store fails open here."""
-    f = F.extract(event, state, now, receiver_state, sender_inbound_ts)
+    f = F.extract(event, state, now, receiver_state, sender_state)
 
     hits = []
     score = 0.0
@@ -153,6 +153,13 @@ def evaluate(event: dict, state: SenderState, now: float,
         hits.append("COACHED_SESSION"); score += C.W_COACHED_SESSION
     if on("DAILY_LIMIT_BREACH") and f["daily_sum_ratio"] > 1.0:
         hits.append("DAILY_LIMIT_BREACH"); score += C.W_DAILY_LIMIT
+    # Transit: money paid into this account minutes ago, nearly all of it leaving
+    # again. The fan-in rules watch the collecting leg; this is the paying-on leg,
+    # which no sender-keyed feature can see. Silent when the store is down.
+    if (on("PASS_THROUGH") and f["sender_inflow_recent"] > 0
+            and f["secs_since_sender_inbound"] <= C.PASS_THROUGH_WINDOW_S
+            and f["amount"] >= C.PASS_THROUGH_SHARE * f["sender_inflow_recent"]):
+        hits.append("PASS_THROUGH"); score += C.W_PASS_THROUGH
     # Fan-IN: the only rule here that looks at the payee's history, not the sender's.
     if on("MULE_FAN_IN"):
         # Constant, or a quantile of the live population - see MULE_FAN_IN_MODE.

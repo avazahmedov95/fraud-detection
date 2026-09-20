@@ -128,12 +128,11 @@ class FraudDetector(KeyedProcessFunction):
         # wall-clock stamps below measure the pipeline and never enter a feature.
         event_epoch = _event_epoch(event)
         receiver_state = self._receivers.load(F.payee_key(event), event_epoch)
-        # The sender's own account, in the same key space: when it was last paid.
-        sender_inbound = self._receivers.last_inbound(F.sender_key(event),
-                                                      event_epoch)
+        # The sender's own account, in the same key space: what was paid into it.
+        sender_state = self._receivers.load(F.sender_key(event), event_epoch)
 
         result = evaluate(event, state, event_epoch, receiver_state,
-                          sender_inbound_ts=sender_inbound,
+                          sender_state=sender_state,
                           population=self._population)
         self._state.update(state)
         self._receivers.record(event, event_epoch)

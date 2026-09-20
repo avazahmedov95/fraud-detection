@@ -39,8 +39,7 @@ def build_matrix(csv_path: str, nrows=None) -> pd.DataFrame:
         res = R.evaluate(event,
                          states[d["sender_card"]], now,
                          receiver_states[F.payee_key(event)],
-                         sender_inbound_ts=(paid_sender.last_inbound_ts
-                                            if paid_sender else None),
+                         sender_state=paid_sender,
                          population=population)
         row = dict(zip(FEATURE_NAMES, res["features"]))
         row["cep_score"] = res["cep_score"]
