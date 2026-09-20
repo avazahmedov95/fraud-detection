@@ -116,7 +116,7 @@ the prevalences match, so the comparison is like for like:
 
 Those rows are the baseline profile. On the realistic profile - fraud at 0.18%,
 legitimate look-alikes, a tenth of fraud unreported -
-the committee scores 0.321 PR-AUC, and the gap has closed (at a far lower fraud
+the committee scores 0.480 PR-AUC, and the gap has closed (at a far lower fraud
 rate, so not directly comparable): much of the
 old distance was a generator whose classes separated by construction.
 
@@ -267,7 +267,10 @@ attached to their account"**.
 This is the regulator of this project's own market defining suspicious P2P
 activity as **counts of distinct counterparties and their totals over days**, not
 as a property of one transfer. The receiver-side features here are the same
-measurement over one hour. Two limits worth stating in the thesis: the rules are
+measurement over one hour, and on 2026-09-20 the same counting over a day and a
+week was built and measured through the deployed extractor: it passed both gates
+and is in the served vector (`ml/README.md`, "Counting counterparties over
+days"). Two limits worth stating in the thesis: the rules are
 applied by the bank that **services the collecting account**, not by the sending
 bank this detector sits in (§9.1 of `docs/irp-framing.md`, and `threat-model.md` §4); and both datasets
 here span 30 days, so a 30-day window cannot be measured on them - it would be
@@ -343,6 +346,7 @@ Extends the table in `generator-spec.md` §0; the datasets actually run are in
 | **PaySim** (§6) | The rule layer went **mute** on foreign data: the highest score any fraud reached was 0.35 against a 0.40 cutoff, while the rules separated the classes 4:1. | `capabilities.scaled_threshold`, reached through `fusion.cutoffs`; adapter `validation/paysim_adapter.py`. |
 | **PaySim, via `ris3abh`** (§6) | PR-AUC **0.380** on the public benchmark, reproduced at 0.397; the leaky 0.988 reproduced at 1.000. | The decomposition of the gap into features and separability - `generator-spec.md` §0, §7. |
 | **IBM AMLSim** (§7; removed 2026-09-19) | `MULE_FAN_IN` at six senders fired on **3.12%** of legitimate traffic and caught **0.0%** of the fan-in typology. | `rules.PopulationBaseline`, `MULE_FAN_IN_MODE=relative`, +6.9 pp - `irp-framing.md` §6, third RQ3 result. |
+| **CBU internal-control rules, No. 343-В-12 of 03.03.2023** (§6e) | P2P activity subject to control is defined by counts of distinct counterparties over up to 30 days. | `capabilities.counterparty_history` - the day-and-week counters, `ml/README.md`. |
 | **CBU Regulation No. 3759** | The BRV-denominated threshold, and the fact that the project's earlier citation of it was wrong. | `data-generator/config.STRUCTURING_THRESHOLD`, mirrored in `stream-processor/config.py`. |
 | **Cybersecurity Centre of Uzbekistan, 2025** (§6d) | **54 of 157** high-severity mobile findings are transport security. | Why transport overhead was measured at all - `irp-framing.md` §7.5, `threat-model.md` §3a. |
 | **Tritscher et al. 2022** (§6b) | The published criterion a generator must meet, and the criticism of post-hoc fraud injection. | `generator-spec.md` §0 and §5. |

@@ -174,9 +174,17 @@ def test_last_inbound_is_the_newest_payment_to_that_account(store, counters_on):
 
 
 def test_nothing_is_written_while_the_capability_is_off(store):
-    store.record(_ev("t1"), 1000)
-    assert not [k for k in store._redis.sets if k.startswith("cp:in:")]
-    assert store.last_inbound(F.payee_key(_ev("t1")), 1000) is None
+    """Off is off: a capability nobody switched on costs no writes and no reads."""
+    import capabilities as CAP
+    original = dict(CAP.MODES)
+    CAP.MODES["counterparty_history"] = "off"
+    try:
+        store.record(_ev("t1"), 1000)
+        assert not [k for k in store._redis.sets if k.startswith("cp:in:")]
+        assert store.last_inbound(F.payee_key(_ev("t1")), 1000) is None
+    finally:
+        CAP.MODES.clear(); CAP.MODES.update(original)
+
 
 
 def test_the_store_path_and_the_in_process_replay_agree(store, counters_on):

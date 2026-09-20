@@ -159,7 +159,7 @@ Everything owed to the review is now done; the items keep their numbers.
    the thesis: **relational fraud detection cannot be validated end-to-end on
    public real data, because the account identifiers that make it relational are
    exactly what cannot be published.** 14 of the 20 features measured here are
-   relational (13 of the 16 deployed since 2026-09-19);
+   relational (18 of the 21 deployed since 2026-09-20);
    removing them costs 0.937 → 0.761 PR-AUC on the baseline profile. So the
    question is split:
    - **PaySim** (`paysim_adapter.py`), the one public dataset with identifiers on

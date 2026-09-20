@@ -60,6 +60,11 @@ _PHRASES = {
     "geo_is_anomaly":         ("operation away from the sender's usual region", lambda v: "yes" if v else "no"),
     "active_call":            ("phone call active while confirming", lambda v: "yes" if v else "no"),
     "secs_login_z":           ("hesitation before confirming vs this sender's habit", lambda v: f"{v:+.1f} sigma"),
+    "payee_payers_24h":       ("distinct senders paying this payee in a day", lambda v: f"{int(v)}"),
+    "payee_payers_7d":        ("distinct senders paying this payee in a week", lambda v: f"{int(v)}"),
+    "sender_payees_24h":      ("distinct payees this sender paid in a day", lambda v: f"{int(v)}"),
+    "sender_payees_7d":       ("distinct payees this sender paid in a week", lambda v: f"{int(v)}"),
+    "secs_since_sender_inbound": ("time since this sender was last paid", lambda v: f"{v/60:.0f} min"),
 }
 
 

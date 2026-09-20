@@ -379,14 +379,21 @@ def b_receiver_store_round_trips():
     written = {}
 
     class Pipe:
-        def zadd(self, key, mapping): written.update(mapping)
+        def zadd(self, key, mapping): written.setdefault(key, {}).update(mapping)
         def zremrangebyscore(self, *a): pass
         def expire(self, *a): pass
         def execute(self): pass
 
     class Fake:
         def pipeline(self): return Pipe()
-        def zrangebyscore(self, key, lo, hi): return list(written)
+
+        def zrangebyscore(self, key, lo, hi, withscores=False):
+            rows = sorted(written.get(key, {}).items(), key=lambda kv: kv[1])
+            return rows if withscores else [m for m, _ in rows]
+
+        def zrevrange(self, key, start, stop, withscores=False):
+            rows = sorted(written.get(key, {}).items(), key=lambda kv: -kv[1])
+            return rows if withscores else [m for m, _ in rows]
 
     store = RS.ReceiverStore("h", 1)
     store._redis = Fake()
@@ -399,6 +406,13 @@ def b_receiver_store_round_trips():
     ts, sender, amount = state.inbound[0]
     if sender != "S1" or amount != 500_000.0:
         return f"member parsed as {(ts, sender, amount)}, expected S1 / 500000"
+    # The counterparty map travels the same way, under its own key.
+    CAP = pkg("stream-processor", "capabilities")
+    if CAP.enabled("counterparty_history"):
+        if state.payers != {"S1": 1000.0}:
+            return f"counterparty map read back as {state.payers}, expected S1 at 1000"
+        if store.last_inbound(F.payee_key(ev), now=1000.0) != 1000.0:
+            return "last_inbound did not read back the time the payee was paid"
     return None
 
 

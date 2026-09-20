@@ -1,12 +1,12 @@
 {
-  "exported_at": "2026-09-19T13:16:11+00:00",
-  "commit": "a92fdb1a68a50f4262ed5fe40d059e5bcb4307ef",
+  "exported_at": "2026-09-20T06:34:19+00:00",
+  "commit": "7247a796a8141984e95851f6cc7a0a380578a4c5",
   "artefacts": {
-    "model.onnx": "c79a662d34c81d5139b9bc92cceddf25f2a7f175d510444d7c24399f04d046e8",
-    "model.txt": "8bb2e8bd6d552f0d9ee11b3edd4006bc29b32cc5609253c67a99c71f1406d19b",
-    "model.joblib": "4c4ba3606baa5903db584d910b0a48bd0627b671a334c0e7d52a5be318ebd0ff",
-    "feature_names.json": "a1e82fe38f096607099ed15315b391bf6ceb099f8aa1f9751a0647832628f77d",
-    "thresholds.json": "953c8a51e09927d18a9084a8f99e771d9b725b8e6b2d29d51d7e1daf7d0172f3"
+    "model.onnx": "6d065df8a91c3f1cd584547f346881ca03850c8f1885af9112410505a7337816",
+    "model.txt": "03bc61a9480c37fd424e81e9a76debb63901d9f6a0c0a08fb2c88671cfc149ba",
+    "model.joblib": "1658d405f9626b29f276a0e4b47aa942bcb46f688b35c87ecdad5defe0648865",
+    "feature_names.json": "61dd792f88f9d2120488386aaf39b0edb781b36ddc78c7b74bae35ef42cb8a46",
+    "thresholds.json": "04965415ca0374bb86f02bcd441afe6e2af4e70e001fe75b4f73c9decc1fd5e5"
   },
   "dataset": {
     "transactions.csv": {
@@ -35,20 +35,26 @@
       "rcv_inflow_1h",
       "geo_is_anomaly",
       "active_call",
-      "secs_login_z"
+      "secs_login_z",
+      "payee_payers_24h",
+      "payee_payers_7d",
+      "sender_payees_24h",
+      "sender_payees_7d",
+      "secs_since_sender_inbound"
     ],
-    "features_sha256": "dc75f5cb44923de5686c0c0a27e70782052b735754751f03df3266b3dd045eab",
+    "features_sha256": "182db17024492d2a4e982716a4e1ce1abe7ca3243d34622eed8583806d5623bf",
     "capability_profile": {
       "core_history": "on",
       "myid_kinship": "off",
       "receiver_velocity": "on",
       "geo_telemetry": "on",
       "session_telemetry": "on",
-      "payee_identity": "card"
+      "payee_identity": "card",
+      "counterparty_history": "on"
     }
   },
   "metrics": {
-    "roc_auc": 0.9611470120137727,
-    "pr_auc": 0.32129168762924915
+    "roc_auc": 0.9918539410004248,
+    "pr_auc": 0.4802081903242833
   }
 }

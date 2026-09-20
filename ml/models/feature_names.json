@@ -14,5 +14,10 @@
   "rcv_inflow_1h",
   "geo_is_anomaly",
   "active_call",
-  "secs_login_z"
+  "secs_login_z",
+  "payee_payers_24h",
+  "payee_payers_7d",
+  "sender_payees_24h",
+  "sender_payees_7d",
+  "secs_since_sender_inbound"
 ]

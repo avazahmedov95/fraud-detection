@@ -51,6 +51,7 @@ in one place and the train/serve contract follows automatically.
 ```
 CAP_MYID_KINSHIP=off|on             MyID verified family relationships
 CAP_RECEIVER_VELOCITY=on|off        receiver-keyed fan-in counter (Redis)
+CAP_COUNTERPARTY_HISTORY=on|off     counterparties per day / week, and transit
 CAP_GEO_TELEMETRY=on|off            operation region
 CAP_SESSION_TELEMETRY=on|off        mobile-app session signals
 CAP_PAYEE_IDENTITY=card|pinfl       what the payee can be resolved to

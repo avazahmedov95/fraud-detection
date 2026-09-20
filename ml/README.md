@@ -65,17 +65,17 @@ fails if this table disagrees with it.
 
 | metric                | ML model | CEP rules only |
 |-----------------------|----------|----------------|
-| ROC-AUC               | 0.961    | —              |
-| PR-AUC                | 0.321    | —              |
-| precision at REVIEW   | 0.538    | 0.013          |
-| recall at REVIEW      | 0.351    | 0.149          |
+| ROC-AUC               | 0.992    | —              |
+| PR-AUC                | 0.480    | —              |
+| precision at REVIEW   | 0.571    | 0.013          |
+| recall at REVIEW      | 0.436    | 0.149          |
 
-Recall by fraud type (ML at REVIEW): STRUCTURING 42.4%, APP 31.0%, ATO 60.0%, MULE 29.0%.
-The five fits alone scored 0.260-0.359 PR-AUC on the same slice; their committee
-0.321 - inside that range, and no fit is known in advance to be the best.
+Recall by fraud type (ML at REVIEW): STRUCTURING 61.0%, APP 29.6%, ATO 70.0%, MULE 38.7%.
+The five fits alone scored 0.389-0.436 PR-AUC on the same slice; their committee
+0.480 - above every one of them, and no fit is known in advance to be the best.
 
-Read plainly: the committee finds about a third of the fraud in the held-out
-month, and about half its alerts are fraud - with the spread one retrain
+Read plainly: the committee finds about four in ten of the fraud in the held-out
+month, and a little over half its alerts are fraud - with the spread one retrain
 moves (below). The rules alone reach 1.3% precision on data where
 legitimate traffic also collects, splits and changes phones. The weak patterns
 are APP and MULE.
@@ -100,7 +100,7 @@ reported. Three changes, each measured before it was adopted:
   probabilities sit near the base rate, so a fixed 0.40 means nothing.
   `train.py` fits on the earliest 64% of rows, puts REVIEW where F1 peaks on the
   next 16%, and writes it to `thresholds.json`, which serve-prep ships beside
-  `model.onnx` and the job reads (`stream-processor/config.py`). This run: cut at REVIEW = 0.0606, and
+  `model.onnx` and the job reads (`stream-processor/config.py`). This run: cut at REVIEW = 0.0471, and
   **there is no BLOCK**: since 2026-09-19 the system never blocks on its own - the
   owner's decision - and every alert goes to a person. The CEP-only fallback keeps
   its fixed cutoff, since an additive rule score is not a probability.
@@ -312,7 +312,8 @@ On 2026-09-19 the owner removed the payee's account age - `receiver_age`,
 supplied it and the BIN table that decided when it was visible. A sending bank
 sees the account behind a card only when the payee is its own client, 6.85% of
 transfers at the real card market (`docs/threat-model.md` §4), and the UzCard /
-HUMO switch carries no such field. The vector is 16 columns.
+HUMO switch carries no such field. The vector became 16 columns, and 21 with the
+counters below.
 
 Unlike the two columns above, this one cost more than a retrain moves. The served
 committee went from PR-AUC 0.450 to 0.321, recall at REVIEW from 0.421 to 0.351 and
@@ -355,6 +356,41 @@ The rule, fixed before any of it was measured:
 All three pass: the capability is switched on and the served model retrained. Any
 fails: it stays off, and the numbers are written here. `experiments/counters.py`
 runs 2 and 3.
+
+### What the counters measured
+
+Parity held: 0 cells differ across the sixteen existing columns on 20,000 rows,
+and the store-backed path matches the in-process replay row for row
+(`stream-processor/tests/test_receiver_store.py`). Five paired fits, validation
+PR-AUC:
+
+| | without | with | paired difference |
+|---|---|---|---|
+| realistic profile | 0.426 | 0.542 | **+0.116 [+0.010, +0.222]**, better on 5 of 5 seeds |
+| PaySim, published split | 0.135 | 0.165 | +0.030 [-0.013, +0.073], better on 4 of 5 |
+
+On PaySim the averaged committee went 0.155 -> 0.196 and its top 0.1% of the
+validation transfers held 18.5% -> 19.5% of the fraud, so condition 3 holds - but
+the interval spans zero: *not worse, probably a little better*, not a proven gain.
+Both conditions held, so the capability was switched on and the served model
+retrained on 21 columns: PR-AUC 0.321 -> 0.480, recall at REVIEW 0.351 -> 0.436,
+precision 0.538 -> 0.571. That is more than the payee's account age was worth
+before it was removed (PR-AUC 0.450 then), on data a sending bank actually has.
+
+**Neither half does it alone.** Measured apart on the realistic profile, after the
+gate: the four counts +0.067 [-0.072, +0.205], better on 4 of 5 seeds; the transit
+interval alone **-0.042** [-0.140, +0.056], better on 1 of 5. Together they are
++0.116 on 5 of 5. The shape is the pair - this payee collects from many people,
+*and* this sender was paid minutes ago - not either column. Dropping the transit
+column now would be keeping the arm that won after seeing the result, so the five
+stay together, as the rule said before the run.
+
+**What this data makes easy.** The generator draws a mule's outflow minutes after
+its last inflow (`data-generator/fraud_patterns.py`), so "paid, then paying" is
+more regular here than in real traffic. The shape is the regulator's - the CBU
+counts counterparties over a day and a month, and the Bank of Russia's equivalent
+list treats money leaving within a minute of arriving as a sign - but its strength
+on this data is partly the generator's.
 
 **Everything below is the baseline profile, the dataset of record until
 2026-09-14, unless it says otherwise.**
@@ -457,7 +493,7 @@ baseline PR-AUC **0.960 ± 0.018**:
 **`channel` is gone.** It measured −0.002 [−0.006, +0.002], no rule read its four
 one-hot features, and no public dataset carries the field. It was removed on
 07.09.2026 from the model, the wire, the ingress hash, ClickHouse, Grafana and the
-case view; the contract was 20 columns, and is 16 since 2026-09-19. Dropping four columns of noise also
+case view; the contract was 20 columns, and is 21 since 2026-09-20. Dropping four columns of noise also
 tightened every interval, which is how `receiver_age` moved from unresolved back
 to **real**.
 
@@ -592,23 +628,23 @@ confidence interval for the mean.
 
 `metrics.json` carries a `calibration` block beside the AUCs, computed by
 `train.py` on every run. It answers a different question: not *does the model rank
-fraud above legitimate traffic* (ROC-AUC 0.961 / PR-AUC 0.321 on the realistic
+fraud above legitimate traffic* (ROC-AUC 0.992 / PR-AUC 0.480 on the realistic
 profile) but *are its probabilities usable as magnitudes*.
 
 ```
-brier               0.00166
-n_alerts            132          (>= REVIEW on the held-out slice)
-saturated_share     22.7%        rounding to 1.000
-distinct_scores     89
-median_alert_score  0.573876
+brier               0.00149
+n_alerts            154          (>= REVIEW on the held-out slice)
+saturated_share     23.4%        rounding to 1.000
+distinct_scores     101
+median_alert_score  0.752841
 scored_with         model.onnx
 ```
 
 Read `saturated_share` and `distinct_scores` together. On the baseline profile
 they read 66.9% and 33: the model separated the classes almost perfectly and
 still could not **order** an alert queue, because the alerts piled up at the top
-of the scale. On the realistic profile 132 alerts carry 89 distinct scores and
-22.7% round to 1.000 - coarser than the 20-column model's 114 among 160, but a
+of the scale. On the realistic profile 154 alerts carry 101 distinct scores and
+23.4% round to 1.000 - coarser than the 20-column model's 114 among 160, but a
 queue that can still be ordered. AUC is blind to this by construction - it is a
 rank statistic - and the finding surfaced only when a real work queue tried to
 sort by score (`docs/irp-framing.md` §9.1). It is a property of near-separable
