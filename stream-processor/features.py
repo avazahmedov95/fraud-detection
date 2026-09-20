@@ -171,19 +171,28 @@ def extract(event: dict, state, now: float, receiver_state=None,
     # own account was last paid: a mule collects over days and passes the money
     # on. Fail open exactly like the fan-in features - a store that is down
     # reads as nothing seen, not as a small count.
+    def _windows(times, self_key):
+        """Distinct counterparties in each window, this transfer's own included. One
+        pass and no set: a hub account can hold tens of thousands of these, and the
+        foreign files have hub accounts."""
+        day = week = 0
+        for other, t in times.items():
+            if other == self_key:
+                continue
+            age = now - t
+            if age <= C.LINK_WEEK_S:
+                week += 1
+                if age <= C.LINK_DAY_S:
+                    day += 1
+        return day + 1, week + 1
+
     payee_payers_24h = payee_payers_7d = 0
     if receiver_state is not None:
-        payer = event.get("sender_pinfl", "")
-        payers = getattr(receiver_state, "payers", None) or {}
-        payee_payers_24h = len({p for p, t in payers.items()
-                                if now - t <= C.LINK_DAY_S} | {payer})
-        payee_payers_7d = len({p for p, t in payers.items()
-                               if now - t <= C.LINK_WEEK_S} | {payer})
-    paid = getattr(state, "payee_times", None) or {}
-    sender_payees_24h = len({p for p, t in paid.items()
-                             if now - t <= C.LINK_DAY_S} | {payee})
-    sender_payees_7d = len({p for p, t in paid.items()
-                            if now - t <= C.LINK_WEEK_S} | {payee})
+        payee_payers_24h, payee_payers_7d = _windows(
+            getattr(receiver_state, "payers", None) or {},
+            event.get("sender_pinfl", ""))
+    sender_payees_24h, sender_payees_7d = _windows(
+        getattr(state, "payee_times", None) or {}, payee)
     # Capped, never NaN: 'never paid' and 'the store is down' are the same
     # observation here, and the cap keeps the column finite for every model.
     secs_since_sender_inbound = float(C.LINK_WEEK_S)
