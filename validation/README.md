@@ -234,9 +234,9 @@ account straight to cash-out and cannot test it at all.
    choke on, and if they drown the collection signal, the file cannot answer the
    question it was brought back for.
 
-Everything below the composition is **historical**, measured before 2026-09-19 with
-the feature set of the time (14 computable columns, no counterparty counters). The
-re-run on the current 21-column extractor is reported under it when it finishes.
+Everything between the composition and **Re-run 2026-09-21** is **historical**,
+measured before 2026-09-19 with the feature set of the time (14 computable columns,
+no counterparty counters). The re-run on the current extractor follows it.
 
 `ibm_aml_adapter.py`. AMLSim - removed with it, and not brought back - left two
 readings of its inverted fan-in result: the
@@ -266,7 +266,9 @@ IBM Box, or a Hugging Face mirror of the transactions that needs no account.
 ```bash
 python ibm_aml_adapter.py --file HI-Small_Trans.csv --limit 500000
 python ibm_aml_adapter.py --file HI-Small_Trans.csv --patterns HI-Small_Patterns.txt
-python ibm_aml_adapter.py --file HI-Small_Trans.csv --patterns HI-Small_Patterns.txt --typology-recall
+python ibm_aml_adapter.py --file HI-Small_Trans.csv --extract-only --cache ibm_features21.npz
+python ibm_aml_adapter.py --file HI-Small_Trans.csv --our-model --cache ibm_features21.npz --seeds 10
+python ibm_aml_adapter.py --file HI-Small_Trans.csv --patterns HI-Small_Patterns.txt --typology-recall --cache ibm_features21.npz --seeds 10
 ```
 
 `--patterns` names each laundering row from the sidecar, which needs a Kaggle
@@ -336,8 +338,8 @@ paper does not state its threshold rule. Class weighting collapses at this 0.1%
 base rate, as on PaySim; `train.py` now fits unweighted below 0.5% fraud.
 
 ```bash
-python ibm_aml_adapter.py --file HI-Small_Trans.csv --extract-only --cache ibm_features.npz
-python ibm_aml_adapter.py --file HI-Small_Trans.csv --our-model --cache ibm_features.npz --seeds 10
+python ibm_aml_adapter.py --file HI-Small_Trans.csv --extract-only --cache ibm_features21.npz
+python ibm_aml_adapter.py --file HI-Small_Trans.csv --our-model --cache ibm_features21.npz --seeds 10
 ```
 
 ### Receiver aggregation, asked so that seed noise cannot answer it (`--receiver-ablation`)
@@ -345,8 +347,9 @@ python ibm_aml_adapter.py --file HI-Small_Trans.csv --our-model --cache ibm_feat
 Ten seeds left the receiver-side delta inside the model's own spread (2.1 F1
 points, CI [-1.5, +5.6]), so it was asked again with twenty seeds and a second
 method - the seed-averaged model, with a paired bootstrap over the test rows -
-under a rule fixed before the run: established only if both F1 intervals on the
-fourteen features exclude zero.
+under a rule fixed before the run: established only if both F1 intervals on this
+project's own columns - fourteen of them at the time, eighteen now - exclude
+zero.
 
 | configuration | per seed, paired (20 seeds) | seed-averaged model, paired bootstrap |
 |---|---|---|
@@ -362,7 +365,7 @@ stage, the same removal helped - the sign turns where the design says it should.
 Averaging twenty fits also more than doubles PR-AUC (0.153 against 0.065).
 
 ```bash
-python ibm_aml_adapter.py --file HI-Small_Trans.csv --receiver-ablation --cache ibm_features.npz --seeds 20 --boots 1000
+python ibm_aml_adapter.py --file HI-Small_Trans.csv --receiver-ablation --cache ibm_features21.npz --seeds 20 --boots 1000
 ```
 
 ### Result (`--typology-recall`): which laundering patterns the model catches
@@ -406,11 +409,180 @@ published test split, the recipe fitted unweighted, three seeds:
 The mode joins the sidecar's labels onto the matrix `--extract-only` cached, so
 it costs minutes instead of the replay's hours, and it refuses to print if that
 cache is not row-aligned with the file - a misaligned join would hang a typology
-on the wrong transaction and still produce a table. The fit is not bit-stable
+on the wrong transaction and still produce a table. Since 2026-09-21 it also
+refuses a cache whose column names are not the ones the extractor computes now:
+the 14-column and 18-column caches hold the same 4,487,133 rows, so alignment
+alone cannot tell them apart. The fit is not bit-stable
 (LightGBM's threaded histograms), so each row moves a few tenths of a point
 between runs: one decimal is all these figures carry.
 
----
+### Re-run 2026-09-21: the current extractor, 18 of its 21 columns
+
+Running the whole file through the deployed extractor took 2 h 05; the fits are
+ten seeds each, on the same 60/20/20 temporal split as above. Three features are
+absent for the same reason as on PaySim - the file carries no call state, no
+region and no session timing - and **all five counterparty counters compute**.
+
+| configuration | feat | F1 %, cut from validation | F1 % at 0.5 | PR-AUC | ROC-AUC |
+|---|---|---|---|---|---|
+| this project, all it can compute | 18 | 22.8 +/- 4.2 | 19.2 | 0.099 | 0.884 |
+| - without receiver aggregation | 16 | 19.3 +/- 7.1 | 17.2 | 0.083 | 0.892 |
+| - without the counterparty counters | 13 | 18.5 +/- 4.3 | 6.8 | 0.073 | **0.938** |
+| - plus the file's payment format and currency | 25 | **42.4 +/- 2.7** | 40.2 | **0.332** | 0.930 |
+| *all four, class-weighted* | | *1.9 - 3.3* | *1.8 - 3.2* | *0.013 at most* | |
+
+**1. The counters are the one thing this file separates from zero - narrowly.**
+Paired by seed, the full set minus the set without:
+
+| removed | F1 % | PR-AUC |
+|---|---|---|
+| the counterparty counters | **+4.30 +/- 4.00** | **+0.026 +/- 0.019** |
+| receiver aggregation | +3.52 +/- 7.04, includes zero | +0.016 +/- 0.029, includes zero |
+
+This is the first evidence for the counters from outside this project, and it
+comes from the one file here with a collection stage on a minute clock - the shape
+they were built for, and the reason the file was brought back. By term 1 it
+decides nothing: the capability was adopted on this project's data and PaySim
+before this run, and IBM AML only reports. What it adds is that the columns keep
+working where the collection is somebody else's simulation rather than ours, on a
+file whose accounts are not the ones this project serves. Both intervals clear
+zero by about a tenth of their own width, so *positive and small* is the whole of
+the claim.
+
+**2. The feature set reads this file better than it did, and is now level with the
+published tabular baselines rather than under them.** On its own columns the mean
+moves 17.5 -> 22.8 F1 and PR-AUC 0.065 -> 0.099; with the file's own payment
+format and currency added, 35.7 -> 42.4 and 0.200 -> 0.332. The published LightGBM
+on this split scores 21.3 +/- 0.3 and XGBoost 19.8 +/- 0.9, so 22.8 +/- 4.2 is
+**level with them, not above**: the spread here is fourteen times theirs, because
+these columns are computed from a stream of events rather than read off the row.
+With the file's own columns added, 42.4 sits between GIN (28.7) and GIN+EU
+(47.7 +/- 7.9) and still far below the graph methods (PNA 56.8, GFP + gradient
+boosting 62.9-64.8).
+
+**3. ROC-AUC points the other way, and that is the useful part.** Dropping the
+counters *raises* ROC-AUC to 0.938, the best figure in the table, while PR-AUC
+falls to 0.073 and F1 at a fixed 0.5 cut collapses 19.2 -> 6.8. At a 0.115% base
+rate ROC-AUC is decided by how the 99.9% of legitimate rows are ordered among
+themselves, which no analyst ever sees; the top of the ranking, which is all a
+queue holds, got worse. Same file, same fits, opposite verdicts - which is why
+this project reads PR-AUC and recall at a fixed alert budget (section 2) and
+quotes ROC-AUC only beside them.
+
+**4. Class weighting still collapses** at this base rate, as on PaySim: 1.9-3.3 F1
+against 18.5-42.4 unweighted. `train.py`'s unweighted rule below 0.5% fraud now
+holds on a third dataset.
+
+The model here is **fitted on IBM AML**, not the served one: it measures the
+feature set, not the deployed system. What the deployed rules make of the file is
+the section below.
+
+**The rules replay reproduces the historical run to the digit.** Every per-rule
+lift above is unchanged, and so is the decision layer: 39.1% of laundering flagged,
+**22.18% of legitimate traffic**. Nine rules became seven since that run -
+`FRESH_RECEIVER` and `DEVICE_CHANGE` left with receiver age and device telemetry -
+and the three attempts to turn the counterparty counters into a rule all failed and
+were removed (`ml/README.md`). On this file none of that could move a number: the
+two departed rules need data IBM AML does not carry, so they never fired here, and
+the counters added no rule to replace them. A capability adopted, two deleted and
+three rule attempts abandoned, and the rule layer's reading of 4.5 million foreign
+rows did not change by a digit.
+
+It took **2 h 46**, against the 5.5 hours recorded above for the 14-column run, on
+four more columns and with the model fits sharing the machine for the first hour.
+Not a controlled comparison - too much moved - but the direction is the one step 4
+of the mentor plan asked about, and the single-pass counterparty count (`f7a6a03`,
+written because a hub account holds tens of thousands of them) is the only change
+aimed at it.
+
+**New: which patterns the RULES catch** - section B of the replay, the fifth of the
+five next steps sent to the mentor on 2026-09-16, and the only one that needed a
+full replay to answer:
+
+| typology | rows | flagged | rules | *model, test slice* |
+|---|---|---|---|---|
+| fan-in | 318 | 125 | **39.3%** | ***58.6%*** |
+| bipartite | 263 | 97 | 36.9% | *18.4%* |
+| scatter-gather | 626 | 230 | 36.7% | *39.2%* |
+| stack | 466 | 164 | 35.2% | *20.5%* |
+| cycle | 287 | 95 | 33.1% | *20.5%* |
+| random | 191 | 63 | 33.0% | *20.5%* |
+| gather-scatter | 705 | 210 | 29.8% | *45.1%* |
+| fan-out | 342 | 92 | 26.9% | *37.3%* |
+| all 3,198 named rows | | 1,076 | 33.6% | |
+| the 1,968 rows the sidecar does not name | | 946 | **48.1%** | ***1.9%*** |
+
+The model column is the re-run below, on the last 20% of the file; the rules run on
+all of it, so the two columns are not a race - see point 2.
+
+**1. Fan-in is the best-caught typology for the rules too**, as it is for the model.
+Two detectors built a year apart agreeing on which shape is easiest, on labels this
+project did not write, is the strongest form the fan-in evidence takes here. Read it
+with the spread in view: 26.9% to 39.3% against a 22.18% false-alarm rate is a lift
+of 1.2x to 1.8x. **The rules rank the typologies roughly as the model does and
+separate them far less.**
+
+**2. The two layers fail differently, and the unnamed rows show it.** The 1,968
+laundering rows the sidecar does not name are the model's worst population (1.9%)
+and the rules' best (48.1%). That is each layer's own ordering, not a comparison:
+the rules reach 48.1% by flagging 22.18% of everything, the model reaches 1.9%
+while flagging 0.29%, and by lift the model is ahead on every row of this table.
+What it says is *why* they fail differently. 95.7% of these rows are the only
+laundering row at their receiver, so a relational model has nothing to look at,
+while one large transfer to an unfamiliar payee needs no relation at all - which is
+`NEW_PAYEE_HIGH_AMOUNT`, at 9.3x the best-separating rule on the file. This is the
+clearest external support for keeping both layers rather than letting the model
+subsume the rules (`docs/irp-framing.md`).
+
+**3. The thresholds still do not transfer, for the reason already recorded.** 22.18%
+of legitimate traffic is not a false-alarm rate this project would ship; it is what
+retail limits do to a file where a sender-day reaches 26,365 transactions. That half
+of the file stays unreadable, exactly as term 3 warned - and the half it was brought
+back for reads clearly.
+
+### Re-run 2026-09-21 (`--typology-recall`): the model, ten seeds, 18 columns
+
+| typology | in test | recall | across seeds | *was, 14 columns / 3 seeds* |
+|---|---|---|---|---|
+| fan-in | 127 | **58.6%** | 40.9-70.9% | *51.4%* |
+| gather-scatter | 378 | 45.1% | 29.9-56.9% | *39.5%* |
+| scatter-gather | 242 | 39.2% | 24.4-47.1% | *32.1%* |
+| fan-out | 133 | 37.3% | 27.8-50.4% | *30.6%* |
+| cycle | 99 | 20.5% | 11.1-32.3% | *37.0%* |
+| random | 84 | 20.5% | 11.9-25.0% | *40.5%* |
+| stack | 122 | 20.5% | 10.7-27.9% | *43.2%* |
+| bipartite | 67 | 18.4% | 10.4-23.9% | *30.8%* |
+| **(unnamed)** | 401 | **1.9%** | 0.2-4.2% | *5.8%* |
+| all laundering | 1,653 | 28.5% | 18.6-36.0% | *30.3%* |
+
+**The total barely moved (30.3% -> 28.5%) and the composition moved decisively.**
+The four typologies that rose - fan-in, gather-scatter, scatter-gather, fan-out -
+are the four whose shape *is* a count of counterparties. The four that fell - cycle,
+stack, random, bipartite - are chains and pairs, where that count stays small. That
+is what the counters were built to do, and it matches the ablation above, but it is
+not proof: three changes landed together, since `cross_network` left with the
+network capability, the five counters arrived, and the seed count went from three to
+ten.
+
+**The wide ranges are the honest part of this table.** The F1 cut taken from
+validation lands anywhere between 1,364 and 4,980 alerts depending on the seed, so
+fan-in reads 40.9% on one fit and 70.9% on another. The three-seed ranges in the
+historical table above (fan-in 47.2-54.3%) were narrow because three fits were
+drawn, not because the estimate was steady. Only the ordering survives ten seeds;
+the levels should be quoted with their ranges or not at all.
+
+### Verdict under the terms
+
+**IBM AML stays, for information.** Term 3 asked whether hub accounts drown the
+collection signal, and they do not: the counters' interval is the only one in the
+model table that clears zero, fan-in comes first in both layers, and both
+per-typology tables are legible. Term 2 asked that the answer be recorded whatever
+it said; it happened to be favourable, and the unfavourable halves - level with the
+tabular baselines rather than above them, intervals that clear zero only narrowly,
+seed ranges thirty points wide, 22.18% of legitimate traffic flagged, the graph
+methods still far ahead - are in the same tables. Term 1 stands: nothing here moved
+a decision. Every capability in `capabilities.py` was settled on this project's own
+data and PaySim before this run, and none was reopened after it.
 
 ---
 

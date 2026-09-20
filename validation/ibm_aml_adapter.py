@@ -192,6 +192,12 @@ PUBLISHED_F1 = (
 )
 
 RCV = ("rcv_distinct_senders_1h", "rcv_inflow_1h")
+#: The counterparty counters (capabilities.py, adopted 2026-09-20). This file is
+#: the only dataset here with a collection stage on a minute clock, which is the
+#: shape they were built for, so it is the only place their multi-day columns can
+#: be read against real laundering.
+CPH = ("payee_payers_24h", "payee_payers_7d", "sender_payees_24h",
+       "sender_payees_7d", "secs_since_sender_inbound")
 
 
 def _ci95(xs):
@@ -238,16 +244,34 @@ def _fit_score(Xtr, ytr, Xva, yva, Xte, yte, weighted, seed):
             "roc_auc": roc_auc_score(yte, pte)}
 
 
+def _open_cache(cache):
+    """The cached matrix, refused if it was built from another feature set. Caches of
+    different vintages hold the same row count, so the alignment check in
+    `typology_recall` cannot tell them apart and a stale one would be read in
+    silence, with a model fitted on columns that are not the ones named."""
+    import numpy as np
+    z = np.load(cache, allow_pickle=False)
+    have = [str(n) for n in z["names"]]
+    want = list(RP.available_features()[1])
+    if have != want:
+        z.close()
+        raise SystemExit(
+            f"{cache} was built from a different feature set - re-run --extract-only."
+            f"\n  cached : {', '.join(have)}\n  current: {', '.join(want)}")
+    return z
+
+
 def our_model(cache, seeds=3):
     """This project's features and recipe on IBM AML, scored on the published split
-    and metric; nothing is tuned to the dataset. The second configuration drops the
-    receiver-side aggregation, which this dataset can test and PaySim could not."""
+    and metric; nothing is tuned to the dataset. Two configurations drop what only
+    this dataset can test: the receiver-side aggregation, and the counterparty
+    counters, whose collection stage PaySim has none of."""
     import warnings
     import numpy as np
     # sklearn warns once per fit that LightGBM was fitted without feature names;
     # sixty identical warnings bury the table they interrupt.
     warnings.filterwarnings("ignore", message="X does not have valid feature names")
-    z = np.load(cache, allow_pickle=False)
+    z = _open_cache(cache)
     X, y = z["X"], z["y"].astype("int8")
     names = [str(n) for n in z["names"]]
     n = len(y)
@@ -256,8 +280,10 @@ def our_model(cache, seeds=3):
     own = np.column_stack([(fmt == k).astype("float32") for k in range(len(fnames))]
                           + [z["currency"].astype("float32")])
     keep = [i for i, c in enumerate(names) if c not in RCV]
+    keep_cph = [i for i, c in enumerate(names) if c not in CPH]
     configs = (("this project, all it can compute", X),
                ("  without receiver aggregation", X[:, keep]),
+               ("  without the counterparty counters", X[:, keep_cph]),
                ("  + the file's own format and currency", np.hstack([X, own])))
     print(f"{n:,} transactions, {int(y.sum()):,} laundering; split by time "
           f"60/20/20: train {a:,}, validate {b - a:,}, test {n - b:,} "
@@ -285,17 +311,21 @@ def our_model(cache, seeds=3):
     for name, f1, sd in PUBLISHED_F1:
         print(f"    {name:<38}{f1:>8.2f} +/-{sd:>5.2f}")
 
-    print("\n  receiver aggregation, paired by seed (full minus without):")
-    for weighted in (True, False):
-        full = results[("this project, all it can compute", weighted)][1]
-        less = results[("without receiver aggregation", weighted)][1]
-        for k in ("f1_tuned", "pr_auc"):
-            d = [f[k] - l[k] for f, l in zip(full, less)]
-            h = _ci95(d)
-            verdict = ("" if h != h else "  - excludes zero" if abs(np.mean(d)) > h
-                       else "  - includes zero")
-            print(f"    {'weighted' if weighted else 'unweighted':<11}{k:<9}"
-                  f"{np.mean(d):+.3f} +/- {h:.3f} (95% CI, n={len(d)}){verdict}")
+    for what, dropped in (("receiver aggregation", "without receiver aggregation"),
+                          ("the counterparty counters",
+                           "without the counterparty counters")):
+        print(f"\n  {what}, paired by seed (full minus without):")
+        for weighted in (True, False):
+            full = results[("this project, all it can compute", weighted)][1]
+            less = results[(dropped, weighted)][1]
+            for k in ("f1_tuned", "pr_auc"):
+                d = [f[k] - l[k] for f, l in zip(full, less)]
+                h = _ci95(d)
+                verdict = ("" if h != h else "  - excludes zero"
+                           if abs(np.mean(d)) > h else "  - includes zero")
+                print(f"    {'weighted' if weighted else 'unweighted':<11}"
+                      f"{k:<9}{np.mean(d):+.3f} +/- {h:.3f} "
+                      f"(95% CI, n={len(d)}){verdict}")
     return results
 
 
@@ -323,7 +353,7 @@ def typology_recall(path, patterns, cache, seeds=3):
           f"{int((lab != '').sum()):,} of them named by the sidecar "
           f"({len(typ):,} edges read)")
 
-    z = np.load(cache, allow_pickle=False)
+    z = _open_cache(cache)
     X, y, ts = z["X"], z["y"].astype("int8"), z["ts"]
     if len(y) != len(d):
         raise SystemExit(f"the cache holds {len(y):,} rows and this file {len(d):,} "
@@ -402,13 +432,13 @@ def receiver_ablation(cache, seeds=20, boots=1000):
     """Is receiver aggregation worth anything to the model here, beyond seed noise?
     Asked two ways, fixed before the run: per seed with a t-interval (twenty seeds),
     and on the seed-averaged model with a paired bootstrap over the test rows. It
-    counts as established only if BOTH F1 intervals on the fourteen-feature
+    counts as established only if BOTH F1 intervals on this project's own columns
     configuration exclude zero. Unweighted recipe only (README 4)."""
     import warnings
     import numpy as np
     from sklearn.metrics import average_precision_score, f1_score
     warnings.filterwarnings("ignore", message="X does not have valid feature names")
-    z = np.load(cache, allow_pickle=False)
+    z = _open_cache(cache)
     X, y = z["X"], z["y"].astype("int8")
     names = [str(n) for n in z["names"]]
     n = len(y)
@@ -417,7 +447,8 @@ def receiver_ablation(cache, seeds=20, boots=1000):
     own = np.column_stack([(fmt == k).astype("float32") for k in range(len(fnames))]
                           + [z["currency"].astype("float32")])
     keep = [i for i, c in enumerate(names) if c not in RCV]
-    pairs = (("fourteen features", X, X[:, keep]),
+    own_label = f"{len(names)} features"
+    pairs = ((own_label, X, X[:, keep]),
              ("plus format and currency", np.hstack([X, own]),
               np.hstack([X[:, keep], own])))
     yte = y[b:]
@@ -473,11 +504,11 @@ def receiver_ablation(cache, seeds=20, boots=1000):
               f"[{bs['f1_ci'][0]:+.2f}, {bs['f1_ci'][1]:+.2f}]   PR-AUC "
               f"{eapf:.4f} vs {eapl:.4f} = {eapf - eapl:+.4f} "
               f"[{bs['ap_ci'][0]:+.4f}, {bs['ap_ci'][1]:+.4f}]")
-    r = out["fourteen features"]
+    r = out[own_label]
     lo_seed = r["per_seed_f1"][0] - r["per_seed_f1"][1]
     established = bool(lo_seed > 0 and r["f1_ci"][0] > 0)
-    print("\n  verdict (rule fixed in advance: both F1 intervals on the fourteen "
-          "features exclude zero):")
+    print("\n  verdict (rule fixed in advance: both F1 intervals on this "
+          "project's own columns exclude zero):")
     print(f"    {'ESTABLISHED' if established else 'NOT ESTABLISHED'}")
     out["established"] = established
     return out

@@ -370,19 +370,24 @@ def test_ibm_our_model_scores_every_configuration_on_a_temporal_split(tmp_path):
     import numpy as np
     rng = np.random.default_rng(0)
     n = 3000
-    names = ["log_amount", "vel_1h", "rcv_distinct_senders_1h", "rcv_inflow_1h"]
+    saved = _foreign_profile()
+    names = list(RP.available_features()[1])
     y = (rng.random(n) < 0.05).astype("int8")
     X = rng.normal(size=(n, len(names))).astype("float32")
-    X[:, 2] += 2.0 * y                          # make fan-in informative
+    X[:, names.index("rcv_distinct_senders_1h")] += 2.0 * y   # fan-in informative
     cache = tmp_path / "c.npz"
     np.savez(cache, X=X, y=y, ts=np.arange(n), names=np.array(names),
              fmt=rng.integers(0, 3, n).astype("int8"),
              fmt_names=np.array(["ACH", "Cheque", "Wire"]),
              currency=rng.integers(0, 2, n).astype("int8"),
              currency_names=np.array(["Euro", "US Dollar"]))
-    res = IB.our_model(str(cache), seeds=1)
+    try:
+        res = IB.our_model(str(cache), seeds=1)
+    finally:
+        CAP.MODES.clear(); CAP.MODES.update(saved)
     assert {k[0] for k in res} == {"this project, all it can compute",
                                    "without receiver aggregation",
+                                   "without the counterparty counters",
                                    "+ the file's own format and currency"}
     agg, _ = res[("this project, all it can compute", False)]
     assert 0.0 <= agg["f1_tuned"][0] <= 100.0 and 0.5 < agg["roc_auc"][0] <= 1.0
@@ -407,17 +412,38 @@ def test_ibm_receiver_ablation_reports_both_methods_and_a_verdict(tmp_path):
     import numpy as np
     rng = np.random.default_rng(1)
     n = 3000
-    names = ["log_amount", "vel_1h", "rcv_distinct_senders_1h", "rcv_inflow_1h"]
+    saved = _foreign_profile()
+    names = list(RP.available_features()[1])
     y = (rng.random(n) < 0.05).astype("int8")
     X = rng.normal(size=(n, len(names))).astype("float32")
-    X[:, 2] += 2.0 * y
+    X[:, names.index("rcv_distinct_senders_1h")] += 2.0 * y
     cache = tmp_path / "c.npz"
     np.savez(cache, X=X, y=y, ts=np.arange(n), names=np.array(names),
              fmt=rng.integers(0, 3, n).astype("int8"),
              fmt_names=np.array(["ACH", "Cheque", "Wire"]),
              currency=rng.integers(0, 2, n).astype("int8"),
              currency_names=np.array(["Euro", "US Dollar"]))
-    out = IB.receiver_ablation(str(cache), seeds=2, boots=20)
+    try:
+        out = IB.receiver_ablation(str(cache), seeds=2, boots=20)
+    finally:
+        CAP.MODES.clear(); CAP.MODES.update(saved)
     assert isinstance(out["established"], bool)
-    r = out["fourteen features"]
+    r = out[f"{len(names)} features"]
     assert r["f1_ci"][0] <= r["f1_ci"][1] and r["ap_ci"][0] <= r["ap_ci"][1]
+
+
+def test_a_cache_from_another_feature_set_is_refused(tmp_path):
+    """Two vintages of this cache hold the same row count, so the alignment check
+    cannot tell them apart; without the names check a stale one trains in silence."""
+    import numpy as np
+    cache = tmp_path / "old.npz"
+    np.savez(cache, X=np.zeros((4, 2), "float32"), y=np.zeros(4, "int8"),
+             ts=np.arange(4), names=np.array(["log_amount", "cross_network"]),
+             fmt=np.zeros(4, "int8"), fmt_names=np.array(["ACH"]),
+             currency=np.zeros(4, "int8"), currency_names=np.array(["Euro"]))
+    saved = _foreign_profile()
+    try:
+        with pytest.raises(SystemExit, match="different feature set"):
+            IB.our_model(str(cache), seeds=1)
+    finally:
+        CAP.MODES.clear(); CAP.MODES.update(saved)
