@@ -329,6 +329,35 @@ mule collections it does catch are already corroborated by other rules. A
 population-relative threshold, as `MULE_FAN_IN_MODE=relative` does for the hour
 window, is the version worth gating next; it needs its own baseline in Redis.
 
+### A rule on the other leg: the gate, fixed before the run (second attempt)
+
+`PASS_THROUGH` fires when the sender's own account was paid within 10 minutes and
+at least 80% of what came in is going straight out again. The window and the share
+are the owner's statement of the shape - *the whole sum, not a part* - rather than
+numbers fitted here; the weight is 0.35, level with the fan-in burst and below the
+0.40 cutoff, so it corroborates rather than decides. It reads the **paying-on leg**,
+which no sender-keyed feature sees and neither fan-in rule can reach. Like COLLECTOR
+it stays out of `MANDATORY_REVIEW_RULES` and out of `PATTERN_SIGNATURES`: a rule on
+trial must not move a fused decision or another profile's scaled threshold.
+
+**This is the second rule tried on these counters**, after COLLECTOR failed above.
+Every further attempt raises the chance that one passes by luck, so the conditions
+are not softened and the count of attempts is recorded here.
+
+The rule, fixed before the run:
+
+1. CEP-only recall on the held-out slice rises by at least 5 points (0.149 -> 0.199
+   or better) - the same bar COLLECTOR was held to.
+2. Of the decisions it alone lifts to REVIEW, at least **20%** are fraud. COLLECTOR
+   cleared its own bar at 9.5% and still failed on volume; a shape this specific
+   should not fill a queue with the innocent, and a fifth is what would make the
+   fallback worth reading.
+3. It fires on at most **0.1%** of the legitimate transfers in the held-out slice -
+   about 100 of them - the cap the fixed fan-in threshold failed abroad at 3.12%.
+
+All three hold: the rule stays on. Any fails: it comes out, and the numbers are
+written here. `stream-processor/experiments/replay.py rule-value` runs it.
+
 ### Honest collections are not mistaken for mules
 
 `experiments/collectors.py` refits the served committee without the counterparty

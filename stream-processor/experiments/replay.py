@@ -46,8 +46,7 @@ def replay(path, population=None, count_hits=False):
                        state=states[r["sender_card"]],
                        now=pd.Timestamp(r["event_time"]).timestamp(),
                        receiver_state=rstates[F.payee_key(ev)],
-                       sender_inbound_ts=(paid_sender.last_inbound_ts
-                                          if paid_sender else None),
+                       sender_state=paid_sender,
                        population=population)
         decisions.append(res["decision"])
         if count_hits:
@@ -264,6 +263,65 @@ def cmd_payee_seeding(args):
         print("\n!! Fewer than three seeds. The interval is decoration at this n.")
 
 
+# --------------------------------------------------------------------------
+# 4. what one rule adds to the CEP-only fallback
+# --------------------------------------------------------------------------
+
+def cmd_rule_value(args):
+    """The gate in ml/README.md: what a rule adds where the model is unavailable.
+
+    The rule is additive and not mandatory, so the arm without it is this replay's
+    own score minus that rule's weight - one pass, and no chance of two arms
+    drifting apart on anything but the rule."""
+    import capabilities as CAP
+    import rules as R
+
+    weights = CAP._rule_weights()
+    thr = R._review_threshold()
+    rows = []
+    states, rstates = defaultdict(SenderState), defaultdict(ReceiverState)
+    population = PopulationBaseline()
+    df = pd.read_csv(args.file).sort_values("event_time").reset_index(drop=True)
+
+    for row in df.itertuples(index=False):
+        r = row._asdict()
+        ev = event_from(r)
+        paid_sender = rstates.get(F.sender_key(ev))
+        res = evaluate(ev, states[r["sender_card"]],
+                       pd.Timestamp(r["event_time"]).timestamp(),
+                       rstates[F.payee_key(ev)],
+                       sender_state=paid_sender,
+                       population=population)
+        hits = res["rule_hits"]
+        without = min(1.0, sum(weights.get(h, 0.0) for h in hits if h != args.rule))
+        rows.append((int(r.get("label_is_fraud", 0)),
+                     res["cep_score"] >= thr, without >= thr, args.rule in hits))
+
+    cut = int(len(rows) * args.cut_share)
+    test = rows[cut:]
+    pos = sum(1 for t in test if t[0] == 1)
+    legit = len(test) - pos
+    print(f"{args.rule} on the CEP-only path, cutoff {thr}: {len(rows):,} rows, "
+          f"held-out slice {len(test):,} rows with {pos} fraud")
+    print()
+    for label, idx in (("without", 2), ("with", 1)):
+        flagged = [t for t in test if t[idx]]
+        tp = sum(1 for t in flagged if t[0] == 1)
+        print(f"  {label:<8}{len(flagged):>7,} alerts{tp:>6} fraud"
+              f"   recall {tp / max(pos, 1):.3f}"
+              f"   precision {tp / max(len(flagged), 1):.3f}")
+    fired = [t for t in test if t[3]]
+    fired_fraud = sum(1 for t in fired if t[0] == 1)
+    lifted = [t for t in test if t[1] and not t[2]]
+    tp = sum(1 for t in lifted if t[0] == 1)
+    print()
+    print(f"  the rule fires on {len(fired):,} transfers: {fired_fraud} fraud, "
+          f"{len(fired) - fired_fraud:,} legitimate "
+          f"({(len(fired) - fired_fraud) / max(legit, 1):.3%} of the legitimate rows)")
+    print(f"  decisions it alone lifts to REVIEW: {len(lifted):,}, {tp} of them fraud "
+          f"({tp / max(len(lifted), 1):.1%})")
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="Replay a dataset through the deployed CEP rule engine.")
@@ -282,6 +340,14 @@ def main():
                        help="seeded vs unseeded APP episodes")
     p.add_argument("--files", nargs="+", required=True)
     p.set_defaults(fn=cmd_payee_seeding)
+
+    p = sub.add_parser("rule-value",
+                       help="what one rule adds to the CEP-only fallback")
+    p.add_argument("--file", default="../data-generator/out/transactions.csv")
+    p.add_argument("--rule", default="PASS_THROUGH")
+    p.add_argument("--cut-share", type=float, default=0.80,
+                   help="train.py's TRAIN_SHARE: the rest is the held-out slice")
+    p.set_defaults(fn=cmd_rule_value)
 
     args = ap.parse_args()
     (getattr(args, "fn", None) or cmd_summary)(args)

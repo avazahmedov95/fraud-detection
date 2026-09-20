@@ -8,6 +8,7 @@ import pytest
 import capabilities as CAP
 import config as C
 import features as F
+import rules as R
 from rules import ReceiverState, SenderState
 from conftest import payee_card
 
@@ -28,9 +29,17 @@ def _ev(payee="rcv", sender="S1", amount=150_000):
             "sender_card": payee_card(sender), "receiver_card": payee_card(payee)}
 
 
-def _f(event, state=None, now=1_000_000.0, receiver_state=None, sender_inbound_ts=None):
+def _f(event, state=None, now=1_000_000.0, receiver_state=None, paid_at=None,
+       inflow=0.0):
+    """`paid_at` and `inflow`: the sender's own inbound view, as the store loads it."""
+    sender_state = None
+    if paid_at is not None:
+        sender_state = ReceiverState()
+        sender_state.last_inbound_ts = paid_at
+        if inflow:
+            sender_state.inbound.append((paid_at, "payer", inflow))
     return F.extract(event, state or SenderState(), now, receiver_state,
-                     sender_inbound_ts=sender_inbound_ts)
+                     sender_state=sender_state)
 
 
 # --- the vector ------------------------------------------------------------
@@ -97,14 +106,14 @@ def test_sender_payees_need_no_store(on):
 
 def test_transit_interval_is_seconds_since_the_sender_was_paid(on):
     now = 1_000_000.0
-    f = _f(_ev(), now=now, sender_inbound_ts=now - 45)
+    f = _f(_ev(), now=now, paid_at=now - 45)
     assert f["secs_since_sender_inbound"] == pytest.approx(45.0)
 
 
 def test_never_paid_and_no_store_read_the_same_capped_value(on):
-    f = _f(_ev(), sender_inbound_ts=None)
+    f = _f(_ev(), paid_at=None)
     assert f["secs_since_sender_inbound"] == float(C.LINK_WEEK_S)
-    old = _f(_ev(), now=1_000_000.0, sender_inbound_ts=1_000_000.0 - 30 * 86400)
+    old = _f(_ev(), now=1_000_000.0, paid_at=1_000_000.0 - 30 * 86400)
     assert old["secs_since_sender_inbound"] == float(C.LINK_WEEK_S), "capped, never NaN"
 
 
@@ -127,3 +136,55 @@ def test_pruning_cannot_change_a_count(on):
     f = _f(_ev(sender="S0"), receiver_state=rs, now=now)
     assert f["payee_payers_24h"] == C.LINK_PRUNE_AT + 10
 
+
+
+# --- the rule: money in, money straight out --------------------------------
+
+def _res(event, state=None, now=1_000_000.0, receiver_state=None, paid_at=None,
+         inflow=0.0):
+    sender_state = None
+    if paid_at is not None:
+        sender_state = ReceiverState()
+        sender_state.last_inbound_ts = paid_at
+        if inflow:
+            sender_state.inbound.append((paid_at, "payer", inflow))
+    return R.evaluate(event, state or SenderState(), now, receiver_state,
+                      sender_state=sender_state)
+
+
+def test_pass_through_fires_when_all_of_it_leaves_again(on):
+    now = 1_000_000.0
+    res = _res(_ev(amount=1_000_000), now=now, paid_at=now - 300, inflow=1_100_000)
+    assert "PASS_THROUGH" in res["rule_hits"]
+
+
+def test_a_part_of_it_is_not_a_pass_through(on):
+    """The shape is the whole sum moving on, not a slice of it."""
+    now = 1_000_000.0
+    res = _res(_ev(amount=300_000), now=now, paid_at=now - 300, inflow=1_000_000)
+    assert "PASS_THROUGH" not in res["rule_hits"]
+
+
+def test_money_that_sat_for_hours_is_not_transit(on):
+    now = 1_000_000.0
+    res = _res(_ev(amount=1_000_000), now=now, paid_at=now - 4 * 3600,
+               inflow=1_000_000)
+    assert "PASS_THROUGH" not in res["rule_hits"]
+
+
+def test_a_store_that_is_down_silences_the_rule(on):
+    """Fail open: an unknown inbound history is not a transit."""
+    assert "PASS_THROUGH" not in _res(_ev(), paid_at=None)["rule_hits"]
+
+
+def test_pass_through_needs_the_capability(on):
+    CAP.MODES["counterparty_history"] = "off"
+    now = 1_000_000.0
+    res = _res(_ev(amount=1_000_000), now=now, paid_at=now - 60, inflow=1_000_000)
+    assert "PASS_THROUGH" not in res["rule_hits"]
+
+
+def test_pass_through_cannot_decide_on_its_own(on):
+    """Not mandatory and below the cutoff: it corroborates, it does not accuse."""
+    assert "PASS_THROUGH" not in C.MANDATORY_REVIEW_RULES
+    assert C.W_PASS_THROUGH < C.REVIEW_THRESHOLD
