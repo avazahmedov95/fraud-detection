@@ -281,6 +281,29 @@ state. The code is in git history (`git show 43962d5`, the last commit with it);
 both harnesses are deleted
 (`git show 77e6dad:ml/experiments/links.py`, `git show 77e6dad:ml/experiments/shapes.py`).
 
+### A rule for the counters: the gate, fixed before the run
+
+`COLLECTOR` fires when six or more distinct people paid the payee within 24 hours
+*and* the one-hour `MULE_FAN_IN` is silent, so one collection cannot score twice.
+The count is the hour rule's own - no new number - and the weight is lower (0.25
+against 0.35): a slow collection is weaker evidence than a burst, and on its own it
+does not reach the 0.40 cutoff. The rule is not in `MANDATORY_REVIEW_RULES`, so it
+cannot move a fused decision; its whole value is on the **CEP-only fallback**, which
+catches 14.9% of the held-out month's fraud at 1.3% precision since `FRESH_RECEIVER`
+went with the payee's age.
+
+The rule, fixed before the run:
+
+1. CEP-only recall on the held-out slice rises by at least 5 points (0.149 -> 0.199
+   or better).
+2. Among the transfers the rule alone lifts to REVIEW, the fraud share is at least
+   the CEP-only precision it is added to (1.3%).
+3. Of the 2,973 legitimate transfers into accounts collecting from five or more
+   other people in a week, it lifts at most 1% - 30 transfers.
+
+All three hold: the rule stays on. Any fails: it comes out, and the numbers are
+written here. `stream-processor/experiments/replay.py rule-value` runs it.
+
 ### Honest collections are not mistaken for mules
 
 `experiments/collectors.py` refits the served committee without the counterparty

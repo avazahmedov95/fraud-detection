@@ -8,6 +8,7 @@ import pytest
 import capabilities as CAP
 import config as C
 import features as F
+import rules as R
 from rules import ReceiverState, SenderState
 from conftest import payee_card
 
@@ -126,3 +127,47 @@ def test_pruning_cannot_change_a_count(on):
     assert len(rs.payers) == C.LINK_PRUNE_AT + 10, "nothing here is older than a week"
     f = _f(_ev(sender="S0"), receiver_state=rs, now=now)
     assert f["payee_payers_24h"] == C.LINK_PRUNE_AT + 10
+
+
+# --- the rule: a collection spread over a day ------------------------------
+
+def _res(event, state=None, now=1_000_000.0, receiver_state=None):
+    return R.evaluate(event, state or SenderState(), now, receiver_state)
+
+
+def test_collector_fires_on_a_day_long_collection(on):
+    now = 1_000_000.0
+    rs = ReceiverState()
+    rs.payers = {f"S{i}": now - (i + 2) * 3600 for i in range(5)}   # 2 to 6 hours ago
+    res = _res(_ev(sender="S9"), receiver_state=rs, now=now)
+    assert "COLLECTOR" in res["rule_hits"], "five payers today, plus this one"
+    assert "MULE_FAN_IN" not in res["rule_hits"], "and none of them in the last hour"
+
+
+def test_collector_is_silent_when_the_burst_rule_fires(on):
+    """One collection must not score twice: the rules are the same shape."""
+    now = 1_000_000.0
+    rs = ReceiverState()
+    for i in range(6):
+        F.update_receiver_state(rs, _ev(sender=f"S{i}"), now - 600)
+    res = _res(_ev(sender="S9"), receiver_state=rs, now=now)
+    assert "MULE_FAN_IN" in res["rule_hits"]
+    assert "COLLECTOR" not in res["rule_hits"]
+
+
+def test_collector_needs_the_capability(on):
+    CAP.MODES["counterparty_history"] = "off"
+    rs = ReceiverState()
+    rs.payers = {f"S{i}": 1_000_000.0 - 3600 * (i + 2) for i in range(9)}
+    assert "COLLECTOR" not in _res(_ev(sender="S9"), receiver_state=rs)["rule_hits"]
+
+
+def test_a_store_that_is_down_silences_the_rule(on):
+    """Fail open: no payer history is not a collection."""
+    assert "COLLECTOR" not in _res(_ev(), receiver_state=None)["rule_hits"]
+
+
+def test_collector_cannot_decide_on_its_own(on):
+    """Not mandatory and below the cutoff: it corroborates, it does not accuse."""
+    assert "COLLECTOR" not in C.MANDATORY_REVIEW_RULES
+    assert C.W_COLLECTOR < C.REVIEW_THRESHOLD
