@@ -80,6 +80,16 @@ def event_from(row: dict) -> dict:
     }
 
 
+def sender_key(event: dict) -> str:
+    """The sender's own account in the SAME key space as payee_key: what the
+    receiver-side store filed this sender under when they were last paid."""
+    if CAP.mode("payee_identity") == "pinfl":
+        pinfl = str(event.get("sender_pinfl", "") or "")
+        if pinfl:
+            return pinfl
+    return str(event.get("sender_card", "") or "")
+
+
 def payee_key(event: dict) -> str:
     """The identity the payee is pinned to - card (default) or pinfl - uniform per
     deployment: every receiver-side store keys on it, and a per-transfer mix loses
@@ -97,7 +107,8 @@ def payee_key(event: dict) -> str:
     return card
 
 
-def extract(event: dict, state, now: float, receiver_state=None) -> dict:
+def extract(event: dict, state, now: float, receiver_state=None,
+            sender_inbound_ts=None) -> dict:
     """Read-only feature extraction; does NOT mutate either state. `receiver_state`
     may be None when the shared store is down - inbound features then read as zero,
     the fail-open behaviour used elsewhere."""
@@ -155,6 +166,31 @@ def extract(event: dict, state, now: float, receiver_state=None) -> dict:
         rcv_senders = len({e[1] for e in recent} | {event.get("sender_pinfl", "")})
         rcv_inflow = sum(e[2] for e in recent) + amount
 
+    # The same counting over the windows the AML rules count over (a day and a
+    # week, config.LINK_*), on both sides, plus the interval since the SENDER's
+    # own account was last paid: a mule collects over days and passes the money
+    # on. Fail open exactly like the fan-in features - a store that is down
+    # reads as nothing seen, not as a small count.
+    payee_payers_24h = payee_payers_7d = 0
+    if receiver_state is not None:
+        payer = event.get("sender_pinfl", "")
+        payers = getattr(receiver_state, "payers", None) or {}
+        payee_payers_24h = len({p for p, t in payers.items()
+                                if now - t <= C.LINK_DAY_S} | {payer})
+        payee_payers_7d = len({p for p, t in payers.items()
+                               if now - t <= C.LINK_WEEK_S} | {payer})
+    paid = getattr(state, "payee_times", None) or {}
+    sender_payees_24h = len({p for p, t in paid.items()
+                             if now - t <= C.LINK_DAY_S} | {payee})
+    sender_payees_7d = len({p for p, t in paid.items()
+                            if now - t <= C.LINK_WEEK_S} | {payee})
+    # Capped, never NaN: 'never paid' and 'the store is down' are the same
+    # observation here, and the cap keeps the column finite for every model.
+    secs_since_sender_inbound = float(C.LINK_WEEK_S)
+    if sender_inbound_ts:
+        secs_since_sender_inbound = max(0.0, min(now - float(sender_inbound_ts),
+                                                 float(C.LINK_WEEK_S)))
+
     active_call = truthy(event.get("active_call"))
     secs_login = float(event.get("secs_login_to_confirm") or 0.0)
 
@@ -174,6 +210,11 @@ def extract(event: dict, state, now: float, receiver_state=None) -> dict:
         "is_new_payee": 0 if payee in state.seen_payees else 1,
         "rcv_distinct_senders_1h": rcv_senders,
         "rcv_inflow_1h": math.log1p(rcv_inflow),
+        "payee_payers_24h": payee_payers_24h,
+        "payee_payers_7d": payee_payers_7d,
+        "sender_payees_24h": sender_payees_24h,
+        "sender_payees_7d": sender_payees_7d,
+        "secs_since_sender_inbound": secs_since_sender_inbound,
         # MyID kinship; in the vector only when the myid_kinship capability is on.
         "is_family": truthy(event.get("is_family_transfer")),
         "vel_10m": win_count(C.VELOCITY_WINDOW_S),
@@ -201,12 +242,26 @@ def to_vector(feat: dict) -> list:
     return [float(feat[name]) for name in FEATURE_NAMES]
 
 
+def _prune_links(times: dict, now: float) -> None:
+    """Drop counterparties older than the longest window. Memory only: extract
+    filters by time, so a late prune cannot change a feature."""
+    if len(times) <= C.LINK_PRUNE_AT:
+        return
+    cutoff = now - C.LINK_WEEK_S
+    for k, t in list(times.items()):
+        if t < cutoff:
+            del times[k]
+
+
 def update_receiver_state(receiver_state, event: dict, now: float) -> None:
     """Advance the payee's inbound history (call AFTER extract)."""
     if receiver_state is None:
         return
     receiver_state.inbound.append(
         (now, event.get("sender_pinfl", ""), float(event["amount_uzs"])))
+    receiver_state.payers[event.get("sender_pinfl", "")] = now
+    receiver_state.last_inbound_ts = now
+    _prune_links(receiver_state.payers, now)
     while (receiver_state.inbound
            and now - receiver_state.inbound[0][0] > C.RECEIVER_WINDOW_S):
         receiver_state.inbound.popleft()
@@ -219,6 +274,8 @@ def update_state(state, event: dict, now: float) -> None:
     # is_new_payee read 1 on every event forever.
     payee = payee_key(event)
     state.seen_payees.add(payee)
+    state.payee_times[payee] = now
+    _prune_links(state.payee_times, now)
     state.events.append((now, amount, payee))
     # Bound the window deque (memory). Stale entries are time-filtered in extract anyway.
     while state.events and now - state.events[0][0] > C.RECENT_RETENTION_S:

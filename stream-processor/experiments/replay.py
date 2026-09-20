@@ -41,10 +41,13 @@ def replay(path, population=None, count_hits=False):
     for row in df.itertuples(index=False):
         r = row._asdict()
         ev = event_from(r)
+        paid_sender = rstates.get(F.sender_key(ev))
         res = evaluate(ev,
                        state=states[r["sender_card"]],
                        now=pd.Timestamp(r["event_time"]).timestamp(),
                        receiver_state=rstates[F.payee_key(ev)],
+                       sender_inbound_ts=(paid_sender.last_inbound_ts
+                                          if paid_sender else None),
                        population=population)
         decisions.append(res["decision"])
         if count_hits:

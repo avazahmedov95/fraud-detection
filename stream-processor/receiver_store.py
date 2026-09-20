@@ -5,6 +5,7 @@ Fails open."""
 
 import logging
 
+import capabilities as CAP
 import config as C
 import features as F
 from rules import ReceiverState, quantile_threshold
@@ -41,6 +42,18 @@ class ReceiverStore:
         except Exception as exc:                       # noqa: BLE001
             log.warning("fan-in lookup failed, failing open: %s", exc)
             return None
+        if CAP.enabled("counterparty_history"):
+            # Who paid this account over the week, and when: the AML counters.
+            # A failure here must not cost the fan-in window read above.
+            try:
+                for member, score in self._redis.zrangebyscore(
+                        f"cp:in:{payee}", now - C.LINK_WEEK_S, now,
+                        withscores=True):
+                    state.payers[member] = float(score)
+                    state.last_inbound_ts = max(state.last_inbound_ts,
+                                                float(score))
+            except Exception as exc:                   # noqa: BLE001
+                log.warning("counterparty lookup failed, failing open: %s", exc)
         for m in members:
             try:
                 # Left three separators only: the last field is the transaction id.
@@ -73,9 +86,29 @@ class ReceiverStore:
             pipe.zremrangebyscore(key, "-inf", now - self._window_s)
             # Twice the window: nothing in use expires, idle payees do not accumulate.
             pipe.expire(key, int(self._window_s * 2))
+            if CAP.enabled("counterparty_history"):
+                # One member per PAYER, scored with the last time they paid, so
+                # the key grows with counterparties rather than with transfers.
+                ckey = f"cp:in:{payee}"
+                pipe.zadd(ckey, {event.get("sender_pinfl", ""): now})
+                pipe.zremrangebyscore(ckey, "-inf", now - C.LINK_WEEK_S)
+                pipe.expire(ckey, int(C.LINK_WEEK_S * 2))
             pipe.execute()
         except Exception as exc:                       # noqa: BLE001
             log.warning("fan-in write failed, continuing: %s", exc)
+
+    def last_inbound(self, account, now):
+        """When this account was last paid, or None when that is not being
+        computed - the other half of the transit shape: money in, money out."""
+        if (self._redis is None or not account
+                or not CAP.enabled("counterparty_history")):
+            return None
+        try:
+            top = self._redis.zrevrange(f"cp:in:{account}", 0, 0, withscores=True)
+        except Exception as exc:                       # noqa: BLE001
+            log.warning("last-inbound lookup failed, failing open: %s", exc)
+            return None
+        return float(top[0][1]) if top else None
 
     def close(self):
         if self._redis is not None:

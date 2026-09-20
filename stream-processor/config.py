@@ -71,6 +71,16 @@ MIN_TRAVEL_DISTANCE_KM = 100.0
 # Above the fan-OUT threshold: receiving from several people in an hour is
 # ordinary, paying out to several unrelated new payees is not.
 RECEIVER_WINDOW_S = 3600
+
+# Counterparty counters (counterparty_history). The CBU's internal-control
+# rules count distinct counterparties over up to 30 days (related-work.md 6e);
+# both datasets here span 30 days, so a month cannot be measured on them and a
+# week is the longest window they support.
+LINK_DAY_S = 86400
+LINK_WEEK_S = 604800
+#: Prune the counterparty maps only once they grow: the window filter in
+#: features.extract decides what counts, so pruning is memory, not correctness.
+LINK_PRUNE_AT = 256
 MULE_FAN_IN_MIN_SENDERS = 6
 
 # "relative": a quantile of the live population instead of the constant 6, which

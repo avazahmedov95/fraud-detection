@@ -102,7 +102,24 @@ REGISTRY = (
                   "back to the card and says so once. The harnesses that read "
                   "the generated CSV can run it.",
     ),
-)
+    Capability(
+        key="counterparty_history",
+        requires="the shared store keeping, per card, who paid it and when, for a "
+                 "week rather than an hour, and the sender's own last inbound",
+        modes=("off", "on"),            # off until measured through this extractor
+        features=("payee_payers_24h", "payee_payers_7d", "sender_payees_24h",
+                  "sender_payees_7d", "secs_since_sender_inbound"),
+        rules=(),
+        rationale="The CBU's internal-control rules define P2P activity subject "
+                  "to control as counts of distinct counterparties over up to 30 "
+                  "days (docs/related-work.md 6e); the one-hour fan-in window "
+                  "sees a slice of that. A mule collects over days and passes "
+                  "the money on, so the interval since the sender's own account "
+                  "was last paid is the other half of the shape. A month cannot "
+                  "be measured on 30-day datasets, so the windows are a day and "
+                  "a week. Last in the registry, so switching it on appends to "
+                  "the vector instead of shifting every trained model's columns.",
+    ),)
 
 BY_KEY = {c.key: c for c in REGISTRY}
 

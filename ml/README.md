@@ -324,6 +324,38 @@ than 45 days (`docs/generator-spec.md` §2), which a bank that cannot see the
 payee's account never observes. **The drop is the price of not assuming data the
 deploying bank does not have, and the figures above are quoted without it.**
 
+### Counting counterparties over days: the rule, fixed before the run
+
+`counterparty_history` (off by default) adds five columns: the payee's distinct
+payers over 24 hours and over 7 days, the sender's distinct payees over the same
+two windows, and the seconds since the sender's own account was last paid. The
+windows are the regulator's - the CBU's internal-control rules define P2P activity
+subject to control as counts of distinct counterparties over up to 30 days
+(`docs/related-work.md` 6e) - shortened to a week, because both datasets here span
+30 days and a month-long window on them would mean "everything since the file
+began". The last column is the other half of the same shape: a mule collects over
+days and passes the money on, so the interval between being paid and paying is
+what a one-hour fan-in window cannot see.
+
+The rule, fixed before any of it was measured:
+
+1. **Parity.** The store-backed path and the in-process replay must produce the
+   same columns for the same events (`stream-processor/tests/test_receiver_store.py`),
+   and switching the capability on must leave the existing sixteen columns
+   unchanged.
+2. **This project's data.** Five paired fits of `train.py`'s recipe on the
+   realistic profile, with and without the five columns: the mean validation
+   PR-AUC difference at or above zero, its 95% interval's lower bound above
+   -0.01, and the averaged committee's validation PR-AUC not lower.
+3. **PaySim**, the published split's first 24 days (fit on the earliest 80%,
+   validate on the rest), unweighted, five seeds: the mean validation PR-AUC
+   difference not below zero, and the averaged committee finding at least as much
+   fraud in the top 0.1% of the validation transfers.
+
+All three pass: the capability is switched on and the served model retrained. Any
+fails: it stays off, and the numbers are written here. `experiments/counters.py`
+runs 2 and 3.
+
 **Everything below is the baseline profile, the dataset of record until
 2026-09-14, unless it says otherwise.**
 

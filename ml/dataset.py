@@ -33,9 +33,14 @@ def build_matrix(csv_path: str, nrows=None) -> pd.DataFrame:
         d = rec._asdict()
         event = F.event_from(d)
         now = pd.Timestamp(d["event_time"]).timestamp()
+        # .get, not [...]: the sender's own inbound state exists only once someone
+        # has paid them, and a defaultdict lookup would invent an empty one.
+        paid_sender = receiver_states.get(F.sender_key(event))
         res = R.evaluate(event,
                          states[d["sender_card"]], now,
                          receiver_states[F.payee_key(event)],
+                         sender_inbound_ts=(paid_sender.last_inbound_ts
+                                            if paid_sender else None),
                          population=population)
         row = dict(zip(FEATURE_NAMES, res["features"]))
         row["cep_score"] = res["cep_score"]

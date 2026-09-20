@@ -17,6 +17,10 @@ class ReceiverState:
     """Inbound history for ONE receiver, keyed by payee: the stream is partitioned
     by sender, so this lives in a shared Redis store, not Flink keyed state."""
     inbound: deque = field(default_factory=deque)     # (ts, sender_pinfl, amount)
+    #: payer -> when they last paid, over the counterparty window; and when this
+    #: account was last paid at all. Both are the AML counters, not the CEP window.
+    payers: dict = field(default_factory=dict)
+    last_inbound_ts: float = 0.0
 
 
 #: Below this a "receiver with many senders" is not a claim anyone would make.
@@ -83,6 +87,8 @@ class PopulationBaseline:
 @dataclass
 class SenderState:
     seen_payees: set = field(default_factory=set)
+    #: payee -> when this sender last paid them, for the counterparty counts.
+    payee_times: dict = field(default_factory=dict)
     events: deque = field(default_factory=deque)        # (ts, amount, payee)
     region_counts: Counter = field(default_factory=Counter)
     # Where and when the sender was last seen, for the travel-speed check.
@@ -113,10 +119,11 @@ def _review_threshold():
 
 def evaluate(event: dict, state: SenderState, now: float,
              receiver_state: "ReceiverState | None" = None,
+             sender_inbound_ts=None,
              population: "PopulationBaseline | None" = None) -> dict:
     """Score one event from the shared features. Mutates state (after extraction).
     `receiver_state` is optional: an unreachable shared store fails open here."""
-    f = F.extract(event, state, now, receiver_state)
+    f = F.extract(event, state, now, receiver_state, sender_inbound_ts)
 
     hits = []
     score = 0.0

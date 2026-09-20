@@ -22,9 +22,15 @@ class FakeRedis:
     def pipeline(self):
         return FakePipeline(self)
 
-    def zrangebyscore(self, key, lo, hi):
-        return [m for m, s in sorted(self.sets.get(key, {}).items(),
-                                     key=lambda kv: kv[1]) if lo <= s <= hi]
+    def zrangebyscore(self, key, lo, hi, withscores=False):
+        rows = [(m, s) for m, s in sorted(self.sets.get(key, {}).items(),
+                                          key=lambda kv: kv[1]) if lo <= s <= hi]
+        return rows if withscores else [m for m, _ in rows]
+
+    def zrevrange(self, key, start, stop, withscores=False):
+        rows = sorted(self.sets.get(key, {}).items(), key=lambda kv: -kv[1])
+        rows = rows[start:stop + 1] if stop >= 0 else rows[start:]
+        return rows if withscores else [m for m, _ in rows]
 
     def close(self):
         pass
@@ -129,3 +135,77 @@ def test_load_distinguishes_unavailable_from_empty(store):
         type(store.load("never-paid", now=1000).inbound)()
     s = ReceiverStore("h", 1)
     assert s.load("never-paid", now=1000) is None
+
+
+# --- the counterparty counters (counterparty_history) -----------------------
+
+@pytest.fixture
+def counters_on():
+    import capabilities as CAP
+    original = dict(CAP.MODES)
+    CAP.MODES["counterparty_history"] = "on"
+    yield
+    CAP.MODES.clear(); CAP.MODES.update(original)
+
+
+def test_one_member_per_payer_not_per_transfer(store, counters_on):
+    """The key grows with counterparties, which is what makes a week affordable."""
+    for i in range(4):
+        store.record(_ev(f"t{i}", sender="S1"), 1000 + i)
+    key = f"cp:in:{F.payee_key(_ev('t0'))}"
+    assert list(store._redis.sets[key]) == ["S1"]
+    assert store._redis.sets[key]["S1"] == 1003, "the score is when they last paid"
+
+
+def test_load_reads_back_the_payers_and_the_last_inbound(store, counters_on):
+    store.record(_ev("t1", sender="S1"), 1000)
+    store.record(_ev("t2", sender="S2"), 1500)
+    state = store.load(F.payee_key(_ev("t1")), 2000)
+    assert state.payers == {"S1": 1000.0, "S2": 1500.0}
+    assert state.last_inbound_ts == 1500.0
+
+
+def test_last_inbound_is_the_newest_payment_to_that_account(store, counters_on):
+    store.record(_ev("t1", sender="S1", receiver="MULE"), 1000)
+    store.record(_ev("t2", sender="S2", receiver="MULE"), 1400)
+    account = F.payee_key(_ev("t1", receiver="MULE"))
+    assert store.last_inbound(account, 1500) == 1400.0
+    assert store.last_inbound("never-paid", 1500) is None
+
+
+def test_nothing_is_written_while_the_capability_is_off(store):
+    store.record(_ev("t1"), 1000)
+    assert not [k for k in store._redis.sets if k.startswith("cp:in:")]
+    assert store.last_inbound(F.payee_key(_ev("t1")), 1000) is None
+
+
+def test_the_store_path_and_the_in_process_replay_agree(store, counters_on):
+    """Parity, the condition the gate in ml/README.md names first: the same events
+    through Redis and through plain objects give the same columns. The extractor is
+    shared, so this pins what the store has to reproduce - including the counters."""
+    import random
+    from collections import defaultdict
+    from rules import ReceiverState, SenderState
+
+    senders_a, receivers_a = defaultdict(SenderState), defaultdict(ReceiverState)
+    senders_b = defaultdict(SenderState)
+    rng, rows_a, rows_b = random.Random(7), [], []
+    for i in range(120):
+        ev = _ev(f"t{i}", sender=f"S{rng.randrange(6)}", receiver=f"R{rng.randrange(4)}")
+        ts = 1_000_000.0 + i * 600
+        pk, sk = F.payee_key(ev), F.sender_key(ev)
+
+        paid = receivers_a.get(sk)                    # .get: never invent a state
+        rows_a.append(F.to_vector(F.extract(
+            ev, senders_a[ev["sender_pinfl"]], ts, receivers_a[pk],
+            sender_inbound_ts=(paid.last_inbound_ts if paid else None))))
+        F.update_state(senders_a[ev["sender_pinfl"]], ev, ts)
+        F.update_receiver_state(receivers_a[pk], ev, ts)
+
+        rows_b.append(F.to_vector(F.extract(
+            ev, senders_b[ev["sender_pinfl"]], ts, store.load(pk, ts),
+            sender_inbound_ts=store.last_inbound(sk, ts))))
+        F.update_state(senders_b[ev["sender_pinfl"]], ev, ts)
+        store.record(ev, ts)
+
+    assert rows_a == rows_b
