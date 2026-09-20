@@ -90,31 +90,39 @@ not create signal.
 
 ### Result (`--our-model`): this project's model trained on PaySim
 
-14 of the 20 features of the time compute here (13 informative: PaySim names no bank, so
-`cross_network` is constant), on the published baseline's own split (24 days / 7
-days).
+18 of the 21 features compute here - PaySim carries no call state, no region and
+no session timing - on the published baseline's own split (24 days / 7 days).
+**Re-run 2026-09-20** with the counterparty counters on; the figures the
+counters replaced are in the paragraph below the table.
 
 | configuration | feat | PR-AUC | ROC-AUC | rec@2% | lift |
 |---|---|---|---|---|---|
-| **fitted with class weighting** (scale_pos_weight ≈ 974) | | | | | |
-| this project, all it can compute | 14 | 0.032 | 0.726 | 19.7% | 3.9× |
-| — without receiver aggregation | 12 | 0.021 | 0.696 | 17.3% | 2.9× |
-| — plus PaySim's own transaction type | 19 | 0.040 | 0.809 | 17.6% | 4.7× |
+| **fitted with class weighting** (scale_pos_weight ≈ 774) | | | | | |
+| this project, all it can compute | 18 | 0.018 | 0.659 | 6.2% | 1.8× |
+| — without receiver aggregation | 16 | 0.022 | 0.705 | 19.0% | 3.1× |
+| — plus PaySim's own transaction type | 23 | 0.018 | 0.682 | 19.7% | 3.4× |
 | **fitted unweighted**, as the published baseline was | | | | | |
-| this project, all it can compute | 14 | **0.267** | 0.853 | 39.8% | 6.8× |
-| — without receiver aggregation | 12 | **0.315** | 0.867 | 44.6% | 6.9× |
-| — plus PaySim's own transaction type | 19 | **0.373** | 0.889 | 46.4% | 7.2× |
+| this project, all it can compute | 18 | **0.294** | 0.831 | 43.0% | 6.6× |
+| — without receiver aggregation | 16 | **0.330** | 0.876 | 48.3% | 6.9× |
+| — plus PaySim's own transaction type | 23 | **0.440** | 0.916 | 53.4% | 8.2× |
 | published generic baseline (§6 of `related-work.md`) | ~24 | 0.380 | 0.908 | 49.4% | 7.0× |
 
 1. **The recipe, not the features, produced the alarming number**: same features
-   and split, **0.032 weighted against 0.267 unweighted** - heavy positive
+   and split, **0.018 weighted against 0.294 unweighted** - heavy positive
    weighting flattens the top of the ranking AUPRC reads. `train.py` now fits
    unweighted below 0.5% fraud.
-2. **Receiver aggregation reverses on PaySim**: removing it *improves* PR-AUC by
-   0.049, where on this project's data it costs the most. PaySim has no fan-in to
-   find, so no run on PaySim can validate that finding, and no dataset here does.
-3. **With matching recipes the feature set is competitive**: 0.373 against the
-   baseline's 0.380, once PaySim's transaction type is added.
+2. **Receiver aggregation reverses on PaySim**: removing the one-hour fan-in pair
+   *improves* PR-AUC by 0.036, where on this project's data it costs the most.
+   PaySim drains one account straight to cash-out with no collection stage, so no
+   run on PaySim can validate that finding, and no dataset here does.
+3. **With matching recipes the feature set now beats the published model**: 0.440
+   against 0.380, 53.4% against 49.4% of the fraud inside a 2% alert budget, and
+   8.2× against 7.0× lift - once PaySim's own transaction type is added to both.
+   The counterparty counters are what moved it: before them the same three rows
+   read 0.267, 0.315 and 0.373 on 14 columns (`git show 6ed678d`), level with the
+   baseline rather than above it. A caveat the number does not carry: this is a
+   model *fitted on PaySim*, not the served one, and the deployed rules still
+   flag 6% of its fraud (§1 above).
 
 The run also found an extractor defect: with no `receiver_card`, `payee_key`
 returned "" and every payee shared one receiver state, fabricating fan-in.

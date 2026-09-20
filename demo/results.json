@@ -4,7 +4,10 @@
     {
       "key": "paysim",
       "status": "used",
-      "name": {"ru": "PaySim", "en": "PaySim"},
+      "name": {
+        "ru": "PaySim",
+        "en": "PaySim"
+      },
       "what": {
         "ru": "Искусственные мобильные переводы, собранные по образцу африканского сервиса: 6,4 млн операций. Проверяли на 500 тыс. переводов, из них 2 520 мошеннических.",
         "en": "Synthetic mobile-money transfers modelled on an African service: 6.4M operations. Checked on 500,000 transfers, 2,520 of them fraud."
@@ -19,14 +22,14 @@
           "Правило «много отправителей на один счёт» молчит — так и должно быть: схемы сбора денег в PaySim нет.",
           "Модель на наших признаках: 0,267 (качество ранжирования, PR-AUC). С колонкой «тип операции» из самого PaySim — 0,373 против 0,380 у опубликованной работы.",
           "Наши пороги не переносятся: с ними поймано 0% мошенничества, с пересчитанными — 6%.",
-          "Обучение с большим весом мошенническим примерам ломается при такой редкости мошенничества: 0,032 вместо 0,267. Теперь обучение в таком случае останавливается и предупреждает."
+          "Обучение с большим весом мошенническим примерам ломается при такой редкости мошенничества: 0,018 вместо 0,294. Теперь обучение в таком случае останавливается и предупреждает."
         ],
         "en": [
           "The rule \"new payee + large amount\" fires on fraud 4 times as often as on honest transfers.",
           "The rule \"many senders into one account\" stays silent, as it should: PaySim has no collection scheme.",
-          "The model on our features: 0.267 (ranking quality, PR-AUC). With PaySim's own transaction type: 0.373, against 0.380 for the published work.",
+          "The model on our features: 0.294 (ranking quality, PR-AUC). With PaySim's own transaction type: 0.440, against 0.380 for the published work.",
           "Our thresholds do not transfer: they catch 0% of the fraud, rescaled ones 6%.",
-          "Training with a heavy weight on fraud collapses at this rarity: 0.032 instead of 0.267. Training now stops and warns in that case."
+          "Training with a heavy weight on fraud collapses at this rarity: 0.018 instead of 0.294. Training now stops and warns in that case."
         ]
       },
       "verdict": {
@@ -35,19 +38,43 @@
       },
       "source": "validation/README.md, section 1",
       "quotes": [
-        {"file": "validation/README.md", "text": "| `NEW_PAYEE_HIGH_AMOUNT` | 5.95% | 1.49% | **4.0x** |"},
-        {"file": "validation/README.md", "text": "| `MULE_FAN_IN` | 0.00% | 0.07% | 0.0x |"},
-        {"file": "validation/README.md", "text": "| this project, all it can compute | 14 | **0.267** |"},
-        {"file": "validation/README.md", "text": "| — plus PaySim's own transaction type | 19 | **0.373** |"},
-        {"file": "validation/README.md", "text": "| published generic baseline (§6 of `related-work.md`) | ~24 | 0.380 |"},
-        {"file": "validation/README.md", "text": "| fraud flagged | 0 / 2,520 (0.0%) | **150 / 2,520 (6.0%)** |"},
-        {"file": "validation/README.md", "text": "**0.032 weighted against 0.267 unweighted**"}
+        {
+          "file": "validation/README.md",
+          "text": "| `NEW_PAYEE_HIGH_AMOUNT` | 5.95% | 1.49% | **4.0x** |"
+        },
+        {
+          "file": "validation/README.md",
+          "text": "| `MULE_FAN_IN` | 0.00% | 0.07% | 0.0x |"
+        },
+        {
+          "file": "validation/README.md",
+          "text": "| this project, all it can compute | 18 | **0.294** |"
+        },
+        {
+          "file": "validation/README.md",
+          "text": "| — plus PaySim's own transaction type | 23 | **0.440** |"
+        },
+        {
+          "file": "validation/README.md",
+          "text": "| published generic baseline (§6 of `related-work.md`) | ~24 | 0.380 |"
+        },
+        {
+          "file": "validation/README.md",
+          "text": "| fraud flagged | 0 / 2,520 (0.0%) | **150 / 2,520 (6.0%)** |"
+        },
+        {
+          "file": "validation/README.md",
+          "text": "**0.018 weighted against 0.294 unweighted**"
+        }
       ]
     },
     {
       "key": "rejected",
       "status": "rejected",
-      "name": {"ru": "Отброшены после проверки", "en": "Rejected after examination"},
+      "name": {
+        "ru": "Отброшены после проверки",
+        "en": "Rejected after examination"
+      },
       "findings": {
         "ru": [
           "Zenodo 20030065: признаки сжаты в безымянные числа, поэтому решение нельзя объяснить, и есть подсказка ответа. Оставили только реальную долю мошенничества в картах — 0,17–0,19%.",
@@ -64,10 +91,22 @@
       },
       "source": "validation/README.md, sections 2 and 3, and \"Rejected: IEEE-CIS\"",
       "quotes": [
-        {"file": "validation/README.md", "text": "~0.17–0.19% is a real figure from real card traffic"},
-        {"file": "validation/README.md", "text": "**1. The coordinates are random, and the release says so.**"},
-        {"file": "validation/README.md", "text": "## Rejected: IEEE-CIS"},
-        {"file": "validation/README.md", "text": "PCA-anonymised into V1..V28"}
+        {
+          "file": "validation/README.md",
+          "text": "~0.17–0.19% is a real figure from real card traffic"
+        },
+        {
+          "file": "validation/README.md",
+          "text": "**1. The coordinates are random, and the release says so.**"
+        },
+        {
+          "file": "validation/README.md",
+          "text": "## Rejected: IEEE-CIS"
+        },
+        {
+          "file": "validation/README.md",
+          "text": "PCA-anonymised into V1..V28"
+        }
       ]
     }
   ]
