@@ -283,29 +283,41 @@ both harnesses are deleted
 
 ### Honest collections are not mistaken for mules
 
-`experiments/collectors.py` (`git show 241ecac:ml/experiments/collectors.py`)
-refitted the served committee with and without link_history - reproducing both
-exactly, 160 alerts at 0.637 / 0.505 and 157 at 0.694 / 0.540 - and read the
-held-out month by the payee's distinct payers over the 96 hours before each
-transfer:
+`experiments/collectors.py` refits the served committee without the counterparty
+counters and with them - reproducing both exactly, 132 alerts at 0.538 / 0.351 and
+154 at 0.571 / 0.436 - and reads the held-out month by the payee's **other** payers
+over the 7 days before each transfer (2026-09-20):
 
-| payee's payers, 96 h | legitimate transfers | false alarms without | with | MULE transfers | caught without | with |
+| payee's other payers, 7 d | legitimate transfers | false alarms without | with | MULE transfers | caught without | with |
 |---|---|---|---|---|---|---|
-| none | 26,722 | 30 (0.11%) | 30 (0.11%) | 14 | 5 | 8 |
-| 1-2 | 58,973 | 18 (0.03%) | 7 (0.01%) | 15 | 7 | 7 |
-| 3-4 | 12,452 | 5 (0.04%) | 4 (0.03%) | 13 | 6 | 5 |
-| 5 or more | 1,651 | 5 (0.30%) | 7 (0.42%) | 20 | 9 | 9 |
+| none | 22,715 | 20 (0.09%) | 45 (0.20%) | 13 | 3 | 4 |
+| 1-2 | 56,723 | 24 (0.04%) | 3 (0.01%) | 15 | 4 | 4 |
+| 3-4 | 17,387 | 7 (0.04%) | 6 (0.03%) | 14 | 3 | 4 |
+| 5 or more | 2,973 | 10 (0.34%) | 12 (0.40%) | 20 | 8 | 12 |
 
-Transfers into an account collecting from five or more people - the realistic
-profile's weddings, gifts and joint purchases - are flagged about ten times as
-often as other legitimate transfers, and still rarely: 7 of 1,651, two more than
-without link_history. False alarms fall overall, 58 to 48, mostly on payees with
-one or two payers. What this cannot test is the seller paid by strangers all day:
-the generator draws no merchant flows (`docs/generator-spec.md` 8), and such a
-payee would sit far above the fifteen payers the model has seen. A deployment
-needs a known-seller flag - self-employed status is something the bank holds -
-before link_history reads a shop as a collection. link_history has since been
-removed (above); the seller caveat stands for any count of a payee's payers.
+**The collection case is the one to watch, and it held.** Transfers into an account
+collecting from five or more people - the realistic profile's weddings, gifts and
+joint purchases - are flagged about five times as often as other legitimate
+transfers, and still rarely: 12 of 2,973 against 10 without the counters, two more
+in a month. In that same group the committee now catches 12 of 20 mule transfers
+rather than 8, so the columns that could have punished collections mostly found
+mules in them.
+
+**Where the false alarms moved is the finding.** The total rose 61 to 66 while the
+catch rose 71 to 88, but the composition changed: alarms on payees with one or two
+payers fell 24 to 3, and alarms on payees **nobody else paid** rose 20 to 45. Those
+are not collection mistakes - with no inbound history on the payee, the two columns
+that can still speak are the sender's own: how many payees it paid this week, and
+how recently it was itself paid. The counters moved the model's attention from the
+payee's side to the sender's, which is the half a sending bank always has.
+
+The same question was asked of `link_history` on 2026-09-19 with the same shape of
+answer (5 to 7 false alarms of 1,651), before that capability was removed. What
+none of this can test is the seller paid by strangers all day: the generator draws
+no merchant flows (`docs/generator-spec.md` 8), and such a payee would sit far
+above the payer counts the model has seen. A deployment needs a known-seller flag -
+self-employed status is something the bank holds - before a payer count reads a
+shop as a collection.
 
 ### cross_network and device telemetry: removed, and what one retrain moves
 
