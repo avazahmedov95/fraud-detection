@@ -104,13 +104,6 @@ W_GEO_ANOMALY = 0.20
 # the model unless the rule is in MANDATORY_REVIEW_RULES.
 W_IMPOSSIBLE_TRAVEL = 0.45
 W_MULE_FAN_IN = 0.35
-#: Transit: paid, and nearly all of it going straight out again. The window and
-#: the share are the owner's specification of "the whole sum, not a part", not
-#: numbers fitted to data. Weight level with the fan-in burst: the same pattern
-#: seen from the other leg, and still below the cutoff on its own.
-PASS_THROUGH_WINDOW_S = 600
-PASS_THROUGH_SHARE = 0.80
-W_PASS_THROUGH = 0.35
 W_AMOUNT_DEVIATION = 0.25
 W_DAILY_LIMIT = 0.30
 
