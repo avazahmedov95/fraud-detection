@@ -12,7 +12,7 @@ train.py          the committee: 64/16/20 by time, cutoffs from data, metrics
 committee.py      five fits averaged into the one booster the job serves
 export_onnx.py    LightGBM -> ONNX + parity check vs the native model
 manifest.py       provenance: what the untracked artefacts were built from
-explain.py        SHAP global (beeswarm + bar) and per-alert reason codes
+explain.py        global importance (beeswarm + bar) and per-alert reason codes
 
 experiments/      harnesses - each produces a NUMBER, not an artefact the
                   system uses, and none is imported by the pipeline above
@@ -38,7 +38,7 @@ of every run is in git history (`git show 483891f:ml/README.md`).
 
 ## Why gradient boosting (not deep learning)
 
-Small labelled fraud sets, SHAP reason codes required per alert (for the analyst
+Small labelled fraud sets, exact reason codes required per alert (for the analyst
 and the regulator), and CPU-speed inference inside Flink. Neural networks fit
 later as **specialised feature providers** (e.g. behavioural biometrics) feeding
 this model, not replacing it.
@@ -546,17 +546,47 @@ separable. Their AUPRC *before* they removed the balance leakage was 0.988 (1.00
 here): a PR-AUC in the high nineties is the range a known-broken model reaches on
 public data. See `docs/related-work.md` §6.
 
-## SHAP
+## Feature importance (SHAP)
 
-**Global importance (mean |SHAP|)**, regenerated 2026-08-30 on the pinned
-environment: `is_new_payee` (0.770), `log_amount` (0.694), `receiver_age` (0.603, since removed),
-`rcv_inflow_1h` (0.516); the session signal `secs_login_z` sits sixth at 0.276.
-SHAP is not bit-stable even when the model is - the explainer samples its
-background set, about 0.002 per feature between runs - so quote three decimals at
-most. Adding a feature redistributes attribution across all of them, so values
-from before `rcv_inflow_1h` existed must not be read beside these.
+**Recomputed 2026-09-20 on the served 21-column committee**, over the 100,000
+held-out transfers. `explain.py` no longer uses the `shap` package - its numba
+extension is blocked by an application-control policy on the owner's machine - but
+LightGBM's own TreeSHAP (`pred_contrib`), which is the same algorithm and the same
+call the case view makes per alert (`case-manager/explain.py`). Mean |contribution|
+to the log-odds:
 
-**`is_new_payee` at the top is an upper bound, not a finding.** Fraud reaches a
+| | feature | | | feature | |
+|---|---|---|---|---|---|
+| 1 | `secs_since_last` | 4.531 | 9 | `payee_payers_7d` | 0.472 |
+| 2 | `active_call` | 2.725 | 10 | `amount_to_mean` | 0.435 |
+| 3 | `secs_since_sender_inbound` | 2.116 | 11 | `distinct_payees_10m` | 0.406 |
+| 4 | `rcv_inflow_1h` | 2.051 | 12 | `amount_z` | 0.362 |
+| 5 | `is_new_payee` | 2.008 | 13 | `hour` | 0.179 |
+| 6 | `secs_login_z` | 1.310 | 14 | `sender_payees_7d` | 0.172 |
+| 7 | `log_amount` | 0.872 | 15 | `payee_payers_24h` | 0.042 |
+| 8 | `daily_sum_ratio` | 0.611 | | | |
+
+These are log-odds on a 2,000-tree committee; the figures from 2026-08-30 were
+probabilities on a single 400-tree fit, so **only the ordering compares**, not the
+magnitudes. Attribution also redistributes across every column when the feature set
+changes, and the set changed twice this week. Quote three decimals at most.
+
+**The transit column is third, and it was worthless alone.** Measured on its own,
+`secs_since_sender_inbound` cost 0.042 PR-AUC (above); here the model leans on it
+more than on any other counter. Both are true: SHAP measures what a column
+contributes *in the presence of the others*, and this one only means something
+beside the payee-side counts - collected from many, then paid on. "Contributes
+nothing on its own" and "can be removed" remain different claims.
+
+**`active_call` is second, and it does not mean what its name suggests.** A call
+while confirming marks **APP** (43.8% of those episodes against 10.0% of legitimate
+traffic) and marks the *absence* of the others: 6.5% of MULE transfers and 7.7% of
+STRUCTURING carry one, below the legitimate rate. So for a mule transfer the model
+reads an active call as evidence *against* fraud, which is why single alerts show it
+with a large negative contribution. The column is a pattern discriminator, not a
+fraud flag.
+
+**`is_new_payee` fifth is still an upper bound, not a finding.** Fraud reaches a
 stream-new payee 99.2% of the time on this data against 36.9% of legitimate
 traffic, because the generator does not produce the evasion its own threat model
 names - one small prior transfer establishes the payee. When it is produced
@@ -573,7 +603,8 @@ generator modelled both directions (25% of legitimate transfers go to relatives,
 and a realistic minority of fraud too), switching it on is worth nothing
 measurable - the `myid_kinship=on` row below. A feature that dominates SHAP on
 synthetic data is suspect until the generator models both sides of its behaviour
-(`docs/irp-framing.md` §4).
+(`docs/irp-framing.md` §4). **The amounts are the next instance of this**, found by
+the owner on 2026-09-20 and recorded in `docs/generator-spec.md` §2.
 
 The ONNX model reproduces native LightGBM probabilities to < 1e-6, so in-Flink
 serving is faithful.

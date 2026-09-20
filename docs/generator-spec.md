@@ -104,6 +104,21 @@ The aged 30% is what stopped `receiver_age` from being a perfect separator. The
 detector no longer reads the age (since 2026-09-19); the column stays in the
 dataset, whose hash is pinned.
 
+**Amounts are not round, and real ones are.** The owner's reading of the market on
+2026-09-20: a person almost always sends a round sum - 350,000 or 6,000,000 - and
+rarely 435,345. This generator draws amounts from continuous distributions, so
+only 39.6% of legitimate transfers are multiples of 1,000 and 5.1% of 100,000. The
+deviation is not symmetric, which is the part that matters: **ATO, MULE and
+STRUCTURING amounts are 0.0% multiples of 1,000** against 39.6% of legitimate
+traffic and 40.0% of APP, because those patterns compute their amounts from
+balances, collected sums and threshold bands. Roundness is therefore a near-perfect
+class separator in this data **by construction**, exactly as `is_family` once was
+(`ml/README.md`). No feature reads it today and none should be added while this
+holds: it would separate the classes without detecting anything. Fixing it means
+rounding amounts on both sides - the legitimate ones and the fraudulent ones whose
+mechanism would still produce round numbers - and regenerating the dataset of
+record, which re-opens every figure pinned to its hash.
+
 ---
 
 ## 3. Payee graph
