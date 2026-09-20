@@ -187,8 +187,29 @@ analysts would operate. That belongs in the decision to build the shapes into th
 stream.
 
 **Decision, 2026-09-16: the owner kept the F1-peak cutoff.** `train.py` is
-unchanged, and the harness is deleted now that its question is answered; it is in
-git history (`git show 5377e74:ml/experiments/thresholds.py`).
+unchanged. Both tables above are the 20-column model of that day, and the IBM AML
+one is history - that dataset was removed on 2026-09-19.
+
+**Re-read on 2026-09-20, against the model actually served.**
+`experiments/thresholds.py` now loads `models/model.txt` instead of refitting, so
+the menu describes the deployed system. Cutoffs chosen on the validation rows,
+read on the 100,000 test transfers (202 fraud):
+
+| cutoff | alerts per 100k | caught | real |
+|---|---|---|---|
+| top 0.05% of transfers | 45 | 17.3% | **77.8%** |
+| top 0.1% | 91 | 32.7% | 72.5% |
+| **F1 peak (the current rule)** | **154** | **43.6%** | **57.1%** |
+| top 0.2% | 200 | 51.5% | 52.0% |
+| F2 peak | 303 | 64.9% | 43.2% |
+| top 0.5% | 496 | 71.3% | 29.0% |
+| top 1% | 973 | 80.7% | 16.8% |
+
+The shape of the trade is unchanged by the new columns: the current rule sits
+where it did, and the two ends of the menu are the ones worth putting to an owner
+- the F2 peak catches two thirds of the fraud for twice the queue at 43% real, and
+the top 0.1% is the opposite trade, a third of the fraud at 72.5% real. Nothing is
+adopted here: the cutoff is a decision, and it has not been changed.
 
 ### Not companies: the same caveat on IBM AML's people-like transfers
 
