@@ -640,6 +640,15 @@ the gain is several times the counters' +0.047, and its mechanism is known.
 **Not adopted yet**: it changes the model and every figure in this file, and
 that is the owner's decision.
 
+**The owner asked for it on 2026-09-21. The rule, fixed before its run:** five
+committee seed sets (seeds 0-24, five to a set), each fitted twice on the same
+rows with nothing changed but `reg_lambda` - 0 and 10 - and the paired
+difference in validation PR-AUC. Ten is adopted only if the mean difference is
+above zero and its 95% interval clears zero; otherwise the recipe stays
+unpenalised and the table above is the record. `subsample=0.8` leaves the recipe
+either way: without a bagging frequency LightGBM ignores it, so removing it must
+change no prediction - checked on the run, not assumed.
+
 Read the order, not the numbers, and the order with care: a column can rank high
 by cancelling another.
 
