@@ -414,55 +414,64 @@ ten seeds each, on the same 60/20/20 temporal split as above. Three features are
 absent for the same reason as on PaySim - the file carries no call state, no
 region and no session timing - and **all five counterparty counters compute**.
 
-| configuration | feat | F1 %, cut from validation | F1 % at 0.5 | PR-AUC | ROC-AUC |
-|---|---|---|---|---|---|
-| this project, all it can compute | 18 | 22.8 +/- 4.2 | 19.2 | 0.099 | 0.884 |
-| - without receiver aggregation | 16 | 19.3 +/- 7.1 | 17.2 | 0.083 | 0.892 |
-| - without the counterparty counters | 13 | 18.5 +/- 4.3 | 6.8 | 0.073 | **0.938** |
-| - plus the file's payment format and currency | 25 | **42.4 +/- 2.7** | 40.2 | **0.332** | 0.930 |
-| *all four, class-weighted* | | *1.9 - 3.3* | *1.8 - 3.2* | *0.013 at most* | |
+Measured twice that day: in the morning on the recipe then served, and in the
+evening on the L2-penalised recipe adopted on this project's own data that day
+(`ml/README.md`, Feature importance). The evening figures are the ones below, with
+the morning's beside them, because the difference is the largest effect this file
+has shown.
 
-**1. The counters are the one thing this file separates from zero - narrowly.**
+| configuration | feat | F1 %, cut from validation | F1 % at 0.5 | PR-AUC | ROC-AUC | *morning: F1 %, PR-AUC* |
+|---|---|---|---|---|---|---|
+| this project, all it can compute | 18 | **56.7 +/- 0.4** | 38.5 | **0.544** | 0.978 | *22.8 +/- 4.2, 0.099* |
+| - without receiver aggregation | 16 | 53.2 +/- 0.4 | 31.7 | 0.509 | 0.977 | *19.3 +/- 7.1, 0.083* |
+| - without the counterparty counters | 13 | 36.6 +/- 0.6 | 6.4 | 0.308 | 0.973 | *18.5 +/- 4.3, 0.073* |
+| - plus the file's payment format and currency | 25 | **67.0 +/- 0.3** | 53.3 | **0.669** | 0.988 | *42.4 +/- 2.7, 0.332* |
+| *all four, class-weighted* | | *4.5 - 5.7* | *2.8 - 4.6* | *0.026 at most* | | |
+
+**1. The penalty changed what this file says about the feature set.** On its own
+18 columns the model moves 22.8 -> 56.7 F1 and PR-AUC 0.099 -> 0.544: from level
+with the published tabular baselines (LightGBM 21.3, XGBoost 19.8) to level with
+PNA (56.8), the stronger graph neural network, and above GIN+EU (47.7). With the
+file's own payment format and currency, 67.0 +/- 0.3 is above both GFP + gradient
+boosting results (62.9, 64.8) - **on the threshold chosen on validation, a rule the
+paper does not state**; at a fixed 0.5 the same model scores 53.3, between GIN+EU
+and PNA. So the claim is range, not rank: streaming counts of counterparties, fitted
+by a regularised booster, reach the published graph methods on this benchmark. The
+morning's unpenalised fits did not show it, because their leaves blew up on the
+near-separable majority exactly as on this project's own data, and harder at a
+0.115% base rate.
+
+**2. Both relational capabilities clear zero now, the counters by a wide margin.**
 Paired by seed, the full set minus the set without:
 
-| removed | F1 % | PR-AUC |
-|---|---|---|
-| the counterparty counters | **+4.30 +/- 4.00** | **+0.026 +/- 0.019** |
-| receiver aggregation | +3.52 +/- 7.04, includes zero | +0.016 +/- 0.029, includes zero |
+| removed | F1 % | PR-AUC | *morning* |
+|---|---|---|---|
+| the counterparty counters | **+20.1 +/- 0.5** | **+0.237 +/- 0.003** | *+4.3 +/- 4.0, +0.026 +/- 0.019* |
+| receiver aggregation | **+3.5 +/- 0.5** | **+0.035 +/- 0.004** | *+3.5 +/- 7.0, includes zero* |
 
-This is the first evidence for the counters from outside this project, and it
-comes from the one file here with a collection stage on a minute clock - the shape
-they were built for, and the reason the file was brought back. By term 1 it
-decides nothing: the capability was adopted on this project's data and PaySim
-before this run, and IBM AML only reports. What it adds is that the columns keep
-working where the collection is somebody else's simulation rather than ours, on a
-file whose accounts are not the ones this project serves. Both intervals clear
-zero by about a tenth of their own width, so *positive and small* is the whole of
-the claim.
+The counters are worth twenty F1 points on the one file here with a collection stage
+on a minute clock - the shape they were built for, and the reason the file was
+brought back - and receiver aggregation, which the morning could not separate from
+noise, is established. By term 1 this decides nothing: both capabilities were
+settled on this project's data and PaySim before the run. What it adds is that the
+columns work where the collection is somebody else's simulation, on accounts this
+project does not serve.
 
-**2. The feature set reads this file better than it did, and is now level with the
-published tabular baselines rather than under them.** On its own columns the mean
-moves 17.5 -> 22.8 F1 and PR-AUC 0.065 -> 0.099; with the file's own payment
-format and currency added, 35.7 -> 42.4 and 0.200 -> 0.332. The published LightGBM
-on this split scores 21.3 +/- 0.3 and XGBoost 19.8 +/- 0.9, so 22.8 +/- 4.2 is
-**level with them, not above**: the spread here is fourteen times theirs, because
-these columns are computed from a stream of events rather than read off the row.
-With the file's own columns added, 42.4 sits between GIN (28.7) and GIN+EU
-(47.7 +/- 7.9) and still far below the graph methods (PNA 56.8, GFP + gradient
-boosting 62.9-64.8).
+**3. The seed lottery is gone.** Ten seeds scatter by 0.3-0.6 F1 points against
+2.7-7.1 in the morning, and the cut chosen on validation lands between 891 and 1,062
+alerts instead of anywhere from 1,364 to 4,980. The morning's wide intervals were
+the unpenalised model, not the file.
 
-**3. ROC-AUC points the other way, and that is the useful part.** Dropping the
-counters *raises* ROC-AUC to 0.938, the best figure in the table, while PR-AUC
-falls to 0.073 and F1 at a fixed 0.5 cut collapses 19.2 -> 6.8. At a 0.115% base
-rate ROC-AUC is decided by how the 99.9% of legitimate rows are ordered among
-themselves, which no analyst ever sees; the top of the ranking, which is all a
-queue holds, got worse. Same file, same fits, opposite verdicts - which is why
-this project reads PR-AUC and recall at a fixed alert budget (section 1) and
-quotes ROC-AUC only beside them.
+**4. ROC-AUC still disagrees with the top of the ranking.** Without the counters it
+reads 0.973 against 0.978, nearly level, while PR-AUC falls from 0.544 to 0.308 and
+F1 at a fixed 0.5 from 38.5 to 6.4. At a 0.115% base rate ROC-AUC is decided by how
+the 99.9% of legitimate rows are ordered among themselves, which no analyst ever
+sees - which is why this project reads PR-AUC and recall at a fixed alert budget
+(section 1) and quotes ROC-AUC only beside them.
 
-**4. Class weighting still collapses** at this base rate, as on PaySim: 1.9-3.3 F1
-against 18.5-42.4 unweighted. `train.py`'s unweighted rule below 0.5% fraud now
-holds on a third dataset.
+**5. Class weighting still collapses** at this base rate, as on PaySim: 4.5-5.7 F1
+against 36.6-67.0 unweighted. `train.py`'s unweighted rule below 0.5% fraud holds on
+a third dataset.
 
 The model here is **fitted on IBM AML**, not the served one: it measures the
 feature set, not the deployed system. What the deployed rules make of the file is
@@ -492,16 +501,16 @@ full replay to answer:
 
 | typology | rows | flagged | rules | *model, test slice* |
 |---|---|---|---|---|
-| fan-in | 318 | 125 | **39.3%** | ***58.6%*** |
-| bipartite | 263 | 97 | 36.9% | *18.4%* |
-| scatter-gather | 626 | 230 | 36.7% | *39.2%* |
-| stack | 466 | 164 | 35.2% | *20.5%* |
-| cycle | 287 | 95 | 33.1% | *20.5%* |
-| random | 191 | 63 | 33.0% | *20.5%* |
-| gather-scatter | 705 | 210 | 29.8% | *45.1%* |
-| fan-out | 342 | 92 | 26.9% | *37.3%* |
+| fan-in | 318 | 125 | **39.3%** | ***78.7%*** |
+| bipartite | 263 | 97 | 36.9% | *26.7%* |
+| scatter-gather | 626 | 230 | 36.7% | *62.3%* |
+| stack | 466 | 164 | 35.2% | *35.0%* |
+| cycle | 287 | 95 | 33.1% | *37.8%* |
+| random | 191 | 63 | 33.0% | *34.9%* |
+| gather-scatter | 705 | 210 | 29.8% | *72.1%* |
+| fan-out | 342 | 92 | 26.9% | *65.4%* |
 | all 3,198 named rows | | 1,076 | 33.6% | |
-| the 1,968 rows the sidecar does not name | | 946 | **48.1%** | ***1.9%*** |
+| the 1,968 rows the sidecar does not name | | 946 | **48.1%** | ***1.7%*** |
 
 The model column is the re-run below, on the last 20% of the file; the rules run on
 all of it, so the two columns are not a race - see point 2.
@@ -514,10 +523,10 @@ of 1.2x to 1.8x. **The rules rank the typologies roughly as the model does and
 separate them far less.**
 
 **2. The two layers fail differently, and the unnamed rows show it.** The 1,968
-laundering rows the sidecar does not name are the model's worst population (1.9%)
+laundering rows the sidecar does not name are the model's worst population (1.7%)
 and the rules' best (48.1%). That is each layer's own ordering, not a comparison:
-the rules reach 48.1% by flagging 22.18% of everything, the model reaches 1.9%
-while flagging 0.29%, and by lift the model is ahead on every row of this table.
+the rules reach 48.1% by flagging 22.18% of everything, the model reaches 1.7%
+while flagging 0.11%, and by lift the model is ahead on every row of this table.
 What it says is *why* they fail differently. 95.7% of these rows are the only
 laundering row at their receiver, so a relational model has nothing to look at,
 while one large transfer to an unfamiliar payee needs no relation at all - which is
@@ -533,91 +542,83 @@ back for reads clearly.
 
 ### Re-run 2026-09-21 (`--typology-recall`): the model, ten seeds, 18 columns
 
-| typology | in test | recall | across seeds | *was, 14 columns / 3 seeds* |
+At the F1 cut from validation - about 950 alerts, 0.11% of the slice, some 78% of
+them laundering:
+
+| typology | in test | recall | across seeds | *morning, unpenalised* |
 |---|---|---|---|---|
-| fan-in | 127 | **58.6%** | 40.9-70.9% | *51.4%* |
-| gather-scatter | 378 | 45.1% | 29.9-56.9% | *39.5%* |
-| scatter-gather | 242 | 39.2% | 24.4-47.1% | *32.1%* |
-| fan-out | 133 | 37.3% | 27.8-50.4% | *30.6%* |
-| cycle | 99 | 20.5% | 11.1-32.3% | *37.0%* |
-| random | 84 | 20.5% | 11.9-25.0% | *40.5%* |
-| stack | 122 | 20.5% | 10.7-27.9% | *43.2%* |
-| bipartite | 67 | 18.4% | 10.4-23.9% | *30.8%* |
-| **(unnamed)** | 401 | **1.9%** | 0.2-4.2% | *5.8%* |
-| all laundering | 1,653 | 28.5% | 18.6-36.0% | *30.3%* |
+| fan-in | 127 | **78.7%** | 77.2-80.3% | *58.6%* |
+| gather-scatter | 378 | 72.1% | 69.3-74.6% | *45.1%* |
+| fan-out | 133 | 65.4% | 62.4-67.7% | *37.3%* |
+| scatter-gather | 242 | 62.3% | 58.7-65.3% | *39.2%* |
+| cycle | 99 | 37.8% | 32.3-44.4% | *20.5%* |
+| stack | 122 | 35.0% | 32.8-36.9% | *20.5%* |
+| random | 84 | 34.9% | 32.1-38.1% | *20.5%* |
+| bipartite | 67 | 26.7% | 25.4-28.4% | *18.4%* |
+| **(unnamed)** | 401 | **1.7%** | 1.0-2.2% | *1.9%* |
+| all laundering | 1,653 | 45.0% | 43.5-46.9% | *28.5%* |
 
-**The total barely moved (30.3% -> 28.5%) and the composition moved decisively.**
-The four typologies that rose - fan-in, gather-scatter, scatter-gather, fan-out -
-are the four whose shape *is* a count of counterparties. The four that fell - cycle,
-stack, random, bipartite - are chains and pairs, where that count stays small. That
-is what the counters were built to do, and it matches the ablation above, but it is
-not proof: three changes landed together, since `cross_network` left with the
-network capability, the five counters arrived, and the seed count went from three to
-ten.
-
-**The wide ranges are the honest part of this table.** The F1 cut taken from
-validation lands anywhere between 1,364 and 4,980 alerts depending on the seed, so
-fan-in reads 40.9% on one fit and 70.9% on another. The three-seed ranges in the
-historical table above (fan-in 47.2-54.3%) were narrow because three fits were
-drawn, not because the estimate was steady. Only the ordering survives ten seeds;
-the levels should be quoted with their ranges or not at all.
+**Every named typology rose, and the order held.** The four whose shape is a count
+of counterparties - fan-in, gather-scatter, fan-out, scatter-gather - lead at
+62-79%; the chains and pairs - cycle, stack, random, bipartite - trail at 27-38%,
+and three of them still sit below the 14-column historical table above. The
+laundering the sidecar does not name stays invisible (1.7%): with no relation to
+see, a relational model sees nothing. The ranges are a few points wide, where the
+morning's ran to thirty.
 
 ### Re-run 2026-09-21 (`--budgets`): recall at a fixed alert budget
 
-The owner's target for this file was to catch more than half of its laundering, and
-neither table above answers that: the F1 cut lands on a different queue every seed
-(1,364 alerts to 4,980), and a catch rate without a queue length behind it is not a
-number anyone can act on. This is the reading section 1 already uses for PaySim -
-review the most suspicious x% of transfers, count the laundering inside - so the two
-datasets can be put side by side. Five seeds, unweighted, this project's 18 columns.
+The owner's target for this file was to catch more than half of its laundering. A
+catch rate means nothing without the queue length that bought it, so this is the
+reading section 1 already uses for PaySim - review the most suspicious x% of
+transfers, count the laundering inside - and the two datasets can be put side by
+side. Five seeds, unweighted, this project's 18 columns.
 
-| budget | alerts | of all laundering | across seeds | of the named patterns |
-|---|---|---|---|---|
-| 0.5% | 4,487 | 35.3% | 27.0-43.6% | 44.6% |
-| 1% | 8,974 | 45.1% | 35.5-51.8% | **53.7%** |
-| 2% | 17,949 | **57.3%** | 44.0-66.7% | 63.8% |
-| 5% | 44,871 | 64.8% | 48.3-72.8% | 69.1% |
+| budget | alerts | of all laundering | across seeds | of the named patterns | *morning* |
+|---|---|---|---|---|---|
+| 0.1% | 897 | 43.6% | 43.1-43.9% | 57.1% | *10.8%* |
+| 0.5% | 4,487 | 63.1% | 62.8-63.5% | 78.2% | *35.3%* |
+| 1% | 8,974 | 69.6% | 69.5-69.8% | **83.6%** | *45.1%* |
+| 2% | 17,949 | **79.0%** | 78.8-79.2% | 90.1% | *57.3%* |
+| 5% | 44,871 | 85.9% | 85.8-86.2% | 94.4% | *64.8%* |
 
-**1. The target is met, at a stated price.** 57.3% of all laundering inside a 2%
-budget, and the named patterns cross half already at 1%. At the same 2% budget
-PaySim reads 53.4% (section 1), so the feature set is not weaker on this file - it
-was being read at the short end of the scale. The 28.5% above is the same model at
-a ~0.3% queue.
+**1. The target is met at a tenth of the queue it once needed.** Over half of all
+laundering is inside a 0.2% budget (53.2%), and 79.0% inside 2%, where the morning's
+model held 57.3%. At the same 2% budget PaySim reads 48.1% on this project's
+columns and 58.8% with its own transaction type (section 1).
 
-**2. Fan-in crosses first and by the widest margin.** Recall per typology inside the
-same budgets:
+**2. Fan-in first, by the widest margin.** Recall per typology inside the same
+budgets:
 
 | typology | rows | at 1% | at 2% |
 |---|---|---|---|
-| fan-in | 127 | **69.0%** | **74.5%** |
-| gather-scatter | 378 | 61.1% | 69.1% |
-| fan-out | 133 | 52.8% | 63.5% |
-| scatter-gather | 242 | 51.9% | 60.2% |
-| stack | 122 | 48.0% | 60.8% |
-| random | 84 | 44.0% | 61.2% |
-| bipartite | 67 | 40.9% | 58.8% |
-| cycle | 99 | 35.4% | 49.1% |
+| fan-in | 127 | **95.0%** | **97.2%** |
+| gather-scatter | 378 | 90.3% | 93.4% |
+| fan-out | 133 | 87.8% | 94.0% |
+| scatter-gather | 242 | 87.4% | 93.4% |
+| cycle | 99 | 70.7% | 84.0% |
+| stack | 122 | 70.0% | 76.4% |
+| random | 84 | 68.8% | 83.3% |
+| bipartite | 67 | 64.8% | 80.0% |
 
-Every typology but `cycle` is over half at a 2% budget, and the collection shapes -
-fan-in and gather-scatter - lead at every budget, which is the ordering both layers
-already agreed on.
+Every typology is over 60% at a 1% budget, and the collection shapes lead at every
+budget - the ordering both layers already agreed on.
 
-**3. Screening the hubs out changes almost nothing, which is the finding.** The file
-names no account type, so "individuals" cannot be selected from it; what can be
-applied is the screen `ml/README.md` used before - neither side over twenty distinct
-counterparties, here over the week the counters cover. It keeps **804,725 of 897,427
-rows and 1,531 of the 1,653 laundering rows** (89.7% and 92.6%, within a point of the
-89.8%/92.7% that screen kept with the columns of the time). With the queue drawn from
-those rows only, fan-in reads **68.8% at 1% and 74.6% at 2%** against 69.0% and 74.5%
-on everything - a fifth of a point. Overall recall moves more (62.3% against 57.3% at
-2%, 79.7% against 64.8% at 5%), because the hubs it removes are where the false
-alarms sit, not where the missed laundering is. **The companies are not what holds
-the number down** - the same conclusion `f672c10` reached from the other direction.
+**3. Screening the hubs out changes little.** The file names no account type, so
+"individuals" cannot be selected from it; what can be applied is the screen
+`ml/README.md` used before - neither side over twenty distinct counterparties, here
+over the week the counters cover. It keeps **804,725 of 897,427 rows and 1,531 of
+the 1,653 laundering rows** (89.7% and 92.6%). With the queue drawn from those rows
+only, fan-in reads 94.2% at 1% and 96.9% at 2% against 95.0% and 97.2% on
+everything; overall recall rises more (84.0% against 79.0% at 2%, 95.5% against
+85.9% at 5%), because the hubs the screen removes are where the false alarms sit,
+not where the missed laundering is. **The companies are not what holds the number
+down** - the same conclusion `f672c10` reached from the other direction.
 
-**4. The file's own columns are worth more than anything this project can add.**
-With payment format and currency the same table reads 57.0% at a 0.5% budget and
-fan-in 83.6% at 1%. A bank has those columns; this project's extractor does not, and
-no feature built from a P2P stream closes that gap.
+**4. The file's own columns still add, and less than they did.** With payment format
+and currency the same table reads 74.8% at a 0.5% budget and 80.6% at 1%, against
+63.1% and 69.6% without them - a gap of eleven points at 1%, where the morning's was
+twenty. A bank has those columns; this project's extractor does not.
 
 **Not an operating point.** 2% of this test slice is 17,949 alerts. The slice is the
 last fifth of the file's rows, and IBM AML's traffic is front-loaded: 97% of those
@@ -629,15 +630,16 @@ queue.
 ### Verdict under the terms
 
 **IBM AML stays, for information.** Term 3 asked whether hub accounts drown the
-collection signal, and they do not: the counters' interval is the only one in the
-model table that clears zero, fan-in comes first in both layers, and both
-per-typology tables are legible. Term 2 asked that the answer be recorded whatever
-it said; it happened to be favourable, and the unfavourable halves - level with the
-tabular baselines rather than above them, intervals that clear zero only narrowly,
-seed ranges thirty points wide, 22.18% of legitimate traffic flagged, the graph
-methods still far ahead - are in the same tables. Term 1 stands: nothing here moved
-a decision. Every capability in `capabilities.py` was settled on this project's own
-data and PaySim before this run, and none was reopened after it.
+collection signal, and they do not: both relational capabilities clear zero, the
+counters by twenty F1 points, fan-in comes first in both layers, and every table is
+legible. Term 2 asked that the answer be recorded whatever it said, and the
+unfavourable halves are in the same tables: the published F1 figures rest on a
+threshold rule the paper does not state, so *within the range of the graph methods*
+is the claim and not *above them*; the laundering the sidecar does not name stays
+invisible to a relational model (1.7%); the retail rules flag 22.18% of legitimate
+traffic. Term 1 stands: nothing here moved a decision. The L2 penalty was adopted on
+this project's own data before this re-run (`ml/README.md`), and no capability was
+reopened after it.
 
 ---
 

@@ -336,8 +336,7 @@ Extends the table in `generator-spec.md` §0; the datasets actually run are in
 - **No P2P evidence for receiver-side aggregation.** The only external evidence
   is IBM AML, which is interbank laundering rather than transfers between people:
   fan-in is its best-caught typology for the rules and the model alike, and the
-  counterparty counters are the one paired comparison there that clears zero
-  (`validation/README.md` §4). PaySim has no collection stage, and AMLSim,
+  counterparty counters add twenty F1 points there (`validation/README.md` §4). PaySim has no collection stage, and AMLSim,
   removed, ran on a daily clock that cannot see one.
 
 ---

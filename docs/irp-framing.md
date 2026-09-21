@@ -169,8 +169,8 @@ Everything owed to the review is now done; the items keep their numbers.
    - **IBM AML** (`ibm_aml_adapter.py`), interbank laundering reported for
      information since 2026-09-20: the one file with a collection stage on a
      minute clock. Fan-in is the best-caught typology for the rules and the
-     model alike, and the counterparty counters are the one paired comparison
-     there that clears zero (`validation/README.md` §4).
+     model alike, and the counterparty counters add twenty F1 points there
+     (`validation/README.md` §4).
    - **Base rate**, from the ULB card dataset: ~0.17% against the generator's
      1.5%, so precision measured on synthetic data is optimistic.
    - **Rejected**: IEEE-CIS (e-commerce, no receiver), CCF/Kaggle for detection
