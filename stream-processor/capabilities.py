@@ -106,7 +106,7 @@ REGISTRY = (
         key="counterparty_history",
         requires="the shared store keeping, per card, who paid it and when, for a "
                  "week rather than an hour, and the sender's own last inbound",
-        modes=("on", "off"),            # on since 2026-09-20: both gates passed
+        modes=("on", "off"),            # on: both gates passed (ml/README.md)
         features=("payee_payers_24h", "payee_payers_7d", "sender_payees_24h",
                   "sender_payees_7d", "secs_since_sender_inbound"),
         rules=(),

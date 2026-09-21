@@ -88,8 +88,8 @@ class ClickHouseWriter:
 
     def flush(self):
         if self._client is None:
-            # ClickHouse not being ready at boot is transient; rows written after a
-            # successful reconnect used to be lost outright.
+            # ClickHouse not being ready at boot is transient: retry, so rows after
+            # a reconnect are kept.
             if not self._reconnect_due():
                 if self._scored or self._audit:
                     self._discard("waiting to retry")

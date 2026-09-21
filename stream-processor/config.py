@@ -24,8 +24,7 @@ def kafka_security_properties():
         "ssl.truststore.location": KAFKA_SSL_CA,
         "ssl.keystore.type": "PEM",
         "ssl.keystore.location": KAFKA_SSL_KEYSTORE,
-        # ON deliberately: disabling hostname verification would also remove
-        # part of the handshake cost this measurement quantifies.
+        # On: switching it off would hide part of the handshake cost measured.
         "ssl.endpoint.identification.algorithm": "https",
     }
 
@@ -38,7 +37,7 @@ CONSUMER_GROUP = os.getenv("CONSUMER_GROUP", "fraud-cep")
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 
-# Which features and rules are active is not here: capabilities.py, set by CAP_*.
+# Which features and rules are active: capabilities.py, set by CAP_*.
 
 # --- Mirrored from the generator (must match it) -----------------------------
 # Chosen figures, not regulatory ones - data-generator/config.py says why.
@@ -46,10 +45,10 @@ STRUCTURING_THRESHOLD = 10_000_000  # UZS - the band structuring stays under
 LIMIT_DAILY = 100_000_000           # UZS - a bank operating limit, not a CBU one
 
 # --- Rule windows (seconds) -------------------------------------------------
-VELOCITY_WINDOW_S = 600             # 10 min
-STRUCTURING_WINDOW_S = 3600         # 1 h
-DISTINCT_PAYEE_WINDOW_S = 600       # 10 min
-DAILY_WINDOW_S = 86400              # 24 h
+VELOCITY_WINDOW_S = 600
+STRUCTURING_WINDOW_S = 3600
+DISTINCT_PAYEE_WINDOW_S = 600
+DAILY_WINDOW_S = 86400
 RECENT_RETENTION_S = 86400          # prune per-sender history older than this
 
 # --- Rule thresholds --------------------------------------------------------
@@ -61,8 +60,8 @@ AMOUNT_DEVIATION_SIGMA = 4.0        # amount > mean + sigma*std
 COACHED_SESSION_Z = 2.0             # login->confirm this far above the sender's own
 SECS_LOGIN_MIN_HISTORY = 5          # cold start: z = 0 below this many observations
 
-# Faster than a jet (900 km/h) is impossible, not unusual; the distance floor
-# absorbs placing each region at its administrative centre (geo.py).
+# Faster than a jet is impossible, not unusual; the floor absorbs each region
+# being one point (geo.py).
 MAX_PLAUSIBLE_KMH = 900.0
 MIN_TRAVEL_DISTANCE_KM = 100.0
 
@@ -78,14 +77,11 @@ MULE_FAN_IN_QUANTILE = float(os.getenv("MULE_FAN_IN_QUANTILE", "0.999"))
 MULE_FAN_IN_MIN_OBS = int(os.getenv("MULE_FAN_IN_MIN_OBS", "5000"))      # else fall back
 MULE_FAN_IN_REFRESH_EVERY = int(os.getenv("MULE_FAN_IN_REFRESH_EVERY", "512"))
 
-# Counterparty counters (counterparty_history). The CBU's internal-control
-# rules count distinct counterparties over up to 30 days (related-work.md 6e);
-# both datasets here span 30 days, so a month cannot be measured on them and a
-# week is the longest window they support.
+# counterparty_history: the CBU counts counterparties over up to 30 days
+# (related-work.md 6e); a week is the longest window 30-day datasets support.
 LINK_DAY_S = 86400
 LINK_WEEK_S = 604800
-#: Prune the counterparty maps only once they grow: the window filter in
-#: features.extract decides what counts, so pruning is memory, not correctness.
+#: Pruning is memory, not correctness: extract filters by time anyway.
 LINK_PRUNE_AT = 256
 
 AMOUNT_DEVIATION_MIN_HISTORY = 5   # history needed before deviation can fire
@@ -109,11 +105,9 @@ W_DAILY_LIMIT = 0.30
 # --- Decision thresholds ----------------------------------------------------
 # Calibrated against the FULL capability set; reduced deployments scale them.
 REVIEW_THRESHOLD = 0.40
-# No BLOCK anywhere: the system never blocks on its own - every alert goes to a
-# person (the owner's decision, 2026-09-19).
+# No BLOCK: the system never blocks on its own; every alert goes to a person.
 
-# Off restores the fixed cutoffs, kept so the two can be compared.
-# Why they are scaled at all: capabilities.scaled_threshold.
+# Off restores the fixed cutoffs, for comparison (capabilities.scaled_threshold).
 SCALE_THRESHOLDS_BY_CAPABILITY = (
     os.getenv("SCALE_THRESHOLDS_BY_CAPABILITY", "1").lower()
     not in ("0", "false", "no"))
@@ -124,11 +118,9 @@ PY_BUNDLE_TIME_MS = int(os.getenv("PY_BUNDLE_TIME_MS", "50"))
 PY_BUNDLE_SIZE = int(os.getenv("PY_BUNDLE_SIZE", "100"))
 # 5 rather than 0: sending each record individually costs more than it saves.
 BUFFER_TIMEOUT_MS = int(os.getenv("BUFFER_TIMEOUT_MS", "5"))
-# The 500 ms default adds half a second to a transaction landing just after a
-# fetch on an empty topic.
+# The 500 ms default parks every fetch on an empty topic for half a second.
 KAFKA_FETCH_MAX_WAIT_MS = int(os.getenv("KAFKA_FETCH_MAX_WAIT_MS", "20"))
-# With AT_LEAST_ONCE the sink flushes at checkpoint barriers, so this interval
-# bounds the warehouse delay as well as recovery.
+# The sink flushes at checkpoints, so this also bounds the warehouse delay.
 CHECKPOINT_INTERVAL_MS = int(os.getenv("CHECKPOINT_INTERVAL_MS", "2000"))
 
 # --- Restart behaviour -------------------------------------------------------
@@ -141,13 +133,11 @@ RESTART_WINDOW_MS = int(os.getenv("RESTART_WINDOW_MS", "300000"))   # 5 min
 CHECKPOINT_DIR = os.getenv("CHECKPOINT_DIR", "file:///opt/flink/checkpoints")
 
 MODEL_VERSION = os.getenv("MODEL_VERSION", "cep+ml-fusion-v2")
-# Distinct value, or a degraded run is stored as a fused one and no later query
-# can separate them.
+# Its own value, so a rules-only run is never stored as a fused one.
 MODEL_VERSION_CEP_ONLY = os.getenv("MODEL_VERSION_CEP_ONLY", "cep-only-fallback")
 
 # --- Deploy-time artefacts ---------------------------------------------------
-# Never relative to __file__: --pyFiles unpacks modules into a temp directory
-# without the artefacts, and the job would fall back to CEP-only.
+# Not __file__: --pyFiles unpacks the modules without the artefacts.
 JOB_DIR = os.path.dirname(os.path.abspath(__file__))
 MOUNTED_JOB_DIR = "/opt/flink/usrjobs"
 

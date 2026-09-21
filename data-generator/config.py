@@ -18,15 +18,13 @@ ATO_TIME_COMPRESS = (0.4, 0.7)        # attacker in a hurry: faster
 SECS_LOGIN_FLOOR = 3.0                # physical minimum
 
 # --- Devices ----------------------------------------------------------------
-# Legitimate people own a second device and replace phones; with one device each,
-# a first-seen device marked only fraud - the label wearing a feature's name.
+# Legitimate people own a second device and replace phones, so a new one is not fraud.
 SECOND_DEVICE_SHARE = 0.25    # people who use a second device at all
 SECOND_DEVICE_USE_RATE = 0.15 # share of THEIR transactions sent from it
 
 # --- Second card ------------------------------------------------------------
-# Some people receive on cards at two banks, so keying the payee by PAN and by
-# PINFL can differ (the payee_identity capability). Receiving only: a sender with
-# two cards would fragment the per-sender history.
+# Some people receive on cards at two banks, so PAN and PINFL keys can differ
+# (payee_identity). Receiving only: a second sending card splits the history.
 SECOND_CARD_SHARE = 0.20      # people who hold a second card
 SECOND_CARD_USE_RATE = 0.40   # share of transfers TO them that arrive on it
 

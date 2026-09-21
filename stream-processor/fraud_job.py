@@ -112,8 +112,8 @@ class FraudDetector(KeyedProcessFunction):
             # scoring_ms bracket on purpose - its cost is what is measured.
             event = payload_crypto.loads_maybe_encrypted(value, self._crypto_key)
         except Exception as exc:                          # noqa: BLE001
-            # These used to vanish with `return`. A wrong key makes every record
-            # undecodable, so that was a whole-stream outage rendered as silence.
+            # Counted and printed, never dropped silently: a wrong key makes every
+            # record undecodable, a whole-stream outage.
             self._undecodable += 1
             if self._undecodable in (1, 10, 100) or self._undecodable % 1000 == 0:
                 print(f"[fraud_job] UNDECODABLE RECORD "
@@ -163,8 +163,8 @@ class FraudDetector(KeyedProcessFunction):
             "secs_login_z": result["secs_login_z"],
             # Raw, from the event: the job does not recompute what the app sent.
             "secs_login_to_confirm": event.get("secs_login_to_confirm"),
-            # From what ran, not from configuration: a degraded run used to be stored
-            # as a fused one, indistinguishable afterwards.
+            # From what ran, not from configuration: a rules-only run must not be
+            # stored as a fused one.
             "model_version": (C.MODEL_VERSION if self._sess is not None
                               else C.MODEL_VERSION_CEP_ONLY),
             # Latency instrumentation (wall clock, never a feature). t0 from the
