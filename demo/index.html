@@ -105,7 +105,7 @@ tr.pick{cursor:pointer}tr.pick:hover td{background:#f7f9fd}tr.sel td{background:
     <div class="tiles" id="case-stats"></div>
     <div class="split">
       <div class="wrap"><table><thead><tr>
-        <th data-t="h_prio"></th><th data-t="h_time"></th><th class="num" data-t="h_amount"></th>
+        <th data-t="h_time"></th><th class="num" data-t="h_amount"></th>
         <th data-t="h_decision"></th><th data-t="h_type"></th>
       </tr></thead><tbody id="case-list"></tbody></table></div>
       <div class="panel" id="case-detail"></div>
@@ -138,7 +138,7 @@ ru: {
   live_hint: "Каждая строка — перевод, который система только что оценила: решение, риск от 0 до 1 и сработавшие правила. Фоновый поток — переводы из набора данных в их исходном ритме, ускоренном в выбранное число раз.",
   t_total: "Решений", t_allow: "Пропущено", t_review: "На проверку", t_ms: "Время решения, медиана",
   h_time: "Время", h_amount: "Сумма", h_route: "Откуда → куда", h_decision: "Решение", h_risk: "Риск",
-  h_rules: "Сработавшие правила", h_role: "Роль", h_when: "Когда", h_prio: "Приоритет", h_type: "Тип",
+  h_rules: "Сработавшие правила", h_role: "Роль", h_when: "Когда", h_type: "Тип",
   empty_live: "Пока нет решений. Запустите фоновый поток или проиграйте сценарий.",
   scn_hint: "Каждый сценарий — настоящий эпизод из той части данных, которую модель не видела при обучении. Отправитель получает новую карту, поэтому система знакомится с ним с нуля: сначала его обычные переводы, затем сам эпизод.",
   real_note: "Настоящий эпизод из данных, которых модель не видела",
@@ -206,7 +206,7 @@ en: {
   live_hint: "Each row is a transfer the system has just scored: the decision, a risk from 0 to 1 and the rules that fired. The background stream replays the dataset at its own pacing, sped up by the chosen factor.",
   t_total: "Decisions", t_allow: "Allowed", t_review: "Review", t_ms: "Decision time, median",
   h_time: "Time", h_amount: "Amount", h_route: "From → to", h_decision: "Decision", h_risk: "Risk",
-  h_rules: "Rules fired", h_role: "Role", h_when: "When", h_prio: "Priority", h_type: "Type",
+  h_rules: "Rules fired", h_role: "Role", h_when: "When", h_type: "Type",
   empty_live: "No decisions yet. Start the background stream or replay a scenario.",
   scn_hint: "Each scenario is a real episode from the part of the data the model never trained on. The sender gets a new card, so the system meets them from scratch: their usual transfers first, then the episode itself.",
   real_note: "A real episode from data the model never saw",
@@ -377,11 +377,11 @@ async function refreshCases() {
   $("#case-stats").innerHTML = [["st_open", s.NEW ?? 0], ["st_conf", s.CONFIRMED_FRAUD ?? 0], ["st_fp", s.FALSE_POSITIVE ?? 0],
     ["st_prec", s._precision == null ? "—" : Math.round(s._precision * 100) + "%"]]
     .map(([k, v]) => `<div class="tile"><span>${t(k)}</span><b>${esc(v)}</b></div>`).join("");
-  if (r.error) { $("#case-list").innerHTML = `<tr><td colspan="5">${esc(t("no_store") + r.error)}</td></tr>`; return; }
+  if (r.error) { $("#case-list").innerHTML = `<tr><td colspan="4">${esc(t("no_store") + r.error)}</td></tr>`; return; }
   $("#case-list").innerHTML = r.cases.length ? r.cases.map(c => `<tr class="pick ${c.id === selCase ? "sel" : ""}" data-case="${esc(c.id)}">` +
-    `<td>${c.priority}</td><td>${fmtTime(c.at)}</td><td class="num">${fmtAmount(c.amount)}</td><td>${badge(c.decision)}</td>` +
+    `<td>${fmtTime(c.at)}</td><td class="num">${fmtAmount(c.amount)}</td><td>${badge(c.decision)}</td>` +
     `<td>${esc(kindName(c.type))}</td></tr>`).join("")
-    : `<tr><td colspan="5" class="muted">${t("empty_cases")}</td></tr>`;
+    : `<tr><td colspan="4" class="muted">${t("empty_cases")}</td></tr>`;
   renderCase();
 }
 

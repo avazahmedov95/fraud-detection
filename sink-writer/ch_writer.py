@@ -12,7 +12,6 @@ log = logging.getLogger("ch_writer")
 RECONNECT_INTERVAL_S = 10.0  # retry throttle; every flush would hammer a down server
 
 
-
 class ClickHouseWriter:
     def __init__(self, host, port, user, password, database, audit_all=True):
         self._cfg = dict(host=host, port=port, username=user,

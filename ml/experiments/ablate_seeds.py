@@ -107,34 +107,33 @@ def sweep_features(seeds):
     features are always on, so no toggle removes them. Reported one at a time (the
     marginal value - redundant columns score zero) and together (the joint value of
     everything the first pass called negligible), because either alone misleads."""
-    import lightgbm as lgb
     from sklearn.metrics import average_precision_score
     sys.path.insert(0, _PKG)
     import dataset as D
+    import train as T
+
+    def split(seed):
+        df = D.build_matrix(_dataset(seed))
+        cut = int(len(df) * 0.80)
+        return df.iloc[:cut], df.iloc[cut:]
+
+    def fit(tr, te, cols):
+        """train.py's recipe on `cols`; PR-AUC on the held-out fifth."""
+        y = tr.label.values
+        m = T.make_model(T.class_weight(int(y.sum()), int((y == 0).sum())))
+        m.fit(tr[cols].astype("float32").values, y)
+        return average_precision_score(
+            te.label.values, m.predict_proba(te[cols].astype("float32").values)[:, 1])
 
     feats = list(D.FEATURE_NAMES)
     per = {f: [] for f in feats}
     bases = []
     for seed in seeds:
-        df = D.build_matrix(_dataset(seed))
-        cut = int(len(df) * 0.80)
-        tr, te = df.iloc[:cut], df.iloc[cut:]
-        ytr, yte = tr.label.values, te.label.values
-
-        def fit(cols):
-            m = lgb.LGBMClassifier(
-                n_estimators=400, learning_rate=0.05, num_leaves=31,
-                colsample_bytree=0.8, min_child_samples=30,
-                scale_pos_weight=(ytr == 0).sum() / max(int(ytr.sum()), 1),
-                random_state=42, n_jobs=-1, verbose=-1)
-            m.fit(tr[cols].astype("float32").values, ytr)
-            return average_precision_score(
-                yte, m.predict_proba(te[cols].astype("float32").values)[:, 1])
-
-        base = fit(feats)
+        tr, te = split(seed)
+        base = fit(tr, te, feats)
         bases.append(base)
         for f in feats:
-            per[f].append(fit([x for x in feats if x != f]) - base)
+            per[f].append(fit(tr, te, [x for x in feats if x != f]) - base)
         print(f"  seed {seed:>5}  baseline {base:.4f}", flush=True)
 
     print(f"\nbaseline {statistics.mean(bases):.4f} "
@@ -162,21 +161,8 @@ def sweep_features(seeds):
     joint = []
     keep = [f for f in feats if f not in negligible]
     for seed in seeds:
-        df = D.build_matrix(_dataset(seed))
-        cut = int(len(df) * 0.80)
-        tr, te = df.iloc[:cut], df.iloc[cut:]
-        ytr, yte = tr.label.values, te.label.values
-
-        def fit(cols):
-            m = lgb.LGBMClassifier(
-                n_estimators=400, learning_rate=0.05, num_leaves=31,
-                colsample_bytree=0.8, min_child_samples=30,
-                scale_pos_weight=(ytr == 0).sum() / max(int(ytr.sum()), 1),
-                random_state=42, n_jobs=-1, verbose=-1)
-            m.fit(tr[cols].astype("float32").values, ytr)
-            return average_precision_score(
-                yte, m.predict_proba(te[cols].astype("float32").values)[:, 1])
-        joint.append(fit(keep) - fit(feats))
+        tr, te = split(seed)
+        joint.append(fit(tr, te, keep) - fit(tr, te, feats))
     m, half = statistics.mean(joint), ci95(joint)
     print(f"  {len(keep)} columns instead of {len(feats)}: "
           f"{m:+.4f} [{m - half:+.4f},{m + half:+.4f}]")

@@ -34,10 +34,10 @@ COPY infra/clickhouse/init/02-cases.sql /app/02-cases.sql
 # The model, for explanations. model.txt is the bare Booster written by
 # ml/export_onnx.py from the same object it converts to ONNX, so the trees that
 # explain a decision are the trees that made it. feature_names.json labels the
-# contributions: the booster's own names are Column_0..23, and labelling a
-# contribution with the wrong feature would be the worst outcome available here
-# — a confident, specific, wrong reason. explain.py checks the count and
-# recomputes the probability before it will say anything.
+# contributions: the booster's own names are Column_0, Column_1, ..., and
+# labelling a contribution with the wrong feature would be the worst outcome
+# available here — a confident, specific, wrong reason. explain.py checks the
+# count and recomputes the probability before it will say anything.
 #
 # Absent artefacts are tolerated: the queue still opens cases, marked
 # NO_MODEL. Run `python ml/export_onnx.py` if this build has no model.txt.

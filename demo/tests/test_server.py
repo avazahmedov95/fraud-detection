@@ -3,6 +3,7 @@
 import csv
 import random
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 
 import server as S  # first: it puts case-manager, where explain lives, on the path
 import explain as EX  # noqa: E402
@@ -93,6 +94,24 @@ def test_case_manager_phrases_split_back_into_feature_value_weight():
     assert S.split_phrases(phrases) == [
         {"feature": "rcv_distinct_senders_1h", "label_en": "distinct senders paying this payee in an hour", "shown": "3", "weight": 0.42},
         {"feature": "hour", "label_en": "hour of day (UTC)", "shown": "14:00", "weight": 0.1}]
+
+
+def test_the_case_queue_reads_only_what_case_manager_stores():
+    """The queue once read a column case-manager had dropped, and failed on every
+    open case."""
+    import case as CASE
+    row = dict.fromkeys(CASE.CASE_COLUMNS, "")
+    row.update(opened_at=T0, rule_hits=[], explanation=[])
+
+    class Store:
+        def open_cases(self, limit):
+            return [row]
+
+        def stats(self):
+            return {}
+
+    app = SimpleNamespace(started=0, store=Store)
+    assert len(S.App.cases(app)["cases"]) == 1
 
 
 def test_times_with_and_without_a_fraction_both_load(tmp_path):

@@ -346,7 +346,6 @@ def cmd_throughput(args):
           "settlement. The curve is where that trade stops paying.")
 
 
-
 def main():
     ap = argparse.ArgumentParser(
         description="Latency against the 300 ms target: one run, or a sweep.")

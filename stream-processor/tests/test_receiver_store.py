@@ -186,7 +186,6 @@ def test_nothing_is_written_while_the_capability_is_off(store):
         CAP.MODES.clear(); CAP.MODES.update(original)
 
 
-
 def test_the_store_path_and_the_in_process_replay_agree(store, counters_on):
     """Parity, the condition the gate in ml/README.md names first: the same events
     through Redis and through plain objects give the same columns. The extractor is

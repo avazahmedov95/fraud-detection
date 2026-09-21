@@ -118,7 +118,7 @@ python ../ml/experiments/layers.py     # CEP-only vs ML-only vs fused, held-out 
 ## Verify without the cluster
 
 ```bash
-pip install -r requirements.txt        # or just: pip install pandas pytest
+pip install -r requirements.txt        # the tests alone: pip install pytest cryptography
 python -m pytest ../stream-processor -q   # from the repo root: pytest stream-processor
 python experiments/replay.py --file ../data-generator/out/transactions.csv
 # end-to-end fusion vs cep-only vs ml-only (uses the real ONNX model):

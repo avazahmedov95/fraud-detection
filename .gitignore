@@ -7,7 +7,7 @@
 # generator --out can point anywhere: out/, out_check/, ...
 data-generator/out*/
 validation/*.csv
-# What the adapters download and what --extract-only writes beside them:
+# The public files the adapters read, and what --extract-only writes beside them:
 # sidecar files and cached feature matrices.
 validation/*_Patterns.txt
 validation/*.npz

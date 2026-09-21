@@ -471,7 +471,6 @@ class App:
                            "from": mask(c["sender_card"]), "to": mask(c["receiver_card"]),
                            "decision": c["decision"], "type": c["predicted_type"],
                            "score": c["final_score"], "rules": list(c["rule_hits"] or []),
-                           "priority": c["priority"],
                            "why": {"status": c.get("explanation_status") or "",
                                    "items": split_phrases(c.get("explanation") or [])}}
                           for c in items],

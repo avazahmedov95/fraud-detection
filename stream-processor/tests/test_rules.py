@@ -28,7 +28,6 @@ def test_known_small_payment_is_allowed():
     assert res["is_new_payee"] is False
 
 
-
 def test_app_pattern_new_large_payee_is_flagged():
     st = SenderState()
     for i in range(6):

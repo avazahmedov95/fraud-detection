@@ -26,8 +26,9 @@ experiments/      harnesses - each produces a NUMBER, not an artefact the
                   One-off experiments are deleted once their decision is
                   written below: git log --diff-filter=D -- ml/experiments
 
-models/           artifacts: model.joblib, model.onnx, thresholds.json, feature_names.json,
-                  metrics.json, shap_summary.png, shap_importance.png
+models/           artifacts: model.joblib, model.txt, model.onnx, manifest.json,
+                  thresholds.json, feature_names.json, metrics.json,
+                  shap_summary.png, shap_importance.png
                   ablation/ holds every harness run that was kept
 ```
 
@@ -51,8 +52,8 @@ this model, not replacing it.
 ```bash
 pip install -r requirements.txt
 python train.py          # -> model.joblib, thresholds.json, feature_names.json, metrics.json
-python explain.py        # -> shap_summary.png, shap_importance.png
-python export_onnx.py    # -> model.onnx (+ parity check)
+python export_onnx.py    # -> model.txt, model.onnx (+ parity check), manifest.json
+python explain.py        # -> shap_summary.png, shap_importance.png (reads model.txt)
 ```
 
 `train.py` weights fraud by negatives over positives only above 0.5% fraud; below
@@ -132,7 +133,8 @@ it, with its harness and both gates.
 
 ### Multi-day link shapes: built as link_history, then removed
 
-Seven columns over the 96 hours before each transfer (`experiments/shapes.py`):
+Seven columns over the 96 hours before each transfer (`experiments/shapes.py`,
+since deleted - `git show 77e6dad:ml/experiments/shapes.py`):
 fan-in and fan-out, the payers of the sender and the payees of the payee, money
 going straight back, three-step circles, and a split gathered again. Computed
 offline in replay order on the identity the job keys on; the rule - money_chains'
@@ -270,7 +272,8 @@ and split-and-gather only at the top of the list on IBM AML.
 
 Step 1 went into the stream as the `link_history` capability - five of the seven
 columns, without the three-step circles and split-and-gather - and was measured
-again (`experiments/links.py`, rule committed before the run in `77e6dad`):
+again (`experiments/links.py`, since deleted - `git show 77e6dad:ml/experiments/links.py`;
+rule committed before the run in `77e6dad`):
 
 | | parity with the offline columns | validation PR-AUC, paired | top 0.1% of validation transfers | verdict |
 |---|---|---|---|---|

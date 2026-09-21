@@ -125,8 +125,8 @@ class CaseStore:
         q = (f"SELECT {', '.join(CASE.CASE_COLUMNS)} "
              f"FROM {self._db}.{_TABLE} FINAL "
              f"WHERE disposition = 'NEW' "
-             # Exposure, not score: 89.1% of probabilities round to 1.000, so ordering
-             # by score orders nothing, while amount spans four orders of magnitude.
+             # Exposure first: every case here is past the cutoff, and the amount at
+             # stake spans four orders of magnitude; the score breaks ties.
              f"ORDER BY amount_uzs DESC, final_score DESC, "
              f"opened_at ASC "
              f"LIMIT {int(limit)}")
