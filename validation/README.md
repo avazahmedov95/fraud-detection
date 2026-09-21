@@ -27,9 +27,10 @@ published:
 > data, because the identifiers that make it relational are the reason such data
 > stays private.**
 
-So only one half is validated here: PaySim tests the sender-side relational
-features. The receiver side (fan-in) has no usable public source - the ones
-tried are recorded below.
+So the two halves are validated unequally: PaySim tests the sender-side
+relational features, and the receiver side - fan-in and the counterparty
+counters - is tested only on IBM AML, which reports for information because its
+accounts include banks and companies (section 4).
 
 ---
 
@@ -43,8 +44,8 @@ session, kinship) are switched **off**, never defaulted, so no rule
 fires on a fabricated zero.
 
 It is not trained on, for three reasons: fitting to the data under test answers
-a circular question; five of the remaining features need data PaySim lacks, so a
-model on what is left would not be the served one; and the rail and the units
+a circular question; three of the features need data PaySim lacks, so a model on
+what is left would not be the served one; and the rail and the units
 differ. The one legitimate training use of foreign data is a throwaway model
 fitted with and without a capability, to see whether an ablation delta
 reproduces.
@@ -198,19 +199,6 @@ python -m pytest validation -q
 Fixtures in the shape of the real files, so the adapters - the mapping onto this
 project's event contract, not the detection result - are known to work before
 anything is downloaded.
-
----
-
-## Rejected: IBM AML (HI-Small)
-
-*IBM Transactions for Anti-Money Laundering* (Altman et al., NeurIPS 2023): 5.08M
-synthetic transfers on a one-minute clock, with a collection stage. Used from
-2026-09-08 and **removed on 2026-09-19 at the owner's decision**: its accounts
-include banks and companies, and this project is about card transfers between
-people. The decisions made with it stay recorded where they were made
-(`ml/README.md`); the adapter and its results are in git history
-(`git show 8f46624:validation/README.md`, section 4, and
-`git show 8f46624:validation/ibm_aml_adapter.py`).
 
 ---
 
@@ -467,7 +455,7 @@ falls to 0.073 and F1 at a fixed 0.5 cut collapses 19.2 -> 6.8. At a 0.115% base
 rate ROC-AUC is decided by how the 99.9% of legitimate rows are ordered among
 themselves, which no analyst ever sees; the top of the ranking, which is all a
 queue holds, got worse. Same file, same fits, opposite verdicts - which is why
-this project reads PR-AUC and recall at a fixed alert budget (section 2) and
+this project reads PR-AUC and recall at a fixed alert budget (section 1) and
 quotes ROC-AUC only beside them.
 
 **4. Class weighting still collapses** at this base rate, as on PaySim: 1.9-3.3 F1
@@ -577,7 +565,7 @@ the levels should be quoted with their ranges or not at all.
 The owner's target for this file was to catch more than half of its laundering, and
 neither table above answers that: the F1 cut lands on a different queue every seed
 (1,364 alerts to 4,980), and a catch rate without a queue length behind it is not a
-number anyone can act on. This is the reading section 2 already uses for PaySim -
+number anyone can act on. This is the reading section 1 already uses for PaySim -
 review the most suspicious x% of transfers, count the laundering inside - so the two
 datasets can be put side by side. Five seeds, unweighted, this project's 18 columns.
 
@@ -590,7 +578,7 @@ datasets can be put side by side. Five seeds, unweighted, this project's 18 colu
 
 **1. The target is met, at a stated price.** 57.3% of all laundering inside a 2%
 budget, and the named patterns cross half already at 1%. At the same 2% budget
-PaySim reads 53.4% (section 2), so the feature set is not weaker on this file - it
+PaySim reads 53.4% (section 1), so the feature set is not weaker on this file - it
 was being read at the short end of the scale. The 28.5% above is the same model at
 a ~0.3% queue.
 

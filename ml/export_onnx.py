@@ -1,7 +1,8 @@
-"""Exports the trained model to ONNX for serving inside Flink, plus model.txt
-for the case-manager's explanations, and checks both against the native model.
+"""Exports the trained committee to ONNX for serving inside Flink, plus model.txt
+for the case-manager's explanations, and checks the ONNX against the native model.
 """
 
+import argparse
 import json
 import os
 
@@ -25,15 +26,11 @@ BOOSTER_PATH = os.path.join(MODELS_DIR, "model.txt")
 
 
 def _onnx_positive_proba(outputs):
-    """Pull the fraud-class probability out of whatever shape the model emits."""
+    """The fraud-class column of the [n, 2] probability tensor (zipmap off)."""
     for out in outputs:
         arr = np.asarray(out)
-        if arr.ndim == 2 and arr.shape[1] == 2:           # [n, 2] probability tensor
+        if arr.ndim == 2 and arr.shape[1] == 2:
             return arr[:, 1]
-    # Fallback: ZipMap output (a list of {label: prob} dicts).
-    for out in outputs:
-        if isinstance(out, list) and out and isinstance(out[0], dict):
-            return np.array([row.get(1, row.get("1", 0.0)) for row in out])
     raise RuntimeError("could not locate probability output in ONNX model")
 
 
@@ -43,39 +40,30 @@ def main():
     n = len(feats)
 
     initial_types = [("input", FloatTensorType([None, n]))]
-    try:
-        onx = convert_lightgbm(model, initial_types=initial_types, zipmap=False)
-    except TypeError:
-        onx = convert_lightgbm(model, initial_types=initial_types)
+    onx = convert_lightgbm(model, initial_types=initial_types, zipmap=False)
 
     with open(ONNX_PATH, "wb") as fh:
         fh.write(onx.SerializeToString())
     print(f"exported {ONNX_PATH}  ({os.path.getsize(ONNX_PATH) / 1024:.0f} KB)")
 
-    booster = model.booster_ if hasattr(model, "booster_") else model
-    booster.save_model(BOOSTER_PATH)
+    model.save_model(BOOSTER_PATH)
     print(f"exported {BOOSTER_PATH}  "
           f"({os.path.getsize(BOOSTER_PATH) / 1024:.0f} KB, "
-          f"{booster.num_trees()} trees)")
+          f"{model.num_trees()} trees)")
 
     # A parity check needs valid inputs, not the whole replay: the first rows of the
     # file, ten minutes shorter at the realistic profile's size.
     df = D.build_matrix(CSV, nrows=PARITY_ROWS)
     sample = df.iloc[int(len(df) * 0.80):][feats].astype("float32").values[:2000]
 
-    # The committee is a merged lgb.Booster (committee.py); a model trained before
-    # it is an LGBMClassifier. Both are scored here the way each predicts.
-    native = (model.predict_proba(sample)[:, 1] if hasattr(model, "predict_proba")
-              else model.predict(sample))
+    native = model.predict(sample)          # a merged lgb.Booster (committee.py)
     sess = ort.InferenceSession(ONNX_PATH, providers=["CPUExecutionProvider"])
     onnx_proba = _onnx_positive_proba(sess.run(None, {sess.get_inputs()[0].name: sample}))
 
     max_diff = float(np.max(np.abs(native - onnx_proba)))
     print(f"parity vs native LightGBM:  max |delta probability| = {max_diff:.2e}  over {len(sample)} rows")
     assert max_diff < 1e-3, "ONNX/native mismatch too large"
-    print("ONNX model matches the native model - ready for in-Flink serving (phase 6).")
-
-    json.dump(feats, open(os.path.join(MODELS_DIR, "feature_names.json"), "w"), indent=2)
+    print("ONNX model matches the native model - ready for in-Flink serving.")
 
     # Last, so it records the artefacts as they finally are.
     import manifest
@@ -83,4 +71,6 @@ def main():
 
 
 if __name__ == "__main__":
+    # Refuses unknown flags: a mistyped one would otherwise re-export the model.
+    argparse.ArgumentParser(description=__doc__).parse_args()
     main()

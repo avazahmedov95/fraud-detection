@@ -15,35 +15,23 @@ import capabilities as CAP
 FEATURE_NAMES = CAP.feature_names()
 
 
-_warned_no_pinfl = False
+_NO_PINFL = ("CAP_PAYEE_IDENTITY=pinfl but the events carry no receiver_pinfl; "
+             "keying the payee by card instead. The live wire format does not "
+             "carry the payee's identity - only the offline harnesses, which "
+             "read the generated CSV, can run this mode.")
+_NO_PAYEE_KEY = ("no receiver_card on the event, so the payee key is empty and "
+                 "EVERY payee shares one receiver-side state. Fan-in is then "
+                 "computed over the whole stream and will fire on ordinary "
+                 "traffic. A source with account identifiers but no PANs "
+                 "(PaySim) needs CAP_PAYEE_IDENTITY=pinfl.")
+_warned = set()
 
 
-def _warn_pinfl_unavailable():
+def _warn_once(message):
     """Once per process: on the 300 ms path, and the condition never changes."""
-    global _warned_no_pinfl
-    if not _warned_no_pinfl:
-        _warned_no_pinfl = True
-        logging.getLogger("features").warning(
-            "CAP_PAYEE_IDENTITY=pinfl but the events carry no receiver_pinfl; "
-            "keying the payee by card instead. The live wire format does not "
-            "carry the payee's identity - only the offline harnesses, which "
-            "read the generated CSV, can run this mode.")
-
-
-_warned_no_key = False
-
-
-def _warn_no_payee_key():
-    """Once per process: neither identity is present, so the payee has no key."""
-    global _warned_no_key
-    if not _warned_no_key:
-        _warned_no_key = True
-        logging.getLogger("features").warning(
-            "no receiver_card on the event, so the payee key is empty and EVERY "
-            "payee shares one receiver-side state. Fan-in is then computed over "
-            "the whole stream and will fire on ordinary traffic. A source with "
-            "account identifiers but no PANs (PaySim) needs "
-            "CAP_PAYEE_IDENTITY=pinfl.")
+    if message not in _warned:
+        _warned.add(message)
+        logging.getLogger("features").warning(message)
 
 
 #: Values that mean False when a flag arrives as text.
@@ -65,10 +53,7 @@ def event_from(row: dict) -> dict:
         "amount_uzs": row["amount_uzs"],
         "sender_pinfl": row["sender_pinfl"],
         "receiver_pinfl": row["receiver_pinfl"],
-        "device_id": row["device_id"],
         "sender_region": row["sender_region"],
-        "sender_network": row.get("sender_network", ""),
-        "receiver_network": row.get("receiver_network", ""),
         # Behavioural session signals - COACHED_SESSION and the secs_login_z
         # baseline train as constant zeros without them.
         "active_call": truthy(row.get("active_call")),
@@ -99,11 +84,11 @@ def payee_key(event: dict) -> str:
         if pinfl:
             return pinfl
         # Normal live: receiver_pinfl is not on the wire, and "" would disable fan-in.
-        _warn_pinfl_unavailable()
+        _warn_once(_NO_PINFL)
     card = str(event.get("receiver_card", "") or "")
     if not card:
         # An empty key would merge every payee into one state and manufacture fan-in.
-        _warn_no_payee_key()
+        _warn_once(_NO_PAYEE_KEY)
     return card
 
 
@@ -132,7 +117,6 @@ def extract(event: dict, state, now: float, receiver_state=None,
         sub += 1
 
     distinct = {e[2] for e in ev if now - e[0] <= C.DISTINCT_PAYEE_WINDOW_S} | {payee}
-
 
     geo_is_anomaly = 0
     if state.region_counts:
@@ -189,10 +173,8 @@ def extract(event: dict, state, now: float, receiver_state=None,
     payee_payers_24h = payee_payers_7d = 0
     if receiver_state is not None:
         payee_payers_24h, payee_payers_7d = _windows(
-            getattr(receiver_state, "payers", None) or {},
-            event.get("sender_pinfl", ""))
-    sender_payees_24h, sender_payees_7d = _windows(
-        getattr(state, "payee_times", None) or {}, payee)
+            receiver_state.payers, event.get("sender_pinfl", ""))
+    sender_payees_24h, sender_payees_7d = _windows(state.payee_times, payee)
     # Capped, never NaN: 'never paid' and 'the store is down' are the same
     # observation here, and the cap keeps the column finite for every model.
     secs_since_sender_inbound = float(C.LINK_WEEK_S)

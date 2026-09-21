@@ -1,5 +1,7 @@
-"""Evaluates score-fusion strategies against the model alone."""
+"""The rules alone, the model alone and the deployed decision, on the held-out
+slice, each at the cutoff the job would apply."""
 
+import json
 import os
 import sys
 
@@ -45,6 +47,8 @@ def main():
     sess = ort.InferenceSession(os.path.join(MODELS, "model.onnx"),
                                 providers=["CPUExecutionProvider"])
     ml = _onnx_proba(sess.run(None, {sess.get_inputs()[0].name: X})).astype(float)
+    with open(os.path.join(MODELS, "thresholds.json"), encoding="utf-8") as fh:
+        review = float(json.load(fh)["review"])       # the model's own cutoff
 
     final = np.array([FU.final_score(c, m) for c, m in zip(cep, ml)])
 
@@ -52,9 +56,9 @@ def main():
     mandatory = (test["sub_threshold_1h"].values >= C.STRUCTURING_MIN_COUNT) | \
                 (test["daily_sum_ratio"].values > 1.0)
 
-    cep_flag = (cep >= C.REVIEW_THRESHOLD).astype(int)
-    ml_flag = (ml >= 0.50).astype(int)
-    fused_flag = ((final >= C.FINAL_REVIEW_THRESHOLD) | mandatory).astype(int)
+    cep_flag = (cep >= FU.review_cutoff(cep_only=True)).astype(int)
+    ml_flag = (ml >= review).astype(int)
+    fused_flag = ((final >= review) | mandatory).astype(int)
 
     print(f"test events: {len(y):,}   positives: {int(y.sum())}\n")
     print(f"final_score ranking quality:  ROC-AUC {roc_auc_score(y, final):.3f}   "
@@ -62,8 +66,8 @@ def main():
 
     print(f"{'layer':<20}{'precision':>10}{'recall':>9}{'f1':>7}    (tp/fp/fn)")
     for name, flag in (("CEP rules only", cep_flag),
-                       ("ML only @0.50", ml_flag),
-                       ("Fused (final)", fused_flag)):
+                       (f"ML at {review:.4f}", ml_flag),
+                       ("Deployed decision", fused_flag)):
         p, r, f1, tp, fp, fn = _pr(y, flag)
         print(f"{name:<20}{p:>10.3f}{r:>9.3f}{f1:>7.3f}    ({tp}/{fp}/{fn})")
 

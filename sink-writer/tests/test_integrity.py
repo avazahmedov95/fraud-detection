@@ -83,7 +83,7 @@ def _build_chain(events):
 
 
 def _events(n):
-    return [dict(EVENT, transaction_id=f"tx-{i}", decision="BLOCK",
+    return [dict(EVENT, transaction_id=f"tx-{i}", decision="REVIEW",
                  final_score=0.9, ingress_hash=integrity.ingress_hash(EVENT))
             for i in range(n)]
 
@@ -94,7 +94,7 @@ def test_clean_chain_verifies():
 
 def test_altered_payload_is_caught():
     chain = _build_chain(_events(10))
-    chain[4]["payload"] = chain[4]["payload"].replace("BLOCK", "ALLOW")
+    chain[4]["payload"] = chain[4]["payload"].replace("REVIEW", "ALLOW")
     findings = verify(chain)
     assert any("record_hash does not recompute" in f for f in findings)
 

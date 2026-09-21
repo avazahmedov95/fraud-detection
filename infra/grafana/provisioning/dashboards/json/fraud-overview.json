@@ -32,7 +32,7 @@
       "gridPos": {
         "x": 0,
         "y": 0,
-        "w": 6,
+        "w": 8,
         "h": 4
       },
       "targets": [
@@ -74,9 +74,9 @@
         "uid": "clickhouse"
       },
       "gridPos": {
-        "x": 6,
+        "x": 8,
         "y": 0,
-        "w": 6,
+        "w": 8,
         "h": 4
       },
       "targets": [
@@ -118,9 +118,9 @@
         "uid": "clickhouse"
       },
       "gridPos": {
-        "x": 12,
+        "x": 16,
         "y": 0,
-        "w": 6,
+        "w": 8,
         "h": 4
       },
       "targets": [
@@ -154,53 +154,9 @@
       }
     },
     {
-      "id": 4,
-      "type": "stat",
-      "title": "Blocked",
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "gridPos": {
-        "x": 18,
-        "y": 0,
-        "w": 6,
-        "h": 4
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorType": "sql",
-          "rawSql": "SELECT countIf(decision = 'BLOCK') AS value FROM fraud.transactions_scored WHERE $__timeFilter(event_time)",
-          "queryType": "table",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "colorMode": "value",
-        "graphMode": "none",
-        "textMode": "value"
-      }
-    },
-    {
       "id": 5,
       "type": "timeseries",
-      "title": "Alerts over time (REVIEW / BLOCK)",
+      "title": "Alerts over time",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -218,7 +174,7 @@
             "uid": "clickhouse"
           },
           "editorType": "sql",
-          "rawSql": "SELECT $__timeInterval(event_time) AS time,\n       countIf(decision = 'REVIEW') AS review,\n       countIf(decision = 'BLOCK')  AS block\nFROM fraud.transactions_scored\nWHERE $__timeFilter(event_time)\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT $__timeInterval(event_time) AS time,\n       countIf(decision = 'REVIEW') AS review\nFROM fraud.transactions_scored\nWHERE $__timeFilter(event_time)\nGROUP BY time\nORDER BY time",
           "queryType": "timeseries",
           "refId": "A"
         }

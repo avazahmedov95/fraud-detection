@@ -15,7 +15,6 @@ from config import (GeneratorConfig, AMOUNT_MIN, AMOUNT_MAX, STRUCTURING_THRESHO
 from events import EVENT_FIELDS, make_event
 import persons as P
 import travel as T
-from persons import build_population, build_fraud_accounts, _normalise
 from fraud_patterns import inject_fraud, maybe_round
 
 
@@ -101,7 +100,7 @@ def generate_normal(config, persons, by_pinfl, n_normal, rng, start_dt, trips):
     n_regular = n_normal - len(events)
 
     # Heavy-tailed activity: a few very active senders.
-    activity = _normalise(rng.random(len(persons)) ** 3)
+    activity = P._normalise(rng.random(len(persons)) ** 3)
     sender_idx = rng.choice(len(persons), size=n_regular, p=activity)
 
     for i in range(n_regular):
@@ -123,7 +122,8 @@ def generate_normal(config, persons, by_pinfl, n_normal, rng, start_dt, trips):
 
         receiver = by_pinfl[rp]
         # Generator-internal: outside the sender's assigned payee set. Not the
-        # stream-derived "new payee" of features.py; the two differ on ~28% of rows.
+        # stream-derived "new payee" of features.py; _signal_check prints how
+        # often the two differ.
         is_new = rp not in known[sender.pinfl]
         known[sender.pinfl].add(rp)
 
@@ -163,9 +163,9 @@ def generate_normal(config, persons, by_pinfl, n_normal, rng, start_dt, trips):
 def build_dataset(config):
     C.PROFILE = config                    # the session knobs make_event reads
     rng = np.random.default_rng(config.seed)
-    persons, by_pinfl = build_population(config, rng)
-    fraud_accounts = build_fraud_accounts(max(50, config.n_persons // 25), rng,
-                                          aged_share=config.aged_fraud_share)
+    persons, by_pinfl = P.build_population(config, rng)
+    fraud_accounts = P.build_fraud_accounts(max(50, config.n_persons // 25), rng,
+                                            aged_share=config.aged_fraud_share)
     start_dt = datetime.fromisoformat(config.start_date)
 
     n_fraud = int(config.fraud_rate * config.n_transactions)
@@ -236,8 +236,9 @@ def _signal_check(df):
         print("  !! fraud is essentially ALWAYS to a stream-new payee. The"
               " threat model (docs/threat-model.md 4) rates that control"
               " 'low cost to evade - a prior small transfer establishes the"
-              " payee', and this generator does not produce that evasion, so"
-              " the feature's measured value is an upper bound.")
+              " payee', and this dataset does not include that evasion"
+              " (SEEDED_PAYEE_SHARE=0), so the feature's measured value is an"
+              " upper bound.")
 
 
 def parse_args():

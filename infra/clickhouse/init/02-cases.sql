@@ -25,10 +25,9 @@ CREATE TABLE IF NOT EXISTS fraud.cases
     receiver_card   String,
     amount_uzs      UInt64,
     final_score     Float32,
-    decision        LowCardinality(String),  -- REVIEW / BLOCK (never ALLOW)
+    decision        LowCardinality(String),  -- REVIEW (never ALLOW)
     predicted_type  LowCardinality(String),
     rule_hits       Array(String),           -- the reason codes, for the analyst
-    priority        UInt8,                   -- 0 = highest; derived, see case.py
 
     -- Workflow state.
     disposition     LowCardinality(String) DEFAULT 'NEW',

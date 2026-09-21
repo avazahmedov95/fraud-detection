@@ -100,7 +100,7 @@ def _require_a_payee_key(ev):
             "the payee key resolves empty on this stream. features.payee_key falls "
             "back to receiver_card and this dataset issues no PANs, so every sender "
             "would have exactly one payee forever. Build the profile with "
-            "replay.capability_profile(...), which sets payee_identity=pinfl.")
+            "harness.capability_profile(...), which sets payee_identity=pinfl.")
 
 
 #: Rows between progress lines. Large enough that the print costs nothing, small
@@ -229,7 +229,6 @@ def section_decision(res, hits, positive="fraud", width=70):
 def available_features():
     """(indices, names) of the contract columns the active profile can supply;
     FEATURE_NAMES is fixed at import, so switched-off columns are dropped here."""
-    import features as F
     off = {f for cap in CAP.REGISTRY if CAP.MODES.get(cap.key) == "off"
            for f in cap.features}
     idx = [i for i, n in enumerate(F.FEATURE_NAMES) if n not in off]
@@ -241,7 +240,6 @@ def extract_features(events, total):
     extractor as fraud_job computes them. Returns (X, y, ts), one column per
     `features.FEATURE_NAMES`; `available_features()` says which to keep."""
     import numpy as np
-    import features as F
     X = np.zeros((total, len(F.FEATURE_NAMES)), dtype="float32")
     y = np.zeros(total, dtype="int8")
     ts = np.zeros(total, dtype="int64")

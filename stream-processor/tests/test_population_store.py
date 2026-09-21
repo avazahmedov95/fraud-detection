@@ -3,13 +3,8 @@
 fake client, so the call counts can be asserted.
 """
 
-import sys
-
-
-# sys.path is set by tests/conftest.py.
-
-import config as C                          # noqa: E402
-from receiver_store import PopulationStore  # noqa: E402
+import config as C
+from receiver_store import PopulationStore
 
 
 class FakePipeline:
@@ -105,7 +100,8 @@ def test_threshold_reflects_the_whole_population_not_one_worker():
     ps, r = _wired()
     r.hash = {"1": C.MULE_FAN_IN_MIN_OBS, "30": C.MULE_FAN_IN_MIN_OBS}
     ps.observe(1)
-    assert ps.threshold(0.60, fallback=6) >= 2
+    # Half the population sits at 30 senders: no single worker saw that.
+    assert ps.threshold(0.60, fallback=6) == 30
 
 
 def test_a_redis_blip_keeps_pending_observations():

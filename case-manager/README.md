@@ -3,9 +3,9 @@
 The consumer `fraud.alerts` did not have.
 
 Before this service the pipeline computed a decision, wrote it to the alert
-topic, and nothing read it — `BLOCK` and `REVIEW` were strings in a warehouse,
-not work anyone did. This turns each alert into a **case**, gives it a priority,
-and records what a human decided about it.
+topic, and nothing read it — a decision was a string in a warehouse, not work
+anyone did. This turns each alert into a **case**, queues it by exposure, and
+records what a human decided about it.
 
 ## What it is not
 
@@ -32,15 +32,15 @@ the resolved set is biased towards high scores.
 
 | File | What it does |
 |---|---|
-| `case.py` | pure alert → case row; priority; the resolution rule. No I/O |
+| `case.py` | pure alert → case row; the resolution rule. No I/O |
 | `store.py` | ClickHouse access: open, read, resolve, count |
 | `explain.py` | exact tree contributions, in words, for alerts no rule explains |
 | `consumer.py` | the service: `fraud.alerts` → `fraud.cases` |
 | `queue_cli.py` | the analyst surface: `list` / `show` / `resolve` / `stats` |
 | `config.py` | connections and batch settings, all from the environment |
-| `tests/test_case.py` | 16 tests, incl. the replay-cannot-revert-a-verdict property |
-| `tests/test_store.py` | 14 tests against a fake ClickHouse: schema, FINAL, round trip |
-| `tests/test_explain.py` | 15 tests, mostly about refusing to give a wrong reason |
+| `tests/test_case.py` | 13 tests, incl. the replay-cannot-revert-a-verdict property |
+| `tests/test_store.py` | 13 tests against a fake ClickHouse: schema, FINAL, round trip |
+| `tests/test_explain.py` | 14 tests, mostly about refusing to give a wrong reason |
 
 ## The schema is applied by the service, not by ClickHouse
 
@@ -57,7 +57,8 @@ copied into the image by the Dockerfile — one source of truth, not two.
 
 ## Why the model's reasons are computed here and not in Flink
 
-14.9% of alerts fire with **no rule hit at all** — the model alone. Those used
+14.9% of alerts fired with **no rule hit at all** on the live queue where this was
+measured (`docs/irp-framing.md` §9.2) — the model alone. Those used
 to reach the queue as an automated adverse decision with nothing to tell a
 customer or an auditor. Now each carries the exact tree contributions that
 pushed its score up, in words:

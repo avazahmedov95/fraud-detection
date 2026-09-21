@@ -3,7 +3,8 @@
   --service scorer   kills the scorer mid-stream: transactions lost and duplicated
                      (docs/irp-framing.md 5, point 6).
   --service redis | neo4j | clickhouse | kafka
-                     stops what the scorer leans on (docs/irp-framing.md 7.7).
+                     stops one dependency of the scorer or the sink
+                     (docs/irp-framing.md 7.7).
   --service control  breaks nothing: the reference for the other arms.
 
   python outage.py [--service S] --phase before
@@ -278,9 +279,6 @@ def _report_scorer(base, snap, expect):
               "\n               metrics; no operational effect.")
         print("     REVIEW  - a second identical case in the analyst queue."
               "\n               Wasted work, and erodes trust in the queue.")
-        print("     BLOCK   - a second alert on an already-blocked transfer."
-              "\n               Safe: blocking twice does not double-block, but"
-              "\n               it does inflate the reported fraud count.")
         # Queried, not assumed: replay is not a pure function of the event.
         rows = query(f"""
             SELECT count() AS n,

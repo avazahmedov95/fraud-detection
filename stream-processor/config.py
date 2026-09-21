@@ -38,10 +38,6 @@ CONSUMER_GROUP = os.getenv("CONSUMER_GROUP", "fraud-cep")
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 
-SECS_LOGIN_MIN_HISTORY = 5          # cold start: z = 0 below this many observations
-W_COACHED_SESSION = 0.35            # deliberately level with W_NEW_PAYEE_HIGH
-COACHED_SESSION_Z = 2.0
-
 # Which features and rules are active is not here: capabilities.py, set by CAP_*.
 
 # --- Mirrored from the generator (must match it) -----------------------------
@@ -62,6 +58,8 @@ STRUCTURING_MIN_COUNT = 3           # >= 3 sub-threshold transfers in the window
 STRUCTURING_BAND_LOW = 0.80         # "just under" band: [0.80*T, 1.0*T)
 DISTINCT_PAYEE_MAX = 5              # > 5 distinct payees in the window (fan-out)
 AMOUNT_DEVIATION_SIGMA = 4.0        # amount > mean + sigma*std
+COACHED_SESSION_Z = 2.0             # login->confirm this far above the sender's own
+SECS_LOGIN_MIN_HISTORY = 5          # cold start: z = 0 below this many observations
 
 # Faster than a jet (900 km/h) is impossible, not unusual; the distance floor
 # absorbs placing each region at its administrative centre (geo.py).
@@ -71,6 +69,14 @@ MIN_TRAVEL_DISTANCE_KM = 100.0
 # Above the fan-OUT threshold: receiving from several people in an hour is
 # ordinary, paying out to several unrelated new payees is not.
 RECEIVER_WINDOW_S = 3600
+MULE_FAN_IN_MIN_SENDERS = 6
+
+# "relative": a quantile of the live population instead of the constant 6, which
+# fits only this generator's density (docs/irp-framing.md §6, third RQ3 result).
+MULE_FAN_IN_MODE = os.getenv("MULE_FAN_IN_MODE", "absolute")   # absolute | relative
+MULE_FAN_IN_QUANTILE = float(os.getenv("MULE_FAN_IN_QUANTILE", "0.999"))
+MULE_FAN_IN_MIN_OBS = int(os.getenv("MULE_FAN_IN_MIN_OBS", "5000"))      # else fall back
+MULE_FAN_IN_REFRESH_EVERY = int(os.getenv("MULE_FAN_IN_REFRESH_EVERY", "512"))
 
 # Counterparty counters (counterparty_history). The CBU's internal-control
 # rules count distinct counterparties over up to 30 days (related-work.md 6e);
@@ -81,14 +87,6 @@ LINK_WEEK_S = 604800
 #: Prune the counterparty maps only once they grow: the window filter in
 #: features.extract decides what counts, so pruning is memory, not correctness.
 LINK_PRUNE_AT = 256
-MULE_FAN_IN_MIN_SENDERS = 6
-
-# "relative": a quantile of the live population instead of the constant 6, which
-# fits only this generator's density (validation/README.md 3).
-MULE_FAN_IN_MODE = os.getenv("MULE_FAN_IN_MODE", "absolute")   # absolute | relative
-MULE_FAN_IN_QUANTILE = float(os.getenv("MULE_FAN_IN_QUANTILE", "0.999"))
-MULE_FAN_IN_MIN_OBS = int(os.getenv("MULE_FAN_IN_MIN_OBS", "5000"))      # else fall back
-MULE_FAN_IN_REFRESH_EVERY = int(os.getenv("MULE_FAN_IN_REFRESH_EVERY", "512"))
 
 AMOUNT_DEVIATION_MIN_HISTORY = 5   # history needed before deviation can fire
 NEW_PAYEE_AMOUNT_FACTOR = 3.0      # amount > factor * sender mean
@@ -96,6 +94,7 @@ NEW_PAYEE_ABS_FLOOR = 2_000_000    # ...and above this absolute floor (UZS)
 
 # --- Rule weights (contribution to the CEP score, capped at 1.0) ------------
 W_NEW_PAYEE_HIGH = 0.35
+W_COACHED_SESSION = 0.35            # deliberately level with W_NEW_PAYEE_HIGH
 W_VELOCITY = 0.30
 W_STRUCTURING = 0.40
 W_DISTINCT_BURST = 0.25
@@ -113,7 +112,7 @@ REVIEW_THRESHOLD = 0.40
 # No BLOCK anywhere: the system never blocks on its own - every alert goes to a
 # person (the owner's decision, 2026-09-19).
 
-# Off restores the pre-2026 fixed cutoffs, kept so the two can be compared.
+# Off restores the fixed cutoffs, kept so the two can be compared.
 # Why they are scaled at all: capabilities.scaled_threshold.
 SCALE_THRESHOLDS_BY_CAPABILITY = (
     os.getenv("SCALE_THRESHOLDS_BY_CAPABILITY", "1").lower()
@@ -168,7 +167,6 @@ def _resolve_artefact(env_var, filename, extra_dirs=()):
 
 
 MODEL_ONNX_PATH = _resolve_artefact("MODEL_ONNX_PATH", "model.onnx")
-FEATURE_NAMES_PATH = _resolve_artefact("FEATURE_NAMES_PATH", "feature_names.json")
 THRESHOLDS_PATH = _resolve_artefact("THRESHOLDS_PATH", "thresholds.json")
 
 # Fusion happens at the DECISION layer - fusion.py says why every blend degraded.
@@ -189,5 +187,4 @@ def _model_review_threshold(path):
 MODEL_REVIEW_THRESHOLD = _model_review_threshold(THRESHOLDS_PATH)
 
 # Force at least REVIEW regardless of the model score (AML / Regulation 3759).
-# High-precision on the synthetic slice: 38 fraud vs 2 legit.
 MANDATORY_REVIEW_RULES = ("STRUCTURING", "DAILY_LIMIT_BREACH")

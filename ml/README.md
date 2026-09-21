@@ -1,4 +1,4 @@
-# ml — phase 5 ✅
+# ml
 
 Offline training of the gradient-boosting fraud model, SHAP explainability, and
 ONNX export for in-stream serving. The model trains on the **same feature
@@ -18,7 +18,10 @@ experiments/      harnesses - each produces a NUMBER, not an artefact the
                   system uses, and none is imported by the pipeline above
   ablate_seeds.py what each capability is worth, across generator seeds, with
                   intervals; --only <capability> sweeps all of its modes
-  layers.py       CEP-only vs ML-only vs fused on the held-out slice
+  counters.py     the counterparty counters' gate, paired fits on two datasets
+  collectors.py   honest collections vs mules, with and without the counters
+  thresholds.py   the cutoff menu, read on the served model
+  layers.py       the rules alone, the model alone and the deployed decision
   recall.py       per-type recall across seeds (budgeted; resumes)
                   One-off experiments are deleted once their decision is
                   written below: git log --diff-filter=D -- ml/experiments
@@ -106,9 +109,10 @@ reported. Three changes, each measured before it was adopted:
   owner's decision - and every alert goes to a person. The CEP-only fallback keeps
   its fixed cutoff, since an additive rule score is not a probability.
 
-*IBM AML, which the gates below use, was removed from the project on 2026-09-19:
-its accounts include banks and companies, and this project is about transfers
-between people. The gates stay as the record of the decisions they made.*
+*IBM AML, which the gates below use, was removed on 2026-09-19 - its accounts
+include banks and companies, and this project is about transfers between people -
+and returned on 2026-09-20 for information only (`validation/README.md` §4): it
+decides no gate now. The gates below stay as the record of the decisions they made.*
 
 ### Following the money a hop further: tried, not adopted, removed
 
@@ -189,28 +193,29 @@ stream.
 
 **Decision, 2026-09-16: the owner kept the F1-peak cutoff.** `train.py` is
 unchanged. Both tables above are the 20-column model of that day, and the IBM AML
-one is history - that dataset was removed on 2026-09-19.
+one is history - that dataset has only reported for information since 2026-09-20.
 
-**Re-read on 2026-09-20, against the model actually served.**
-`experiments/thresholds.py` now loads `models/model.txt` instead of refitting, so
-the menu describes the deployed system. Cutoffs chosen on the validation rows,
-read on the 100,000 test transfers (202 fraud):
+**Re-read on 2026-09-21, against the model actually served.**
+`experiments/thresholds.py` loads `models/model.txt` instead of refitting, so the
+menu describes the deployed system - the dataset regenerated on 2026-09-20 and the
+committee retrained on it. Cutoffs chosen on the validation rows, read on the
+100,000 test transfers (176 fraud):
 
 | cutoff | alerts per 100k | caught | real |
 |---|---|---|---|
-| top 0.05% of transfers | 45 | 17.3% | **77.8%** |
-| top 0.1% | 91 | 32.7% | 72.5% |
-| **F1 peak (the current rule)** | **154** | **43.6%** | **57.1%** |
-| top 0.2% | 200 | 51.5% | 52.0% |
-| F2 peak | 303 | 64.9% | 43.2% |
-| top 0.5% | 496 | 71.3% | 29.0% |
-| top 1% | 973 | 80.7% | 16.8% |
+| top 0.05% of transfers | 65 | 31.2% | **84.6%** |
+| top 0.1% | 85 | 38.6% | 80.0% |
+| **F1 peak (the current rule)** | **131** | **54.5%** | **73.3%** |
+| top 0.2% | 150 | 56.8% | 66.7% |
+| F2 peak | 192 | 61.4% | 56.2% |
+| top 0.5% | 476 | 73.9% | 27.3% |
+| top 1% | 963 | 81.8% | 15.0% |
 
-The shape of the trade is unchanged by the new columns: the current rule sits
-where it did, and the two ends of the menu are the ones worth putting to an owner
-- the F2 peak catches two thirds of the fraud for twice the queue at 43% real, and
-the top 0.1% is the opposite trade, a third of the fraud at 72.5% real. Nothing is
-adopted here: the cutoff is a decision, and it has not been changed.
+The shape of the trade holds on the new file: the current rule sits near the knee,
+and the two ends of the menu are the ones worth putting to an owner - the F2 peak
+catches 61.4% of the fraud for half as many alerts again at 56% real, and the top
+0.1% is the opposite trade, 38.6% of the fraud at 80% real. Nothing is adopted
+here: the cutoff is a decision, and it has not been changed.
 
 ### Not companies: the same caveat on IBM AML's people-like transfers
 
@@ -290,8 +295,8 @@ The count is the hour rule's own - no new number - and the weight is lower (0.25
 against 0.35): a slow collection is weaker evidence than a burst, and on its own it
 does not reach the 0.40 cutoff. The rule is not in `MANDATORY_REVIEW_RULES`, so it
 cannot move a fused decision; its whole value is on the **CEP-only fallback**, which
-catches 14.9% of the held-out month's fraud at 1.3% precision since `FRESH_RECEIVER`
-went with the payee's age.
+caught 14.9% of the held-out month's fraud at 1.3% precision once `FRESH_RECEIVER`
+went with the payee's age (14.2% at 1.1% on the file regenerated later that day).
 
 The rule, fixed before the run:
 
@@ -334,9 +339,9 @@ window, is the version worth gating next; it needs its own baseline in Redis.
 
 The counters are worth +0.116 PR-AUC to the model (above). Turning the same shapes
 into a CEP rule was tried three times, each with its conditions committed before its
-run, and each removed by them. The fallback they were meant to strengthen catches
+run, and each removed by them. The fallback they were meant to strengthen caught
 14.9% of the held-out month's fraud at 1.3% precision, where `FRESH_RECEIVER` left
-it.
+it - 14.2% at 1.1% on the file regenerated later that day.
 
 | attempt | rule | CEP-only recall | fires on legitimate rows | decisions it alone lifts | verdict |
 |---|---|---|---|---|---|
@@ -445,7 +450,8 @@ deploying bank does not have, and the figures above are quoted without it.**
 
 ### Counting counterparties over days: the rule, fixed before the run
 
-`counterparty_history` (off by default) adds five columns: the payee's distinct
+`counterparty_history` (on by default since it passed its gates on 2026-09-20) adds
+five columns: the payee's distinct
 payers over 24 hours and over 7 days, the sender's distinct payees over the same
 two windows, and the seconds since the sender's own account was last paid. The
 windows are the regulator's - the CBU's internal-control rules define P2P activity
@@ -584,51 +590,65 @@ public data. See `docs/related-work.md` §6.
 
 ## Feature importance (SHAP)
 
-**Recomputed 2026-09-20 on the served 21-column committee**, over the 100,000
-held-out transfers. `explain.py` no longer uses the `shap` package - its numba
-extension is blocked by an application-control policy on the owner's machine - but
-LightGBM's own TreeSHAP (`pred_contrib`), which is the same algorithm and the same
-call the case view makes per alert (`case-manager/explain.py`). Mean |contribution|
+**Recomputed 2026-09-21 on the served committee**, over the 100,000 held-out
+transfers, with LightGBM's own TreeSHAP (`pred_contrib`) - the algorithm the `shap`
+package implements and the call the case view makes per alert
+(`case-manager/explain.py`); the package itself cannot load on the owner's machine,
+where an application-control policy blocks its numba extension. Mean |contribution|
 to the log-odds:
 
 | | feature | | | feature | |
 |---|---|---|---|---|---|
-| 1 | `secs_since_last` | 4.531 | 9 | `payee_payers_7d` | 0.472 |
-| 2 | `active_call` | 2.725 | 10 | `amount_to_mean` | 0.435 |
-| 3 | `secs_since_sender_inbound` | 2.116 | 11 | `distinct_payees_10m` | 0.406 |
-| 4 | `rcv_inflow_1h` | 2.051 | 12 | `amount_z` | 0.362 |
-| 5 | `is_new_payee` | 2.008 | 13 | `hour` | 0.179 |
-| 6 | `secs_login_z` | 1.310 | 14 | `sender_payees_7d` | 0.172 |
-| 7 | `log_amount` | 0.872 | 15 | `payee_payers_24h` | 0.042 |
-| 8 | `daily_sum_ratio` | 0.611 | | | |
+| 1 | `daily_sum_ratio` | 1,895 | 9 | `secs_login_z` | 50 |
+| 2 | `log_amount` | 659 | 10 | `is_new_payee` | 38 |
+| 3 | `secs_since_sender_inbound` | 533 | 11 | `sender_payees_7d` | 33 |
+| 4 | `amount_z` | 513 | 12 | `payee_payers_7d` | 15 |
+| 5 | `amount_to_mean` | 413 | 13 | `payee_payers_24h` | 9 |
+| 6 | `rcv_inflow_1h` | 379 | 14 | `rcv_distinct_senders_1h` | 8 |
+| 7 | `secs_since_last` | 170 | 15 | `vel_1h` | 3 |
+| 8 | `hour` | 96 | | | |
 
-These are log-odds on a 2,000-tree committee; the figures from 2026-08-30 were
-probabilities on a single 400-tree fit, so **only the ordering compares**, not the
-magnitudes. Attribution also redistributes across every column when the feature set
-changes, and the set changed twice this week. Quote three decimals at most.
+**The magnitudes are the finding.** The committee before the dataset was
+regenerated gave contributions of a few log-odds; this one gives hundreds and
+thousands, and the attribution is not what is wrong - the model is. Its raw scores
+run from −26,419 to +158 on the first 60,000 rows, median −1,117; its
+leaves reach ±18,111; and 55% of transfers sit beyond ±745, where even a 64-bit
+probability is exactly 0 or 1. On the regenerated file most transfers are
+classified with certainty early, the later trees chase the few hard cases where
+the second derivative has all but vanished, and a Newton step over a vanishing
+second derivative is enormous - nothing in `train.py`'s recipe, which sets no L2
+penalty on leaf values, holds it back. The ranking survives it (PR-AUC 0.573, the
+same alerts in 32 and 64 bits); the probabilities (Calibration, below) and these
+contributions do not. Large terms cancel: the caught fraud `explain.py` prints
+carries +4,808 from `daily_sum_ratio` against −1,110 from `log_amount`. **An L2
+penalty on leaf values is the repair**, and it changes the model and every figure
+measured on it, so it is the owner's decision - recorded here, not made in a
+clean-up.
+
+Read the order, not the numbers, and the order with care: a column can rank high
+by cancelling another.
 
 **The transit column is third, and it was worthless alone.** Measured on its own,
-`secs_since_sender_inbound` cost 0.042 PR-AUC (above); here the model leans on it
-more than on any other counter. Both are true: SHAP measures what a column
-contributes *in the presence of the others*, and this one only means something
-beside the payee-side counts - collected from many, then paid on. "Contributes
-nothing on its own" and "can be removed" remain different claims.
+`secs_since_sender_inbound` cost 0.042 PR-AUC on the file of the time (above);
+here the model leans on it more than on any other counter. Both are true: SHAP
+measures what a column contributes *in the presence of the others*, and this one
+only means something beside the payee-side counts - collected from many, then paid
+on. "Contributes nothing on its own" and "can be removed" remain different claims.
 
-**`active_call` is second, and it does not mean what its name suggests.** A call
-while confirming marks **APP** (43.8% of those episodes against 10.0% of legitimate
-traffic) and marks the *absence* of the others: 6.5% of MULE transfers and 7.7% of
-STRUCTURING carry one, below the legitimate rate. So for a mule transfer the model
-reads an active call as evidence *against* fraud, which is why single alerts show it
-with a large negative contribution. The column is a pattern discriminator, not a
-fraud flag.
+**`active_call` does not mean what its name suggests.** It left the top fifteen on
+the regenerated file, and what it carries is unchanged: a call while confirming
+marks **APP** (44.9% of those transfers against 10.0% of legitimate traffic) and the
+*absence* of the others - 6.0% of MULE transfers and 7.7% of STRUCTURING carry one,
+below the legitimate rate. So for a mule transfer the model reads an active call as
+evidence *against* fraud. The column is a pattern discriminator, not a fraud flag.
 
-**`is_new_payee` fifth is still an upper bound, not a finding.** Fraud reaches a
-stream-new payee 99.2% of the time on this data against 36.9% of legitimate
-traffic, because the generator does not produce the evasion its own threat model
-names - one small prior transfer establishes the payee. When it is produced
-(`SEEDED_PAYEE_SHARE`, default off), APP detection on the affected episodes falls
-from 56.0% to 31.8%, five seeds, delta −25.3 pp [−47.5, −3.1]
-(`docs/threat-model.md` §4).
+**`is_new_payee` is still an upper bound, not a finding.** Fraud reaches a
+stream-new payee 99.1% of the time on this data against 44.2% of legitimate
+traffic (keyed by card, as the job keys it), because the generator does not produce
+the evasion its own threat model names - one small prior transfer establishes the
+payee. When it is produced (`SEEDED_PAYEE_SHARE`, default off), APP detection on
+the affected episodes falls from 56.0% to 31.8%, five seeds, delta −25.3 pp
+[−47.5, −3.1] (`docs/threat-model.md` §4).
 
 **`is_family` was the same artefact, and how it ended is the finding.** An earlier
 revision reported it as the #1 feature (1.29) and the core research contribution:
@@ -642,8 +662,16 @@ synthetic data is suspect until the generator models both sides of its behaviour
 (`docs/irp-framing.md` §4). **The amounts are the next instance of this**, found by
 the owner on 2026-09-20 and recorded in `docs/generator-spec.md` §2.
 
-The ONNX model reproduces native LightGBM probabilities to < 1e-6, so in-Flink
-serving is faithful.
+The ONNX model reproduces the native committee's probabilities to within 2.3e-6
+on the held-out month, and every alert with them: at the model's cutoff both
+catch the same 96 frauds with the same 35 false alarms, and PR-AUC agrees to
+0.001 (0.572 against 0.573). **ROC-AUC does not agree** - 0.965 served against
+0.988 native - and the reason is arithmetic, not the model: ONNX Runtime computes
+in 32-bit floats, where 92.6% of held-out transfers score exactly 0.0 (49.4% in
+64-bit, for the reason Feature importance gives), and a tie that large at the bottom of the ranking costs ROC-AUC without
+touching a transfer anyone would review. The 0.988 quoted in this file is the
+native committee's; `experiments/layers.py` reads the served model and prints
+0.965.
 
 ## Capability ablation
 
@@ -820,7 +848,6 @@ n_alerts            131          (>= REVIEW on the held-out slice)
 saturated_share     47.3%        rounding to 1.000
 distinct_scores     64
 median_alert_score  0.998788
-scored_with         model.onnx
 ```
 
 Read `saturated_share` and `distinct_scores` together. On the baseline profile
@@ -832,4 +859,5 @@ dataset, and the sharpest reminder that rounding the amounts made this data
 easier: a queue of 131 with 64 distinct scores can be ordered, but barely. AUC is blind to this by construction - it is a
 rank statistic - and the finding surfaced only when a real work queue tried to
 sort by score (`docs/irp-framing.md` §9.1). It is a property of near-separable
-synthetic data, not of gradient boosting.
+synthetic data met by a recipe with no penalty on leaf values (Feature
+importance, above), not of gradient boosting as such.

@@ -119,7 +119,7 @@ def test_a_missing_card_collapses_every_payee_into_one(mode, caplog):
     """An empty card key puts every payee into ONE ReceiverState and fabricates the
     fan-in MULE_FAN_IN looks for - found on PaySim, which issues no PANs."""
     mode("card")
-    F._warned_no_key = False
+    F._warned.clear()
     a = {"amount_uzs": 100_000, "receiver_pinfl": "P1", "sender_pinfl": "S1"}
     b = {"amount_uzs": 100_000, "receiver_pinfl": "P2", "sender_pinfl": "S2"}
 

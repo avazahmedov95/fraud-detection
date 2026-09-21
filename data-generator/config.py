@@ -59,10 +59,8 @@ AMOUNT_MAX = 50_000_000
 # rule watches the same constant, so that recall is partly by construction.
 STRUCTURING_THRESHOLD = 10_000_000
 
-# Bank limits, not regulatory. Only LIMIT_DAILY is read (DAILY_LIMIT_BREACH).
+# A bank limit, not a regulatory one (DAILY_LIMIT_BREACH).
 LIMIT_DAILY = 100_000_000
-LIMIT_PER_TRANSACTION = 30_000_000   # UNUSED
-LIMIT_MONTHLY = 500_000_000          # UNUSED
 
 # --- Geography (Uzbekistan regions) -----------------------------------------
 REGIONS = [

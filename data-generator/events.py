@@ -3,6 +3,9 @@ Spec for what each pattern should look like: docs/generator-spec.md 3."""
 
 import uuid
 
+import numpy as np
+
+import config as C
 from config import SECOND_CARD_USE_RATE
 
 EVENT_FIELDS = [
@@ -14,13 +17,11 @@ EVENT_FIELDS = [
     "amount_uzs", "device_id",
     "sender_region", "receiver_region", "sender_balance_before",
     "active_call", "secs_login_to_confirm",
-    # enriched (Flink-side in production)
+    # not on the wire: the job derives is_new_payee itself, and the other two
+    # stay in the file for its pinned hash (data-generator/README.md)
     "is_new_payee", "receiver_account_age_days", "is_family_transfer",
     "label_is_fraud", "label_fraud_type",
 ]
-
-import numpy as np
-import config as C
 
 
 def gen_session_signals(sender, fraud_type, rng):
@@ -63,6 +64,7 @@ def round_like_a_person(amount, rng, down=False):
     r = int(scaled) * step if down else round(scaled) * step
     return float(max(step, r))
 
+
 def _payee_card(receiver, rng):
     """Which of the payee's cards this transfer lands on - what lets PAN and PINFL
     keys differ (config.SECOND_CARD_*). Without `rng`, the primary card."""
@@ -83,8 +85,8 @@ def _payee_card(receiver, rng):
 def make_event(sender, receiver, amount, ts, device_id,
                is_new_payee, balance_before,
                is_fraud=0, fraud_type="NONE", rng=None):
-    active_call, secs_login = gen_session_signals(sender, fraud_type, rng)
     """Build one transaction event. `sender`/`receiver` are Person-like objects."""
+    active_call, secs_login = gen_session_signals(sender, fraud_type, rng)
     return {
         "transaction_id": str(uuid.uuid4()),
         "event_time": ts.isoformat(),
@@ -111,5 +113,4 @@ def make_event(sender, receiver, amount, ts, device_id,
             sender.household_id == receiver.household_id),
         "label_is_fraud": int(is_fraud),
         "label_fraud_type": fraud_type,
-
     }

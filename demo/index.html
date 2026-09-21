@@ -36,7 +36,7 @@ th{font-size:12px;color:var(--muted);font-weight:600;background:#fafbfc}
 tr:last-child td{border-bottom:0}
 .num{text-align:right;font-variant-numeric:tabular-nums}
 .badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:650;color:#fff}
-.ALLOW{background:var(--allow)}.REVIEW{background:var(--review)}.BLOCK{background:var(--block)}
+.ALLOW{background:var(--allow)}.REVIEW{background:var(--review)}
 .rule{display:inline-block;margin:1px 4px 1px 0;padding:1px 7px;border-radius:6px;background:#edf1f8;font-size:12px}
 .bar{display:inline-block;width:80px;height:7px;border-radius:4px;background:#edf0f3;vertical-align:middle;margin-right:6px}
 .bar i{display:block;height:100%;border-radius:4px}
@@ -136,7 +136,7 @@ ru: {
   bg_start: "Запустить фоновый поток", bg_stop: "Остановить фоновый поток",
   speed: "Скорость ", alerts_only: "Только тревоги",
   live_hint: "Каждая строка — перевод, который система только что оценила: решение, риск от 0 до 1 и сработавшие правила. Фоновый поток — переводы из набора данных в их исходном ритме, ускоренном в выбранное число раз.",
-  t_total: "Решений", t_allow: "Пропущено", t_review: "На проверку", t_block: "Заблокировано", t_ms: "Время решения, медиана",
+  t_total: "Решений", t_allow: "Пропущено", t_review: "На проверку", t_ms: "Время решения, медиана",
   h_time: "Время", h_amount: "Сумма", h_route: "Откуда → куда", h_decision: "Решение", h_risk: "Риск",
   h_rules: "Сработавшие правила", h_role: "Роль", h_when: "Когда", h_prio: "Приоритет", h_type: "Тип",
   empty_live: "Пока нет решений. Запустите фоновый поток или проиграйте сценарий.",
@@ -169,7 +169,7 @@ ru: {
   no_decisions: "Переводы отправлены, но решений нет. Проверьте, что задача Flink запущена: http://localhost:8081",
   no_store: "Очередь недоступна: ",
   sum: "сум", score: "риск",
-  dec: {ALLOW: "Пропущен", REVIEW: "На проверку", BLOCK: "Заблокирован"},
+  dec: {ALLOW: "Пропущен", REVIEW: "На проверку"},
   kind: {NORMAL: "Обычный перевод", APP: "Мошенник по телефону", ATO: "Захват аккаунта", MULE: "Дроп-счёт", STRUCTURING: "Дробление сумм", NONE: "обычный"},
   kind_desc: {
     NORMAL: "Привычный перевод знакомому получателю после обычной истории отправителя. Ожидаем: пропуск.",
@@ -204,7 +204,7 @@ en: {
   bg_start: "Start background stream", bg_stop: "Stop background stream",
   speed: "Speed ", alerts_only: "Alerts only",
   live_hint: "Each row is a transfer the system has just scored: the decision, a risk from 0 to 1 and the rules that fired. The background stream replays the dataset at its own pacing, sped up by the chosen factor.",
-  t_total: "Decisions", t_allow: "Allowed", t_review: "Review", t_block: "Blocked", t_ms: "Decision time, median",
+  t_total: "Decisions", t_allow: "Allowed", t_review: "Review", t_ms: "Decision time, median",
   h_time: "Time", h_amount: "Amount", h_route: "From → to", h_decision: "Decision", h_risk: "Risk",
   h_rules: "Rules fired", h_role: "Role", h_when: "When", h_prio: "Priority", h_type: "Type",
   empty_live: "No decisions yet. Start the background stream or replay a scenario.",
@@ -216,7 +216,7 @@ en: {
   caught: "Fraudulent transfers caught: {a} of {b}",
   false_alarms: "False alarms on ordinary transfers: {a} of {b}",
   why: "Why the model was suspicious", why_status: {NO_MODEL: "no model file for explanations", MODEL_MISMATCH: "the explanation model disagrees with the scorer — not shown", NO_FEATURES: "decided without model features", FAILED: "the explanation could not be computed"},
-  cases_hint: "Alerts the system has already decided in a fraction of a second: Blocked or Review. In a real bank that decision would stop or hold the transfer; the prototype records it and does not touch the payment. The analyst does not release or block anything here — they mark whether it really was fraud. Those marks are the only real labels the system gets: precision is computed from them, and a bank would retrain the model on them. Most urgent first.",
+  cases_hint: "Alerts the system has already raised in a fraction of a second. It never blocks on its own: in a real bank the transfer would be held for a person; the prototype records the alert and does not touch the payment. The analyst does not release or block anything here — they mark whether it really was fraud. Those marks are the only real labels the system gets: precision is computed from them, and a bank would retrain the model on them. Most urgent first.",
   confirm: "Confirm fraud", fp: "False alarm",
   st_open: "Open cases", st_conf: "Confirmed", st_fp: "False alarms", st_prec: "Precision on resolved",
   empty_cases: "No open cases. Replay a scenario — its alerts appear here within seconds.",
@@ -237,7 +237,7 @@ en: {
   no_decisions: "The transfers were sent but no decision came back. Check that the Flink job is running: http://localhost:8081",
   no_store: "Queue unavailable: ",
   sum: "UZS", score: "risk",
-  dec: {ALLOW: "Allowed", REVIEW: "Review", BLOCK: "Blocked"},
+  dec: {ALLOW: "Allowed", REVIEW: "Review"},
   kind: {NORMAL: "Ordinary transfer", APP: "Phone scam (APP)", ATO: "Account takeover", MULE: "Money mule", STRUCTURING: "Structuring", NONE: "ordinary"},
   kind_desc: {
     NORMAL: "A usual transfer to a known payee after the sender's ordinary history. Expected: allowed.",
@@ -315,7 +315,7 @@ function renderStatus() {
   $("#c-model").textContent = `${t("model")}: ${status.model || "—"}`;
   $("#bg-btn").textContent = t(bg ? "bg_stop" : "bg_start");
   const c = status.counts || {}, total = Object.values(c).reduce((a, b) => a + b, 0);
-  $("#tiles").innerHTML = [["t_total", total], ["t_allow", c.ALLOW || 0], ["t_review", c.REVIEW || 0], ["t_block", c.BLOCK || 0],
+  $("#tiles").innerHTML = [["t_total", total], ["t_allow", c.ALLOW || 0], ["t_review", c.REVIEW || 0],
     ["t_ms", status.median_ms == null ? "—" : status.median_ms.toFixed(1) + " ms"]]
     .map(([k, v]) => `<div class="tile"><span>${t(k)}</span><b>${esc(v)}</b></div>`).join("");
   let msg = "";

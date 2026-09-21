@@ -118,8 +118,11 @@ REGISTRY = (
                   "was last paid is the other half of the shape. A month cannot "
                   "be measured on 30-day datasets, so the windows are a day and "
                   "a week. Last in the registry, so switching it on appends to "
-                  "the vector instead of shifting every trained model's columns. A rule on these counts was built and measured (ml/README.md) and did not pass its gate.",
-    ),)
+                  "the vector instead of shifting every trained model's columns. "
+                  "Rules on these counts were built and measured three times "
+                  "(ml/README.md) and none passed its gate.",
+    ),
+)
 
 BY_KEY = {c.key: c for c in REGISTRY}
 
@@ -209,8 +212,8 @@ PATTERN_SIGNATURES = {
 
 
 def _rule_weights():
-    """Rule -> weight, read from config by naming convention. A renamed weight
-    constant shows up as missing here rather than silently contributing zero."""
+    """Rule -> weight from config. No default on the lookup: a renamed weight
+    constant fails here rather than silently contributing zero."""
     import config as C
     explicit = {
         "NEW_PAYEE_HIGH_AMOUNT": "W_NEW_PAYEE_HIGH",
@@ -224,16 +227,13 @@ def _rule_weights():
         "DAILY_LIMIT_BREACH": "W_DAILY_LIMIT",
         "MULE_FAN_IN": "W_MULE_FAN_IN",
     }
-    return {rule: getattr(C, const) for rule, const in explicit.items()
-            if hasattr(C, const)}
+    return {rule: getattr(C, const) for rule, const in explicit.items()}
 
 
 def _full_modes() -> dict:
     """Every capability at its richest setting - the profile the hand-calibrated
     thresholds were set against, and the denominator every rescale divides by."""
-    return {c.key: (c.modes[0] if c.always_on
-                    else ("on" if "on" in c.modes else c.modes[0]))
-            for c in REGISTRY}
+    return {c.key: "on" if "on" in c.modes else c.modes[0] for c in REGISTRY}
 
 
 def reachable_score(pattern: str, modes: dict = None) -> float:
@@ -247,9 +247,7 @@ def reachable_score(pattern: str, modes: dict = None) -> float:
 
 
 def weakest_reachable(modes: dict = None) -> float:
-    """The hardest-to-score pattern under a profile. Zero if none can score."""
-    if not PATTERN_SIGNATURES:
-        return 0.0
+    """The hardest-to-score pattern under a profile."""
     return min(reachable_score(p, modes) for p in PATTERN_SIGNATURES)
 
 

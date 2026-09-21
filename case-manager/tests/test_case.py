@@ -15,7 +15,7 @@ ALERT = {
     "receiver_card": "8600030000000002",
     "amount_uzs": 4_800_000,
     "final_score": 0.91,
-    "decision": "BLOCK",
+    "decision": "REVIEW",
     "predicted_type": "APP",
     "rule_hits": ["VELOCITY", "NEW_PAYEE_HIGH_AMOUNT"],
 }
@@ -101,32 +101,6 @@ def test_only_terminal_dispositions_can_be_written(bad):
     opened = _as_dict(CASE.case_row(ALERT))
     with pytest.raises(ValueError):
         CASE.resolution_row(opened, bad, "analyst.k", at_epoch=1.0)
-
-
-# --- queue order -------------------------------------------------------------
-
-def test_block_outranks_every_review():
-    """A blocked transfer has a customer waiting; no review score may overtake it."""
-    worst_block = CASE.priority_of({"decision": "BLOCK", "final_score": 0.0})
-    best_review = CASE.priority_of({"decision": "REVIEW", "final_score": 1.0})
-    assert worst_block < best_review
-
-
-def test_priority_is_the_band_and_nothing_else():
-    """Score is deliberately absent from this column. The live queue showed 89.1%
-    of alerts carrying a probability that rounds to 1.000 - only 35 distinct
-    rounded values across the whole alert set - so score-within-band ordered
-    nothing and every case arrived at priority 0. Ordering by exposure happens in
-    the query; see CaseStore.open_cases."""
-    for score in (0.0, 0.42, 0.95, 1.0):
-        assert CASE.priority_of({"decision": "BLOCK", "final_score": score}) == 0
-        assert CASE.priority_of({"decision": "REVIEW", "final_score": score}) == 1
-
-
-def test_missing_or_malformed_score_does_not_crash_the_queue():
-    for bad in (None, "", "n/a", float("nan")):
-        assert isinstance(CASE.priority_of({"decision": "REVIEW",
-                                            "final_score": bad}), int)
 
 
 # --- drift guard -------------------------------------------------------------

@@ -1,4 +1,4 @@
-"""The PyFlink job: enrich, apply the CEP rules, score with ONNX, decide.
+"""The PyFlink job: apply the CEP rules, score with ONNX, decide.
 
     transactions.raw --(key by sender)--> transactions.scored + fraud.alerts
 
@@ -51,17 +51,14 @@ def _warn_cep_only(reason: str) -> None:
 
 
 def _positive_proba(outputs) -> float:
-    """Extract the fraud-class probability from a single-row ONNX output."""
+    """The fraud-class probability from a single-row ONNX output: the [1, 2]
+    probability tensor ml/export_onnx.py writes (zipmap off)."""
     import numpy as np
     for out in outputs:
         arr = np.asarray(out)
-        if arr.ndim == 2 and arr.shape[1] == 2:           # [1, 2] probability tensor
+        if arr.ndim == 2 and arr.shape[1] == 2:
             return float(arr[0, 1])
-    for out in outputs:                                   # ZipMap fallback
-        if isinstance(out, list) and out and isinstance(out[0], dict):
-            row = out[0]
-            return float(row.get(1, row.get("1", 0.0)))
-    return 0.0
+    raise RuntimeError("no [1, 2] probability tensor in the ONNX output")
 
 
 class FraudDetector(KeyedProcessFunction):

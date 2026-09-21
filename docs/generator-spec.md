@@ -352,7 +352,7 @@ python generator.py --profile baseline --out ./out    # the baseline profile
 ```
 
 Output is a deterministic function of the seed, the sizes, the profile and
-`banks.csv`. `ml/experiments/ablate_seeds.py` regenerates across seeds; baseline
+`banks.csv`, except `transaction_id` (below). `ml/experiments/ablate_seeds.py` regenerates across seeds; baseline
 PR-AUC varies by ±0.008–0.035 between seeds, which is why no single-dataset figure
 is quoted anywhere in this project.
 
@@ -382,8 +382,9 @@ persons.csv        52,000 rows    5,782,987 bytes
 
 The population is unchanged - `persons.csv` keeps its hash - and the transfers are
 not: every figure dated 2026-09-14 to 2026-09-19 was measured on the previous file
-(`0338db95c10a…`), which this repository can reproduce by checking out the commit
-before `round amounts on both sides of the label` and running the same command. The
+(`0338db95c10a…`), whose content this repository can reproduce by checking out
+the commit before `round amounts on both sides of the label` and running the same
+command. The
 held-out month differs in more than roundness: it carries 176 fraud against 202, and
 its mix moved - 49 ATO against 10 - so figures across the two files are not
 comparable point to point.
@@ -398,12 +399,15 @@ persons.csv         5,200 rows      578,549 bytes
   sha256  dbe01edd7626def3c8ce50a343915d80fe309c97895342476d9c22a01be37cb6
 ```
 
-These hashes hold on any host: `generator.py` writes LF line endings explicitly,
-where `pandas.to_csv` would take them from the operating system. Figures dated
+`persons.csv` regenerates to its hash on any host: `generator.py` writes LF line
+endings explicitly, where `pandas.to_csv` would take them from the operating
+system. `transactions.csv` cannot, since its `transaction_id` is a fresh `uuid4()`
+on every run; regenerated on 2026-09-21, the other 25 columns matched the pinned
+file on all 500,000 rows. The hash pins the file, and a regeneration reproduces
+its content. Figures dated
 before 2026-09-07 come from the 2026-07-19 dataset (`b767f38489ab…` /
 `010cddd6a60f…`, kept at `data-generator/out_frozen_2026-07-19/`), which the payee
-fix makes impossible to regenerate. `out/relationships.csv` is a leftover of the
-removed kinship graph, and nothing reads it.
+fix makes impossible to regenerate.
 
 ### Specification against the produced dataset
 

@@ -1,4 +1,4 @@
-"""The seven fraud scenarios injected into the generated traffic; each leaves a
+"""The four fraud scenarios injected into the generated traffic; each leaves a
 signature a specific rule is meant to catch. Parameters: docs/generator-spec.md 5."""
 
 import numpy as np
@@ -103,8 +103,8 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
 
         elif kind == "ATO":
             victim = pick(persons)
-            # 40% "stealth" takeover: fraudster operates from the victim's own device and
-            # region (on-device malware), leaving only behavioural signals - harder to catch.
+            # A "stealth" takeover works from the victim's own device and region
+            # (on-device malware), leaving only behavioural signals - harder to catch.
             stealth = rng.random() < config.ato_stealth_share
             device = f"dev-{victim.pinfl[-8:]}" if stealth else f"dev-NEW-{int(rng.integers(10**6))}"
             region, base = victim.region, rand_time()

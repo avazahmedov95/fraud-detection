@@ -322,28 +322,6 @@ def b_serve_prep_ships_every_artefact():
     return None
 
 
-def b_served_copy_is_not_stale():
-    """The serve-prep copy of the feature contract must match the exported one: the
-    vector is positional, so a stale feature_names.json beside the job attributes
-    every SHAP contribution to the wrong feature without any error."""
-    served = os.path.join(ROOT, "stream-processor", "feature_names.json")
-    exported = os.path.join(ROOT, "ml", "models", "feature_names.json")
-    if not os.path.exists(served):
-        return "SKIP: no serve-prep copy on this machine"
-    if not os.path.exists(exported):
-        return "SKIP: model not exported"
-    with open(served, encoding="utf-8") as fh:
-        a = json.load(fh)
-    with open(exported, encoding="utf-8") as fh:
-        b = json.load(fh)
-    if a != b:
-        return (f"stream-processor/feature_names.json is stale: {len(a)} names "
-                f"against the exported {len(b)}. Re-run serve-prep; the vector is "
-                f"positional, so the job would label the new model's outputs with "
-                f"the old contract.")
-    return None
-
-
 def b_no_artefact_path_derived_from_file():
     """__file__-relative data paths are the trap that killed the job twice."""
     offenders = []
@@ -453,8 +431,7 @@ def b_event_mapping_matches_the_csv():
     except KeyError as exc:
         return (f"features.event_from requires CSV column {exc} and the "
                 f"generator does not produce it")
-    empty = sorted(k for k, v in event.items()
-                   if v == "" and k not in ("sender_network", "receiver_network"))
+    empty = sorted(k for k, v in event.items() if v == "")
     if empty:
         return (f"features.event_from defaulted {empty} to empty on a real row - "
                 f"the column was renamed or dropped, and the default hid it")
@@ -680,7 +657,6 @@ CHECKS = [
     ("case_row -> ClickHouse 02-cases", b_case_row_matches_the_schema),
     ("fraud_job imports -> run.ps1 AND Makefile", b_job_modules_cover_every_import),
     ("config artefacts -> run.ps1 serve-prep", b_serve_prep_ships_every_artefact),
-    ("exported contract -> the served copy", b_served_copy_is_not_stale),
     ("no data path derived from __file__", b_no_artefact_path_derived_from_file),
     ("ReceiverStore write -> read (Redis member)", b_receiver_store_round_trips),
     ("features.event_from -> generated CSV columns", b_event_mapping_matches_the_csv),

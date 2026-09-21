@@ -12,7 +12,7 @@ and the UzCard / HUMO networks.
 
 ```
 fraud-detection/
-├── docker-compose.yml      full local stack (phase 2)
+├── docker-compose.yml      full local stack
 ├── .env                    image versions, ports, dev credentials
 ├── Makefile                make up / generate / produce / load-graph ...
 ├── run.ps1                 the experiment driver: every measured run starts here
@@ -26,14 +26,14 @@ fraud-detection/
 │   ├── grafana/            datasource + dashboard provisioning
 │   └── case-manager/  sink-writer/    service images
 │
-├── data-generator/         synthetic population + transactions   (phase 1)
+├── data-generator/         synthetic population + transactions
 │   ├── config.py  events.py  persons.py  travel.py  fraud_patterns.py
 │   ├── generator.py  kafka_producer.py  verify_spec.py
 │   └── out/                generated CSVs (gitignored)
 │
-├── stream-processor/       PyFlink: enrich + CEP + ONNX + fusion   (phases 4,6)
-├── ml/                     LightGBM + SHAP -> ONNX                 (phase 5)
-├── sink-writer/            transactions.scored -> ClickHouse + Neo4j (phase 7)
+├── stream-processor/       PyFlink: CEP + ONNX + fusion
+├── ml/                     LightGBM committee -> ONNX, tree contributions
+├── sink-writer/            transactions.scored -> ClickHouse + Neo4j
 ├── case-manager/           fraud.alerts -> the analyst work queue
 │   ├── case.py  store.py   an alert becomes a case; a verdict becomes a label
 │   ├── explain.py          exact tree contributions, for alerts no rule explains
@@ -55,7 +55,7 @@ reader:
 
 | document | what it holds |
 |---|---|
-| `docs/irp-framing.md` | the research question, every measurement with its interval, a line-by-line answer to the seven review points, nineteen silent failure modes, and what a real work queue exposed that no metric did |
+| `docs/irp-framing.md` | the research question, every measurement with its interval, a line-by-line answer to the seven review points, twenty-one silent failure modes, and what a real work queue exposed that no metric did |
 | `docs/threat-model.md` | three adversaries, what each control assumes, and what evading it costs — one of those costs is now measured rather than argued |
 | `docs/generator-spec.md` | the generator as a specification, the dataset of record with its hashes, and why the data is generated at all |
 | `validation/README.md` | the foreign datasets, what each could and could not test, and the ones rejected, with why |
@@ -75,8 +75,8 @@ run **one at a time**:
 python -m pytest stream-processor -q     # 174
 python -m pytest data-generator   -q     #  26
 python -m pytest sink-writer      -q     #  23
-python -m pytest validation       -q     #  25
-python -m pytest case-manager     -q     #  44
+python -m pytest validation       -q     #  24
+python -m pytest case-manager     -q     #  40
 python -m pytest ml               -q     #  9
 python -m pytest demo             -q     #   8
 ```
@@ -92,7 +92,7 @@ scored 1 on 100% of live events, `test_payload_crypto.py` after the risk of two
 copies of one module drifting. They are regression evidence, not coverage.
 
 ```bash
-python tools/boundary_audit.py           # 25 joins between components
+python tools/boundary_audit.py           # 24 joins between components
 ```
 
 checks what the tests cannot: that what one component *produces* is what the
@@ -145,25 +145,15 @@ From inside the Docker network use service names: `kafka:9092`, `redis:6379`,
 | Topic | Purpose |
 |---|---|
 | `transactions.raw` | events from the switch (keyed by sender) |
-| `transactions.scored` | enriched + scored transactions |
-| `fraud.alerts` | high-risk decisions |
-| `cbu.reports` | outbound Central Bank platform integration |
+| `transactions.scored` | every transaction, scored and decided |
+| `fraud.alerts` | REVIEW decisions, for the analyst queue |
 
-## Roadmap
+## Status
 
-1. ✅ Synthetic data generator
-2. ✅ Infrastructure (this stack)
-3. ✅ Kafka ingestion wiring
-4. ✅ Flink job: stateful CEP
-5. ✅ ML: training, SHAP, ONNX export
-6. ✅ ONNX serving inside Flink + score fusion
-7. ✅ ClickHouse + Neo4j sinks
-8. ✅ Grafana dashboards
-
-All eight phases are implemented. Pipeline logic is validated offline (unit tests,
-CEP replay, ML/fusion evaluation, dashboard-query checks against the schema); the
-Flink runtime and full stack run via Docker. All metrics are design targets on
-synthetic data, not validated production findings.
+Every component above is implemented and runs. Pipeline logic is validated
+offline (unit tests, CEP replay, ML/fusion evaluation, dashboard-query checks
+against the schema); the Flink runtime and full stack run via Docker. All
+metrics are design targets on synthetic data, not validated production findings.
 
 ## Notes on image tags
 

@@ -12,12 +12,10 @@ create () {
 
 # raw events from the payment switch (keyed by sender_card -> ordered per sender)
 create transactions.raw     6
-# transactions after enrichment + CEP + ML scoring
+# every transaction after CEP + ML scoring
 create transactions.scored  6
 # high-risk decisions for downstream consumers
 create fraud.alerts         3
-# outbound reports for the Central Bank platform integration
-create cbu.reports          1
 
 echo "--- topics ---"
 "$KT" --bootstrap-server "$BOOTSTRAP" --list

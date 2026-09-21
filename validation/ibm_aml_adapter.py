@@ -19,8 +19,7 @@ from harness import C, Event                                   # noqa: F401
 #: Account / Account.1).
 COLUMNS = {"Account": "sender", "Account.1": "receiver", "Amount Paid": "amount",
            "Payment Currency": "currency", "Payment Format": "fmt",
-           "Is Laundering": "label", "From Bank": "from_bank",
-           "To Bank": "to_bank"}
+           "Is Laundering": "label"}
 
 #: Self-transfers (12% of the file, mostly `Reinvestment`) are not transfers
 #: between two parties: dropped, and the count printed.
@@ -28,8 +27,7 @@ DROP_SELF_TRANSFERS = True
 
 
 def load(path, formats=None, limit=None):
-    d = pd.read_csv(path, dtype={"Account": str, "Account.1": str,
-                                 "From Bank": str, "To Bank": str})
+    d = pd.read_csv(path, dtype={"Account": str, "Account.1": str})
     d.columns = [c.strip() for c in d.columns]
     missing = [c for c in COLUMNS if c not in d.columns]
     if missing:
@@ -65,10 +63,7 @@ def to_events(d, scales, typologies=None):
         yield Event(
             ev={"amount_uzs": float(r.amount) * scales.get(r.currency, 1.0),
                 "sender_pinfl": r.sender,
-                "receiver_pinfl": r.receiver,
-                # The bank on each side: kept on the event, read by nothing now.
-                "sender_network": r.from_bank,
-                "receiver_network": r.to_bank},
+                "receiver_pinfl": r.receiver},
             ts=int(r.ts.timestamp()),
             label=int(r.label),
             typology=typologies.get(key, ""))

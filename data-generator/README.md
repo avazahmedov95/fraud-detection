@@ -24,7 +24,7 @@ absence of such a dataset is itself a contribution opportunity.
 | Amounts | log-normal, UZS | — |
 | CB limits / control threshold | placeholders in `config.py` | Regulation No. 3759 |
 | Geography | 14 regions, population-weighted | — |
-| Fraud rate | 1.5% (configurable) | — |
+| Fraud rate | 0.2% in the dataset of record (realistic profile), 1.5% in the baseline | — |
 
 All values live in `config.py` and are meant to be overridden.
 
@@ -94,9 +94,9 @@ not a result**. The false-positive rate on legitimate travel is.
 | Type | Shape | Primary signals |
 |---|---|---|
 | **APP** | account-holder sends one unusually large amount to a new, fresh payee, often while on a call | new payee + amount spike + coached session |
-| **ATO** | new device, then 2–4 rapid transfers out; 60% continue the session from a region the victim cannot have reached since they were last seen | device change, impossible travel, velocity |
+| **ATO** | new device, then 2–4 rapid transfers out; 60% continue the session from a region the victim cannot have reached since they were last seen | impossible travel, geo anomaly, velocity |
 | **STRUCTURING** | many transfers kept just under the control threshold, short window | sub-threshold clustering, velocity |
-| **MULE** | fan-in from many senders, then fan-out to a few | graph fan-in/out, velocity |
+| **MULE** | fan-in from many senders, then fan-out to a few | fan-in to the payee (`MULE_FAN_IN`, counterparty counts), velocity |
 
 The fraud mix is weighted toward **APP** (the central research target) by
 *transaction* count, since each APP episode is a single transaction.
@@ -124,17 +124,10 @@ python kafka_producer.py --file out/transactions.csv --realtime --speed 200 \
 inside the compose network; from the host it fails to connect. This example
 said 9092 for months.
 
-Load the graph into Neo4j (example Cypher):
-
-```cypher
-LOAD CSV WITH HEADERS FROM 'file:///persons.csv' AS r
-MERGE (p:Person {pinfl: r.pinfl})
-  SET p.card = r.card, p.network = r.network, p.region = r.region,
-      p.account_age_days = toInteger(r.account_age_days);
-```
-
-Edges are not loaded here: the money-flow relationships are written by the
-sink-writer from scored transactions, not generated up front.
+`make load-graph` loads the account population into Neo4j
+(`infra/neo4j/import.cypher`), for the analysts' alert graph. Edges are not
+loaded there: the money-flow relationships are written by the sink-writer from
+scored transactions, not generated up front.
 
 ## Files
 

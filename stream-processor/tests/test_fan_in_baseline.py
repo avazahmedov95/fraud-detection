@@ -1,14 +1,11 @@
 """Tests for the population-relative MULE_FAN_IN threshold: they test the
-ADAPTATION to the traffic seen, not a number (validation/README.md 3)."""
-
-import sys
+ADAPTATION to the traffic seen, not a number (docs/irp-framing.md §6, third RQ3
+result)."""
 
 import pytest
 
-# sys.path is set by tests/conftest.py.
-
-import config as C          # noqa: E402
-from rules import PopulationBaseline   # noqa: E402
+import config as C
+from rules import PopulationBaseline
 
 
 @pytest.fixture
@@ -91,7 +88,7 @@ def test_baseline_is_observed_after_the_decision(relative_mode):
 
 
 def test_missing_baseline_falls_back_rather_than_failing(relative_mode):
-    """Missing shared state degrades to known behaviour, as with Redis and Neo4j."""
+    """Missing shared state degrades to known behaviour, as with Redis."""
     from rules import SenderState, ReceiverState, evaluate
     ev = {"amount_uzs": 100_000.0, "sender_pinfl": "A", "receiver_pinfl": "B"}
     res = evaluate(ev, SenderState(), 1_700_000_000.0, ReceiverState(),

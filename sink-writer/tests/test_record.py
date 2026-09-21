@@ -14,7 +14,7 @@ SCORED = {
     "sender_region": "Tashkent City",
     "is_new_payee": True,
     "cep_score": 0.5, "ml_score": 0.93, "final_score": 0.93,
-    "decision": "BLOCK", "predicted_type": "APP",
+    "decision": "REVIEW", "predicted_type": "APP",
     "rule_hits": ["NEW_PAYEE_HIGH_AMOUNT", "VELOCITY"],
     "model_version": "cep+ml-fusion-v1",
 }
@@ -28,7 +28,7 @@ def test_scored_row_matches_columns():
     d = dict(zip(R.SCORED_COLUMNS, row))
     assert d["amount_uzs"] == 9_000_000 and isinstance(d["amount_uzs"], int)
     assert d["is_new_payee"] == 1
-    assert d["decision"] == "BLOCK"
+    assert d["decision"] == "REVIEW"
 
 
 def test_ml_score_none_becomes_zero():
@@ -56,7 +56,7 @@ def test_alert_params_links_by_card():
     p = R.alert_params(SCORED)
     assert p["sender"] == SCORED["sender_card"]
     assert p["receiver"] == SCORED["receiver_card"]
-    assert p["decision"] == "BLOCK" and p["ptype"] == "APP"
+    assert p["decision"] == "REVIEW" and p["ptype"] == "APP"
 
 
 def test_alert_params_survive_a_record_without_a_payee_identity():

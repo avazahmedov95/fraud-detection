@@ -3,14 +3,8 @@
 # Unpinned floors make a model unreproducible: LightGBM, scikit-learn and
 # skl2onnx all change numerics across minor releases, so a retrain months later
 # yields a different model from the same data and seed, and the metrics quoted
-# in the thesis stop being regenerable.
-#
-# HONEST CAVEAT: these pins record the environment as of 2026-08-15. The
-# model.onnx and metrics currently in ml/models/ were produced in July under an
-# environment that was never captured and cannot now be reconstructed. Pinning
-# fixes reproducibility going FORWARD only. If the reported metrics need to be
-# defensible, retrain once on this pinned environment and quote those numbers
-# rather than the July ones.
+# in the thesis stop being regenerable. The served model was trained on exactly
+# these versions.
 lightgbm==4.6.0
 scikit-learn==1.7.2
 onnxruntime==1.23.2

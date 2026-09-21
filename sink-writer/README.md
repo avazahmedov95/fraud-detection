@@ -1,4 +1,4 @@
-# sink-writer — phase 7 ✅
+# sink-writer
 
 Consumes `transactions.scored` from Kafka and persists every event to ClickHouse
 and each alert to Neo4j. Runs as its own service so sink failures never backpressure
@@ -31,7 +31,7 @@ tests/           run with `python -m pytest sink-writer -q`
 - **WORM audit.** Every decision is appended to `fraud.audit_log` with the full
   event JSON and the CEP `rule_hits`. Immutability is enforced at the grant level
   (INSERT/SELECT only — see the schema). Set `SINK_AUDIT_ALL=false` to audit only
-  flagged (REVIEW/BLOCK) decisions.
+  REVIEW decisions.
 - **Alert graph.** Only alerts go to Neo4j, as `:Transaction` nodes between the
   sender and receiver `:Person`. This puts flagged flows next to the account
   population, so mule fan-in/out and transfer rings become graph-queryable.

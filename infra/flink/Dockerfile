@@ -1,5 +1,5 @@
 # Flink session-cluster image with Python + PyFlink, so the stream processor
-# (phase 4) can run Python jobs and serve the ONNX model inside Flink.
+# can run Python jobs and serve the ONNX model inside Flink.
 
 ARG FLINK_VERSION=1.19.1
 FROM flink:${FLINK_VERSION}-java11
@@ -27,7 +27,6 @@ RUN pip3 install --no-cache-dir \
     apache-flink==${FLINK_VERSION} \
     onnxruntime==1.23.2 \
     redis==8.0.1 \
-    neo4j==6.2.0 \
     cryptography==48.0.0
 
 # Kafka connector JAR for the SQL/DataStream Kafka source/sink.

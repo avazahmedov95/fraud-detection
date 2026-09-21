@@ -934,11 +934,10 @@ switch ($Target.ToLower()) {
 
     "serve-prep" {
         Copy-Item "ml/models/model.onnx" "stream-processor/" -Force
-        Copy-Item "ml/models/feature_names.json" "stream-processor/" -Force
         # The model's REVIEW cutoff: an unweighted committee's scale belongs to
         # it, and config._model_review_threshold reads it from here.
         Copy-Item "ml/models/thresholds.json" "stream-processor/" -Force
-        Write-Host "model + feature spec copied to stream-processor/"
+        Write-Host "model + cutoff copied to stream-processor/"
     }
 
     # The latency knobs go to the client as -D too (read during job-graph

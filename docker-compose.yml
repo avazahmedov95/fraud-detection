@@ -184,7 +184,7 @@ services:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: jobmanager
     volumes:
-      - ./stream-processor:/opt/flink/usrjobs   # PyFlink jobs (phase 4)
+      - ./stream-processor:/opt/flink/usrjobs   # PyFlink jobs
       - flink_checkpoints:/opt/flink/checkpoints
       - ./infra/kafka/certs:/certs:ro           # mutual TLS arm (point 3)
     depends_on:

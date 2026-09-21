@@ -8,15 +8,14 @@ import logging
 import capabilities as CAP
 import config as C
 import features as F
-from rules import ReceiverState, quantile_threshold
+from rules import FAN_IN_BINS, ReceiverState, quantile_threshold
 
 log = logging.getLogger("receiver_store")
 
 
 class ReceiverStore:
-    def __init__(self, host, port, window_s=None):
+    def __init__(self, host, port):
         self._host, self._port = host, port
-        self._window_s = window_s or C.RECEIVER_WINDOW_S
         self._redis = None
 
     def open(self):
@@ -38,7 +37,7 @@ class ReceiverStore:
         state = ReceiverState()
         try:
             members = self._redis.zrangebyscore(
-                f"rcv:{payee}", now - self._window_s, now)
+                f"rcv:{payee}", now - C.RECEIVER_WINDOW_S, now)
         except Exception as exc:                       # noqa: BLE001
             log.warning("fan-in lookup failed, failing open: %s", exc)
             return None
@@ -83,9 +82,9 @@ class ReceiverStore:
         try:
             pipe = self._redis.pipeline()
             pipe.zadd(key, {member: now})
-            pipe.zremrangebyscore(key, "-inf", now - self._window_s)
+            pipe.zremrangebyscore(key, "-inf", now - C.RECEIVER_WINDOW_S)
             # Twice the window: nothing in use expires, idle payees do not accumulate.
-            pipe.expire(key, int(self._window_s * 2))
+            pipe.expire(key, int(C.RECEIVER_WINDOW_S * 2))
             if CAP.enabled("counterparty_history"):
                 # One member per PAYER, scored with the last time they paid, so
                 # the key grows with counterparties rather than with transfers.
@@ -125,7 +124,7 @@ class PopulationStore:
     the absolute constant."""
 
     KEY = "mule:fanin:hist"
-    BINS = 257
+    BINS = FAN_IN_BINS
     #: Long enough to survive normal operation, short enough that a deployment
     #: left idle does not come back scoring against last month's traffic.
     TTL_S = 7 * 24 * 3600
@@ -165,13 +164,14 @@ class PopulationStore:
                             "(%d senders)", fallback)
             return fallback
         if self._counts is None or self._since_sync >= C.MULE_FAN_IN_REFRESH_EVERY:
-            self._sync()
+            self._sync(q)
         if self._total < C.MULE_FAN_IN_MIN_OBS or self._thr is None:
             return fallback
         return self._thr
 
-    def _sync(self):
-        """Flush what this worker observed, then re-read the whole population."""
+    def _sync(self, q):
+        """Flush what this worker observed, then re-read the whole population and
+        cut it at quantile `q`."""
         try:
             if self._pending:
                 pipe = self._redis.pipeline()
@@ -193,8 +193,7 @@ class PopulationStore:
                     counts[i] = c
                     total += c
             self._counts, self._total = counts, total
-            self._thr = (quantile_threshold(counts, total, C.MULE_FAN_IN_QUANTILE)
-                         if total else None)
+            self._thr = quantile_threshold(counts, total, q) if total else None
         except Exception as exc:                       # noqa: BLE001
             # Do not drop _pending: a blip should cost the next refresh's accuracy, not
             # the observations themselves.
@@ -205,7 +204,7 @@ class PopulationStore:
         if self._redis is not None:
             try:
                 if self._pending:
-                    self._sync()
+                    self._sync(C.MULE_FAN_IN_QUANTILE)
                 self._redis.close()
             except Exception:                          # noqa: BLE001
                 pass

@@ -1,4 +1,4 @@
-# stream-processor (PyFlink) — phase 4 ✅ (CEP) + phase 6 ✅ (ML serving + fusion)
+# stream-processor (PyFlink)
 
 The streaming detection job:
 
@@ -37,7 +37,7 @@ experiments/     harnesses. Nothing here is deployed; each one produces a
                  --service redis|neo4j|clickhouse|kafka  what silently stops
                  --service control           the healthy reference pass
 
-tests/           17 files, run with `python -m pytest stream-processor -q`
+tests/           run with `python -m pytest stream-processor -q`
 requirements.txt host-side deps (the Flink image already bundles them)
 ```
 
@@ -75,22 +75,24 @@ layer**, not by averaging:
 - `final_score` = the **model probability** (graded risk), with the CEP score as a
   fallback only when the model is unavailable;
 - the CEP layer adds **deterministic regulatory must-flags** (`STRUCTURING`,
-  `DAILY_LIMIT_BREACH`) that force at least REVIEW regardless of the model score —
-  high-precision on synthetic data (38 fraud vs 2 legit) — plus per-alert
-  **reason codes** (`rule_hits`) and a `predicted_type` tag explaining each alert.
+  `DAILY_LIMIT_BREACH`) that force at least REVIEW regardless of the model score
+  — there for the regulation, not the score: on the current held-out month they
+  add one alert, a false one, to the model's 131 (`ml/experiments/layers.py`) —
+  plus per-alert **reason codes** (`rule_hits`) and a `predicted_type` tag
+  explaining each alert.
 
 A blend is not the only way the rules could reach the decision, and the other way
 is measured too. Letting the CEP verdict act as a **floor** — it can only raise a
 decision, never lower one, so unlike a blend it cannot degrade ranking at all —
-still costs precision 0.847 -> 0.457 for two additional true positives on the
-held-out slice. The layers stay decoupled because of that number
+cost precision 0.847 -> 0.457 for two additional true positives on the baseline
+profile's held-out slice. The layers stay decoupled because of that number
 (`docs/irp-framing.md` §8, fifteenth).
 
 The model is served inside the Flink operator via **ONNX Runtime** on the exact
 same feature vector used in training (`features.py`), so there is no train/serve
 skew. If `model.onnx` is missing the job degrades to CEP-only scoring, stamps
 `model_version = cep-only-fallback` so the warehouse can tell the two apart, and
-takes its cutoffs from `fusion.cutoffs(cep_only=True)` — which scale with what the
+takes its cutoff from `fusion.review_cutoff(cep_only=True)` — which scales with what the
 deployment can observe, because an additive score's cutoff is a claim about how
 many rules must agree.
 
@@ -130,7 +132,7 @@ pytest cannot import two modules of one name.
 ## Run on the cluster
 
 ```bash
-make serve-prep      # copies ml/models/model.onnx + feature_names.json here
+make serve-prep      # copies ml/models/model.onnx + thresholds.json here
 make submit-job      # submits the job (serve-prep runs automatically)
 make resume-job      # same, restoring keyed state from the newest checkpoint
 ```

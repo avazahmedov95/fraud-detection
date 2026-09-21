@@ -1,11 +1,10 @@
 """The CEP rule engine over the shared feature contract in features.py; returns both
-the rule decision and the model's feature vector. No Flink, Redis or Neo4j imports,
-so it replays offline unchanged."""
-
-from dataclasses import dataclass, field
-from collections import deque, Counter
+the rule decision and the model's feature vector. No Flink or Redis imports, so it
+replays offline unchanged."""
 
 import logging
+from collections import deque, Counter
+from dataclasses import dataclass, field
 
 import config as C
 import features as F
@@ -25,6 +24,8 @@ class ReceiverState:
 
 #: Below this a "receiver with many senders" is not a claim anyone would make.
 FAN_IN_FLOOR = 2
+#: Histogram bins for the senders-per-receiver distribution; the last one is open.
+FAN_IN_BINS = 257
 
 
 def quantile_threshold(counts, n, q):
@@ -63,14 +64,13 @@ def _warn_relative_without_baseline():
 class PopulationBaseline:
     """Live distribution of `rcv_distinct_senders_1h` across all receivers, so
     MULE_FAN_IN can fire on a quantile; without it the rule uses the constant."""
-    BINS: int = 257
-    counts: list = field(default_factory=lambda: [0] * 257)
+    counts: list = field(default_factory=lambda: [0] * FAN_IN_BINS)
     n: int = 0
     _cached_thr: int = -1
     _cached_at: int = -1
 
     def observe(self, senders: int) -> None:
-        self.counts[min(int(senders), self.BINS - 1)] += 1
+        self.counts[min(int(senders), FAN_IN_BINS - 1)] += 1
         self.n += 1
 
     def threshold(self, q: float, fallback: int) -> int:

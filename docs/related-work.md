@@ -300,11 +300,12 @@ Extends the table in `generator-spec.md` §0; the datasets actually run are in
   P2P data is an accepted industry instrument.
 - **Kaggle UPI datasets** (e.g. `skullagos5246/upi-transactions-2024`) - themselves
   synthetic, with no generating specification.
-- **AMLSim** (IBM, open source) - run, then removed with IBM AML-Data on
-  2026-09-19 (`validation/README.md`, Removed).
+- **AMLSim** (IBM, open source) - run, then removed on 2026-09-19
+  (`validation/README.md`, Removed); IBM AML-Data went with it and came back the
+  next day, for information.
 - **The AI4FCF catalogue** (`sites.google.com/view/ai4fcf/open-datasets`): BankSim
-  (customer→merchant, so receiver concentration is normal), IBM AML-Data (run, then
-  removed: it includes banks and companies - `validation/README.md`, Rejected), Amaretto (capital markets), the Czech financial
+  (customer→merchant, so receiver concentration is normal), IBM AML-Data (run, and
+  reported for information since 2026-09-20 - `validation/README.md` §4), Amaretto (capital markets), the Czech financial
   dataset (no fraud labels), the Libra Bank graph, Paradise/Panama Papers.
 - **`CiferAI/Cifer-Fraud-Detection-Dataset-AF`** - 21M rows of PaySim's
   phenomenology: no collection stage, balance-column leakage, and `isFlaggedFraud`
@@ -331,10 +332,12 @@ Extends the table in `generator-spec.md` §0; the datasets actually run are in
   closable with these sources.
 - **No external benchmark this system's numbers are directly comparable to** - §6
   anchors the difficulty of the *data*, not a comparison of *systems*.
-- **No external evidence for receiver-side aggregation.** IBM AML supplied the only
-  one and was removed as not P2P (`validation/README.md`, Rejected); PaySim has no
-  collection stage, and AMLSim, removed too, ran on a daily clock that cannot see
-  one.
+- **No P2P evidence for receiver-side aggregation.** The only external evidence
+  is IBM AML, which is interbank laundering rather than transfers between people:
+  fan-in is its best-caught typology for the rules and the model alike, and the
+  counterparty counters are the one paired comparison there that clears zero
+  (`validation/README.md` §4). PaySim has no collection stage, and AMLSim,
+  removed, ran on a daily clock that cannot see one.
 
 ---
 
@@ -344,7 +347,7 @@ Extends the table in `generator-spec.md` §0; the datasets actually run are in
 
 | Source | What was taken | Where it lands |
 |---|---|---|
-| **PaySim** (§6) | The rule layer went **mute** on foreign data: the highest score any fraud reached was 0.35 against a 0.40 cutoff, while the rules separated the classes 4:1. | `capabilities.scaled_threshold`, reached through `fusion.cutoffs`; adapter `validation/paysim_adapter.py`. |
+| **PaySim** (§6) | The rule layer went **mute** on foreign data: the highest score any fraud reached was 0.35 against a 0.40 cutoff, while the rules separated the classes 4:1. | `capabilities.scaled_threshold`, reached through `fusion.review_cutoff`; adapter `validation/paysim_adapter.py`. |
 | **PaySim, via `ris3abh`** (§6) | PR-AUC **0.380** on the public benchmark, reproduced at 0.397; the leaky 0.988 reproduced at 1.000. | The decomposition of the gap into features and separability - `generator-spec.md` §0, §7. |
 | **IBM AMLSim** (§7; removed 2026-09-19) | `MULE_FAN_IN` at six senders fired on **3.12%** of legitimate traffic and caught **0.0%** of the fan-in typology. | `rules.PopulationBaseline`, `MULE_FAN_IN_MODE=relative`, +6.9 pp - `irp-framing.md` §6, third RQ3 result. |
 | **CBU internal-control rules, No. 343-В-12 of 03.03.2023** (§6e) | P2P activity subject to control is defined by counts of distinct counterparties over up to 30 days. | `capabilities.counterparty_history` - the day-and-week counters, `ml/README.md`. |
@@ -365,7 +368,7 @@ Extends the table in `generator-spec.md` §0; the datasets actually run are in
 **Saad et al. 2011** (§5) and **Zenodo 20030065** supply nothing; recorded so the
 search is not repeated.
 
-**Five sources reached the code; the rest shaped how results are reported** -
+**Six sources reached the code; the rest shaped how results are reported** -
 Machado, Afriyie, Hemel and both Wang papers appear nowhere in this repository
 outside this file. Reporting discipline is a contribution of its own, and
 claiming that all of them shaped the design would be false.

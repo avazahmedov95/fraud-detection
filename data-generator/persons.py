@@ -155,8 +155,8 @@ def build_population(config, rng):
         for _ in range(size):
             if len(persons) >= config.n_persons:
                 break
-            # A share of legitimate accounts are freshly opened, so "fresh
-            # receiver" is not a fraud-exclusive signal.
+            # A share of legitimate accounts are freshly opened, so account age
+            # alone does not mark fraud.
             if rng.random() < config.new_account_share:
                 age = int(rng.integers(1, 30))
             else:

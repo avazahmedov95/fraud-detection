@@ -166,6 +166,11 @@ Everything owed to the review is now done; the items keep their numbers.
      both sides: `NEW_PAYEE_HIGH_AMOUNT`, computed purely from per-sender history,
      separates the classes **4.0x** on data this project did not produce, while
      `MULE_FAN_IN` finds nothing - PaySim has no collection stage.
+   - **IBM AML** (`ibm_aml_adapter.py`), interbank laundering reported for
+     information since 2026-09-20: the one file with a collection stage on a
+     minute clock. Fan-in is the best-caught typology for the rules and the
+     model alike, and the counterparty counters are the one paired comparison
+     there that clears zero (`validation/README.md` §4).
    - **Base rate**, from the ULB card dataset: ~0.17% against the generator's
      1.5%, so precision measured on synthetic data is optimistic.
    - **Rejected**: IEEE-CIS (e-commerce, no receiver), CCF/Kaggle for detection
@@ -244,8 +249,7 @@ otherwise, on 50,000 transactions:
 The mixed key loses **17.4% of the rule's true positives**: it depends on the
 sender's bank, splitting one payee's window across two keys. The default is the
 card; `payee_identity = pinfl` measures what platform-level resolution would add
-(`test_payee_identity.py`). A closed bank's BIN (Yangi Bank, 986040) still
-appears on 1.10% of card sides and resolves to no issuer (`bins.RETIRED_BINS`).
+(`test_payee_identity.py`).
 
 ## 7. Latency: measured
 
@@ -372,7 +376,7 @@ own budget each time; the answer is connection pooling on the switch side.
 
 ### The work was never the constraint
 
-Scoring - rules, ONNX inference, Redis and Neo4j lookups - takes a few
+Scoring - rules, ONNX inference and the Redis lookups - takes a few
 milliseconds of a 300 ms budget. The rest is framework buffering, and each
 default that mattered was tuned for throughput:
 
@@ -498,7 +502,7 @@ submission restarts the TaskManager first, and the TaskManager has
 `restart: unless-stopped`. The production answer is a per-job cluster.
 
 **Twentieth: the feature extractor was quadratic in a population this project
-never streams.** Replaying IBM AML (4.49M rows; since removed as not P2P) took 5.5 hours: five linear passes
+never streams.** Replaying IBM AML (4.49M rows; removed 2026-09-19 as not P2P, back the next day for information) took 5.5 hours: five linear passes
 over the sender's 24-hour history per event, invisible at two events per retail
 sender-day, dominant at IBM's 26,365. The latency chapter could not see it - a
 benchmark from the same generator shares its assumptions. The same property
@@ -594,8 +598,9 @@ On the baseline profile every case carried `final_score = 1.000`:
 ROC-AUC 0.9992 and PR-AUC 0.9591 were correct - rank statistics, and the ranking
 was near-perfect - while the scores could not order a queue. The queue was
 re-ordered by exposure, and `train.py` now reports calibration beside the AUCs.
-On the realistic profile 11.9% of alerts round to 1.000 and the queue can be
-ordered again (`ml/README.md`, Calibration).
+On the realistic profile 47.3% of alerts now round to 1.000 - the dataset
+regenerated on 2026-09-20 is easier (`ml/README.md`, Calibration) - so score
+still cannot order the queue on its own, and exposure orders it.
 
 ### 9.2 One alert in seven was an automated adverse decision with no reason
 
@@ -606,6 +611,9 @@ ordered again (`ml/README.md`, Calibration).
 | **with no reason code at all** | **113** | **14.9%** |
 | BLOCKs with no reason code | 111 of 744 | 14.9% |
 | of those, actually fraud | 109 of 111 | **98.2%** |
+
+*As measured then; BLOCK was removed on 2026-09-19, and every alert now goes to
+a person.*
 
 Accurate and mute - a compliance problem whatever the accuracy. The model was
 given a voice: exact tree contributions, computed downstream in case-manager
@@ -654,5 +662,7 @@ conjure labels, but operating it produces them.
 - **Declare the scope in the introduction**: a *detection* system, not an
   *enforcement* one - `fraud.alerts` opens an analyst case, and nothing declines a
   transfer. The latency is the time to *reach* a decision.
-- The cost of a false BLOCK is never paid by this system; a deployment would
-  argue the operating point over declined payments, not F1.
+- The system never blocks on its own (since 2026-09-19): a false alert costs
+  analyst time, not a declined payment. A deployment that added automatic
+  declines would have to argue that operating point over declined payments, not
+  F1.

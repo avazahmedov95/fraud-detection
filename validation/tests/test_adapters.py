@@ -86,7 +86,7 @@ def test_rules_fire_on_foreign_data(paysim_df, tmp_path):
     assert hits["fraud"], "no rule fired on fraud — the adapter is not wiring up"
     # Separation, not a rate: the fixture is not calibrated, so a threshold here
     # would be meaningless. Fraud must simply be flagged more often than legit.
-    flagged = res.decision.isin(["REVIEW", "BLOCK"])
+    flagged = res.decision == "REVIEW"
     fraud_rate = flagged[res.label == 1].mean()
     legit_rate = flagged[res.label == 0].mean()
     assert fraud_rate > legit_rate
@@ -284,7 +284,7 @@ def test_ibm_capabilities_without_data_are_off(ibm_file):
     finally:
         CAP.MODES.clear(); CAP.MODES.update(saved)
     forbidden = {"GEO_ANOMALY", "IMPOSSIBLE_TRAVEL",
-                 "COACHED_SESSION", "FRESH_RECEIVER"}
+                 "COACHED_SESSION"}
     fired = set(hits["fraud"]) | set(hits["legit"])
     assert not (fired & forbidden), f"fired without data: {fired & forbidden}"
 
@@ -391,19 +391,6 @@ def test_ibm_our_model_scores_every_configuration_on_a_temporal_split(tmp_path):
                                    "+ the file's own format and currency"}
     agg, _ = res[("this project, all it can compute", False)]
     assert 0.0 <= agg["f1_tuned"][0] <= 100.0 and 0.5 < agg["roc_auc"][0] <= 1.0
-
-
-def test_ibm_events_carry_the_bank_on_each_side(ibm_file):
-    """The file names the bank on both sides, so the translated event carries them.
-    No feature reads them since cross_network was removed on 2026-09-19; they stay
-    because a translation that drops a field the source has cannot get it back."""
-    saved = _ibm_profile()
-    try:
-        d, scales = _loaded(ibm_file)
-        e = next(IB.to_events(d, scales))
-        assert (e.ev["sender_network"], e.ev["receiver_network"]) == ("010", "020")
-    finally:
-        CAP.MODES.clear(); CAP.MODES.update(saved)
 
 
 def test_ibm_receiver_ablation_reports_both_methods_and_a_verdict(tmp_path):

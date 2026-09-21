@@ -1,4 +1,4 @@
-# Grafana provisioning — phase 8 ✅
+# Grafana provisioning
 
 Auto-provisions on `make up`:
 
@@ -12,8 +12,8 @@ Auto-provisions on `make up`:
 Open Grafana at http://localhost:3000 (`admin` / `.env` password). Panels over
 `fraud.transactions_scored` and `fraud.audit_log`:
 
-- **Stat tiles** — total transactions, alert rate %, new-payee share %, blocked count.
-- **Alerts over time** — REVIEW vs BLOCK counts bucketed by the dashboard interval.
+- **Stat tiles** — total transactions, alert rate %, new-payee share %.
+- **Alerts over time** — REVIEW counts bucketed by the dashboard interval.
 - **Alerts by predicted type** — APP / ATO / MULE / STRUCTURING split.
 - **Risk score distribution** — histogram of `final_score`.
 - **Alerts by sender region**. (The channel panel went with the `channel`

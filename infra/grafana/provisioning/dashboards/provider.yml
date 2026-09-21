@@ -6,7 +6,7 @@ providers:
     type: file
     disableDeletion: false
     options:
-      # Dashboards (phase 8) go in the json/ subfolder so this provider config
+      # Dashboards go in the json/ subfolder so this provider config
       # is not itself parsed as a dashboard.
       path: /etc/grafana/provisioning/dashboards/json
       foldersFromFilesStructure: false

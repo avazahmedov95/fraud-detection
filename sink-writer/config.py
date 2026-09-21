@@ -22,5 +22,5 @@ BATCH_SIZE = int(os.getenv("SINK_BATCH_SIZE", "500"))
 # and is published to fraud.alerts by now, and MergeTree dislikes small inserts.
 FLUSH_INTERVAL_S = float(os.getenv("SINK_FLUSH_INTERVAL_S", "5"))
 
-# Audit every decision (compliance-complete) vs only flagged (REVIEW/BLOCK).
+# Audit every decision (compliance-complete) vs only the REVIEW ones.
 AUDIT_ALL = os.getenv("SINK_AUDIT_ALL", "true").lower() in ("1", "true", "yes")

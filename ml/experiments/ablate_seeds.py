@@ -107,7 +107,6 @@ def sweep_features(seeds):
     features are always on, so no toggle removes them. Reported one at a time (the
     marginal value - redundant columns score zero) and together (the joint value of
     everything the first pass called negligible), because either alone misleads."""
-    import numpy as np
     import lightgbm as lgb
     from sklearn.metrics import average_precision_score
     sys.path.insert(0, _PKG)

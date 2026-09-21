@@ -344,7 +344,7 @@ reviewer asks about in points 3 and 4.
 |---|---|---|
 | Forged or replayed events on `transactions.raw` | mTLS between switch and ingest; payload authentication | scoped, unmeasured (point 3) |
 | Tampering with a decision after the fact | Ingress hash binds decision to event; audit hash chain makes any edit/delete/reorder evident (`verify_audit.py`); WORM grants make the log append-only | **implemented** (point 4) |
-| Model theft or inversion via probing | Rate limits on decision feedback; the customer sees only allow/block | not analysed |
+| Model theft or inversion via probing | Rate limits on decision feedback; the customer sees only allow or hold | not analysed |
 | Poisoning the model through crafted training data | Retraining is offline on labelled data with human review | acceptable while retraining is manual; becomes a real risk under automated retraining |
 
 The last row is worth flagging: this system is safe from poisoning **because it

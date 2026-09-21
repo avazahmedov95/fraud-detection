@@ -32,17 +32,10 @@ def _epoch_dt(v):
         return _EPOCH
 
 
-def priority_of(alert: dict) -> int:
-    """0 = work this first. The BAND only, not the score: most alerts round to the
-    same probability, so the queue orders by exposure within a band
-    (CaseStore.open_cases). A BLOCK outranks every REVIEW - a customer is waiting."""
-    return 0 if alert.get("decision") == "BLOCK" else 1
-
-
 CASE_COLUMNS = [
     "case_id", "transaction_id", "event_time", "opened_at",
     "sender_card", "receiver_card", "amount_uzs", "final_score",
-    "decision", "predicted_type", "rule_hits", "priority",
+    "decision", "predicted_type", "rule_hits",
     "disposition", "resolved_by", "resolved_at", "version",
     "explanation", "explanation_status",
 ]
@@ -65,7 +58,6 @@ def case_row(alert: dict, explanation=None, explanation_status="") -> list:
         alert.get("decision", "") or "",
         alert.get("predicted_type") or "",
         list(alert.get("rule_hits") or []),
-        priority_of(alert),
         "NEW",
         "",
         _EPOCH,

@@ -127,7 +127,7 @@ class CaseStore:
              f"WHERE disposition = 'NEW' "
              # Exposure, not score: 89.1% of probabilities round to 1.000, so ordering
              # by score orders nothing, while amount spans four orders of magnitude.
-             f"ORDER BY priority ASC, amount_uzs DESC, final_score DESC, "
+             f"ORDER BY amount_uzs DESC, final_score DESC, "
              f"opened_at ASC "
              f"LIMIT {int(limit)}")
         return [dict(zip(CASE.CASE_COLUMNS, r))

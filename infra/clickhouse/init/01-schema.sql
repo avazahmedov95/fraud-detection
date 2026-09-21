@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS fraud.transactions_scored
     cep_score           Float32,                 -- rule/CEP contribution
     ml_score            Float32,                 -- gradient-boosting probability
     final_score         Float32,                 -- combined risk score
-    decision            LowCardinality(String),  -- ALLOW / REVIEW / BLOCK
+    decision            LowCardinality(String),  -- ALLOW / REVIEW
     predicted_type      LowCardinality(String),  -- model's fraud-type guess
     model_version       String,
     scored_at           DateTime64(3) DEFAULT now64(3),

@@ -10,7 +10,7 @@ ALERT = {
     "transaction_id": "t_1", "event_time": "2026-03-14T19:22:41",
     "scored_at_job": 1_772_000_000.5, "sender_card": "8600330000000001",
     "receiver_card": "8600030000000002", "amount_uzs": 4_800_000,
-    "final_score": 0.91, "decision": "BLOCK", "predicted_type": "APP",
+    "final_score": 0.91, "decision": "REVIEW", "predicted_type": "APP",
     "rule_hits": ["VELOCITY"],
 }
 
@@ -51,8 +51,7 @@ class FakeClient:
         if "disposition = 'NEW'" in q:
             rows = [r for r in rows
                     if r[CASE.CASE_COLUMNS.index("disposition")] == "NEW"]
-            rows.sort(key=lambda r: (r[CASE.CASE_COLUMNS.index("priority")],
-                                     -r[CASE.CASE_COLUMNS.index("amount_uzs")],
+            rows.sort(key=lambda r: (-r[CASE.CASE_COLUMNS.index("amount_uzs")],
                                      -r[CASE.CASE_COLUMNS.index("final_score")]))
         elif "case_id = " in q:
             cid = (parameters or {}).get("cid")
@@ -154,17 +153,6 @@ def test_queue_orders_by_exposure_when_scores_tie(store):
 def _order_clause(store):
     store.open_cases()
     return store._fake.queries[-1]
-
-
-def test_a_block_still_outranks_a_bigger_review(store):
-    """Exposure orders WITHIN a band, never across it."""
-    store.add(dict(ALERT, transaction_id="small_block",
-                   decision="BLOCK", amount_uzs=100_000))
-    store.add(dict(ALERT, transaction_id="huge_review",
-                   decision="REVIEW", amount_uzs=99_000_000))
-    store.flush()
-    assert [r["case_id"] for r in store.open_cases()] == \
-        ["small_block", "huge_review"]
 
 
 def test_resolved_case_leaves_the_queue(store):

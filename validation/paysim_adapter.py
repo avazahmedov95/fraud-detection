@@ -1,5 +1,5 @@
 """Replays the deployed rules over PaySim, mapping its schema onto the event shape
-features.py expects (validation/README.md 2), and fits this project's model on
+features.py expects (validation/README.md 1), and fits this project's model on
 PaySim's published split. The shared replay and report are in harness.py.
 """
 
@@ -10,7 +10,7 @@ import time
 import pandas as pd
 
 import harness as RP
-from harness import CAP, Event, scale_factor      # noqa: F401  (scale_factor: tests)
+from harness import Event, scale_factor
 
 
 def to_events(df, scale):

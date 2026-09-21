@@ -7,6 +7,7 @@ is reported beside the AUCs because a rank statistic cannot see a score that
 ranks well yet cannot order a queue.
 """
 
+import argparse
 import json
 import os
 
@@ -141,7 +142,7 @@ def main():
     print("\n=== CEP-only vs ML (same test slice) ===")
     print(f"CEP rules    : precision={cep['precision']:.3f}  recall={cep['recall']:.3f}")
     print(f"ML at REVIEW : precision={mr['precision']:.3f}  recall={mr['recall']:.3f}"
-          f"   <- fusion (phase 6) combines both")
+          f"   <- fusion.py combines both")
 
     cal = _calibration(yte, proba, review)
     print("\n=== calibration - are the probabilities usable as MAGNITUDES? ===")
@@ -155,13 +156,13 @@ def main():
     print("\nrecall by fraud type (ML at REVIEW):")
     tdf = test.copy()
     tdf["pred"] = (proba >= review).astype(int)
+    # Counts beside the rate: a per-type recall on a few dozen events has a wide
+    # binomial interval.
     by_type = {}
     for ftype, grp in tdf[tdf.label == 1].groupby("fraud_type"):
         by_type[ftype] = {"recall": float(grp["pred"].mean()),
                           "caught": int(grp["pred"].sum()), "n": int(len(grp))}
         print(f"  {ftype:<12} {grp['pred'].mean():.1%}  (n={len(grp)})")
-    # Counts beside the rate: a per-type recall on a few dozen events has a wide
-    # binomial interval.
 
     joblib.dump(model, os.path.join(MODELS_DIR, "model.joblib"))
     with open(os.path.join(MODELS_DIR, "feature_names.json"), "w") as fh:
@@ -182,4 +183,6 @@ def main():
 
 
 if __name__ == "__main__":
+    # Refuses unknown flags: a mistyped one would otherwise retrain the model.
+    argparse.ArgumentParser(description=__doc__).parse_args()
     main()

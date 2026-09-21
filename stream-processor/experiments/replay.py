@@ -57,7 +57,7 @@ def replay(path, population=None, count_hits=False):
                 hit_counter[bucket][h] += 1
 
     df["decision"] = decisions
-    df["flagged"] = df["decision"].isin(["REVIEW", "BLOCK"])
+    df["flagged"] = df["decision"] == "REVIEW"
     return df, hit_counter
 
 
@@ -102,7 +102,7 @@ def cmd_summary(args):
     print(f"events scored : {len(df):,}")
     print("\noverall decisions:")
     print(df["decision"].value_counts().reindex(
-        ["ALLOW", "REVIEW", "BLOCK"]).fillna(0).astype(int).to_string())
+        ["ALLOW", "REVIEW"]).fillna(0).astype(int).to_string())
 
     if not has_labels:
         print("\n(no labels in file - run the producer/CSV with labels for a "
@@ -113,7 +113,7 @@ def cmd_summary(args):
     legit = ~fraud
     fr_flagged = (df["flagged"] & fraud).sum()
     lg_flagged = (df["flagged"] & legit).sum()
-    print("\nfraud vs legit (flagged = REVIEW or BLOCK):")
+    print("\nfraud vs legit (flagged = REVIEW):")
     print(f"  fraud flagged : {fr_flagged:>6} / {fraud.sum():<6}  "
           f"({fr_flagged / max(fraud.sum(), 1):.1%})")
     print(f"  legit flagged : {lg_flagged:>6} / {legit.sum():<6}  "
@@ -129,8 +129,8 @@ def cmd_summary(args):
             print(f"  {rule:<22} {c}")
 
     print("\nNote: design behaviour of the CEP layer on synthetic data - tuning "
-          "targets, not validated production metrics. ML fusion (phase 6) lifts "
-          "recall further.")
+          "targets, not validated production metrics. The model lifts recall "
+          "further (ml/experiments/layers.py).")
 
 
 # --------------------------------------------------------------------------
