@@ -20,16 +20,16 @@
         "ru": [
           "Правило «новый получатель + крупная сумма» срабатывает на мошенничестве в 4 раза чаще, чем на честных переводах.",
           "Правило «много отправителей на один счёт» молчит — так и должно быть: схемы сбора денег в PaySim нет.",
-          "Модель на наших признаках: 0,267 (качество ранжирования, PR-AUC). С колонкой «тип операции» из самого PaySim — 0,373 против 0,380 у опубликованной работы.",
+          "Модель на наших признаках: 0,364 (качество ранжирования, PR-AUC) — вровень с опубликованной работой (0,380). С колонкой «тип операции» из самого PaySim — 0,529, заметно выше неё.",
           "Наши пороги не переносятся: с ними поймано 0% мошенничества, с пересчитанными — 6%.",
-          "Обучение с большим весом мошенническим примерам ломается при такой редкости мошенничества: 0,018 вместо 0,294. Теперь обучение в таком случае останавливается и предупреждает."
+          "Обучение с большим весом мошенническим примерам ломается при такой редкости мошенничества: 0,030 вместо 0,364. Поэтому при мошенничестве реже 0,5% модель обучается без весов."
         ],
         "en": [
           "The rule \"new payee + large amount\" fires on fraud 4 times as often as on honest transfers.",
           "The rule \"many senders into one account\" stays silent, as it should: PaySim has no collection scheme.",
-          "The model on our features: 0.294 (ranking quality, PR-AUC). With PaySim's own transaction type: 0.440, against 0.380 for the published work.",
+          "The model on our features: 0.364 (ranking quality, PR-AUC), level with the published work (0.380). With PaySim's own transaction type: 0.529, well above it.",
           "Our thresholds do not transfer: they catch 0% of the fraud, rescaled ones 6%.",
-          "Training with a heavy weight on fraud collapses at this rarity: 0.018 instead of 0.294. Training now stops and warns in that case."
+          "Training with a heavy weight on fraud collapses at this rarity: 0.030 instead of 0.364. Below 0.5% fraud the model is therefore fitted unweighted."
         ]
       },
       "verdict": {
@@ -48,11 +48,11 @@
         },
         {
           "file": "validation/README.md",
-          "text": "| this project, all it can compute | 18 | **0.294** |"
+          "text": "| this project, all it can compute | 18 | **0.364** |"
         },
         {
           "file": "validation/README.md",
-          "text": "| — plus PaySim's own transaction type | 23 | **0.440** |"
+          "text": "| — plus PaySim's own transaction type | 23 | **0.529** |"
         },
         {
           "file": "validation/README.md",
@@ -64,7 +64,7 @@
         },
         {
           "file": "validation/README.md",
-          "text": "**0.018 weighted against 0.294 unweighted**"
+          "text": "**0.030 weighted against 0.364 unweighted**"
         }
       ]
     },
