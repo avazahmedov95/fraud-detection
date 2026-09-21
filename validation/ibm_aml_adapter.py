@@ -342,16 +342,10 @@ def typology_recall(path, patterns, cache, seeds=3):
     import numpy as np
     warnings.filterwarnings("ignore", message="X does not have valid feature names")
 
-    typ = read_patterns(patterns)
-    d, n_all, n_self = load(path)
-    lab = np.array([""] * len(d), dtype=object)
-    mins = d.ts.dt.strftime("%Y/%m/%d %H:%M").values
-    sender, receiver = d.sender.values, d.receiver.values
-    for i in np.flatnonzero(d.label.values == 1):
-        lab[i] = typ.get((mins[i], sender[i], receiver[i]), "")
+    d, lab, n_edges = _typology_labels(path, patterns)
     print(f"{len(d):,} transactions, {int(d.label.sum()):,} laundering, "
           f"{int((lab != '').sum()):,} of them named by the sidecar "
-          f"({len(typ):,} edges read)")
+          f"({n_edges:,} edges read)")
 
     z = _open_cache(cache)
     X, y, ts = z["X"], z["y"].astype("int8"), z["ts"]
@@ -426,6 +420,118 @@ def _bootstrap_delta(y, p_full, p_less, t_full, t_less, boots, seed=0):
             "ap_ci": tuple(np.percentile(d_ap, [2.5, 97.5])),
             "f1_share_not_positive": float(np.mean(d_f1 <= 0)),
             "ap_share_not_positive": float(np.mean(d_ap <= 0))}
+
+
+def _typology_labels(path, patterns):
+    """The file, and one typology name per row - empty where the sidecar names none.
+    The join is positional on the cached matrix, so both readers share it rather than
+    writing the key twice: `(minute, sender, receiver)`, looked up for laundering rows
+    only, is the whole of the correspondence with the sidecar."""
+    import numpy as np
+    typ = read_patterns(patterns)
+    d, _, _ = load(path)
+    lab = np.array([""] * len(d), dtype=object)
+    mins = d.ts.dt.strftime("%Y/%m/%d %H:%M").values
+    sender, receiver = d.sender.values, d.receiver.values
+    for i in np.flatnonzero(d.label.values == 1):
+        lab[i] = typ.get((mins[i], sender[i], receiver[i]), "")
+    return d, lab, len(typ)
+
+
+BUDGETS = (0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.10)
+
+#: Neither side is a hub: at most twenty distinct counterparties in the week before,
+#: on the two sides this project's extractor counts. `ml/README.md` screened the same
+#: way with the columns of the time (twenty over 96 hours). IBM AML carries no account
+#: type, so this is a screen this project defines, never a fact the file states - and
+#: the counts include the transfer itself, so twenty means nineteen others.
+INDIVIDUAL_MAX = 20
+
+
+def _people_like(X, names):
+    import numpy as np
+    return ((X[:, names.index("payee_payers_7d")] <= INDIVIDUAL_MAX)
+            & (X[:, names.index("sender_payees_7d")] <= INDIVIDUAL_MAX))
+
+
+def _top_of(pte, sel, frac):
+    """Indices of the most suspicious `frac` of the rows `sel` keeps, and how many."""
+    import numpy as np
+    idx = np.flatnonzero(sel)
+    k = max(int(round(frac * len(idx))), 1)
+    return idx[np.argpartition(-pte[idx], k - 1)[:k]], k
+
+
+def alert_budgets(cache, seeds=5, path=None, patterns=None, individuals=False):
+    """How much laundering sits inside the most suspicious 0.1%, 1%, 2% ... of the
+    test slice. A catch rate means nothing without the queue length that bought it,
+    and the F1 cut `our_model` reports lands on a different queue every seed - 1,364
+    alerts on one, 4,980 on another - so it cannot answer "how much would we catch if
+    an analyst reviewed N of them". With --patterns the laundering the sidecar names
+    is read beside the whole of it, and per typology at the two middle budgets; with
+    --individuals the same questions are asked again of the transfers that look like
+    people, where both the queue and the recall are drawn from those rows only."""
+    import warnings
+    import numpy as np
+    warnings.filterwarnings("ignore", message="X does not have valid feature names")
+    z = _open_cache(cache)
+    X, y = z["X"], z["y"].astype("int8")
+    names = [str(n) for n in z["names"]]
+    n = len(y)
+    a, b = int(n * 0.6), int(n * 0.8)
+    fmt, fnames = z["fmt"], [str(c) for c in z["fmt_names"]]
+    own = np.column_stack([(fmt == k).astype("float32") for k in range(len(fnames))]
+                          + [z["currency"].astype("float32")])
+    yte = y[b:]
+    lab = None
+    if patterns:
+        d, lab_all, _ = _typology_labels(path, patterns)
+        if len(d) != n:
+            raise SystemExit(f"the cache holds {n:,} rows and this file {len(d):,} - "
+                             "re-run --extract-only before joining labels onto it")
+        lab = lab_all[b:]
+
+    views = [("all test rows", np.ones(len(yte), bool))]
+    if individuals:
+        views.append((f"people-like only (neither side over {INDIVIDUAL_MAX} "
+                      f"counterparties in 7 d)", _people_like(X[b:], names)))
+
+    print(f"test slice {n - b:,} rows, {int(yte.sum()):,} laundering "
+          f"({yte.mean():.3%}); {seeds} seeds, unweighted")
+    for label, M in (("this project, all it can compute", X),
+                     ("+ the file's own format and currency", np.hstack([X, own]))):
+        runs = [_fit_and_cut(M[:a], y[:a], M[a:b], y[a:b], False, seed)[0]
+                .predict_proba(M[b:])[:, 1] for seed in range(seeds)]
+        for view, sel in views:
+            fraud = (yte == 1) & sel
+            named = fraud & (lab != "") if lab is not None else None
+            print(f"\n  {label}\n  {view}: {int(sel.sum()):,} rows, "
+                  f"{int(fraud.sum()):,} laundering"
+                  + (f", {int(named.sum()):,} of them named" if named is not None else ""))
+            print(f"    {'budget':>8}{'alerts':>10}{'of laundering':>15}"
+                  f"{'across seeds':>19}" + (f"{'of named':>11}" if lab is not None else ""))
+            for frac in BUDGETS:
+                rs, ns, k = [], [], 0
+                for pte in runs:
+                    top, k = _top_of(pte, sel, frac)
+                    rs.append(float(fraud[top].sum()) / max(int(fraud.sum()), 1))
+                    if named is not None:
+                        ns.append(float(named[top].sum()) / max(int(named.sum()), 1))
+                print(f"    {frac:>7.1%}{k:>10,}{np.mean(rs):>14.1%}"
+                      f"{min(rs):>11.1%}-{max(rs):<7.1%}"
+                      + (f"{np.mean(ns):>10.1%}" if ns else ""))
+            if lab is None:
+                continue
+            shown = (0.01, 0.02)
+            tops = {f: [_top_of(pte, sel, f)[0] for pte in runs] for f in shown}
+            print(f"    {'per typology':<18}{'rows':>7}" +
+                  "".join(f"{f'at {f:.0%}':>12}" for f in shown))
+            for g in sorted({str(v) for v in lab[fraud] if v}):
+                gm = fraud & (lab == g)
+                cells = [f"{np.mean([float(gm[t].sum()) / max(int(gm.sum()), 1) for t in tops[f]]):>11.1%}"
+                         for f in shown]
+                print(f"    {g:<18}{int(gm.sum()):>7,}" + "".join(cells))
+    print()
 
 
 def receiver_ablation(cache, seeds=20, boots=1000):
@@ -546,6 +652,12 @@ def main():
                     action="store_true",
                     help="recall per laundering typology from --patterns and the "
                          "cached matrix, without re-running the replay")
+    ap.add_argument("--budgets", dest="budgets", action="store_true",
+                    help="recall at fixed alert budgets from the cached "
+                         "matrix; with --patterns, also over the named rows")
+    ap.add_argument("--individuals", dest="individuals", action="store_true",
+                    help="with --budgets, ask the same of transfers where "
+                         "neither side looks like a hub")
     ap.add_argument("--boots", type=int, default=1000,
                     help="bootstrap resamples for --receiver-ablation")
     args = ap.parse_args()
@@ -567,6 +679,11 @@ def main():
         if not os.path.exists(args.cache):
             raise SystemExit(f"{args.cache} not found - run --extract-only first")
         return receiver_ablation(args.cache, args.seeds, args.boots)
+    if args.budgets:
+        if not os.path.exists(args.cache):
+            raise SystemExit(f"{args.cache} not found - run --extract-only first")
+        return alert_budgets(args.cache, args.seeds, args.file, args.patterns,
+                             args.individuals)
     if args.typology_recall:
         if not os.path.exists(args.cache):
             raise SystemExit(f"{args.cache} not found - run --extract-only first")
