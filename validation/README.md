@@ -629,9 +629,11 @@ With payment format and currency the same table reads 57.0% at a 0.5% budget and
 fan-in 83.6% at 1%. A bank has those columns; this project's extractor does not, and
 no feature built from a P2P stream closes that gap.
 
-**Not an operating point.** 2% of this test slice is 17,949 alerts over about three
-and a half days. The deployed system runs at 131 alerts per 100,000 transfers, which
-is 0.13%. These budgets exist to make two datasets comparable, not to propose a
+**Not an operating point.** 2% of this test slice is 17,949 alerts. The slice is the
+last fifth of the file's rows, and IBM AML's traffic is front-loaded: 97% of those
+rows fall inside two days, and a sparse tail of a few hundred runs on to ten. The
+deployed system runs at 131 alerts per 100,000 transfers, which is 0.13% - fifteen
+times fewer. These budgets exist to make two datasets comparable, not to propose a
 queue.
 
 ### Verdict under the terms
