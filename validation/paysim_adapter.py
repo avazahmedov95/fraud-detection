@@ -87,7 +87,7 @@ def _fit_report(name, X, y, step, cut, drop=(), names=None, weighted=True):
 
 def our_model(path, limit=None):
     """This project's own feature extractor and model, trained on PaySim's published
-    split: 14 of the 20 features survive, the rest switched off. The second
+    split: 18 of the 21 features survive, the rest switched off. The second
     configuration drops the receiver-side aggregation, to ask whether that finding
     reproduces off this project's own generator."""
     import numpy as np

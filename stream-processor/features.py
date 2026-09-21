@@ -46,6 +46,23 @@ def truthy(v) -> int:
     return 1 if v else 0
 
 
+def unusable(event: dict):
+    """Why an event cannot be scored, or None. Raised inside the Flink operator,
+    the error would fail the task again on every replay of the record and stop
+    the stream; a NaN or infinite amount would poison the sender's baseline for
+    good. The job drops such a record and counts it."""
+    try:
+        amount = float(event["amount_uzs"])
+        secs = float(event.get("secs_login_to_confirm") or 0.0)
+    except (KeyError, TypeError, ValueError) as exc:
+        return f"{type(exc).__name__}: {exc}"
+    if not (math.isfinite(amount) and amount >= 0):
+        return f"amount_uzs {amount!r}"
+    if not (math.isfinite(secs) and secs >= 0):
+        return f"secs_login_to_confirm {secs!r}"
+    return None
+
+
 def event_from(row: dict) -> dict:
     """One generated-CSV row as the event `rules.evaluate` expects - offline only,
     and the one copy of this mapping every replay uses."""

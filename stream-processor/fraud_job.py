@@ -77,7 +77,7 @@ class FraudDetector(KeyedProcessFunction):
 
         # Absent is legitimate (the plaintext arm); present-and-unusable is not,
         # so it fails here rather than as undecodable records later.
-        self._undecodable = 0
+        self._unusable = 0
         self._crypto_key = None
         if os.getenv("PAYLOAD_KEY_HEX"):
             self._crypto_key = payload_crypto.key_from_env()
@@ -111,13 +111,16 @@ class FraudDetector(KeyedProcessFunction):
             # Both arms, discriminated by prefix. Decryption sits INSIDE the
             # scoring_ms bracket on purpose - its cost is what is measured.
             event = payload_crypto.loads_maybe_encrypted(value, self._crypto_key)
+            problem = F.unusable(event)
+            if problem:
+                raise ValueError(problem)
         except Exception as exc:                          # noqa: BLE001
             # Counted and printed, never dropped silently: a wrong key makes every
             # record undecodable, a whole-stream outage.
-            self._undecodable += 1
-            if self._undecodable in (1, 10, 100) or self._undecodable % 1000 == 0:
-                print(f"[fraud_job] UNDECODABLE RECORD "
-                      f"({self._undecodable} so far): {type(exc).__name__}: {exc}")
+            self._unusable += 1
+            if self._unusable in (1, 10, 100) or self._unusable % 1000 == 0:
+                print(f"[fraud_job] UNUSABLE RECORD "
+                      f"({self._unusable} so far): {type(exc).__name__}: {exc}")
             return
 
         state = self._state.value() or SenderState()

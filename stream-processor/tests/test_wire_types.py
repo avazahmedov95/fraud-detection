@@ -68,3 +68,41 @@ def test_a_wire_shaped_event_extracts_like_a_typed_one():
     a = F.extract(typed, R.SenderState(), now=1000)
     b = F.extract(wire, R.SenderState(), now=1000)
     assert F.to_vector(a) == F.to_vector(b)
+
+
+# --- an event the extractor cannot score ---------------------------------------
+
+@pytest.mark.parametrize("bad", [
+    {"amount_uzs": None}, {"amount_uzs": ""}, {"amount_uzs": "abc"},
+    {"amount_uzs": [1, 2]}, {"amount_uzs": float("nan")},
+    {"amount_uzs": float("inf")}, {"amount_uzs": -500_000},
+    {"secs_login_to_confirm": "abc"}, {"secs_login_to_confirm": float("nan")},
+    {"secs_login_to_confirm": -5},
+])
+def test_an_unscorable_event_is_named(bad):
+    """Each of these raised in the extractor - a task failing on every replay of the
+    record - or, for NaN and infinity, poisoned the sender's baseline for good."""
+    assert F.unusable(_ev(**bad))
+
+
+def test_a_missing_amount_is_unscorable():
+    ev = _ev()
+    del ev["amount_uzs"]
+    assert F.unusable(ev)
+
+
+@pytest.mark.parametrize("fine", [
+    {}, {"amount_uzs": "500000"}, {"amount_uzs": 0}, {"secs_login_to_confirm": "41.2"},
+])
+def test_a_scorable_event_passes(fine):
+    assert F.unusable(_ev(**fine)) is None
+
+
+def test_the_job_checks_every_event_before_scoring_it():
+    """fraud_job.py needs PyFlink, absent on the host, so this reads its SOURCE."""
+    import pathlib
+    src = (pathlib.Path(__file__).resolve().parent.parent / "fraud_job.py"
+           ).read_text(encoding="utf-8")
+    assert "F.unusable(" in src, "the job no longer checks events before scoring"
+    assert src.index("F.unusable(") < src.index("evaluate(event"), (
+        "the check must run before the event reaches the extractor")

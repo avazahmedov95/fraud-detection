@@ -55,7 +55,7 @@ reader:
 
 | document | what it holds |
 |---|---|
-| `docs/irp-framing.md` | the research question, every measurement with its interval, a line-by-line answer to the seven review points, twenty-one silent failure modes, and what a real work queue exposed that no metric did |
+| `docs/irp-framing.md` | the research question, every measurement with its interval, a line-by-line answer to the seven review points, twenty-two silent failure modes, and what a real work queue exposed that no metric did |
 | `docs/threat-model.md` | three adversaries, what each control assumes, and what evading it costs — one of those costs is now measured rather than argued |
 | `docs/generator-spec.md` | the generator as a specification, the dataset of record with its hashes, and why the data is generated at all |
 | `validation/README.md` | the foreign datasets, what each could and could not test, and the ones rejected, with why |
@@ -72,7 +72,7 @@ Each package keeps its tests in its own `tests/` directory, and the packages are
 run **one at a time**:
 
 ```bash
-python -m pytest stream-processor -q     # 174
+python -m pytest stream-processor -q     # 190
 python -m pytest data-generator   -q     #  26
 python -m pytest sink-writer      -q     #  23
 python -m pytest validation       -q     #  24

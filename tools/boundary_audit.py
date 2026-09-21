@@ -342,11 +342,18 @@ def b_no_artefact_path_derived_from_file():
 
 def b_manifest_matches_the_deployment():
     """The served artefacts, dataset and feature contract must be the manifest's - a
-    drift in any of them leaves a system that runs and reports itself healthy."""
+    drift in any of them leaves a system that runs and reports itself healthy. A
+    clone that has trained and generated nothing yet has nothing to drift."""
     m = pkg("ml", "manifest")
     if not os.path.exists(m.PATH):
         return "SKIP: no manifest - run ml/export_onnx.py"
-    problems = m.check()
+    with open(m.PATH, encoding="utf-8") as fh:
+        recorded = json.load(fh)["artefacts"]
+    # feature_names.json and thresholds.json are tracked; the model files are not.
+    if not any(os.path.exists(os.path.join(m.MODELS, a)) for a in recorded
+               if a.startswith("model.")):
+        return "SKIP: model not exported on this machine"
+    problems = [p for p in m.check() if "(absent vs" not in p]
     return "; ".join(problems) or None
 
 

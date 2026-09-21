@@ -106,7 +106,7 @@ lesson as PaySim's balance-column leakage.
 | # | Reviewer's point | Response |
 |---|---|---|
 | 1 | Formal adversarial threat model | **Done - `docs/threat-model.md`.** Per control: what the attacker must do, whether it is attacker-controllable, what evasion costs. Result: detection value and evasion cost are different axes - session telemetry, the second most valuable capability, is the cheapest to evade. |
-| 2 | Exact mathematical specification of the generator | **Done - `docs/generator-spec.md`**, every distribution stated and the parametric approach defended: no Uzbek P2P data exists to fit a GAN or copula to. `verify_spec.py` re-checks it against the output (16/16). |
+| 2 | Exact mathematical specification of the generator | **Done - `docs/generator-spec.md`**, every distribution stated and the parametric approach defended: no Uzbek P2P data exists to fit a GAN or copula to. `verify_spec.py` re-checks it against the output (15/15). |
 | 3 | Security-overhead benchmarking (mTLS, payload encryption) | **Done (§7.4, 7.5, 7.5a).** AES-256-GCM: no detectable cost on the decision path (p99 183 ms both arms), ~6.8 µs to decrypt, +50% message size. Mutual TLS: below a ~4 ms per-arm drift; one handshake costs +11.2 ms, paid by the client before the measured clock starts. |
 | 4 | Integrity audit - cryptographic hashing at ingress and sink | **Done.** Ingress SHA-256 at the producer, bound into the audit record; a hash chain makes alteration, deletion or reordering evident (`verify_audit.py`); head hashes are published in `docs/audit-anchors.md`. |
 | 5 | Distinguish organic concept drift from adversarial evasion | **Done - `docs/threat-model.md`.** Drift moves both classes; evasion moves the fraud class only, and only on attacker-controllable features. Falsifiable prediction: once `COACHED_SESSION` is announced, `P(active_call = 1 \| APP fraud)` should decay toward the ~3% base rate. |
@@ -489,8 +489,19 @@ its clients; 7.7a is the other half of the same code path.
 
 ## 8. Silent failure modes
 
-Twenty-one failures, numbered in the order found; most left every health
+Twenty-two failures, numbered in the order found; most left every health
 indicator green. The pattern is the result, not the individual bugs.
+
+**Twenty-second: one malformed record would have stopped the stream - found by
+feeding it one, before production did.** An event with no amount, or an empty,
+textual or negative one, raised inside the operator; Flink restarts the task,
+replays from the last checkpoint, reads the same record and raises again, until
+the restart budget - ten in five minutes - fails the job. A NaN or infinite
+amount raised nothing: it turned the sender's running mean into NaN for every
+later transfer. The generator never writes such a record, which is why no test
+or run had met one; the threat model's forged event on `transactions.raw` would.
+`features.unusable` now names the problem, and the job drops the record through
+the same counted path as an undecodable one.
 
 **Twenty-first: the session cluster leaks on every redeploy, and the eighth one
 kills it.** Each job loads its own classloader into JVM Metaspace and a cancelled

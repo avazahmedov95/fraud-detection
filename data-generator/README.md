@@ -150,8 +150,8 @@ payload_crypto.py  AES-256-GCM envelope for the security-overhead arm. Also
                    duplicated by design, in stream-processor/
 
 harnesses - produce a NUMBER, not part of the generator
-verify_spec.py     re-checks docs/generator-spec.md against the output (15/15 on the
-                   realistic profile, the default; 16/16 on the baseline).
+verify_spec.py     re-checks docs/generator-spec.md against the output (15/15 on
+                   either profile; the realistic one is the default).
                    The spec is a claim; this is what makes it falsifiable
 ```
 
