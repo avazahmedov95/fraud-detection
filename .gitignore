@@ -32,9 +32,6 @@ ml/models/*.txt
 !ml/models/manifest.json
 ml/models/*.png
 
-# Local env overrides
-.env.local
-
 # OS / editor
 .DS_Store
 .idea/
@@ -42,7 +39,6 @@ ml/models/*.png
 
 # deployed model artifacts (copied from ml/models at deploy)
 stream-processor/model.onnx
-stream-processor/feature_names.json
 stream-processor/thresholds.json
 
 # TLS material for the mutual-TLS arm (regenerate with `run.ps1 make-certs`).
@@ -51,8 +47,7 @@ stream-processor/thresholds.json
 # why it must never be committed.
 infra/kafka/certs/
 
-# Editor and shell scratch. run.ps1.tmp was tracked as an empty file for weeks:
-# a zero-byte artefact is exactly the kind of thing a diff never draws attention to.
+# Editor and shell scratch.
 *.tmp
 
 # Run state, not source: experiments/outage.py rewrites the baseline snapshot on
