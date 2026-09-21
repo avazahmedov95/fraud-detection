@@ -70,8 +70,8 @@ def _fit_report(name, X, y, step, cut, drop=(), names=None, weighted=True):
     ytr, yte = y[tr], y[te]
     spw = ((ytr == 0).sum() / max(int(ytr.sum()), 1)) if weighted else 1.0
     m = lgb.LGBMClassifier(n_estimators=400, learning_rate=0.05, num_leaves=31,
-                           subsample=0.8, colsample_bytree=0.8,
-                           min_child_samples=30, scale_pos_weight=spw,
+                           colsample_bytree=0.8, min_child_samples=30,
+                           reg_lambda=10.0, scale_pos_weight=spw,
                            random_state=42, n_jobs=-1, verbose=-1)
     m.fit(Xk[tr], ytr)
     p = m.predict_proba(Xk[te])[:, 1]
@@ -189,9 +189,8 @@ def baseline(path):
           f"({int(y[te].sum()):,}) - reported 1.142%, 1,854\n")
 
     m = lgb.LGBMClassifier(n_estimators=400, learning_rate=0.05, num_leaves=63,
-                           subsample=0.8, colsample_bytree=0.8,
-                           min_child_samples=20, random_state=42, n_jobs=-1,
-                           verbose=-1)
+                           colsample_bytree=0.8, min_child_samples=20,
+                           random_state=42, n_jobs=-1, verbose=-1)
     m.fit(X[tr].values.astype("float32"), y[tr])
     p = m.predict_proba(X[te].values.astype("float32"))[:, 1]
     yte = y[te]

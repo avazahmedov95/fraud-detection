@@ -68,21 +68,21 @@ fails if this table disagrees with it.
 
 | metric                | ML model | CEP rules only |
 |-----------------------|----------|----------------|
-| ROC-AUC               | 0.988    | —              |
-| PR-AUC                | 0.573    | —              |
-| precision at REVIEW   | 0.733    | 0.011          |
-| recall at REVIEW      | 0.545    | 0.142          |
+| ROC-AUC               | 0.997    | —              |
+| PR-AUC                | 0.673    | —              |
+| precision at REVIEW   | 0.634    | 0.011          |
+| recall at REVIEW      | 0.670    | 0.142          |
 
-Recall by fraud type (ML at REVIEW): STRUCTURING 65.5%, APP 42.9%, ATO 79.6%, MULE 31.4%.
-The five fits alone scored 0.392-0.539 PR-AUC on the same slice; their committee
-0.573 - above every one of them, and no fit is known in advance to be the best.
+Recall by fraud type (ML at REVIEW): STRUCTURING 82.8%, APP 52.4%, ATO 89.8%, MULE 48.6%.
+The five fits alone scored 0.665-0.678 PR-AUC on the same slice and their committee
+0.673, inside that range: with the L2 penalty (Feature importance, below) single
+fits barely scatter, where without it they ranged 0.392-0.539 and averaging them
+was what made the committee worth serving.
 
-Read plainly: the committee finds about half the fraud in the held-out month, and
-about three alerts in four are fraud - with the spread one retrain moves (below),
-and on a dataset regenerated the same day (below). The rules alone reach 1.1%
-precision on data where
-legitimate traffic also collects, splits and changes phones. The weak patterns
-are APP and MULE.
+Read plainly: the committee finds two thirds of the fraud in the held-out month,
+and nearly two alerts in three are fraud, on a dataset regenerated on 2026-09-20
+(below). The rules alone reach 1.1% precision on data where legitimate traffic
+also collects, splits and changes phones. The weak patterns are APP and MULE.
 
 ### Since 2026-09-14: the realistic profile, a committee, cutoffs from data
 
@@ -104,7 +104,7 @@ reported. Three changes, each measured before it was adopted:
   probabilities sit near the base rate, so a fixed 0.40 means nothing.
   `train.py` fits on the earliest 64% of rows, puts REVIEW where F1 peaks on the
   next 16%, and writes it to `thresholds.json`, which serve-prep ships beside
-  `model.onnx` and the job reads (`stream-processor/config.py`). This run: cut at REVIEW = 0.1715, and
+  `model.onnx` and the job reads (`stream-processor/config.py`). This run: cut at REVIEW = 0.1048, and
   **there is no BLOCK**: since 2026-09-19 the system never blocks on its own - the
   owner's decision - and every alert goes to a person. The CEP-only fallback keeps
   its fixed cutoff, since an additive rule score is not a probability.
@@ -195,27 +195,30 @@ stream.
 unchanged. Both tables above are the 20-column model of that day, and the IBM AML
 one is history - that dataset has only reported for information since 2026-09-20.
 
-**Re-read on 2026-09-21, against the model actually served.**
+**Re-read on 2026-09-21, against the model actually served** - the committee
+retrained that day with the L2 penalty (Feature importance, below).
 `experiments/thresholds.py` loads `models/model.txt` instead of refitting, so the
-menu describes the deployed system - the dataset regenerated on 2026-09-20 and the
-committee retrained on it. Cutoffs chosen on the validation rows, read on the
-100,000 test transfers (176 fraud):
+menu describes the deployed system. Cutoffs chosen on the validation rows, read on
+the 100,000 test transfers (176 fraud):
 
 | cutoff | alerts per 100k | caught | real |
 |---|---|---|---|
-| top 0.05% of transfers | 65 | 31.2% | **84.6%** |
-| top 0.1% | 85 | 38.6% | 80.0% |
-| **F1 peak (the current rule)** | **131** | **54.5%** | **73.3%** |
-| top 0.2% | 150 | 56.8% | 66.7% |
-| F2 peak | 192 | 61.4% | 56.2% |
-| top 0.5% | 476 | 73.9% | 27.3% |
-| top 1% | 963 | 81.8% | 15.0% |
+| top 0.05% of transfers | 56 | 29.0% | **91.1%** |
+| top 0.1% | 87 | 42.6% | 86.2% |
+| top 0.2% | 165 | 61.4% | 65.5% |
+| **F1 peak (the current rule)** | **186** | **67.0%** | **63.4%** |
+| F2 peak | 210 | 68.8% | 57.6% |
+| top 0.5% | 446 | 80.1% | 31.6% |
+| top 1% | 927 | 90.3% | 17.2% |
 
-The shape of the trade holds on the new file: the current rule sits near the knee,
-and the two ends of the menu are the ones worth putting to an owner - the F2 peak
-catches 61.4% of the fraud for half as many alerts again at 56% real, and the top
-0.1% is the opposite trade, 38.6% of the fraud at 80% real. Nothing is adopted
-here: the cutoff is a decision, and it has not been changed.
+Against the unpenalised committee's menu of the same morning the penalty is ahead
+wherever the queues are the same size: 42.6% caught at 86.2% real in 87 alerts,
+where 85 had held 38.6% at 80.0%, and 90.3% against 81.8% in the top 1%. The F1
+peak moved to a longer queue, 186 alerts against 131, because it is chosen on the
+validation rows and the penalised model's peak sits further out. The two ends worth
+putting to an owner: the top 0.1% catches 42.6% of the fraud with 86% of alerts
+real, the F2 peak 68.8% at 58%. Nothing is adopted here: the cutoff is a decision,
+and it has not been changed.
 
 ### Not companies: the same caveat on IBM AML's people-like transfers
 
@@ -373,31 +376,31 @@ are in git history: `git show 7d16c19` (attempt 1), `git show 8ba52f9` (attempt 
 ### Honest collections are not mistaken for mules
 
 `experiments/collectors.py` refits the served committee without the counterparty
-counters and with them - reproducing both exactly, 131 alerts at 0.664 / 0.494 and
-131 at 0.733 / 0.545 - and reads the held-out month by the payee's **other** payers
-over the 7 days before each transfer (re-run 2026-09-20 on the regenerated
-dataset):
+counters and with them - reproducing the served one exactly, 186 alerts at
+0.634 / 0.670, against 131 at 0.664 / 0.494 without - and reads the held-out month
+by the payee's **other** payers over the 7 days before each transfer (re-run
+2026-09-21 with the penalised recipe):
 
 | payee's other payers, 7 d | legitimate transfers | false alarms without | with | MULE transfers | caught without | with |
 |---|---|---|---|---|---|---|
-| none | 22,807 | 14 (0.06%) | 19 (0.08%) | 9 | 2 | 3 |
-| 1-2 | 56,587 | 17 (0.03%) | 12 (0.02%) | 10 | 1 | 1 |
-| 3-4 | 17,617 | 6 (0.03%) | 2 (0.01%) | 8 | 3 | 4 |
-| 5 or more | 2,813 | 7 (0.25%) | **2 (0.07%)** | 8 | 4 | 3 |
+| none | 22,807 | 19 (0.08%) | 45 (0.20%) | 9 | 3 | 6 |
+| 1-2 | 56,587 | 15 (0.03%) | 10 (0.02%) | 10 | 2 | 3 |
+| 3-4 | 17,617 | 4 (0.02%) | 5 (0.03%) | 8 | 3 | 5 |
+| 5 or more | 2,813 | 6 (0.21%) | **8 (0.28%)** | 8 | 3 | 3 |
 
-**The collection case is the one to watch, and the counters improve it.** Transfers
-into an account collecting from five or more people - the realistic profile's
-weddings, gifts and joint purchases - draw **2 false alarms of 2,813 with the
-counters against 7 without**, and the committee still catches 3 of that group's 8
-mule transfers against 4. Across the whole slice the false alarms fall 44 to 35
-while the catch rises 87 to 96: on this dataset the columns that could have
-punished collections mostly sharpened them.
+**The collection case is the one to watch, and the counters cost it a little.**
+Transfers into an account collecting from five or more people - the realistic
+profile's weddings, gifts and joint purchases - draw **8 false alarms of 2,813
+with the counters against 6 without**, and the committee catches the same 3 of
+that group's 8 mule transfers either way. Across the whole slice the counters
+raise the catch from 87 to 118 and the false alarms from 44 to 68.
 
-On the **previous** dataset the same table read the other way round - 12 false
-alarms of 2,973 against 10, with the total rising 61 to 66 - and the difference is
-worth keeping in view: a 35-alert queue and a 66-alert queue are two draws of the
-same system, not two systems. What held on both files is where the alarms sit: on
-payees with one or two payers they fall, and on payees nobody else paid they rise,
+The same table has read three ways: two more alarms on collections on the
+previous dataset (12 against 10), five fewer on the regenerated one with the
+unpenalised recipe (2 against 7), two more again here. A handful of alarms on
+2,813 transfers moves with every draw, so what can be said is that the counters
+neither protect collections nor punish them measurably. What held every time is
+where the alarms sit: on payees nobody else paid they rise (19 to 45 here),
 because with no inbound history the only columns that can speak are the sender's
 own - how many payees it paid this week, and how recently it was itself paid.
 
@@ -425,8 +428,9 @@ That is not the two columns; it is what one
 retrain does here. With 570 fraud to learn from, the five fits scatter (0.303-0.461
 PR-AUC) and the F1-chosen cutoff lands on a different alert count each time:
 removing either column alone moved the served recall to 0.421 or 0.436 with PR-AUC
-unchanged (0.476, 0.469). **The headline figures carry about eight points of
-retrain-to-retrain spread in recall, and are quoted with it.**
+unchanged (0.476, 0.469). **The headline figures carried about eight points of
+retrain-to-retrain spread in recall, and were quoted with it** - until the L2
+penalty of 2026-09-21 took most of that spread away (Feature importance).
 
 ### The payee's account age: removed, and what it cost here
 
@@ -507,6 +511,10 @@ first five seeds suggested.** The +0.116 above belongs to a file that no longer
 exists, measured with too few seeds to pin an effect of this size; +0.047 on the
 current data is the figure to quote. The decomposition below - counts against
 transit - was measured on that older file and has not been re-run.
+
+Both ran on the unpenalised recipe. Refitted with the L2 penalty, the counters
+still raise the served committee's catch from 87 to 118 of 176 (collections,
+below); the gate itself has not been re-run on that recipe.
 
 On PaySim the averaged committee went 0.155 -> 0.196 and its top 0.1% of the
 validation transfers held 18.5% -> 19.5% of the fraud, so condition 3 holds - but
@@ -599,80 +607,65 @@ to the log-odds:
 
 | | feature | | | feature | |
 |---|---|---|---|---|---|
-| 1 | `daily_sum_ratio` | 1,895 | 9 | `secs_login_z` | 50 |
-| 2 | `log_amount` | 659 | 10 | `is_new_payee` | 38 |
-| 3 | `secs_since_sender_inbound` | 533 | 11 | `sender_payees_7d` | 33 |
-| 4 | `amount_z` | 513 | 12 | `payee_payers_7d` | 15 |
-| 5 | `amount_to_mean` | 413 | 13 | `payee_payers_24h` | 9 |
-| 6 | `rcv_inflow_1h` | 379 | 14 | `rcv_distinct_senders_1h` | 8 |
-| 7 | `secs_since_last` | 170 | 15 | `vel_1h` | 3 |
-| 8 | `hour` | 96 | | | |
+| 1 | `rcv_inflow_1h` | 0.600 | 9 | `daily_sum_ratio` | 0.096 |
+| 2 | `log_amount` | 0.497 | 10 | `amount_z` | 0.095 |
+| 3 | `is_new_payee` | 0.359 | 11 | `secs_login_z` | 0.093 |
+| 4 | `amount_to_mean` | 0.232 | 12 | `sender_payees_7d` | 0.067 |
+| 5 | `payee_payers_7d` | 0.227 | 13 | `payee_payers_24h` | 0.061 |
+| 6 | `hour` | 0.215 | 14 | `active_call` | 0.015 |
+| 7 | `secs_since_last` | 0.212 | 15 | `rcv_distinct_senders_1h` | 0.014 |
+| 8 | `secs_since_sender_inbound` | 0.111 | | | |
 
-**The magnitudes are the finding.** The committee before the dataset was
-regenerated gave contributions of a few log-odds; this one gives hundreds and
-thousands, and the attribution is not what is wrong - the model is. Its raw scores
-run from −26,419 to +158 on the first 60,000 rows, median −1,117; its
-leaves reach ±18,111; and 55% of transfers sit beyond ±745, where even a 64-bit
-probability is exactly 0 or 1. On the regenerated file most transfers are
-classified with certainty early, the later trees chase the few hard cases where
-the second derivative has all but vanished, and a Newton step over a vanishing
-second derivative is enormous - nothing in `train.py`'s recipe, which sets no L2
-penalty on leaf values, holds it back. Neither the probabilities (Calibration,
-below) nor these contributions can be read as evidence, and large terms cancel:
-the caught fraud `explain.py` prints carries +4,808 from `daily_sum_ratio`
-against −1,110 from `log_amount`.
+The caught fraud `explain.py` prints reads the way a case view should: +5.05 from
+the money that reached the payee within the hour, +1.93 from the amount, +1.10 from
+the payee's other payers this week, +0.82 from the payee being new to the sender.
 
-**Measured the same day: the ranking does not survive it either.** The served
-recipe with only `reg_lambda` changed - the same five seeds, the same split, the
-penalty to be chosen on the validation rows and the test rows only reporting:
+**Money converging on the payee is the model's first reason** - the fan-in shape
+the receiver-side store exists for (Fan-in, below) - and two counterparty counters
+follow within the first eight. **`hour` sixth is the generator, not a finding**:
+the diurnal pattern is drawn, not observed (`docs/irp-framing.md` 9.4).
+**`is_new_payee` third is still an upper bound**: fraud reaches a stream-new payee
+99.1% of the time on this data against 44.2% of legitimate traffic (keyed by card,
+as the job keys it), because the generator does not produce the evasion its own
+threat model names - one small prior transfer establishes the payee. When it is
+produced (`SEEDED_PAYEE_SHARE`, default off), APP detection on the affected
+episodes falls from 56.0% to 31.8%, five seeds, delta −25.3 pp [−47.5, −3.1]
+(`docs/threat-model.md` §4).
+
+**`active_call` near the bottom is not a useless column.** A call while confirming
+marks **APP** (44.9% of those transfers against 10.0% of legitimate traffic) and
+the *absence* of the others - 6.0% of MULE transfers and 7.7% of STRUCTURING carry
+one, below the legitimate rate - so its contributions cancel across types in a
+mean. It is a pattern discriminator, not a fraud flag.
+
+### The L2 penalty on leaf values: found, measured, adopted 2026-09-21
+
+The committee served until that day set no penalty, and on the regenerated file its
+attribution ran to thousands: `daily_sum_ratio` at 1,895 mean |contribution|, raw
+scores from −26,419 to +158 on the first 60,000 rows, leaves reaching ±18,111, and
+55% of transfers beyond ±745, where even a 64-bit probability is exactly 0 or 1.
+Most transfers were classified with certainty early, the later trees chased the
+few hard cases where the second derivative had all but vanished, and a Newton step
+over a vanishing second derivative is enormous. Neither its probabilities nor its
+contributions could be read as evidence - the fraud above then carried +4,808 from
+`daily_sum_ratio` against −1,110 from `log_amount` - and, measured, **its ranking
+suffered too**. The served recipe with only `reg_lambda` changed, the same five
+seeds and split, chosen on the validation rows:
 
 | `reg_lambda` | validation PR-AUC | test PR-AUC | at the F1 cutoff: alerts, caught, real | largest leaf | largest mean contribution |
 |---|---|---|---|---|---|
-| 0 (served) | 0.434 | 0.573 | 131, 54.5%, 73.3% | 18,111 | 1,909 |
+| 0 (served until 2026-09-21) | 0.434 | 0.573 | 131, 54.5%, 73.3% | 18,111 | 1,909 |
 | 1 | 0.510 | 0.687 | 163, 62.5%, 67.5% | 1.28 | 0.78 |
-| 10 | **0.511** | 0.673 | 186, 67.0%, 63.4% | 1.28 | 0.61 |
+| **10 (served since)** | **0.511** | 0.673 | 186, 67.0%, 63.4% | 1.28 | 0.61 |
 
-Every fraud type is caught more often with the penalty on, no probability is
-exactly 0 or 1, and no alert rounds to 1.000. The validation rows pick 10, by a
-margin (0.001) no one should lean on - 1 and 10 are one result. It is one
-committee per setting, so a paired-seed confirmation belongs before adoption;
-the gain is several times the counters' +0.047, and its mechanism is known.
-**Not adopted yet**: it changes the model and every figure in this file, and
-that is the owner's decision.
-
-**The owner asked for it on 2026-09-21. The rule, fixed before its run:** five
-committee seed sets (seeds 0-24, five to a set), each fitted twice on the same
-rows with nothing changed but `reg_lambda` - 0 and 10 - and the paired
-difference in validation PR-AUC. Ten is adopted only if the mean difference is
-above zero and its 95% interval clears zero; otherwise the recipe stays
-unpenalised and the table above is the record. `subsample=0.8` leaves the recipe
-either way: without a bagging frequency LightGBM ignores it, so removing it must
-change no prediction - checked on the run, not assumed.
-
-Read the order, not the numbers, and the order with care: a column can rank high
-by cancelling another.
-
-**The transit column is third, and it was worthless alone.** Measured on its own,
-`secs_since_sender_inbound` cost 0.042 PR-AUC on the file of the time (above);
-here the model leans on it more than on any other counter. Both are true: SHAP
-measures what a column contributes *in the presence of the others*, and this one
-only means something beside the payee-side counts - collected from many, then paid
-on. "Contributes nothing on its own" and "can be removed" remain different claims.
-
-**`active_call` does not mean what its name suggests.** It left the top fifteen on
-the regenerated file, and what it carries is unchanged: a call while confirming
-marks **APP** (44.9% of those transfers against 10.0% of legitimate traffic) and the
-*absence* of the others - 6.0% of MULE transfers and 7.7% of STRUCTURING carry one,
-below the legitimate rate. So for a mule transfer the model reads an active call as
-evidence *against* fraud. The column is a pattern discriminator, not a fraud flag.
-
-**`is_new_payee` is still an upper bound, not a finding.** Fraud reaches a
-stream-new payee 99.1% of the time on this data against 44.2% of legitimate
-traffic (keyed by card, as the job keys it), because the generator does not produce
-the evasion its own threat model names - one small prior transfer establishes the
-payee. When it is produced (`SEEDED_PAYEE_SHARE`, default off), APP detection on
-the affected episodes falls from 56.0% to 31.8%, five seeds, delta −25.3 pp
-[−47.5, −3.1] (`docs/threat-model.md` §4).
+The rule, committed before its confirmation (`1e6c2eb`): five committee seed sets,
+0 against 10 on the same rows, adopted only if the paired validation difference is
+above zero with a 95% interval clear of it. **It passed: +0.034 [+0.005, +0.063],
+better on 5 of 5.** The penalty also took the lottery out of retraining:
+unpenalised, the five sets scored 0.440-0.498 on validation - the served seeds 42-46
+were the worst draw of them - and penalised 0.506-0.514. `subsample=0.8` left the
+recipe at the same time: without a bagging frequency LightGBM ignores it, and
+removing it changed no prediction (largest difference 0.0).
 
 **`is_family` was the same artefact, and how it ended is the finding.** An earlier
 revision reported it as the #1 feature (1.29) and the core research contribution:
@@ -686,16 +679,12 @@ synthetic data is suspect until the generator models both sides of its behaviour
 (`docs/irp-framing.md` §4). **The amounts are the next instance of this**, found by
 the owner on 2026-09-20 and recorded in `docs/generator-spec.md` §2.
 
-The ONNX model reproduces the native committee's probabilities to within 2.3e-6
-on the held-out month, and every alert with them: at the model's cutoff both
-catch the same 96 frauds with the same 35 false alarms, and PR-AUC agrees to
-0.001 (0.572 against 0.573). **ROC-AUC does not agree** - 0.965 served against
-0.988 native - and the reason is arithmetic, not the model: ONNX Runtime computes
-in 32-bit floats, where 92.6% of held-out transfers score exactly 0.0 (49.4% in
-64-bit, for the reason Feature importance gives), and a tie that large at the bottom of the ranking costs ROC-AUC without
-touching a transfer anyone would review. The 0.988 quoted in this file is the
-native committee's; `experiments/layers.py` reads the served model and prints
-0.965.
+The ONNX model reproduces the native committee's probabilities to within 1.2e-7 on
+the parity rows, and every figure with them: `experiments/layers.py` reads the
+served ONNX and prints ROC-AUC 0.997 and PR-AUC 0.673, the native committee's, with
+the same 118 frauds against 68 false alarms at the cutoff. Before the L2 penalty
+they disagreed - 0.965 served against 0.988 native - because 32-bit inference tied
+92.6% of held-out transfers at exactly 0.0; bounded leaves ended that.
 
 ## Capability ablation
 
@@ -863,25 +852,25 @@ confidence interval for the mean.
 
 `metrics.json` carries a `calibration` block beside the AUCs, computed by
 `train.py` on every run. It answers a different question: not *does the model rank
-fraud above legitimate traffic* (ROC-AUC 0.988 / PR-AUC 0.573 on the realistic
+fraud above legitimate traffic* (ROC-AUC 0.997 / PR-AUC 0.673 on the realistic
 profile) but *are its probabilities usable as magnitudes*.
 
 ```
-brier               0.00107
-n_alerts            131          (>= REVIEW on the held-out slice)
-saturated_share     47.3%        rounding to 1.000
-distinct_scores     64
-median_alert_score  0.998788
+brier               0.00093
+n_alerts            186          (>= REVIEW on the held-out slice)
+saturated_share     0.0%         rounding to 1.000
+distinct_scores     161
+median_alert_score  0.481618
 ```
 
 Read `saturated_share` and `distinct_scores` together. On the baseline profile
 they read 66.9% and 33: the model separated the classes almost perfectly and
 still could not **order** an alert queue, because the alerts piled up at the top
-of the scale. On the realistic profile 131 alerts carry 64 distinct scores and
-**47.3% round to 1.000** - much coarser than the 101 among 154 of the previous
-dataset, and the sharpest reminder that rounding the amounts made this data
-easier: a queue of 131 with 64 distinct scores can be ordered, but barely. AUC is blind to this by construction - it is a
+of the scale. On the realistic profile the unpenalised committee's 131 alerts
+carried 64 distinct scores and 47.3% rounded to 1.000; with the L2 penalty 186
+alerts carry 161 distinct scores, none rounds to 1.000, and the median alert scores
+0.48 - probabilities that can order a queue. AUC is blind to this by construction - it is a
 rank statistic - and the finding surfaced only when a real work queue tried to
-sort by score (`docs/irp-framing.md` §9.1). It is a property of near-separable
+sort by score (`docs/irp-framing.md` §9.1). It was a property of near-separable
 synthetic data met by a recipe with no penalty on leaf values (Feature
 importance, above), not of gradient boosting as such.

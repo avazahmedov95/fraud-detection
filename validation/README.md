@@ -18,7 +18,7 @@ held-out slice, baseline profile, on the 20-column vector of the time):
 | no account identifiers | 0.761 | 0.563 | 0.745 |
 | amount + hour only | 0.653 | 0.272 | 0.819 |
 
-On the realistic profile the full system scores PR-AUC 0.573 (`ml/README.md`);
+On the realistic profile the full system scores PR-AUC 0.673 (`ml/README.md`);
 the stripped configurations have not been re-run there. Public transaction
 datasets carry no account identifiers, because those are what cannot be
 published:
@@ -620,8 +620,8 @@ no feature built from a P2P stream closes that gap.
 **Not an operating point.** 2% of this test slice is 17,949 alerts. The slice is the
 last fifth of the file's rows, and IBM AML's traffic is front-loaded: 97% of those
 rows fall inside two days, and a sparse tail of a few hundred runs on to ten. The
-deployed system runs at 131 alerts per 100,000 transfers, which is 0.13% - fifteen
-times fewer. These budgets exist to make two datasets comparable, not to propose a
+deployed system runs at 186 alerts per 100,000 transfers, which is 0.19% - about
+ten times fewer. These budgets exist to make two datasets comparable, not to propose a
 queue.
 
 ### Verdict under the terms

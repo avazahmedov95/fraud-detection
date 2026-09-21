@@ -217,8 +217,8 @@ def _fit_and_cut(Xtr, ytr, Xva, yva, weighted, seed):
     from sklearn.metrics import precision_recall_curve
     spw = ((ytr == 0).sum() / max(int(ytr.sum()), 1)) if weighted else 1.0
     m = lgb.LGBMClassifier(n_estimators=400, learning_rate=0.05, num_leaves=31,
-                           subsample=0.8, colsample_bytree=0.8,
-                           min_child_samples=30, scale_pos_weight=spw,
+                           colsample_bytree=0.8, min_child_samples=30,
+                           reg_lambda=10.0, scale_pos_weight=spw,
                            random_state=seed, n_jobs=-1, verbose=-1)
     m.fit(Xtr, ytr)
     pva = m.predict_proba(Xva)[:, 1]
@@ -557,8 +557,8 @@ def receiver_ablation(cache, seeds=20, boots=1000):
     def fit(M, seed):
         import lightgbm as lgb
         m = lgb.LGBMClassifier(n_estimators=400, learning_rate=0.05, num_leaves=31,
-                               subsample=0.8, colsample_bytree=0.8,
-                               min_child_samples=30, scale_pos_weight=1.0,
+                               colsample_bytree=0.8, min_child_samples=30,
+                               reg_lambda=10.0, scale_pos_weight=1.0,
                                random_state=seed, n_jobs=-1, verbose=-1)
         m.fit(M[:a], y[:a])
         return m.predict_proba(M[a:b])[:, 1], m.predict_proba(M[b:])[:, 1]

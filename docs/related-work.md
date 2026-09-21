@@ -116,8 +116,9 @@ the prevalences match, so the comparison is like for like:
 
 Those rows are the baseline profile. On the realistic profile - fraud at 0.18%,
 legitimate look-alikes, a tenth of fraud unreported -
-the committee scores 0.573 PR-AUC - on a held-out month regenerated on 2026-09-20
-with a different fraud mix, so not comparable with the 0.480 it replaced - and the
+the committee scores 0.673 PR-AUC - on a held-out month regenerated on 2026-09-20
+with a different fraud mix, and with the L2 penalty adopted on 2026-09-21, so not
+comparable with the 0.480 or the 0.573 before it - and the
 gap is open again (at a far lower fraud rate, so not directly comparable either): much of the
 old distance was a generator whose classes separated by construction.
 

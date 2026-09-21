@@ -77,7 +77,7 @@ layer**, not by averaging:
 - the CEP layer adds **deterministic regulatory must-flags** (`STRUCTURING`,
   `DAILY_LIMIT_BREACH`) that force at least REVIEW regardless of the model score
   — there for the regulation, not the score: on the current held-out month they
-  add one alert, a false one, to the model's 131 (`ml/experiments/layers.py`) —
+  add one alert, a false one, to the model's 186 (`ml/experiments/layers.py`) —
   plus per-alert **reason codes** (`rule_hits`) and a `predicted_type` tag
   explaining each alert.
 

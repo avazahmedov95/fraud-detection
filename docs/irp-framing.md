@@ -609,9 +609,10 @@ On the baseline profile every case carried `final_score = 1.000`:
 ROC-AUC 0.9992 and PR-AUC 0.9591 were correct - rank statistics, and the ranking
 was near-perfect - while the scores could not order a queue. The queue was
 re-ordered by exposure, and `train.py` now reports calibration beside the AUCs.
-On the realistic profile 47.3% of alerts now round to 1.000 - the dataset
-regenerated on 2026-09-20 is easier (`ml/README.md`, Calibration) - so score
-still cannot order the queue on its own, and exposure orders it.
+On the regenerated realistic profile 47.3% of alerts rounded to 1.000 again, until
+an L2 penalty on leaf values bounded the model on 2026-09-21: 186 alerts now carry
+161 distinct scores and none rounds to 1.000 (`ml/README.md`, Calibration). The
+queue still orders by exposure first.
 
 ### 9.2 One alert in seven was an automated adverse decision with no reason
 

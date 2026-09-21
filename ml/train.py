@@ -59,10 +59,12 @@ def class_weight(pos, neg, mode=None):
 
 
 def make_model(scale_pos_weight, random_state=42):
-    """The deployed recipe, in one place for the experiments that refit it."""
+    """The deployed recipe, in one place for the experiments that refit it. The L2
+    penalty bounds the leaf values: without it, Newton steps over vanishing second
+    derivatives reached 18,111 on this data (ml/README.md, Feature importance)."""
     return lgb.LGBMClassifier(
         n_estimators=400, learning_rate=0.05, num_leaves=31,
-        subsample=0.8, colsample_bytree=0.8, min_child_samples=30,
+        colsample_bytree=0.8, min_child_samples=30, reg_lambda=10.0,
         scale_pos_weight=scale_pos_weight, random_state=random_state,
         n_jobs=-1, verbose=-1)
 

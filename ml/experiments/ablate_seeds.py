@@ -124,7 +124,7 @@ def sweep_features(seeds):
         def fit(cols):
             m = lgb.LGBMClassifier(
                 n_estimators=400, learning_rate=0.05, num_leaves=31,
-                subsample=0.8, colsample_bytree=0.8, min_child_samples=30,
+                colsample_bytree=0.8, min_child_samples=30,
                 scale_pos_weight=(ytr == 0).sum() / max(int(ytr.sum()), 1),
                 random_state=42, n_jobs=-1, verbose=-1)
             m.fit(tr[cols].astype("float32").values, ytr)
@@ -170,7 +170,7 @@ def sweep_features(seeds):
         def fit(cols):
             m = lgb.LGBMClassifier(
                 n_estimators=400, learning_rate=0.05, num_leaves=31,
-                subsample=0.8, colsample_bytree=0.8, min_child_samples=30,
+                colsample_bytree=0.8, min_child_samples=30,
                 scale_pos_weight=(ytr == 0).sum() / max(int(ytr.sum()), 1),
                 random_state=42, n_jobs=-1, verbose=-1)
             m.fit(tr[cols].astype("float32").values, ytr)
