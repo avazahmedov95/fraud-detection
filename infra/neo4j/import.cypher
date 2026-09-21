@@ -21,16 +21,16 @@ FOR (p:Person) REQUIRE p.pinfl IS UNIQUE;
 CREATE INDEX person_card IF NOT EXISTS
 FOR (p:Person) ON (p.card);
 
-// Accounts.
+// Accounts. The CSV's is_fraud_account column is the generator's answer key, which
+// no bank holds, so it is not loaded.
 LOAD CSV WITH HEADERS FROM 'file:///persons.csv' AS row
 MERGE (p:Person {pinfl: row.pinfl})
-  SET p.card             = row.card,
-      p.network          = row.network,
-      p.full_name        = row.full_name,
-      p.bank_code        = row.bank_code,
-      p.bank_name        = row.bank_name,
-      p.region           = row.region,
-      p.is_fraud_account = (row.is_fraud_account = 'True');
+  SET p.card      = row.card,
+      p.network   = row.network,
+      p.full_name = row.full_name,
+      p.bank_code = row.bank_code,
+      p.bank_name = row.bank_name,
+      p.region    = row.region;
 
 // Sanity counts.
 MATCH (p:Person) RETURN count(p) AS persons;
