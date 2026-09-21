@@ -617,13 +617,28 @@ probability is exactly 0 or 1. On the regenerated file most transfers are
 classified with certainty early, the later trees chase the few hard cases where
 the second derivative has all but vanished, and a Newton step over a vanishing
 second derivative is enormous - nothing in `train.py`'s recipe, which sets no L2
-penalty on leaf values, holds it back. The ranking survives it (PR-AUC 0.573, the
-same alerts in 32 and 64 bits); the probabilities (Calibration, below) and these
-contributions do not. Large terms cancel: the caught fraud `explain.py` prints
-carries +4,808 from `daily_sum_ratio` against −1,110 from `log_amount`. **An L2
-penalty on leaf values is the repair**, and it changes the model and every figure
-measured on it, so it is the owner's decision - recorded here, not made in a
-clean-up.
+penalty on leaf values, holds it back. Neither the probabilities (Calibration,
+below) nor these contributions can be read as evidence, and large terms cancel:
+the caught fraud `explain.py` prints carries +4,808 from `daily_sum_ratio`
+against −1,110 from `log_amount`.
+
+**Measured the same day: the ranking does not survive it either.** The served
+recipe with only `reg_lambda` changed - the same five seeds, the same split, the
+penalty to be chosen on the validation rows and the test rows only reporting:
+
+| `reg_lambda` | validation PR-AUC | test PR-AUC | at the F1 cutoff: alerts, caught, real | largest leaf | largest mean contribution |
+|---|---|---|---|---|---|
+| 0 (served) | 0.434 | 0.573 | 131, 54.5%, 73.3% | 18,111 | 1,909 |
+| 1 | 0.510 | 0.687 | 163, 62.5%, 67.5% | 1.28 | 0.78 |
+| 10 | **0.511** | 0.673 | 186, 67.0%, 63.4% | 1.28 | 0.61 |
+
+Every fraud type is caught more often with the penalty on, no probability is
+exactly 0 or 1, and no alert rounds to 1.000. The validation rows pick 10, by a
+margin (0.001) no one should lean on - 1 and 10 are one result. It is one
+committee per setting, so a paired-seed confirmation belongs before adoption;
+the gain is several times the counters' +0.047, and its mechanism is known.
+**Not adopted yet**: it changes the model and every figure in this file, and
+that is the owner's decision.
 
 Read the order, not the numbers, and the order with care: a column can rank high
 by cancelling another.
