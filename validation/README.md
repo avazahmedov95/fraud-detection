@@ -127,6 +127,13 @@ no session timing - on the published baseline's own split (24 days / 7 days).
    0.373 on 14 columns (`git show 6ed678d`). A caveat the number does not carry:
    this is a model *fitted on PaySim*, not the served one, and the deployed rules
    still flag 6% of its fraud (§1 above).
+4. **The published split is not neutral, and every row above is read on it.**
+   PaySim draws fraud at a flat 216-320 a day, while legitimate traffic, around
+   400,000 a day on most of the first 17 days, stays under 60,000 on every day
+   after: the seven test days carry 11.4 fraud per 1,000 transfers against 1.03 in
+   the 24 training days. PR-AUC rises with the base rate, so these figures - ours
+   and the published 0.380 alike - are fair against each other, not against a
+   PR-AUC read on other data.
 
 The run also found an extractor defect: with no `receiver_card`, `payee_key`
 returned "" and every payee shared one receiver state, fabricating fan-in.
