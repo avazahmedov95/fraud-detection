@@ -212,10 +212,13 @@ the 100,000 test transfers (176 fraud):
 | top 1% | 927 | 90.3% | 17.2% |
 
 Against the unpenalised committee's menu of the same morning the penalty is ahead
-wherever the queues are the same size: 42.6% caught at 86.2% real in 87 alerts,
-where 85 had held 38.6% at 80.0%, and 90.3% against 81.8% in the top 1%. The F1
-peak moved to a longer queue, 186 alerts against 131, because it is chosen on the
-validation rows and the penalised model's peak sits further out. The two ends worth
+at the short end and the long end - 42.6% caught at 86.2% real in 87 alerts, where
+85 had held 38.6% at 80.0%, and 90.3% against 81.8% in the top 1% - and level at
+the old committee's own operating point: in 131 alerts it catches 93 of 176 at
+71.0% real, where the old one caught 96 at 73.3%, three transfers inside the noise
+of 176 fraud. The F1 peak moved to a longer queue, 186 alerts against 131, because
+it is chosen on the validation rows and the penalised model's peak sits further
+out: more fraud caught (118 against 96) for more false alarms (68 against 35). The two ends worth
 putting to an owner: the top 0.1% catches 42.6% of the fraud with 86% of alerts
 real, the F2 peak 68.8% at 58%. Nothing is adopted here: the cutoff is a decision,
 and it has not been changed.
