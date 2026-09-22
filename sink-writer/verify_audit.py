@@ -19,7 +19,7 @@ def _fetch(limit):
     import urllib.parse
     import urllib.request
     # Ordered by seq: the order the chain was built, not ClickHouse storage order.
-    tail = f"WHERE seq >= (SELECT max(seq) - {limit} FROM {CH_DB}.audit_log)" if limit else ""
+    tail = f"WHERE seq > (SELECT max(seq) - {limit} FROM {CH_DB}.audit_log)" if limit else ""
     query = (f"SELECT seq, prev_hash, record_hash, ingress_hash, payload, "
              f"decision, transaction_id "
              f"FROM {CH_DB}.audit_log {tail} ORDER BY seq FORMAT JSONEachRow")
@@ -34,10 +34,13 @@ def _fetch(limit):
     return [json.loads(line) for line in body.strip().splitlines() if line]
 
 
-def verify(records):
-    """Return a list of findings; empty means the log is intact."""
+def verify(records, window=False):
+    """Return a list of findings; empty means the log is intact. A `window` - the
+    most recent records only - starts from its first record's prev_hash, a link
+    only the record before the window could confirm; the whole log starts from
+    genesis, so a deleted head is caught."""
     findings = []
-    prev_hash = integrity.GENESIS
+    prev_hash = records[0]["prev_hash"] if window and records else integrity.GENESIS
     expected_seq = None
 
     for r in records:
@@ -87,10 +90,12 @@ def main():
         print("audit log is empty - nothing to verify.")
         return
 
-    findings = verify(records)
+    findings = verify(records, window=args.limit is not None)
     n = len(records)
     print(f"verified {n:,} audit records "
-          f"(seq {records[0]['seq']}..{records[-1]['seq']})\n")
+          f"(seq {records[0]['seq']}..{records[-1]['seq']})"
+          + (", the most recent only: the link into the first is not checked"
+             if args.limit is not None else "") + "\n")
 
     if not findings:
         print(f"INTACT - chain continuous, no gaps, projections consistent.")

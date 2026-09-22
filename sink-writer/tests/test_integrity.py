@@ -120,6 +120,15 @@ def test_edited_flat_column_is_caught():
     assert any("disagrees with payload" in f for f in findings)
 
 
+def test_a_window_starts_from_its_own_first_link():
+    """--limit reads the most recent records, whose first links to a record outside
+    the window: judged against genesis, every intact log read as tampered. The
+    whole log must still start at genesis, or deleting its head goes unseen."""
+    chain = _build_chain(_events(10))
+    assert verify(chain[4:], window=True) == []
+    assert verify(chain[4:])
+
+
 def test_missing_ingress_hash_still_chains():
     """A pre-integrity producer sends no ingress_hash; the chain still verifies."""
     events = [dict(EVENT, transaction_id=f"tx-{i}", decision="ALLOW")
