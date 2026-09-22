@@ -8,6 +8,10 @@
 COMPOSE = docker compose
 GEN_DIR = data-generator
 
+# Credentials and ports: .env, copied from .env.example on each machine.
+-include .env
+export
+
 .PHONY: help up down clean ps logs topics generate produce produce-stream no-active-job fresh-taskmanager produce-stream-docker load-graph serve-prep submit-job resume-job sink-logs latency query-scored
 
 help: ## show this help
@@ -50,7 +54,7 @@ produce-stream-docker: ## paced replay from INSIDE the network - required for la
 	    --bootstrap kafka:9092 --topic transactions.raw $(if $(COUNT),--limit $(COUNT),)
 
 load-graph: ## load the account population into Neo4j
-	$(COMPOSE) exec -T neo4j cypher-shell -u neo4j -p $${NEO4J_PASSWORD:-fraud_neo4j} < infra/neo4j/import.cypher
+	$(COMPOSE) exec -T neo4j cypher-shell -u neo4j -p $${NEO4J_PASSWORD} < infra/neo4j/import.cypher
 
 serve-prep: ## copy the trained ONNX model and its cutoff next to the Flink job
 	cp ml/models/model.onnx ml/models/thresholds.json stream-processor/
@@ -113,6 +117,6 @@ verify-audit: ## recompute the audit hash chain and report any tampering
 	cd sink-writer && python verify_audit.py
 
 query-scored: ## quick ClickHouse check: decision counts in transactions_scored
-	$(COMPOSE) exec clickhouse clickhouse-client -u $${CLICKHOUSE_USER:-fraud} \
-	  --password $${CLICKHOUSE_PASSWORD:-fraud_ch} -q \
+	$(COMPOSE) exec clickhouse clickhouse-client -u $${CLICKHOUSE_USER} \
+	  --password $${CLICKHOUSE_PASSWORD} -q \
 	  "SELECT decision, count() FROM fraud.transactions_scored GROUP BY decision ORDER BY decision"

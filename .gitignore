@@ -12,6 +12,9 @@ validation/*.csv
 validation/*_Patterns.txt
 validation/*.npz
 
+# Local settings and passwords: copied from .env.example on each machine.
+.env
+
 # Python
 __pycache__/
 *.pyc

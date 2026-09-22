@@ -13,7 +13,7 @@ and the UzCard / HUMO networks.
 ```
 fraud-detection/
 ├── docker-compose.yml      full local stack
-├── .env                    image versions, ports, dev credentials
+├── .env.example            image versions, ports; copy to .env and set the passwords
 ├── Makefile                make up / generate / produce / load-graph ...
 ├── run.ps1                 the experiment driver: every measured run starts here
 │
@@ -106,6 +106,9 @@ next one *expects*. It found three warehouse columns that were constant zero.
 ## Quickstart
 
 ```bash
+# 0. local settings: copy the template, then set your own passwords in .env
+cp .env.example .env
+
 # 1. bring the stack up (first run builds the Flink image — a few minutes)
 make up
 make ps
@@ -157,6 +160,7 @@ metrics are design targets on synthetic data, not validated production findings.
 
 ## Notes on image tags
 
-All image versions are pinned in `.env`. If a tag is unavailable in your
-registry, bump it there — nothing else needs to change. Neo4j is the Community
+All image versions are pinned in `.env.example`, which `.env` is copied from. If
+a tag is unavailable in your registry, bump it in both — nothing else needs to
+change. Neo4j is the Community
 Edition; APOC downloads on first boot, so the first `make up` needs internet.

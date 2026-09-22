@@ -86,10 +86,18 @@ function Get-DotEnv {
     return $vars
 }
 
+if (-not (Test-Path ".env")) {
+    Write-Host ".env is missing: copy .env.example to .env and set the passwords in it" -ForegroundColor Red
+    exit 1
+}
 $DotEnv = Get-DotEnv
-$Neo4jPassword = if ($DotEnv.NEO4J_PASSWORD) { $DotEnv.NEO4J_PASSWORD } else { "fraud_neo4j" }
-$ChUser = if ($DotEnv.CLICKHOUSE_USER) { $DotEnv.CLICKHOUSE_USER } else { "fraud" }
-$ChPassword = if ($DotEnv.CLICKHOUSE_PASSWORD) { $DotEnv.CLICKHOUSE_PASSWORD } else { "fraud_ch" }
+# The host-side scripts (experiments/, verify_audit.py) read the same credentials.
+foreach ($k in "NEO4J_PASSWORD", "CLICKHOUSE_USER", "CLICKHOUSE_PASSWORD", "CLICKHOUSE_DB") {
+    if ($DotEnv[$k] -and -not (Test-Path "env:$k")) { Set-Item "env:$k" $DotEnv[$k] }
+}
+$Neo4jPassword = $DotEnv.NEO4J_PASSWORD
+$ChUser = $DotEnv.CLICKHOUSE_USER
+$ChPassword = $DotEnv.CLICKHOUSE_PASSWORD
 
 # Built once so every producer target speaks the same churn setting; an arm
 # where only one side reconnects would compare two different experiments.
