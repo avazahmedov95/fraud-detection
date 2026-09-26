@@ -48,13 +48,21 @@ class Event(NamedTuple):
     typology: str = ""
 
 
-def replay(events, total=None):
+def replay(events, total=None, vectors=False):
     """Run the deployed rule engine over translated events, in stream order.
     Receiver state is keyed by `receiver_pinfl`, the identifier these datasets
-    carry. `total` prints progress on stderr, keeping a redirected report clean."""
+    carry. `total` prints progress on stderr, keeping a redirected report clean.
+    `vectors` returns the model's feature matrix as well, so comparing the layers
+    costs one pass over the file rather than two."""
     senders, receivers = defaultdict(SenderState), defaultdict(ReceiverState)
     rows, hits_by_class = [], defaultdict(Counter)
     checked, started = False, time.time()
+    X = None
+    if vectors:
+        import numpy as np
+        if not total:
+            raise ValueError("vectors needs `total`: the matrix is allocated once")
+        X = np.zeros((total, len(F.FEATURE_NAMES)), dtype="float32")
 
     for n, e in enumerate(events, 1):
         if not checked:
@@ -66,7 +74,11 @@ def replay(events, total=None):
                        e.ts, receivers[e.ev["receiver_pinfl"]],
                        sender_inbound_ts=(paid_sender.last_inbound_ts
                                           if paid_sender else None))
-        rows.append((e.label, res["cep_score"], res["decision"], e.typology))
+        rows.append((e.label, res["cep_score"], res["decision"],
+                     any(r in C.MANDATORY_REVIEW_RULES for r in res["rule_hits"]),
+                     e.typology))
+        if vectors:
+            X[n - 1] = res["features"]
         for hit in res["rule_hits"]:
             hits_by_class["fraud" if e.label else "legit"][hit] += 1
         if n % PROGRESS_EVERY == 0:
@@ -74,9 +86,48 @@ def replay(events, total=None):
     if total:
         _progress(n, total, started, final=True)
 
-    return (pd.DataFrame(rows,
-                         columns=["label", "cep_score", "decision", "typology"]),
-            hits_by_class)
+    frame = pd.DataFrame(rows, columns=["label", "cep_score", "decision",
+                                        "mandatory", "typology"])
+    return (frame, hits_by_class, X[:n]) if vectors else (frame, hits_by_class)
+
+
+def fit_and_cut(Xtr, ytr, Xva, yva, weighted=False, seed=0):
+    """One fit of train.py's recipe, with the cut that maximises F1 on validation.
+    The recipe lives here once, for every adapter mode that fits a model."""
+    import numpy as np
+    import lightgbm as lgb
+    from sklearn.metrics import precision_recall_curve
+    spw = ((ytr == 0).sum() / max(int(ytr.sum()), 1)) if weighted else 1.0
+    m = lgb.LGBMClassifier(n_estimators=400, learning_rate=0.05, num_leaves=31,
+                           colsample_bytree=0.8, min_child_samples=30,
+                           reg_lambda=10.0, scale_pos_weight=spw,
+                           random_state=seed, n_jobs=-1, verbose=-1)
+    m.fit(Xtr, ytr)
+    pva = m.predict_proba(Xva)[:, 1]
+    prec, rec, thr = precision_recall_curve(yva, pva)
+    f1s = 2 * prec[:-1] * rec[:-1] / np.maximum(prec[:-1] + rec[:-1], 1e-12)
+    return m, (float(thr[int(np.argmax(f1s))]) if len(thr) else 0.5)
+
+
+def section_layers(y, rules, mandatory, proba, cut, positive="fraud", width=70):
+    """The rules alone, the model alone and the deployed decision - one set of rows,
+    so the three are comparable. The deployed decision is the model's, raised to
+    REVIEW by a mandatory rule (fusion.decide)."""
+    import numpy as np
+    y = np.asarray(y).astype("int8")
+    model = np.asarray(proba) >= cut
+    _head(f"THE THREE LAYERS, ON THE SAME {len(y):,} ROWS", width)
+    print(f"  {'layer':<24}{'alerts':>11}{'caught':>9}{'precision':>11}{'recall':>9}")
+    pos, counted = max(int(y.sum()), 1), []
+    for name, flag in (("CEP rules only", np.asarray(rules, dtype=bool)),
+                       (f"model at {cut:.4f}", model),
+                       ("deployed decision",
+                        model | np.asarray(mandatory, dtype=bool))):
+        n, tp = int(flag.sum()), int((flag & (y == 1)).sum())
+        counted.append((name, n, tp))
+        print(f"  {name:<24}{n:>11,}{tp:>9,}{tp / max(n, 1):>10.1%}{tp / pos:>9.1%}")
+    print(f"\n  {pos:,} {positive} rows in this slice.")
+    return counted
 
 
 def capability_profile(*off, payee_identity="pinfl"):

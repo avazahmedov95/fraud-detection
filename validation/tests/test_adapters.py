@@ -434,3 +434,11 @@ def test_a_cache_from_another_feature_set_is_refused(tmp_path):
             IB.our_model(str(cache), seeds=1)
     finally:
         CAP.MODES.clear(); CAP.MODES.update(saved)
+
+
+def test_the_deployed_layer_can_only_add_to_the_model():
+    """The three layers are counted on one set of rows, and the deployed decision is
+    the model's raised by a mandatory rule - it can add an alert, never remove one."""
+    rows = RP.section_layers([0, 1, 0, 1, 0], [1, 0, 1, 0, 0], [0, 0, 1, 0, 0],
+                             [0.9, 0.9, 0.1, 0.2, 0.1], 0.5)
+    assert [(n, c) for _, n, c in rows] == [(2, 0), (2, 1), (3, 1)]

@@ -209,29 +209,11 @@ def _ci95(xs):
     return float(stats.t.ppf(0.975, n - 1) * sd / math.sqrt(n))
 
 
-def _fit_and_cut(Xtr, ytr, Xva, yva, weighted, seed):
-    """One fit of train.py's recipe, with the cut that maximises F1 on validation.
-    The recipe lives here once, for every mode that needs a fitted model."""
-    import numpy as np
-    import lightgbm as lgb
-    from sklearn.metrics import precision_recall_curve
-    spw = ((ytr == 0).sum() / max(int(ytr.sum()), 1)) if weighted else 1.0
-    m = lgb.LGBMClassifier(n_estimators=400, learning_rate=0.05, num_leaves=31,
-                           colsample_bytree=0.8, min_child_samples=30,
-                           reg_lambda=10.0, scale_pos_weight=spw,
-                           random_state=seed, n_jobs=-1, verbose=-1)
-    m.fit(Xtr, ytr)
-    pva = m.predict_proba(Xva)[:, 1]
-    prec, rec, thr = precision_recall_curve(yva, pva)
-    f1s = 2 * prec[:-1] * rec[:-1] / np.maximum(prec[:-1] + rec[:-1], 1e-12)
-    return m, (float(thr[int(np.argmax(f1s))]) if len(thr) else 0.5)
-
-
 def _fit_score(Xtr, ytr, Xva, yva, Xte, yte, weighted, seed):
     """Test metrics at that cut, with F1 at 0.5 beside it since the paper does not
     state its rule."""
     from sklearn.metrics import (average_precision_score, f1_score, roc_auc_score)
-    m, t = _fit_and_cut(Xtr, ytr, Xva, yva, weighted, seed)
+    m, t = RP.fit_and_cut(Xtr, ytr, Xva, yva, weighted, seed)
     pte = m.predict_proba(Xte)[:, 1]
     return {"f1_tuned": 100 * f1_score(yte, pte >= t, zero_division=0),
             "f1_05": 100 * f1_score(yte, pte >= 0.5, zero_division=0),
@@ -324,6 +306,39 @@ def our_model(cache, seeds=3):
     return results
 
 
+def layers(path, cache, store, formats=None, limit=None, seed=0):
+    """Rules alone, model alone and the deployed decision, on the same test rows.
+    The replay costs hours and the fit minutes, so the per-row verdict is cached
+    beside the feature matrix and checked against it row for row."""
+    import numpy as np
+    z = _open_cache(cache)
+    X, y = z["X"], z["y"].astype("int8")
+    if os.path.exists(store):
+        with np.load(store, allow_pickle=False) as s:
+            rules, mand, lab = s["rules"], s["mandatory"], s["label"]
+        print(f"rule verdicts read from {store}")
+    else:
+        d, n_all, n_self = load(path, formats, limit)
+        print(f"{len(d):,} transactions ({n_self:,} self-transfers dropped), "
+              f"{int(d.label.sum()):,} laundering")
+        res, _ = RP.replay(to_events(d, _scales(d)), total=len(d))
+        rules = (res.decision.values == "REVIEW")
+        mand, lab = res.mandatory.values, res.label.values.astype("int8")
+        np.savez_compressed(store, rules=rules, mandatory=mand, label=lab)
+        print(f"rule verdicts cached in {store}")
+    if len(lab) != len(y) or not np.array_equal(lab.astype("int8"), y):
+        raise SystemExit(f"{store} and {cache} are not the same rows in the same "
+                         f"order - rebuild both from one file")
+    n = len(y)
+    a, b = int(n * 0.6), int(n * 0.8)
+    m, t = RP.fit_and_cut(X[:a], y[:a], X[a:b], y[a:b], False, seed)
+    p = m.predict_proba(X[b:])[:, 1]
+    print(f"\nsplit by time 60/20/20, as the published table uses: fitted on "
+          f"{a:,} rows, cut chosen on {b - a:,}\n")
+    RP.section_layers(y[b:], rules[b:], mand[b:], p, t,
+                      positive="laundering", width=72)
+
+
 def typology_recall(path, patterns, cache, seeds=3):
     """Recall per laundering typology, for the recipe fitted on this file.
 
@@ -362,7 +377,7 @@ def typology_recall(path, patterns, cache, seeds=3):
     flags = []
     for seed in range(seeds):
         # Unweighted: train.py's rule below 0.5% fraud, and this file is at 0.102%.
-        m, t = _fit_and_cut(X[:a], y[:a], X[a:b], y[a:b], False, seed)
+        m, t = RP.fit_and_cut(X[:a], y[:a], X[a:b], y[a:b], False, seed)
         f = m.predict_proba(X[b:])[:, 1] >= t
         flags.append(f)
         print(f"  seed {seed}: cut {t:.4f} from validation, {int(f.sum()):,} alerts, "
@@ -495,7 +510,7 @@ def alert_budgets(cache, seeds=5, path=None, patterns=None, individuals=False):
           f"({yte.mean():.3%}); {seeds} seeds, unweighted")
     for label, M in (("this project, all it can compute", X),
                      ("+ the file's own format and currency", np.hstack([X, own]))):
-        runs = [_fit_and_cut(M[:a], y[:a], M[a:b], y[a:b], False, seed)[0]
+        runs = [RP.fit_and_cut(M[:a], y[:a], M[a:b], y[a:b], False, seed)[0]
                 .predict_proba(M[b:])[:, 1] for seed in range(seeds)]
         for view, sel in views:
             fraud = (yte == 1) & sel
@@ -655,6 +670,12 @@ def main():
                          "neither side looks like a hub")
     ap.add_argument("--boots", type=int, default=1000,
                     help="bootstrap resamples for --receiver-ablation")
+    ap.add_argument("--layers", action="store_true",
+                    help="the rules alone, the model alone and the deployed "
+                         "decision, on the same test rows")
+    ap.add_argument("--layers-cache", dest="layers_cache",
+                    default="ibm_layers.npz",
+                    help="where the replay's per-row verdict is kept")
     args = ap.parse_args()
 
     if not os.path.exists(args.file):
@@ -679,6 +700,12 @@ def main():
             raise SystemExit(f"{args.cache} not found - run --extract-only first")
         return alert_budgets(args.cache, args.seeds, args.file, args.patterns,
                              args.individuals)
+    if args.layers:
+        if not os.path.exists(args.cache):
+            raise SystemExit(f"{args.cache} not found - run --extract-only first")
+        formats = ([f.strip() for f in args.formats.split(",")]
+                   if args.formats else None)
+        return layers(args.file, args.cache, args.layers_cache, formats, args.limit)
     if args.typology_recall:
         if not os.path.exists(args.cache):
             raise SystemExit(f"{args.cache} not found - run --extract-only first")

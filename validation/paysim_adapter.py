@@ -43,6 +43,47 @@ def run(path, txn_types, limit):
     return RP.replay(to_events(df, scale), total=len(df))
 
 
+def layers(path, txn_types, limit, store, seed=42):
+    """Rules alone, model alone and the deployed decision, on the same rows. One
+    pass gives both the rule verdict and the model's vector; the published split
+    trains the model, and the last fifth of the training days picks its cut."""
+    import numpy as np
+    if os.path.exists(store):
+        with np.load(store, allow_pickle=False) as s:
+            X, y, step = s["X"], s["y"], s["step"]
+            rules, mand = s["rules"], s["mandatory"]
+        print(f"the pass over the file was read from {store}")
+    else:
+        df = pd.read_csv(path)
+        if txn_types:
+            df = df[df.type.isin(txn_types)]
+        if limit:
+            df = df.head(limit)
+        df = df.sort_values("step", kind="stable").reset_index(drop=True)
+        print(f"{len(df):,} PaySim rows, types {sorted(df.type.unique())}, "
+              f"{int(df.isFraud.sum()):,} fraud")
+        res, _, X = RP.replay(to_events(df, scale_factor(df.amount)),
+                              total=len(df), vectors=True)
+        X = X[:, RP.available_features()[0]]
+        y, step = df.isFraud.values.astype("int8"), df.step.values
+        rules, mand = (res.decision.values == "REVIEW"), res.mandatory.values
+        np.savez_compressed(store, X=X, y=y, step=step, rules=rules, mandatory=mand)
+        print(f"the pass over the file was cached in {store}")
+
+    tr = step <= BASELINE["cut_step"]
+    if not (~tr).any():
+        raise SystemExit(f"no rows past step {BASELINE['cut_step']} - run without "
+                         f"--limit")
+    fit = int(tr.sum() * 0.8)
+    m, t = RP.fit_and_cut(X[tr][:fit], y[tr][:fit], X[tr][fit:], y[tr][fit:],
+                          seed=seed)
+    p = m.predict_proba(X[~tr])[:, 1]
+    print(f"\npublished split: fitted on {fit:,} rows, cut chosen on the "
+          f"{int(tr.sum()) - fit:,} after them\n")
+    RP.section_layers(y[~tr], rules[~tr], mand[~tr], p, t,
+                      positive="fraud", width=70)
+
+
 def report(res, hits):
     RP.section_lift(res, hits, positive="fraud", width=70)
     print()
@@ -228,6 +269,12 @@ def main():
                          "on the published baseline's split - and again without "
                          "the receiver-side features, to see whether the "
                          "largest finding reproduces on foreign data")
+    ap.add_argument("--layers", action="store_true",
+                    help="the rules alone, the model alone and the deployed "
+                         "decision, on the same rows")
+    ap.add_argument("--layers-cache", dest="layers_cache",
+                    default="paysim_layers.npz",
+                    help="where the pass over the file is kept")
     ap.add_argument("--baseline", action="store_true",
                     help="retrain the published PaySim baseline instead of "
                          "replaying the rules - verifies the AUPRC 0.380 that "
@@ -242,6 +289,10 @@ def main():
         # than defaulted, so no feature is computed from a fabricated value.
         RP.capability_profile("myid_kinship", "geo_telemetry", "session_telemetry")
         return our_model(args.file, args.limit)
+    if args.layers:
+        RP.capability_profile("myid_kinship", "geo_telemetry", "session_telemetry")
+        return layers(args.file, [t.strip() for t in args.types.split(",") if t.strip()],
+                      args.limit, args.layers_cache)
     if args.baseline:
         return baseline(args.file)
 
