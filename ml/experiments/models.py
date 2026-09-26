@@ -82,10 +82,11 @@ def _subsample(yfit, legit_rows, seed=42):
     return np.concatenate([np.flatnonzero(yfit == 1), keep])
 
 
-def _extra(yfit):
+def _extra(yfit, tabpfn_model=None):
     """XGBoost and TabPFN, when the environment has them. Neither is a dependency
     of this project: they live in an environment of their own, and a run without
-    them prints the same table two rows shorter."""
+    them prints the same table two rows shorter. TabPFN's weights are a gated
+    download, so `tabpfn_model` points at a checkpoint fetched by hand."""
     out = []
     try:
         from xgboost import XGBClassifier
@@ -98,7 +99,9 @@ def _extra(yfit):
     try:
         from tabpfn import TabPFNClassifier
         rows = _subsample(yfit, TABPFN_ROWS - int(yfit.sum()))
-        out.append((f"TabPFN, {len(rows):,} rows", _scaled(TabPFNClassifier()), rows, True))
+        model = (TabPFNClassifier(model_path=tabpfn_model) if tabpfn_model
+                 else TabPFNClassifier())
+        out.append((f"TabPFN, {len(rows):,} rows", _scaled(model), rows, True))
     except ImportError:
         print("  (tabpfn not installed here - skipped)")
     except Exception as exc:                           # noqa: BLE001
@@ -147,7 +150,7 @@ def _committee_score(members, X):
     return expit(np.mean([m.predict(X, raw_score=True) for m in members], axis=0))
 
 
-def run(cache, rbf_rows=RBF_ROWS):
+def run(cache, rbf_rows=RBF_ROWS, tabpfn_model=None):
     X, y = _load(cache)
     n = len(y)
     cut, fit = T.cut_index(n), int(T.cut_index(n) * T.FIT_SHARE)
@@ -174,7 +177,7 @@ def run(cache, rbf_rows=RBF_ROWS):
                                                                random_state=42)), None, False),
         ("sklearn boosting", HistGradientBoostingClassifier(max_iter=400, learning_rate=0.05,
                                                             random_state=42), None, False),
-    ] + _extra(yfit)
+    ] + _extra(yfit, tabpfn_model)
 
     print(f"{'model':<30}{'PR-AUC':>9}{'ROC-AUC':>9}{'caught':>9}{'real':>8}"
           f"{'alerts':>9}{'fit s':>8}{'ms/1k':>8}")
@@ -275,13 +278,17 @@ def main():
     ap.add_argument("--cache", help="npz of the deployed matrix (X, y, names)")
     ap.add_argument("--rbf-rows", dest="rbf_rows", type=int, default=RBF_ROWS,
                     help="legitimate rows the RBF kernel is fitted on")
+    ap.add_argument("--tabpfn-model", dest="tabpfn_model", default=None,
+                    help="a TabPFN checkpoint downloaded by hand; its weights are "
+                         "gated, so the file is fetched from the vendor's page "
+                         "and passed in here")
     ap.add_argument("--paired", action="store_true",
                     help="the forest against the served recipe, five paired fits")
     ap.add_argument("--sets", type=int, default=5, help="how many pairs")
     args = ap.parse_args()
     if args.paired:
         return paired(args.cache, args.sets)
-    run(args.cache, args.rbf_rows)
+    run(args.cache, args.rbf_rows, args.tabpfn_model)
 
 
 if __name__ == "__main__":
