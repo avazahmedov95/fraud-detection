@@ -46,6 +46,8 @@ fraud-detection/
 │   └── boundary_audit.py   what one component produces vs what the next expects
 ├── demo/                   one page to show it working: stream, replayed episodes, queue
 └── docs/                   the evidence base — read irp-framing.md first
+    └── pipeline_diagram.png   every component and the measured cost of each
+                               stage (tools/pipeline_diagram.py redraws it)
 ```
 
 ## Where the results live
