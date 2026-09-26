@@ -161,6 +161,16 @@ The rule said to build them into the stream next. The cutoff menu below found th
 IBM AML gain confined to the top of the list, and a third question, fixed before
 its run, stopped the build; PaySim, asked last, restarted it for a strict cutoff.
 
+### The three layers, and the same reading on foreign data
+
+`experiments/layers.py` reads the rules alone, the model alone and the deployed
+decision on the held-out month: 25 of 176 fraud at 1.1% precision, 118 at 63.4%,
+and 118 at 63.1% - the mandatory rules add one alert, a false one. The adapters'
+`--layers` mode is the same reading on PaySim and on IBM AML
+(`validation/README.md` 1 and 4), and IBM is where it says something this file
+cannot: there the same mandatory rules raise 165,282 of 897,427 rows, because a
+retail daily limit means nothing to a company's account.
+
 ### The alert cutoff: a menu, not a verdict
 
 `experiments/thresholds.py`: the committee's test rows at cutoffs chosen on the

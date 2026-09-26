@@ -135,6 +135,32 @@ no session timing - on the published baseline's own split (24 days / 7 days).
    and the published 0.380 alike - are fair against each other, not against a
    PR-AUC read on other data.
 
+### The three layers on one slice, 2026-09-26 (`--layers`)
+
+```bash
+python paysim_adapter.py --file PS_20174392719_1491204439457_log.csv --layers
+```
+
+The rules alone, the model alone and the deployed decision, on the same rows -
+what `ml/experiments/layers.py` reads on this project's own data. TRANSFER rows
+only, the P2P analogue the rules were written for: the model is fitted on the
+published split's training days, with the last fifth of them choosing its cut, and
+every layer is read on the 15,474 rows after step 576.
+
+| layer | alerts | caught | precision | recall |
+|---|---|---|---|---|
+| CEP rules only | 211 | 77 | 36.5% | 8.4% |
+| model at 0.2578 | 394 | 252 | 64.0% | 27.4% |
+| deployed decision | 394 | 252 | 64.0% | 27.4% |
+
+1. **The deployed decision is the model's, exactly**: neither mandatory rule fires
+   here. A PaySim sender rarely returns, so nothing clusters under a threshold, and
+   the scaled amounts sit far below a daily limit.
+2. **The rules' precision is not comparable across datasets**: this slice runs at
+   5.9% fraud, where this project's own held-out month and IBM's test slice both sit
+   at 0.18%. PaySim's legitimate volume collapses in the last week (section 2, item
+   4), and precision rises with prevalence whatever the detector does.
+
 The run also found an extractor defect: with no `receiver_card`, `payee_key`
 returned "" and every payee shared one receiver state, fabricating fan-in.
 `features.py` now warns, and the harness refuses such a stream
@@ -572,6 +598,36 @@ and three of them still sit below the 14-column historical table above. The
 laundering the sidecar does not name stays invisible (1.7%): with no relation to
 see, a relational model sees nothing. The ranges are a few points wide, where the
 morning's ran to thirty.
+
+### The three layers on one slice, 2026-09-26 (`--layers`)
+
+```bash
+python ibm_aml_adapter.py --file HI-Small_Trans.csv --cache ibm_features21.npz --layers
+```
+
+On the published 60/20/20 split: the model is fitted on the first 2,692,279 rows,
+its cut chosen on the next 897,427, and all three layers read on the last 897,427,
+which carry 1,653 laundering. The replay's per-row verdict is cached in
+`ibm_layers.npz` and checked against the feature matrix row for row.
+
+| layer | alerts | caught | precision | recall |
+|---|---|---|---|---|
+| CEP rules only | 181,932 | 579 | 0.3% | 35.0% |
+| model at 0.0894 | **926** | **733** | **79.2%** | 44.3% |
+| deployed decision | 165,282 | 909 | 0.5% | 55.0% |
+
+**The deployed decision is far worse than the model alone here, and the reason is
+the point.** The mandatory path - `STRUCTURING` and `DAILY_LIMIT_BREACH` raise a
+transfer to REVIEW whatever the model says, because the regulation requires it -
+fires on 165,282 of 897,427 rows. On this project's own data those two rules add
+**one** alert to the model's 186. IBM's accounts are companies and banks paying
+many counterparties a day, in currencies the thresholds were never set for, so a
+retail daily limit is breached as a matter of course. The file-level replay says
+the same thing from the other side: the rules flag 22.18% of legitimate traffic
+(section A above).
+
+That is the strongest argument this project has for setting rule limits per
+customer type rather than per system, which is where the mentor's step 3 points.
 
 ### Re-run 2026-09-21 (`--budgets`): recall at a fixed alert budget
 
