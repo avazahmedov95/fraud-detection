@@ -152,12 +152,65 @@ def run(cache, rbf_rows=RBF_ROWS):
           "paired\nfits, then the decision (ml/README.md).")
 
 
+def paired(cache, sets=5):
+    """The forest against the served recipe, five times over, on the same rows.
+
+    One table row cannot separate models four thousandths apart, so this repeats
+    the pair with a different seed each time and reads the difference within each
+    pair - the rule every capability in this project went through. Measured on the
+    cutoff rows, never on the held-out slice: a decision read there is a decision
+    taken on the test set."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from ablate_seeds import ci95
+
+    X, y = _load(cache)
+    n = len(y)
+    cut, fit = T.cut_index(n), int(T.cut_index(n) * T.FIT_SHARE)
+    Xfit, yfit, Xva, yva = X[:fit], y[:fit], X[fit:cut], y[fit:cut]
+    spw = T.class_weight(int(yfit.sum()), int((yfit == 0).sum()))
+    print(f"{sets} pairs on the same {fit:,} rows; read on the {cut - fit:,} cutoff "
+          f"rows ({int(yva.sum())} fraud)\n")
+    print(f"{'pair':<8}{'committee':>12}{'forest':>10}{'difference':>13}")
+
+    diffs = []
+    for k in range(sets):
+        base = 42 + 5 * k
+        members = [T.make_model(spw, random_state=s).fit(Xfit, yfit)
+                   for s in range(base, base + 5)]
+        committee = average_precision_score(yva, _committee_score(members, Xva))
+        rf = make_pipeline(SimpleImputer(strategy="median"),
+                           RandomForestClassifier(n_estimators=300, n_jobs=-1,
+                                                  min_samples_leaf=5, random_state=base))
+        rf.fit(Xfit, yfit)
+        forest = average_precision_score(yva, rf.predict_proba(Xva)[:, 1])
+        diffs.append(forest - committee)
+        print(f"seeds {base:<3}{committee:>12.4f}{forest:>10.4f}{diffs[-1]:>+13.4f}",
+              flush=True)
+
+    mean = sum(diffs) / len(diffs)
+    half = ci95(diffs)
+    better = sum(1 for d in diffs if d > 0)
+    print(f"\npaired difference, forest minus committee: {mean:+.4f} "
+          f"[{mean - half:+.4f}, {mean + half:+.4f}], forest ahead on {better} of {sets}")
+    if abs(mean) <= half:
+        print("The interval spans zero: on this data the two are not distinguishable.")
+    else:
+        print("The interval clears zero: the difference is real at this sample size.")
+    print("Either way nothing changes here - a swap would be its own decision, with "
+          "its rule\nwritten down before the run.")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--cache", help="npz of the deployed matrix (X, y, names)")
     ap.add_argument("--rbf-rows", dest="rbf_rows", type=int, default=RBF_ROWS,
                     help="legitimate rows the RBF kernel is fitted on")
+    ap.add_argument("--paired", action="store_true",
+                    help="the forest against the served recipe, five paired fits")
+    ap.add_argument("--sets", type=int, default=5, help="how many pairs")
     args = ap.parse_args()
+    if args.paired:
+        return paired(args.cache, args.sets)
     run(args.cache, args.rbf_rows)
 
 

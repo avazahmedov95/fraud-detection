@@ -744,6 +744,19 @@ cost.
    have. They would go in an environment of their own; the script skips a model it
    cannot import.
 
+**The forest, measured the way this project measures** (`--paired`, 2026-09-26):
+five paired fits on the same rows, a different seed each time, read on the cutoff
+rows. The forest is ahead by **+0.0061 PR-AUC [+0.0019, +0.0103], on 5 of 5
+pairs** - the interval clears zero, so the difference is real at this sample size,
+and it is six thousandths of PR-AUC against the 3.4 points of recall the committee
+held at its own cutoff in the table above. Ranking and the operating point are
+different questions.
+
+A swap would also cost the explanation path: the case view reads the LightGBM
+booster's own tree contributions (`case-manager/explain.py`), which a forest does
+not provide in that form, and the served artefact is an ONNX export of one merged
+booster.
+
 **Nothing is adopted.** The served model, its cutoff and the running job are
 untouched by this file: it reads the same matrix and prints a table.
 
