@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_fraud" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:collaboration id="Collaboration_1">
+    <bpmn:participant id="Participant_1" name="Real-time fraud detection" processRef="Process_1" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_1" isExecutable="false">
+    <bpmn:laneSet id="LaneSet_1">
+      <bpmn:lane id="Lane_channel" name="Channel">
+        <bpmn:flowNodeRef>Start_1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_publish</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_engine" name="Streaming engine (Apache Flink)">
+        <bpmn:flowNodeRef>Task_decode</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_features</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_rules</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_model</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_1</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_services" name="Sink writer and case manager">
+        <bpmn:flowNodeRef>Task_record</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_allowed</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_graph</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_case</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_analyst" name="Analyst">
+        <bpmn:flowNodeRef>Task_verdict</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_case</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="Start_1" name="Transfer confirmed">
+      <bpmn:outgoing>Flow_start</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="Task_publish" name="Publish to transactions.raw">
+      <bpmn:incoming>Flow_start</bpmn:incoming>
+      <bpmn:outgoing>Flow_publish</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Task_decode" name="Decode the record">
+      <bpmn:incoming>Flow_publish</bpmn:incoming>
+      <bpmn:outgoing>Flow_decode</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Task_features" name="Build the 21 features">
+      <bpmn:incoming>Flow_decode</bpmn:incoming>
+      <bpmn:outgoing>Flow_features</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Task_rules" name="Run the 10 hard rules">
+      <bpmn:incoming>Flow_features</bpmn:incoming>
+      <bpmn:outgoing>Flow_rules</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Task_model" name="Score with the model">
+      <bpmn:incoming>Flow_rules</bpmn:incoming>
+      <bpmn:outgoing>Flow_model</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="Gateway_1" name="Above the cut-off, or a mandatory rule?">
+      <bpmn:incoming>Flow_model</bpmn:incoming>
+      <bpmn:outgoing>Flow_allow</bpmn:outgoing>
+      <bpmn:outgoing>Flow_review</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="Task_record" name="Write the decision and the audit record">
+      <bpmn:incoming>Flow_allow</bpmn:incoming>
+      <bpmn:outgoing>Flow_recorded</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="End_allowed" name="Allowed and recorded">
+      <bpmn:incoming>Flow_recorded</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:task id="Task_graph" name="Write the alert to the graph">
+      <bpmn:incoming>Flow_review</bpmn:incoming>
+      <bpmn:outgoing>Flow_graph</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Task_case" name="Open a case with its reason">
+      <bpmn:incoming>Flow_graph</bpmn:incoming>
+      <bpmn:outgoing>Flow_case</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Task_verdict" name="Mark fraud or false alarm">
+      <bpmn:incoming>Flow_case</bpmn:incoming>
+      <bpmn:outgoing>Flow_verdict</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="End_case" name="Case closed">
+      <bpmn:incoming>Flow_verdict</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:dataStoreReference id="Store_redis" name="Redis: who paid this account" />
+    <bpmn:dataStoreReference id="Store_ch" name="ClickHouse: decisions, audit, cases" />
+    <bpmn:dataStoreReference id="Store_neo" name="Neo4j: the alert graph" />
+    <bpmn:sequenceFlow id="Flow_start" sourceRef="Start_1" targetRef="Task_publish" />
+    <bpmn:sequenceFlow id="Flow_publish" name="transactions.raw" sourceRef="Task_publish" targetRef="Task_decode" />
+    <bpmn:sequenceFlow id="Flow_decode" sourceRef="Task_decode" targetRef="Task_features" />
+    <bpmn:sequenceFlow id="Flow_features" sourceRef="Task_features" targetRef="Task_rules" />
+    <bpmn:sequenceFlow id="Flow_rules" sourceRef="Task_rules" targetRef="Task_model" />
+    <bpmn:sequenceFlow id="Flow_model" sourceRef="Task_model" targetRef="Gateway_1" />
+    <bpmn:sequenceFlow id="Flow_allow" name="allow" sourceRef="Gateway_1" targetRef="Task_record" />
+    <bpmn:sequenceFlow id="Flow_recorded" sourceRef="Task_record" targetRef="End_allowed" />
+    <bpmn:sequenceFlow id="Flow_review" name="send to review" sourceRef="Gateway_1" targetRef="Task_graph" />
+    <bpmn:sequenceFlow id="Flow_graph" sourceRef="Task_graph" targetRef="Task_case" />
+    <bpmn:sequenceFlow id="Flow_case" name="fraud.alerts" sourceRef="Task_case" targetRef="Task_verdict" />
+    <bpmn:sequenceFlow id="Flow_verdict" sourceRef="Task_verdict" targetRef="End_case" />
+    <bpmn:association id="Assoc_redis" sourceRef="Task_features" targetRef="Store_redis" />
+    <bpmn:association id="Assoc_ch" sourceRef="Task_record" targetRef="Store_ch" />
+    <bpmn:association id="Assoc_neo" sourceRef="Task_graph" targetRef="Store_neo" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram_1">
+    <bpmndi:BPMNPlane id="Plane_1" bpmnElement="Collaboration_1">
+      <bpmndi:BPMNShape id="Participant_1_di" bpmnElement="Participant_1" isHorizontal="true">
+        <dc:Bounds x="160" y="80" width="1700" height="660" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_channel_di" bpmnElement="Lane_channel" isHorizontal="true">
+        <dc:Bounds x="190" y="80" width="1670" height="140" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_engine_di" bpmnElement="Lane_engine" isHorizontal="true">
+        <dc:Bounds x="190" y="220" width="1670" height="160" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_services_di" bpmnElement="Lane_services" isHorizontal="true">
+        <dc:Bounds x="190" y="380" width="1670" height="220" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_analyst_di" bpmnElement="Lane_analyst" isHorizontal="true">
+        <dc:Bounds x="190" y="600" width="1670" height="140" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Start_1_di" bpmnElement="Start_1">
+        <dc:Bounds x="240" y="132" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="200" y="174" width="116" height="30" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_publish_di" bpmnElement="Task_publish">
+        <dc:Bounds x="330" y="110" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_decode_di" bpmnElement="Task_decode">
+        <dc:Bounds x="530" y="260" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_features_di" bpmnElement="Task_features">
+        <dc:Bounds x="710" y="260" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_rules_di" bpmnElement="Task_rules">
+        <dc:Bounds x="890" y="260" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_model_di" bpmnElement="Task_model">
+        <dc:Bounds x="1070" y="260" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_1_di" bpmnElement="Gateway_1">
+        <dc:Bounds x="1270" y="278" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1230" y="334" width="130" height="30" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_record_di" bpmnElement="Task_record">
+        <dc:Bounds x="1380" y="400" width="160" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_allowed_di" bpmnElement="End_allowed">
+        <dc:Bounds x="1600" y="422" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1560" y="464" width="116" height="30" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_graph_di" bpmnElement="Task_graph">
+        <dc:Bounds x="1380" y="520" width="160" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_case_di" bpmnElement="Task_case">
+        <dc:Bounds x="1180" y="520" width="160" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_verdict_di" bpmnElement="Task_verdict">
+        <dc:Bounds x="1380" y="760" width="160" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_case_di" bpmnElement="End_case">
+        <dc:Bounds x="1600" y="782" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1560" y="824" width="116" height="30" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Store_redis_di" bpmnElement="Store_redis">
+        <dc:Bounds x="710" y="400" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="650" y="455" width="170" height="40" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Store_ch_di" bpmnElement="Store_ch">
+        <dc:Bounds x="1600" y="520" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1540" y="575" width="170" height="40" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Store_neo_di" bpmnElement="Store_neo">
+        <dc:Bounds x="1380" y="640" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1320" y="695" width="170" height="40" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_start_di" bpmnElement="Flow_start">
+        <di:waypoint x="276" y="150" />
+        <di:waypoint x="330" y="150" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_publish_di" bpmnElement="Flow_publish">
+        <di:waypoint x="405" y="190" />
+        <di:waypoint x="405" y="300" />
+        <di:waypoint x="530" y="300" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_decode_di" bpmnElement="Flow_decode">
+        <di:waypoint x="680" y="300" />
+        <di:waypoint x="710" y="300" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_features_di" bpmnElement="Flow_features">
+        <di:waypoint x="860" y="300" />
+        <di:waypoint x="890" y="300" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_rules_di" bpmnElement="Flow_rules">
+        <di:waypoint x="1040" y="300" />
+        <di:waypoint x="1070" y="300" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_model_di" bpmnElement="Flow_model">
+        <di:waypoint x="1145" y="340" />
+        <di:waypoint x="1145" y="303" />
+        <di:waypoint x="1270" y="303" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_allow_di" bpmnElement="Flow_allow">
+        <di:waypoint x="1295" y="328" />
+        <di:waypoint x="1295" y="440" />
+        <di:waypoint x="1380" y="440" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_recorded_di" bpmnElement="Flow_recorded">
+        <di:waypoint x="1540" y="440" />
+        <di:waypoint x="1600" y="440" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_review_di" bpmnElement="Flow_review">
+        <di:waypoint x="1295" y="328" />
+        <di:waypoint x="1295" y="560" />
+        <di:waypoint x="1380" y="560" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_graph_di" bpmnElement="Flow_graph">
+        <di:waypoint x="1540" y="560" />
+        <di:waypoint x="1180" y="560" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_case_di" bpmnElement="Flow_case">
+        <di:waypoint x="1260" y="600" />
+        <di:waypoint x="1260" y="800" />
+        <di:waypoint x="1380" y="800" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_verdict_di" bpmnElement="Flow_verdict">
+        <di:waypoint x="1540" y="800" />
+        <di:waypoint x="1600" y="800" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Assoc_redis_di" bpmnElement="Assoc_redis">
+        <di:waypoint x="785" y="340" />
+        <di:waypoint x="735" y="400" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Assoc_ch_di" bpmnElement="Assoc_ch">
+        <di:waypoint x="1460" y="480" />
+        <di:waypoint x="1625" y="520" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Assoc_neo_di" bpmnElement="Assoc_neo">
+        <di:waypoint x="1460" y="600" />
+        <di:waypoint x="1405" y="640" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
