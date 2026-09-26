@@ -37,6 +37,12 @@ import train as T    # noqa: E402
 #: An RBF kernel is quadratic in the rows; the full fit does not finish on this
 #: machine, so it is fitted on a stratified subsample and said so in the table.
 RBF_ROWS = 40_000
+#: TabPFN reads its training rows as context at prediction time and is built for
+#: about ten thousand of them, so it gets a subsample of the same shape.
+TABPFN_ROWS = 10_000
+#: How long a model may take to score the two slices before it is left unscored.
+#: A model that cannot score 180,000 rows in this budget cannot serve a stream.
+SCORING_BUDGET_S = 1800
 
 
 def _load(cache):
@@ -65,6 +71,60 @@ def _score_of(model, X):
     if hasattr(model, "predict_proba"):
         return model.predict_proba(X)[:, 1]
     return expit(model.decision_function(X))
+
+
+def _subsample(yfit, legit_rows, seed=42):
+    """Every fraud row and a random sample of the rest, for the models that cannot
+    take the whole training slice."""
+    rng = np.random.default_rng(seed)
+    legit = np.flatnonzero(yfit == 0)
+    keep = rng.choice(legit, size=min(legit_rows, len(legit)), replace=False)
+    return np.concatenate([np.flatnonzero(yfit == 1), keep])
+
+
+def _extra(yfit):
+    """XGBoost and TabPFN, when the environment has them. Neither is a dependency
+    of this project: they live in an environment of their own, and a run without
+    them prints the same table two rows shorter."""
+    out = []
+    try:
+        from xgboost import XGBClassifier
+        out.append(("XGBoost", XGBClassifier(
+            n_estimators=400, learning_rate=0.05, max_depth=6,
+            colsample_bytree=0.8, reg_lambda=10.0, tree_method="hist",
+            n_jobs=-1, random_state=42, eval_metric="aucpr"), None, False))
+    except ImportError:
+        print("  (xgboost not installed here - skipped)")
+    try:
+        from tabpfn import TabPFNClassifier
+        rows = _subsample(yfit, TABPFN_ROWS - int(yfit.sum()))
+        out.append((f"TabPFN, {len(rows):,} rows", _scaled(TabPFNClassifier()), rows, True))
+    except ImportError:
+        print("  (tabpfn not installed here - skipped)")
+    except Exception as exc:                           # noqa: BLE001
+        # Its weights are a gated download: the account and the licence are the
+        # user's to accept, not this script's.
+        print(f"  (tabpfn is installed but its model is not available here: "
+              f"{type(exc).__name__} - skipped)")
+    return out
+
+
+def _guarded_scores(model, Xva, Xte):
+    """Score both slices, unless a probe says the model would take longer than the
+    budget: a model that cannot score 180,000 rows in half an hour cannot serve a
+    stream, and that is the finding, not a failure."""
+    probe = min(1000, len(Xva))
+    started = time.time()
+    _score_of(model, Xva[:probe])
+    per_row = (time.time() - started) / probe
+    needed = per_row * (len(Xva) + len(Xte))
+    if needed > SCORING_BUDGET_S:
+        raise TimeoutError(f"would need {needed / 60:.0f} min to score both slices "
+                           f"on this machine")
+    pva = _score_of(model, Xva)
+    started = time.time()
+    pte = _score_of(model, Xte)
+    return pva, pte, 1000 * (time.time() - started) / max(len(Xte), 1) * 1000
 
 
 def _cut(y, p):
@@ -99,29 +159,26 @@ def run(cache, rbf_rows=RBF_ROWS):
           f"({int(yva.sum())}) | test {n - cut:,} ({int(yte.sum())})")
     print(f"scale_pos_weight {spw:.1f}, as train.py computes it\n")
 
-    rng = np.random.default_rng(42)
-    sub = np.concatenate([np.flatnonzero(yfit == 1),
-                          rng.choice(np.flatnonzero(yfit == 0),
-                                     size=min(rbf_rows, int((yfit == 0).sum())),
-                                     replace=False)])
+    sub = _subsample(yfit, rbf_rows)
 
     candidates = [
-        ("LightGBM committee (served)", None, None),
-        ("logistic regression", _scaled(LogisticRegression(max_iter=2000, class_weight=None)), None),
+        ("LightGBM committee (served)", None, None, False),
+        ("logistic regression", _scaled(LogisticRegression(max_iter=2000, class_weight=None)),
+         None, False),
         ("linear SVM", _scaled(SGDClassifier(loss="hinge", max_iter=50, tol=1e-3,
-                                             random_state=42)), None),
-        (f"RBF SVM, {len(sub):,} rows", _scaled(SVC(kernel="rbf", cache_size=800)), sub),
+                                             random_state=42)), None, False),
+        (f"RBF SVM, {len(sub):,} rows", _scaled(SVC(kernel="rbf", cache_size=800)), sub, False),
         ("random forest", make_pipeline(SimpleImputer(strategy="median"),
                                         RandomForestClassifier(n_estimators=300, n_jobs=-1,
                                                                min_samples_leaf=5,
-                                                               random_state=42)), None),
+                                                               random_state=42)), None, False),
         ("sklearn boosting", HistGradientBoostingClassifier(max_iter=400, learning_rate=0.05,
-                                                            random_state=42), None),
-    ]
+                                                            random_state=42), None, False),
+    ] + _extra(yfit)
 
     print(f"{'model':<30}{'PR-AUC':>9}{'ROC-AUC':>9}{'caught':>9}{'real':>8}"
           f"{'alerts':>9}{'fit s':>8}{'ms/1k':>8}")
-    for name, model, rows in candidates:
+    for name, model, rows, guarded in candidates:
         started = time.time()
         if model is None:
             members = _committee(Xfit, yfit, spw)
@@ -132,12 +189,25 @@ def run(cache, rbf_rows=RBF_ROWS):
             per_1k = 1000 * (time.time() - scored) / max(len(yte), 1) * 1000
         else:
             idx = rows if rows is not None else slice(None)
-            model.fit(Xfit[idx], yfit[idx])
+            try:
+                model.fit(Xfit[idx], yfit[idx])
+            except Exception as exc:                   # noqa: BLE001
+                # One model that cannot run here must not take the table with it.
+                print(f"{name:<30}  did not fit: {type(exc).__name__}: "
+                      f"{str(exc).splitlines()[0][:60]}")
+                continue
             fitted = time.time() - started
-            pva = _score_of(model, Xva)
-            scored = time.time()
-            pte = _score_of(model, Xte)
-            per_1k = 1000 * (time.time() - scored) / max(len(yte), 1) * 1000
+            if guarded:
+                try:
+                    pva, pte, per_1k = _guarded_scores(model, Xva, Xte)
+                except TimeoutError as slow:
+                    print(f"{name:<30}  not scored: {slow}")
+                    continue
+            else:
+                pva = _score_of(model, Xva)
+                scored = time.time()
+                pte = _score_of(model, Xte)
+                per_1k = 1000 * (time.time() - scored) / max(len(yte), 1) * 1000
         t = _cut(yva, pva)
         flag = pte >= t
         tp = int((flag & (yte == 1)).sum())

@@ -716,6 +716,7 @@ cost.
 |---|---|---|---|---|---|---|---|
 | **LightGBM committee (served)** | 0.673 | **0.997** | **67.0%** | **63.4%** | 186 | 15 | 11.0 |
 | random forest, 300 trees | **0.677** | 0.990 | 63.6% | 63.3% | 177 | 30 | 2.6 |
+| XGBoost, 400 trees | 0.672 | **0.997** | 60.2% | **65.4%** | 162 | 3 | 0.8 |
 | RBF SVM, 40,569 rows | 0.491 | 0.986 | 52.3% | 48.9% | 188 | 1 | 75.8 |
 | sklearn HistGradientBoosting | 0.439 | 0.931 | 48.3% | 49.7% | 171 | 3 | 0.2 |
 | logistic regression | 0.423 | 0.989 | 44.3% | 38.2% | 204 | 1 | 0.4 |
@@ -740,9 +741,19 @@ cost.
    record, one at a time (`docs/irp-framing.md` 7.1c). Read the column for the order
    of magnitude between families, not as a deployment figure - the RBF SVM is 30x
    the forest per row even in the batch it suits.
-5. **Not run:** TabPFN and XGBoost, which need packages this environment does not
-   have. They would go in an environment of their own; the script skips a model it
-   cannot import.
+5. **XGBoost lands where a second boosting library should**: level with the served
+   committee on ranking (0.672 against 0.673) and on ROC, a little tighter at its own
+   cutoff (65.4% of its alerts real against 63.4%) and a little further behind on
+   what matters here (60.2% of the fraud caught against 67.0%). Two implementations
+   of the same idea agreeing is a check on the recipe, not a candidate.
+6. **TabPFN was not measured.** It installs, but its weights are a gated download:
+   the current release wants a licence accepted on the vendor's site and an account
+   to authenticate with, and it opens a browser login when it cannot find one. Those
+   are the owner's credentials to give, not this script's, so the row says so and the
+   table goes on without it.
+7. Both live in an environment of their own (`.venv-models`, outside this
+   repository), because they are not dependencies of this project. Run here, the
+   script prints the same table two rows shorter.
 
 **The forest, measured the way this project measures** (`--paired`, 2026-09-26):
 five paired fits on the same rows, a different seed each time, read on the cutoff
