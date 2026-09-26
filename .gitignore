@@ -11,6 +11,8 @@ validation/*.csv
 # sidecar files and cached feature matrices.
 validation/*_Patterns.txt
 validation/*.npz
+# Matrix caches the experiments write beside themselves.
+ml/*.npz
 
 # Local settings and passwords: copied from .env.example on each machine.
 .env

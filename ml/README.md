@@ -23,6 +23,7 @@ experiments/      harnesses - each produces a NUMBER, not an artefact the
   thresholds.py   the cutoff menu, read on the served model
   layers.py       the rules alone, the model alone and the deployed decision
   recall.py       per-type recall across seeds (budgeted; resumes)
+  models.py       the served recipe against five other model families
                   One-off experiments are deleted once their decision is
                   written below: git log --diff-filter=D -- ml/experiments
 
@@ -701,6 +702,50 @@ served ONNX and prints ROC-AUC 0.997 and PR-AUC 0.673, the native committee's, w
 the same 118 frauds against 68 false alarms at the cutoff. Before the L2 penalty
 they disagreed - 0.965 served against 0.988 native - because 32-bit inference tied
 92.6% of held-out transfers at exactly 0.0; bounded leaves ended that.
+
+### Other model families, measured 2026-09-26
+
+`experiments/models.py` fits five alternatives on the rows `train.py` fits on and
+reads them on the same held-out slice, each with its own cutoff at the F1 peak of
+the cutoff rows. The served committee is the first row, refitted here so the
+comparison is like for like. Trees take the vector as it is; the distance-based
+models need the gaps filled and the columns scaled, which is part of what they
+cost.
+
+| model | PR-AUC | ROC-AUC | caught | real | alerts | fit s | ms / 1k rows |
+|---|---|---|---|---|---|---|---|
+| **LightGBM committee (served)** | 0.673 | **0.997** | **67.0%** | **63.4%** | 186 | 15 | 11.0 |
+| random forest, 300 trees | **0.677** | 0.990 | 63.6% | 63.3% | 177 | 30 | 2.6 |
+| RBF SVM, 40,569 rows | 0.491 | 0.986 | 52.3% | 48.9% | 188 | 1 | 75.8 |
+| sklearn HistGradientBoosting | 0.439 | 0.931 | 48.3% | 49.7% | 171 | 3 | 0.2 |
+| logistic regression | 0.423 | 0.989 | 44.3% | 38.2% | 204 | 1 | 0.4 |
+| linear SVM (hinge, SGD) | 0.292 | 0.981 | 25.0% | 42.3% | 104 | 1 | 0.3 |
+
+1. **The tree models are a class apart on this data.** The two distance-based
+   models reach 0.29 and 0.42 PR-AUC where the trees reach 0.67, and they need
+   scaling and imputation to run at all. Fraud here is a combination of ordinary
+   values - an ordinary amount to an account that ten other people paid this hour -
+   which is what a tree cuts and a hyperplane cannot.
+2. **The random forest is the only real contender, and this run does not separate
+   it from the served model.** It is 0.004 PR-AUC ahead and 3.4 points behind on
+   recall at its own cutoff, on one fit and one dataset draw. This project's own
+   rule for such a claim is five paired fits with an interval clear of zero
+   (`ablate_seeds.py`), which was not run here: the mentor asked what else the data
+   supports, not for a replacement.
+3. **The sklearn boosting row is not a statement about the library.** It is one fit
+   with different defaults and no averaging of five seeds, against a committee whose
+   recipe was tuned and penalised on this data (Feature importance, above).
+4. **The scoring times are batch times on the host**, 100,000 rows at once, and are
+   not the in-stream cost: inside Flink the served model takes 0.21 ms for a single
+   record, one at a time (`docs/irp-framing.md` 7.1c). Read the column for the order
+   of magnitude between families, not as a deployment figure - the RBF SVM is 30x
+   the forest per row even in the batch it suits.
+5. **Not run:** TabPFN and XGBoost, which need packages this environment does not
+   have. They would go in an environment of their own; the script skips a model it
+   cannot import.
+
+**Nothing is adopted.** The served model, its cutoff and the running job are
+untouched by this file: it reads the same matrix and prints a table.
 
 ## Capability ablation
 
