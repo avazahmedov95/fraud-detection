@@ -213,6 +213,9 @@ services:
       # properties are fixed when the job graph is built.
       KAFKA_SECURITY_PROTOCOL: ${KAFKA_SECURITY_PROTOCOL:-PLAINTEXT}
       KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:-kafka:9092}
+      # Where the decision time goes, stage by stage (stream-processor/config.py).
+      # 0 is off; a measurement run sets it and the job prints one line per N records.
+      STAGE_TIMING_EVERY: ${STAGE_TIMING_EVERY:-0}
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: jobmanager
         taskmanager.numberOfTaskSlots: 4

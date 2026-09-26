@@ -309,6 +309,31 @@ Modern Standby for sixteen minutes mid-run (System log, Kernel-Power 506/507):
 everything froze together, no container logged it, and no decision spans the
 pause. The audit-chain anchor for this run is in `audit-anchors.md`.
 
+### 7.1c Where the decision time goes, stage by stage
+
+`scoring_ms` times the whole operator; `STAGE_TIMING_EVERY` (off by default) times
+the six stages inside it and prints one line per N records to the taskmanager log.
+Measured 2026-09-26 on the running stack: 6,000 records at a paced 50/s, twelve
+windows of 500, medians of the per-window figures.
+
+| stage | what it is | p50 | p95 |
+|---|---|---|---|
+| decode | parse, and decrypt when the record is encrypted | 0.02 ms | 0.05 ms |
+| state | read this sender's own state from Flink | **1.58 ms** | 7.56 ms |
+| redis | the receiver's inbound window and the sender's last inbound | 0.84 ms | 6.56 ms |
+| rules | build 21 features, run 10 rules, write both states back | 0.32 ms | 3.17 ms |
+| model | one ONNX inference | **0.21 ms** | 0.97 ms |
+| decide | fuse, label the type, build the record | 0.01 ms | 0.05 ms |
+
+**The model is the fastest of the five real steps, not the slowest**: 0.21 ms
+against 1.58 ms to read one sender's state and 0.84 ms to ask Redis for the
+receiver's side. Together the stages account for about 3 ms, against a median 86 ms
+from ingest to decision (7.1b) - so **97% of the decision time is transport and
+batching**, not computation: the Kafka fetch (`fetch.max.wait.ms` 20 ms) and the
+PyFlink bundle (`python.fn-execution.bundle.time` 50 ms) that 7.5a had to tune down
+from a second. That is the same conclusion the throughput sweep reached from the
+other end (7.6), and it says where an optimisation would pay: not in the model.
+
 ### 7.2 The enrichment lookup, removed 2026-09-19
 
 Until 2026-09-19 the payee's age was looked up in Neo4j, cached in Redis for an

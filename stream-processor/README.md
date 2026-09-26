@@ -115,6 +115,14 @@ To see the layers compared on the current model:
 python ../ml/experiments/layers.py     # CEP-only vs ML-only vs fused, held-out slice
 ```
 
+## Where the decision time goes
+
+`STAGE_TIMING_EVERY=N` (0 by default, set in `.env`) makes the job print one line
+per N records with the median and p95 of each stage inside the operator. Measured
+at 50 records/s: state 1.58 ms, Redis 0.84 ms, features and rules 0.32 ms, the
+model 0.21 ms, decode and decide 0.02 ms each - about 3 ms of the median 86 ms
+from ingest to decision (`docs/irp-framing.md` 7.1c).
+
 ## Verify without the cluster
 
 ```bash
