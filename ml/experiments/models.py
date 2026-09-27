@@ -150,21 +150,46 @@ def _committee_score(members, X):
     return expit(np.mean([m.predict(X, raw_score=True) for m in members], axis=0))
 
 
-def run(cache, rbf_rows=RBF_ROWS, tabpfn_model=None):
+def _slices(cache):
+    """The three slices train.py cuts, in its order: fit, cutoff, held-out test."""
     X, y = _load(cache)
     n = len(y)
     cut, fit = T.cut_index(n), int(T.cut_index(n) * T.FIT_SHARE)
-    Xfit, yfit = X[:fit], y[:fit]
-    Xva, yva = X[fit:cut], y[fit:cut]
-    Xte, yte = X[cut:], y[cut:]
+    return (X[:fit], y[:fit], X[fit:cut], y[fit:cut], X[cut:], y[cut:])
+
+
+def small(cache, tabpfn_model=None, fit_rows=TABPFN_ROWS, eval_legit=3000):
+    """Every model on TabPFN's terms: the rows it can take, the rows it can score.
+
+    TabPFN refuses more than 5,000 training rows on a CPU and needs 207 ms for each
+    row it scores, so on the full slices it cannot be measured at all. Here every
+    model is fitted on the same small sample and read on the same small one - all
+    the fraud, and a sample of the rest.
+
+    The rates below are NOT the rates of the full table: keeping every fraud row
+    and sampling the others raises the fraud rate from 0.18% to about 5%, which
+    lifts precision for every model alike. Read the order between models, not the
+    numbers against the table above."""
+    Xfit, yfit, Xva, yva, Xte, yte = _slices(cache)
+    fit_idx = _subsample(yfit, fit_rows - int(yfit.sum()))
+    va_idx = _subsample(yva, eval_legit, seed=7)
+    te_idx = _subsample(yte, eval_legit, seed=13)
+    Xfit, yfit = Xfit[fit_idx], yfit[fit_idx]
+    Xva, yva = Xva[va_idx], yva[va_idx]
+    Xte, yte = Xte[te_idx], yte[te_idx]
     spw = T.class_weight(int(yfit.sum()), int((yfit == 0).sum()))
-    print(f"fit {fit:,} rows ({int(yfit.sum())} fraud) | cutoff {cut - fit:,} "
-          f"({int(yva.sum())}) | test {n - cut:,} ({int(yte.sum())})")
-    print(f"scale_pos_weight {spw:.1f}, as train.py computes it\n")
+    print(f"fit {len(yfit):,} rows ({int(yfit.sum())} fraud, "
+          f"{yfit.mean():.1%}) | cutoff {len(yva):,} ({int(yva.sum())}) | "
+          f"test {len(yte):,} ({int(yte.sum())})")
+    print("all the fraud, a sample of the rest: precision here is not the "
+          "precision of the full table\n")
+    _table(_candidates(yfit, tabpfn_model, rbf_rows=len(yfit)),
+           Xfit, yfit, Xva, yva, Xte, yte, spw)
 
+
+def _candidates(yfit, tabpfn_model=None, rbf_rows=RBF_ROWS):
     sub = _subsample(yfit, rbf_rows)
-
-    candidates = [
+    return [
         ("LightGBM committee (served)", None, None, False),
         ("logistic regression", _scaled(LogisticRegression(max_iter=2000, class_weight=None)),
          None, False),
@@ -179,6 +204,17 @@ def run(cache, rbf_rows=RBF_ROWS, tabpfn_model=None):
                                                             random_state=42), None, False),
     ] + _extra(yfit, tabpfn_model)
 
+
+def run(cache, rbf_rows=RBF_ROWS, tabpfn_model=None):
+    Xfit, yfit, Xva, yva, Xte, yte = _slices(cache)
+    spw = T.class_weight(int(yfit.sum()), int((yfit == 0).sum()))
+    print(f"fit {len(yfit):,} rows ({int(yfit.sum())} fraud) | cutoff {len(yva):,} "
+          f"({int(yva.sum())}) | test {len(yte):,} ({int(yte.sum())})")
+    print(f"scale_pos_weight {spw:.1f}, as train.py computes it\n")
+    _table(_candidates(yfit, tabpfn_model, rbf_rows), Xfit, yfit, Xva, yva, Xte, yte, spw)
+
+
+def _table(candidates, Xfit, yfit, Xva, yva, Xte, yte, spw):
     print(f"{'model':<30}{'PR-AUC':>9}{'ROC-AUC':>9}{'caught':>9}{'real':>8}"
           f"{'alerts':>9}{'fit s':>8}{'ms/1k':>8}")
     for name, model, rows, guarded in candidates:
@@ -282,10 +318,15 @@ def main():
                     help="a TabPFN checkpoint downloaded by hand; its weights are "
                          "gated, so the file is fetched from the vendor's page "
                          "and passed in here")
+    ap.add_argument("--small", action="store_true",
+                    help="every model on TabPFN's terms: the rows it can take and "
+                         "the rows it can score")
     ap.add_argument("--paired", action="store_true",
                     help="the forest against the served recipe, five paired fits")
     ap.add_argument("--sets", type=int, default=5, help="how many pairs")
     args = ap.parse_args()
+    if args.small:
+        return small(args.cache, args.tabpfn_model)
     if args.paired:
         return paired(args.cache, args.sets)
     run(args.cache, args.rbf_rows, args.tabpfn_model)

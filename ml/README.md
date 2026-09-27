@@ -775,6 +775,37 @@ booster's own tree contributions (`case-manager/explain.py`), which a forest doe
 not provide in that form, and the served artefact is an ONNX export of one merged
 booster.
 
+**On TabPFN's own terms it wins** (`--small`, 2026-09-26). Since it cannot be
+measured on the full slices, every model was put on the rows it can take: fitted on
+5,000 (all 569 fraud and a sample of the rest), cut on 3,171, read on 3,176. Keeping
+every fraud row raises the rate to 5.5%, which lifts precision for all of them, so
+these numbers compare models with each other and not with the table above.
+
+| model | PR-AUC | ROC-AUC | caught | real | ms / 1k rows |
+|---|---|---|---|---|---|
+| **TabPFN 3.5, 5,000 rows** | **0.966** | **0.998** | **93.8%** | 86.8% | **86,408** |
+| sklearn HistGradientBoosting | 0.947 | 0.996 | 92.0% | 85.7% | 11.5 |
+| LightGBM committee (served) | 0.937 | 0.996 | 90.3% | 86.9% | 38.1 |
+| XGBoost | 0.936 | 0.997 | 85.8% | **87.8%** | 1.8 |
+| random forest | 0.934 | 0.995 | 89.2% | 80.1% | 22.8 |
+| RBF SVM | 0.903 | 0.992 | 85.2% | 76.9% | 53.7 |
+| logistic regression | 0.835 | 0.988 | 77.8% | 65.6% | 0.4 |
+| linear SVM | 0.723 | 0.977 | 93.8% | 56.9% | 1.1 |
+
+**This is the finding to keep, and it cuts both ways.** Given five thousand rows,
+the foundation model is the best thing in the table - 0.966 against the served
+recipe's 0.937, and 93.8% of the fraud at 86.8% real. That is what it was built
+for: a few thousand rows read as context, no fitting loop. But the problem here is
+not short of data - the served model learns from 320,000 rows, sixty-four times
+what TabPFN would accept - and it is bound by a deadline: 86 ms per row against
+0.21 ms in the job, four hundred times over, on a machine with no GPU. A model can
+be the strongest on the small version of a problem and still be the wrong
+instrument for the problem itself.
+
+At this fraud rate `train.py`'s own rule weights the classes (11.4% in the fit
+slice, above its 0.5% threshold), where on the full slice it does not: the recipe
+followed its rule, and the rule read the slice it was given.
+
 **Nothing is adopted.** The served model, its cutoff and the running job are
 untouched by this file: it reads the same matrix and prints a table.
 
