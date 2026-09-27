@@ -37,9 +37,9 @@ import train as T    # noqa: E402
 #: An RBF kernel is quadratic in the rows; the full fit does not finish on this
 #: machine, so it is fitted on a stratified subsample and said so in the table.
 RBF_ROWS = 40_000
-#: TabPFN reads its training rows as context at prediction time and is built for
-#: about ten thousand of them, so it gets a subsample of the same shape.
-TABPFN_ROWS = 10_000
+#: TabPFN reads its training rows as context at prediction time, and refuses more
+#: than five thousand of them on a CPU, so it gets a subsample of that size.
+TABPFN_ROWS = 5_000
 #: How long a model may take to score the two slices before it is left unscored.
 #: A model that cannot score 180,000 rows in this budget cannot serve a stream.
 SCORING_BUDGET_S = 1800

@@ -721,6 +721,7 @@ cost.
 | sklearn HistGradientBoosting | 0.439 | 0.931 | 48.3% | 49.7% | 171 | 3 | 0.2 |
 | logistic regression | 0.423 | 0.989 | 44.3% | 38.2% | 204 | 1 | 0.4 |
 | linear SVM (hinge, SGD) | 0.292 | 0.981 | 25.0% | 42.3% | 104 | 1 | 0.3 |
+| TabPFN 3.5, 5,000 rows | not scored | | | | | 1 | ~207,000 |
 
 1. **The tree models are a class apart on this data.** The two distance-based
    models reach 0.29 and 0.42 PR-AUC where the trees reach 0.67, and they need
@@ -746,11 +747,17 @@ cost.
    cutoff (65.4% of its alerts real against 63.4%) and a little further behind on
    what matters here (60.2% of the fraud caught against 67.0%). Two implementations
    of the same idea agreeing is a check on the recipe, not a candidate.
-6. **TabPFN was not measured.** It installs, but its weights are a gated download:
-   the current release wants a licence accepted on the vendor's site and an account
-   to authenticate with, and it opens a browser login when it cannot find one. Those
-   are the owner's credentials to give, not this script's, so the row says so and the
-   table goes on without it.
+6. **TabPFN stopped at three walls, and the third is the interesting one.** Its
+   weights are a gated download, so the owner accepted the licence and fetched the
+   checkpoint by hand (`--tabpfn-model`, the 3.5 multiclass variant, 835 MB). It then
+   refused more than 5,000 training rows on a CPU - 1.5% of what every other model
+   here was fitted on. And at that size the probe measured **207 ms per row**: scoring
+   the cutoff and test slices would take 622 minutes, so the harness recorded the
+   estimate instead of running it. The served model scores a record in **0.21 ms**
+   inside the job (`docs/irp-framing.md` 7.1c), a thousandth of that. A tabular
+   foundation model is a different instrument: read a few thousand rows, answer
+   offline, on a GPU. It is not a candidate for a decision before settlement, and
+   this is the measurement that says so rather than an opinion.
 7. Both live in an environment of their own (`.venv-models`, outside this
    repository), because they are not dependencies of this project. Run here, the
    script prints the same table two rows shorter.
