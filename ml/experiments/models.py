@@ -11,7 +11,7 @@ are; the distance-based models need them scaled and their gaps filled, which is
 part of what they cost.
 
     cd ml
-    python experiments/models.py --cache collectors_matrix.npz
+    python experiments/models.py --cache models_matrix.npz
 """
 import argparse
 import os
