@@ -1,24 +1,35 @@
-"""Live demo: one page that shows the pipeline deciding.
+"""Live demo: one page that shows the running system deciding.
 
-Three views over the running stack - the transfers streaming through, a fraud
-episode replayed on demand with its decision and reasons, and the analyst queue.
-It adds no detection logic: transfers are built by data-generator's
+The transfers streaming through, fraud cases replayed on demand with their decision
+and reasons, the analyst queue, and where the decision time goes. It adds no
+detection logic: transfers are built by data-generator's
 `kafka_producer._row_to_message`, decisions come back from `transactions.scored`,
-reasons and queue from case-manager's `Explainer` and `CaseStore`.
+reasons and queue from case-manager's `Explainer` and `CaseStore`, stage times from
+the warehouse.
+
+It runs as the stack's `demo` container (infra/demo/Dockerfile). Until Kafka,
+ClickHouse, the Flink job and the generated dataset are all there, the page shows
+only which of them is missing: everything it shows comes from the running system.
+In the stack rather than on the host because the transfers it sends are stamped
+on the containers' clock, the one the stage times are measured against.
 
 Scenarios are real episodes from the held-out 20% of the dataset, replayed under
 a fresh sender card and moved in time to end now; receivers keep their cards.
+The background stream replays the same held-out part at its own pacing.
 
-    python demo/server.py        # then open http://localhost:8090
+    .\\run.ps1 up; .\\run.ps1 submit-job     # then open http://localhost:8090
 """
 import json
+import math
 import os
 import random
 import re
+import socket
 import subprocess
 import sys
 import threading
 import time
+import urllib.request
 import uuid
 from collections import Counter, OrderedDict, deque
 from datetime import datetime, timezone
@@ -31,6 +42,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 GEN = os.path.join(ROOT, "data-generator")
 CM = os.path.join(ROOT, "case-manager")
+MODELS = os.path.join(ROOT, "ml", "models")
 # Imported from these: kafka_producer and integrity, store, case and explain. None
 # of them imports `config`, the one module name both directories hold.
 sys.path[:0] = [GEN, CM]
@@ -44,33 +56,22 @@ HELD_OUT_FROM = 0.80    # ml/train.py's cut: the model never trained past it
 HISTORY_ROWS = 8        # the sender's own transfers replayed before the episode
 EPISODE_HOURS = 6       # how far around the picked row the episode's rows are sought
 KINDS = ("NORMAL", "APP", "ATO", "MULE", "STRUCTURING")
+#: The job's decision path (stream-processor/fraud_job.py STAGES), each stored by
+#: sink-writer as stage_<name>_ms.
+STAGES = ("kafka", "handoff", "decode", "state", "redis", "rules", "model", "decide")
+LIVE_WINDOW = 1000      # how many of the latest decisions the time figures cover
 
-
-def _dotenv(path):
-    """The stack's .env, so the demo reaches the ports and credentials the
-    containers were started with. Values stay in memory; nothing is printed."""
-    vals = {}
-    try:
-        with open(path, encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    k, v = line.split("=", 1)
-                    vals[k.strip()] = v.strip().strip("\"'")
-    except OSError:
-        pass
-    return vals
-
-
-ENV = {**_dotenv(os.path.join(ROOT, ".env")), **os.environ}
-KAFKA = ENV.get("DEMO_KAFKA", "localhost:" + ENV.get("KAFKA_HOST_PORT", "29092"))
-CLICKHOUSE = dict(host=ENV.get("DEMO_CLICKHOUSE_HOST", "localhost"),
-                  port=int(ENV.get("CLICKHOUSE_HTTP_PORT", "8123")),
-                  user=ENV.get("CLICKHOUSE_USER", "fraud"),
-                  password=ENV.get("CLICKHOUSE_PASSWORD", ""),
-                  database=ENV.get("CLICKHOUSE_DB", "fraud"))
-PORT = int(ENV.get("DEMO_PORT", "8090"))
-GRAFANA = "http://localhost:" + ENV.get("GRAFANA_PORT", "3000")
+KAFKA = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
+CLICKHOUSE = dict(host=os.getenv("CLICKHOUSE_HOST", "clickhouse"),
+                  port=int(os.getenv("CLICKHOUSE_HTTP_PORT", "8123")),
+                  username=os.getenv("CLICKHOUSE_USER", "fraud"),
+                  password=os.getenv("CLICKHOUSE_PASSWORD", ""),
+                  database=os.getenv("CLICKHOUSE_DB", "fraud"))
+FLINK = os.getenv("FLINK_REST", "http://jobmanager:8081")
+JOB_NAME = "fraud-detection-cep-ml"     # stream-processor/fraud_job.py
+PORT = 8090
+# Opened by the browser, on the host: the host's port, not the service name.
+GRAFANA = "http://localhost:" + os.getenv("GRAFANA_PORT", "3000")
 DASHBOARD = os.path.join(ROOT, "infra", "grafana", "provisioning", "dashboards",
                          "json", "fraud-overview.json")
 
@@ -102,6 +103,18 @@ def _digits(rng, n):
     return "".join(rng.choice("0123456789") for _ in range(n))
 
 
+def _finite(v):
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return None
+    return v if math.isfinite(v) else None
+
+
+def _quantile(ordered, q):
+    return ordered[min(len(ordered) - 1, int(q * len(ordered)))] if ordered else None
+
+
 def mask(card):
     """8600 03** **** 2655 - enough to tell cards apart on screen, not to use one."""
     c = str(card or "")
@@ -118,6 +131,87 @@ def _dashboard_url():
     except (OSError, KeyError, ValueError):
         return ""
     return f"{GRAFANA}/d/{uid}?orgId=1&kiosk&refresh=10s&from=now-2y&to=now"
+
+
+def _review_cut():
+    """The alert level the job decides by: the model's cutoff, shipped beside it."""
+    try:
+        with open(os.path.join(MODELS, "thresholds.json"), encoding="utf-8") as fh:
+            return float(json.load(fh)["review"])
+    except (OSError, KeyError, TypeError, ValueError):
+        return None
+
+
+def decision_ms(rec):
+    """Arrival to decision: the producer's ingested_at to the job's scored_at_job,
+    both stamped on the containers' clock."""
+    try:
+        return (float(rec["scored_at_job"]) - float(rec["ingested_at"])) * 1000.0
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def job_running(overview):
+    """Whether Flink's /jobs/overview lists the fraud job as RUNNING."""
+    return any(j.get("name") == JOB_NAME and j.get("state") == "RUNNING"
+               for j in (overview or {}).get("jobs", []))
+
+
+def stage_summary(row):
+    """(count, one average per stage, median, p99) -> what the page draws. The
+    stage averages add up to the average time from arrival to decision."""
+    n = int(row[0] or 0)
+    values = [_finite(v) for v in row[1:]] if n else [None] * (len(STAGES) + 2)
+    avgs, (median, p99) = values[:len(STAGES)], values[len(STAGES):]
+    return {"n": n, "stages": [{"name": s, "ms": a} for s, a in zip(STAGES, avgs)],
+            "total_ms": sum(a for a in avgs if a is not None) if n else None,
+            "median_ms": median, "p99_ms": p99}
+
+
+def _reachable(host, port):
+    try:
+        socket.create_connection((host, port), timeout=1).close()
+        return True
+    except OSError:
+        return False
+
+
+def _get(url):
+    """The body of a GET, or None when nothing answers."""
+    try:
+        with urllib.request.urlopen(url, timeout=2) as r:
+            return r.read()
+    except OSError:
+        return None
+
+
+class Health:
+    """What the page needs running, checked every few seconds. Until every part is
+    there the page shows which one is missing, and nothing else."""
+
+    def __init__(self, data_error):
+        self.parts = {"kafka": False, "clickhouse": False, "job": False,
+                      "data": not data_error}
+
+    @property
+    def ready(self):
+        return all(self.parts.values())
+
+    def check(self):
+        host, _, port = KAFKA.rpartition(":")
+        self.parts["kafka"] = _reachable(host, int(port))
+        self.parts["clickhouse"] = _get(
+            f"http://{CLICKHOUSE['host']}:{CLICKHOUSE['port']}/ping") is not None
+        body = _get(f"{FLINK}/jobs/overview")
+        try:
+            self.parts["job"] = job_running(json.loads(body) if body else None)
+        except ValueError:
+            self.parts["job"] = False
+
+    def run(self):
+        while True:
+            self.check()
+            time.sleep(3)
 
 
 class Episodes:
@@ -153,6 +247,11 @@ class Episodes:
         r["event_time"] = _utc_iso(float(self.t[i]))
         r["transaction_id"] = ""
         return r
+
+    def replay_start(self, rng=random):
+        """A row inside the held-out part to start the background replay at. The
+        generator writes the file in time order, which the producer's --skip counts."""
+        return rng.randrange(self.cut, max(self.cut + 1, len(self.df) - 1000))
 
     def _prior(self, i):
         idx = self.by_sender[self.sender[i]]
@@ -244,8 +343,8 @@ class Decisions:
         self.recent = deque(maxlen=400)
         self.by_id = OrderedDict()
         self.counts = Counter()
-        self.ms = deque(maxlen=1000)
-        self.connected, self.error, self.last_at, self.model = False, "", None, ""
+        self.ms = deque(maxlen=LIVE_WINDOW)
+        self.last_at, self.model = None, ""
 
     def add(self, rec):
         with self.lock:
@@ -255,8 +354,9 @@ class Decisions:
                 while len(self.by_id) > 50_000:
                     self.by_id.popitem(last=False)
             self.counts[rec.get("decision") or "?"] += 1
-            if rec.get("scoring_ms") is not None:
-                self.ms.append(float(rec["scoring_ms"]))
+            ms = decision_ms(rec)
+            if ms is not None:
+                self.ms.append(ms)
             self.last_at = time.time()
             self.model = rec.get("model_version") or self.model
 
@@ -266,21 +366,20 @@ class Decisions:
             try:
                 consumer = KafkaConsumer(TOPIC_SCORED, bootstrap_servers=KAFKA,
                                          group_id=None, auto_offset_reset="latest")
-                self.connected, self.error = True, ""
                 for m in consumer:
                     try:
                         self.add(json.loads(m.value))
                     except ValueError:
                         continue
-            except Exception as exc:                   # noqa: BLE001 - shown on the page
-                self.connected, self.error = False, str(exc)[:200]
+            except Exception:                          # noqa: BLE001 - Health reports it
                 time.sleep(3)
 
 
 class Background:
     """data-generator's producer run unchanged - the dataset at its own pacing,
-    200 times faster - so the stream is the one every figure was measured on.
-    Starts at a random row so that two demos do not show the same minutes."""
+    100-500 times faster - so the stream is the one every figure was measured on.
+    Starts at a random row of the held-out part, which the model never trained on,
+    so that two demos do not show the same minutes."""
 
     def __init__(self):
         self.proc, self.speed = None, 200
@@ -288,30 +387,23 @@ class Background:
     def running(self):
         return self.proc is not None and self.proc.poll() is None
 
-    def start(self, speed):
+    def start(self, speed, skip):
         if self.running():
             return
         self.speed = int(speed)
         self.proc = subprocess.Popen(
             [sys.executable, "kafka_producer.py", "--file", os.path.join("out", "transactions.csv"),
-             "--realtime", "--speed", str(self.speed), "--skip", str(random.randrange(40_000)),
+             "--realtime", "--speed", str(self.speed), "--skip", str(skip),
              "--bootstrap", KAFKA, "--topic", TOPIC_RAW],
             cwd=GEN, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def stop(self):
-        if not self.running():
-            return
-        if os.name == "nt":
-            # The venv's python.exe is a launcher that starts the real interpreter as
-            # a child; terminating the launcher alone leaves the replay running.
-            subprocess.run(["taskkill", "/PID", str(self.proc.pid), "/T", "/F"],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        else:
+        if self.running():
             self.proc.terminate()
 
 
 class Sender:
-    """One producer, opened on first use, so the page loads with the stack down."""
+    """One producer, opened on first use."""
 
     def __init__(self):
         self._producer, self._lock = None, threading.Lock()
@@ -337,19 +429,20 @@ def view(rec):
             "amount": rec.get("amount_uzs"), "from": mask(rec.get("sender_card")),
             "to": mask(rec.get("receiver_card")), "decision": rec.get("decision"),
             "score": rec.get("final_score"), "type": rec.get("predicted_type"),
-            "rules": rec.get("rule_hits") or [], "ms": rec.get("scoring_ms")}
+            "rules": rec.get("rule_hits") or [], "ms": decision_ms(rec)}
 
 
 class App:
     def __init__(self, csv_path=CSV_PATH):
         self.decisions, self.background, self.sender = Decisions(), Background(), Sender()
         self.runs, self.started = OrderedDict(), time.time()
-        self.grafana = _dashboard_url()
-        self._store, self._explainer = None, None
+        self.grafana, self.cut = _dashboard_url(), _review_cut()
+        self._store, self._warehouse, self._explainer = None, None, None
         try:
             self.library, self.library_error = Episodes(csv_path), ""
         except (OSError, KeyError, ValueError) as exc:
             self.library, self.library_error = None, str(exc)
+        self.health = Health(self.library_error)
 
     def _why(self, rec):
         """Explained once per alert and kept: the page asks every second."""
@@ -369,24 +462,37 @@ class App:
         d = self.decisions
         with d.lock:
             ms, counts = sorted(d.ms), dict(d.counts)
-        return {"kafka": {"connected": d.connected, "error": d.error, "last": d.last_at},
+        return {"ready": self.health.ready, "parts": self.health.parts,
+                "data_error": self.library_error,
                 "background": {"on": self.background.running(), "speed": self.background.speed},
-                "counts": counts, "median_ms": ms[len(ms) // 2] if ms else None,
-                "model": d.model, "scenarios_error": self.library_error,
+                "counts": counts, "median_ms": _quantile(ms, 0.5), "p99_ms": _quantile(ms, 0.99),
+                "last_decision": d.last_at, "model": d.model, "cut": self.cut,
                 "grafana": self.grafana}
 
     def stream(self, alerts_only=False, limit=60):
+        """The latest decisions, newest first, each with the reasons if it is an
+        alert and, if a scenario sent it, its role and true type."""
         with self.decisions.lock:
             recs = list(self.decisions.recent)
         if alerts_only:
             recs = [r for r in recs if r.get("decision") != "ALLOW"]
-        return [view(r) for r in reversed(recs[-limit:])]
+        roles = {row["id"]: row for run in list(self.runs.values()) for row in run["rows"]}
+        out = []
+        for rec in reversed(recs[-limit:]):
+            v = view(rec)
+            v["why"] = self._why(rec)
+            sent = roles.get(v["id"])
+            if sent:
+                v["role"], v["truth"] = sent["role"], sent["truth"]
+            out.append(v)
+        return out
+
+    def start_background(self, speed):
+        self.background.start(speed, self.library.replay_start())
 
     def start_run(self, kind):
         if kind not in KINDS:
             raise ValueError(f"unknown scenario {kind!r}")
-        if self.library is None:
-            raise RuntimeError(self.library_error or "the dataset is not loaded")
         msgs = replay_messages(self.library.pick(kind), time.time())
         run = {"id": uuid.uuid4().hex[:10], "kind": kind, "started": time.time(), "error": "",
                "rows": [{"id": m["message"]["transaction_id"], "role": m["role"],
@@ -414,19 +520,17 @@ class App:
         for row in run["rows"]:
             r, rec = dict(row), self.decisions.by_id.get(row["id"])
             if rec is not None:
-                r.update(decision=rec.get("decision"), score=rec.get("final_score"),
-                         rules=rec.get("rule_hits") or [], ms=rec.get("scoring_ms"),
-                         type=rec.get("predicted_type"), why=self._why(rec))
+                r.update(decision=rec.get("decision"), score=rec.get("final_score"))
             rows.append(r)
         return {**run, "rows": rows}
 
     def results(self):
-        """The model's test figures as ml/train.py wrote them to metrics.json, the
-        split they were measured on, and the public datasets from results.json."""
+        """The model's test figures as ml/train.py wrote them to metrics.json, when
+        it was trained, the split they were measured on, and the public datasets
+        from results.json."""
         own = {}
         try:
-            with open(os.path.join(ROOT, "ml", "models", "metrics.json"),
-                      encoding="utf-8") as fh:
+            with open(os.path.join(MODELS, "metrics.json"), encoding="utf-8") as fh:
                 m = json.load(fh)
             own = {"roc_auc": m["roc_auc"], "pr_auc": m["pr_auc"],
                    "precision": m["at_review"]["precision"],
@@ -435,25 +539,52 @@ class App:
                    "rules_precision": m["cep_only"]["precision"],
                    "rules_recall": m["cep_only"]["recall"],
                    "by_type": {k: v["recall"] for k, v in m["by_fraud_type"].items()}}
+            with open(os.path.join(MODELS, "manifest.json"), encoding="utf-8") as fh:
+                own["trained_at"] = json.load(fh)["exported_at"]
         except (OSError, KeyError, ValueError) as exc:
             own = {"error": str(exc)[:200]}
-        if self.library is not None:
-            lib = self.library
-            n, cut = len(lib.df), lib.cut
-            fit = int(cut * 0.80)                  # ml/train.py's FIT_SHARE
-            own.update(rows=n, fit=fit, val=cut - fit, test=n - cut,
-                       fraud_share=float(lib.is_fraud.mean()),
-                       test_fraud=int(lib.is_fraud[cut:].sum()))
+        lib = self.library
+        n, cut = len(lib.df), lib.cut
+        fit = int(cut * 0.80)                  # ml/train.py's FIT_SHARE
+        own.update(rows=n, fit=fit, val=cut - fit, test=n - cut,
+                   fraud_share=float(lib.is_fraud.mean()),
+                   test_fraud=int(lib.is_fraud[cut:].sum()))
         with open(os.path.join(HERE, "results.json"), encoding="utf-8") as fh:
             return {"own": own, "public": json.load(fh)["datasets"]}
 
     def store(self):
         if self._store is None:
             from store import CaseStore
-            s = CaseStore(**CLICKHOUSE)
+            c = CLICKHOUSE
+            s = CaseStore(c["host"], c["port"], c["username"], c["password"], c["database"])
             s.open()
             self._store = s
         return self._store
+
+    def warehouse(self):
+        if self._warehouse is None:
+            import clickhouse_connect
+            self._warehouse = clickhouse_connect.get_client(**CLICKHOUSE)
+        return self._warehouse
+
+    def live(self):
+        """What the warehouse holds now: each stage's average over the latest
+        decisions that carry stage times, arrival to decision over the same rows,
+        and the analyst's verdicts."""
+        cols = [f"stage_{s}_ms" for s in STAGES]
+        q = (f"SELECT count(), {', '.join(f'avg({c})' for c in cols)}, "
+             f"quantileExact(0.5)(total), quantileExact(0.99)(total) FROM ("
+             f"SELECT {', '.join(cols)}, toUnixTimestamp64Milli(scored_at_job)"
+             f" - toUnixTimestamp64Milli(ingested_at) AS total"
+             f" FROM transactions_scored WHERE stage_decide_ms IS NOT NULL"
+             f" AND toUnixTimestamp64Milli(ingested_at) > 0"
+             f" ORDER BY scored_at_job DESC LIMIT {LIVE_WINDOW})")
+        try:
+            timing = stage_summary(self.warehouse().query(q).result_rows[0])
+        except Exception as exc:                       # noqa: BLE001 - shown on the page
+            self._warehouse = None
+            timing = {"error": str(exc)[:300]}
+        return {"timing": timing, "verdicts": self.cases()["stats"]}
 
     def cases(self, new_only=False):
         """case-manager's queue, in its own order. `new_only` keeps the cases opened
@@ -461,6 +592,10 @@ class App:
         earlier measurement run, and the case a scenario just opened drowns in them."""
         try:
             s = self.store()
+            # A store that cannot connect answers with an empty queue, which the page
+            # would show as "no new alerts".
+            if not s._ensure():
+                raise RuntimeError("the case store cannot reach ClickHouse; see docker logs demo")
             items, stats = s.open_cases(limit=500), s.stats()
         except Exception as exc:                       # noqa: BLE001 - shown on the page
             return {"error": str(exc)[:300], "cases": [], "stats": {}}
@@ -511,11 +646,15 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(fh.read(), "text/html; charset=utf-8")
         elif path == "/api/status":
             self._json(APP.status())
+        elif not APP.health.ready:
+            self._json({"error": "the system is not running"}, 503)
         elif path == "/api/stream":
             self._json(APP.stream(alerts_only="alerts=1" in query))
         elif path.startswith("/api/episode/"):
             run = APP.run(path.rsplit("/", 1)[1])
             self._json(run if run else {"error": "unknown run"}, 200 if run else 404)
+        elif path == "/api/live":
+            self._json(APP.live())
         elif path == "/api/results":
             self._json(APP.results())
         elif path == "/api/cases":
@@ -524,11 +663,14 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "not found"}, 404)
 
     def do_POST(self):
+        if not APP.health.ready:
+            self._json({"error": "the system is not running"}, 503)
+            return
         try:
             n = int(self.headers.get("Content-Length") or 0)
             data = json.loads(self.rfile.read(n) or b"{}")
             if self.path == "/api/background":
-                (APP.background.start(data.get("speed", 200)) if data.get("on")
+                (APP.start_background(data.get("speed", 200)) if data.get("on")
                  else APP.background.stop())
                 self._json({"on": APP.background.running()})
             elif self.path == "/api/episode":
@@ -544,12 +686,16 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     global APP
     APP = App()
+    APP.health.check()
+    threading.Thread(target=APP.health.run, daemon=True).start()
     threading.Thread(target=APP.decisions.run, daemon=True).start()
-    srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    # Every interface inside the container; compose publishes the port on the
+    # host's loopback only, since the page can send transfers and close cases.
+    srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     print(f"demo: http://localhost:{PORT}   (Kafka {KAFKA}, ClickHouse "
-          f"{CLICKHOUSE['host']}:{CLICKHOUSE['port']})")
+          f"{CLICKHOUSE['host']}:{CLICKHOUSE['port']}, Flink {FLINK})")
     if APP.library_error:
-        print(f"scenarios disabled: {APP.library_error}")
+        print(f"no dataset: {APP.library_error}")
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

@@ -45,6 +45,11 @@ def _epoch_dt(v):
         return _EPOCH
 
 
+#: The job's decision path (stream-processor/fraud_job.py STAGES), one column each,
+#: added by infra/clickhouse/init/03-stages.sql.
+STAGES = ("kafka", "handoff", "decode", "state", "redis", "rules", "model", "decide")
+STAGE_COLUMNS = [f"stage_{s}_ms" for s in STAGES]
+
 SCORED_COLUMNS = [
     "transaction_id", "event_time", "sender_card", "receiver_card", "amount_uzs",
     "sender_region", "is_new_payee",
@@ -52,7 +57,21 @@ SCORED_COLUMNS = [
     "predicted_type", "model_version",
     "active_call", "secs_login_to_confirm", "secs_login_z",
     "ingested_at", "scored_at_job", "scoring_ms",
-]
+] + STAGE_COLUMNS
+
+
+def _stage_times(e: dict) -> list:
+    """One value per stage; None, stored as NULL, where the job did not time it, so
+    an untimed stage never reads as an instant one."""
+    stages = e.get("stage_ms") or {}
+    out = []
+    for s in STAGES:
+        try:
+            out.append(float(stages[s]))
+        except (KeyError, TypeError, ValueError):
+            out.append(None)
+    return out
+
 
 def scored_row(e: dict) -> list:
     return [
@@ -75,7 +94,7 @@ def scored_row(e: dict) -> list:
         _epoch_dt(e.get("ingested_at")),
         _epoch_dt(e.get("scored_at_job")),
         _f(e.get("scoring_ms")),
-    ]
+    ] + _stage_times(e)
 
 
 # fraud.audit_log is append-only / WORM. The chain columns (seq, prev_hash,
@@ -115,8 +134,6 @@ def audit_signed_values(core: list) -> list:
     against it; only strings are hashed, since Float32 columns do not read back
     byte-for-byte."""
     return [core[_INGRESS_IDX], core[_PAYLOAD_IDX]]
-    return [e.get("ingress_hash", "") or "",
-            json.dumps(e, ensure_ascii=False, separators=(",", ":"))]
 
 
 def is_alert(e: dict) -> bool:

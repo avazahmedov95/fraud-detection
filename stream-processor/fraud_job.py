@@ -50,17 +50,30 @@ def _warn_cep_only(reason: str) -> None:
           f"[fraud_job] in the mounted job directory, then resubmit.\n{bar}\n")
 
 
-def _stage_summary(samples) -> str:
-    """Median and p95 per stage, in milliseconds, in the order they run."""
-    parts = []
-    for name, xs in samples.items():
-        if not xs:
-            continue
-        ordered = sorted(xs)
-        p50 = ordered[len(ordered) // 2]
-        p95 = ordered[min(len(ordered) - 1, int(len(ordered) * 0.95))]
-        parts.append(f"{name} {p50:.2f}/{p95:.2f}")
-    return "  ".join(parts)
+#: The decision path in the order a record travels it. Every decision carries one
+#: wall time per stage, `stage_ms`, which sink-writer stores as stage_<name>_ms.
+#: kafka and handoff happen before this operator and are timed against Kafka's own
+#: append time: transactions.raw is LogAppendTime (infra/kafka/create-topics.sh).
+STAGES = ("kafka", "handoff", "decode", "state", "redis", "rules", "model", "decide")
+
+
+def _lap(stages, name, mark):
+    """Close one stage: its wall time in ms into `stages`; returns the next start."""
+    now = time.perf_counter()
+    stages[name] = round((now - mark) * 1000.0, 3)
+    return now
+
+
+def _before_operator(stages, ingested_at, appended_ms, arrived):
+    """The two stages before this operator, from the producer's ingested_at, Kafka's
+    append time (ms) and the moment the record got here. A missing stamp leaves its
+    stage out rather than inventing one."""
+    if appended_ms is None:
+        return
+    appended = appended_ms / 1000.0
+    if ingested_at is not None:
+        stages["kafka"] = round((appended - float(ingested_at)) * 1000.0, 3)
+    stages["handoff"] = round((arrived - appended) * 1000.0, 3)
 
 
 def _positive_proba(outputs) -> float:
@@ -91,9 +104,6 @@ class FraudDetector(KeyedProcessFunction):
         # Absent is legitimate (the plaintext arm); present-and-unusable is not,
         # so it fails here rather than as undecodable records later.
         self._unusable = 0
-        self._timed = 0
-        self._stages = {k: [] for k in
-                        ("decode", "state", "redis", "rules", "model", "decide")}
         self._crypto_key = None
         if os.getenv("PAYLOAD_KEY_HEX"):
             self._crypto_key = payload_crypto.key_from_env()
@@ -114,14 +124,6 @@ class FraudDetector(KeyedProcessFunction):
         except Exception as exc:                          # noqa: BLE001
             _warn_cep_only(f"ONNX init failed ({exc})")
 
-    def _stage(self, name, mark):
-        """Wall clock for one stage of the decision path, kept only while
-        C.STAGE_TIMING_EVERY is set. It never reaches a feature or a record."""
-        now = time.perf_counter()
-        if C.STAGE_TIMING_EVERY:
-            self._stages[name].append((now - mark) * 1000.0)
-        return now
-
     def _ml_score(self, feature_vector):
         if self._sess is None:
             return None
@@ -131,6 +133,7 @@ class FraudDetector(KeyedProcessFunction):
 
     def process_element(self, value, ctx):
         scoring_started = time.time()
+        stages = {}
         mark = time.perf_counter()
         try:
             # Both arms, discriminated by prefix. Decryption sits INSIDE the
@@ -147,19 +150,19 @@ class FraudDetector(KeyedProcessFunction):
                 print(f"[fraud_job] UNUSABLE RECORD "
                       f"({self._unusable} so far): {type(exc).__name__}: {exc}")
             return
-        mark = self._stage("decode", mark)
+        mark = _lap(stages, "decode", mark)
 
         state = self._state.value() or SenderState()
         # SIMULATED clock, like the windows it is compared against. The
         # wall-clock stamps below measure the pipeline and never enter a feature.
         event_epoch = _event_epoch(event)
-        mark = self._stage("state", mark)
+        mark = _lap(stages, "state", mark)
         receiver_state = self._receivers.load(F.payee_key(event), event_epoch)
         # The sender's own account, in the same key space: when it was last paid.
         sender_inbound = self._receivers.last_inbound(F.sender_key(event),
                                                       event_epoch)
 
-        mark = self._stage("redis", mark)
+        mark = _lap(stages, "redis", mark)
 
         result = evaluate(event, state, event_epoch, receiver_state,
                           sender_inbound_ts=sender_inbound,
@@ -167,11 +170,11 @@ class FraudDetector(KeyedProcessFunction):
         self._state.update(state)
         self._receivers.record(event, event_epoch)
 
-        mark = self._stage("rules", mark)
+        mark = _lap(stages, "rules", mark)
 
         cep_score = result["cep_score"]
         ml_score = self._ml_score(result["features"])
-        mark = self._stage("model", mark)
+        mark = _lap(stages, "model", mark)
         # One call: score_and_decide knows whether the score is a probability.
         final, decision = fusion.score_and_decide(
             cep_score, ml_score, result["rule_hits"])
@@ -221,15 +224,9 @@ class FraudDetector(KeyedProcessFunction):
             out["label_is_fraud"] = event["label_is_fraud"]
             out["label_fraud_type"] = event.get("label_fraud_type")
 
-        self._stage("decide", mark)
-        if C.STAGE_TIMING_EVERY:
-            self._timed += 1
-            if self._timed % C.STAGE_TIMING_EVERY == 0:
-                print(f"[fraud_job] stage ms p50/p95 over "
-                      f"{C.STAGE_TIMING_EVERY} records: "
-                      f"{_stage_summary(self._stages)}")
-                for xs in self._stages.values():
-                    xs.clear()
+        _lap(stages, "decide", mark)
+        _before_operator(stages, event.get("ingested_at"), ctx.timestamp(), scoring_started)
+        out["stage_ms"] = stages
         yield json.dumps(out)
 
     def close(self):

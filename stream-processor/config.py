@@ -118,10 +118,6 @@ PY_BUNDLE_TIME_MS = int(os.getenv("PY_BUNDLE_TIME_MS", "50"))
 PY_BUNDLE_SIZE = int(os.getenv("PY_BUNDLE_SIZE", "100"))
 # 5 rather than 0: sending each record individually costs more than it saves.
 BUFFER_TIMEOUT_MS = int(os.getenv("BUFFER_TIMEOUT_MS", "5"))
-
-# Where the decision time goes, stage by stage: 0 is off, N prints one summary
-# line per N records to the taskmanager log. Wall clock, never a feature.
-STAGE_TIMING_EVERY = int(os.getenv("STAGE_TIMING_EVERY", "0"))
 # The 500 ms default parks every fetch on an empty topic for half a second.
 KAFKA_FETCH_MAX_WAIT_MS = int(os.getenv("KAFKA_FETCH_MAX_WAIT_MS", "20"))
 # The sink flushes at checkpoints, so this also bounds the warehouse delay.

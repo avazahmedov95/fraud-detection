@@ -44,7 +44,7 @@ fraud-detection/
 │   └── harness.py          the replay loop and report both adapters use
 ├── tools/
 │   └── boundary_audit.py   what one component produces vs what the next expects
-├── demo/                   one page to show it working: stream, replayed episodes, queue
+├── demo/                   one page over the running stack: stream, fraud cases, queue, stage times
 └── docs/                   the evidence base — read irp-framing.md first
     ├── pipeline_diagram.png   every component and the measured cost of each
     │                          stage (tools/pipeline_diagram.py redraws it)
@@ -78,11 +78,11 @@ run **one at a time**:
 ```bash
 python -m pytest stream-processor -q     # 190
 python -m pytest data-generator   -q     #  26
-python -m pytest sink-writer      -q     #  23
-python -m pytest validation       -q     #  24
+python -m pytest sink-writer      -q     #  27
+python -m pytest validation       -q     #  25
 python -m pytest case-manager     -q     #  40
 python -m pytest ml               -q     #  9
-python -m pytest demo             -q     #   8
+python -m pytest demo             -q     #  17
 ```
 
 Not all seven in one invocation: five module names recur across packages
@@ -130,8 +130,9 @@ make submit-job         # serves model.onnx inside Flink and starts scoring
 # 4. watch it: Flink UI (8081), Grafana dashboard (3000), or:
 make query-scored       # decision counts in ClickHouse
 
-# 5. show it: one page over the running stack, Russian or English
-python demo/server.py   # http://localhost:8090 - demo/README.md
+# 5. show it: one page over the running stack, Russian or English. It comes up
+#    with the stack and opens once the job is running - demo/README.md
+#    http://localhost:8090
 ```
 
 ## Service endpoints
@@ -143,6 +144,7 @@ python demo/server.py   # http://localhost:8090 - demo/README.md
 | Neo4j Browser | http://localhost:7474 | `neo4j` / `.env` password |
 | ClickHouse HTTP | http://localhost:8123 | `.env` user / password |
 | Grafana | http://localhost:3000 | `admin` / `.env` password |
+| Demo page | http://localhost:8090 (this machine only) | — |
 
 From inside the Docker network use service names: `kafka:9092`, `redis:6379`,
 `neo4j:7687`, `clickhouse:9000`.

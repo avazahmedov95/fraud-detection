@@ -749,8 +749,8 @@ cost.
    with different defaults and no averaging of five seeds, against a committee whose
    recipe was tuned and penalised on this data (Feature importance, above).
 4. **The scoring times are batch times on the host**, 100,000 rows at once, and are
-   not the in-stream cost: inside Flink the served model takes 0.21 ms for a single
-   record, one at a time (`docs/irp-framing.md` 7.1c). Read the column for the order
+   not the in-stream cost: inside Flink the served model takes about 0.2 ms for a
+   single record, one at a time (`docs/irp-framing.md` 7.1c). Read the column for the order
    of magnitude between families, not as a deployment figure - the RBF SVM is 30x
    the forest per row even in the batch it suits.
 5. **XGBoost lands where a second boosting library should**: level with the served
@@ -764,7 +764,7 @@ cost.
    refused more than 5,000 training rows on a CPU - 1.5% of what every other model
    here was fitted on. And at that size the probe measured **207 ms per row**: scoring
    the cutoff and test slices would take 622 minutes, so the harness recorded the
-   estimate instead of running it. The served model scores a record in **0.21 ms**
+   estimate instead of running it. The served model scores a record in **about 0.2 ms**
    inside the job (`docs/irp-framing.md` 7.1c), a thousandth of that. A tabular
    foundation model is a different instrument: read a few thousand rows, answer
    offline, on a GPU. It is not a candidate for a decision before settlement, and
@@ -809,7 +809,7 @@ recipe's 0.937, and 93.8% of the fraud at 86.8% real. That is what it was built
 for: a few thousand rows read as context, no fitting loop. But the problem here is
 not short of data - the served model learns from 320,000 rows, sixty-four times
 what TabPFN would accept - and it is bound by a deadline: 86 ms per row against
-0.21 ms in the job, four hundred times over, on a machine with no GPU. A model can
+about 0.2 ms in the job, four hundred times over, on a machine with no GPU. A model can
 be the strongest on the small version of a problem and still be the wrong
 instrument for the problem itself.
 

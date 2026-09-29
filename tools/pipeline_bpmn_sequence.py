@@ -183,16 +183,16 @@ MERMAID = """sequenceDiagram
     actor Analyst
 
     Customer->>App: confirms a transfer
-    App->>Kafka: transactions.raw (keyed by sender)
-    Kafka->>Flink: the record, after the queue and batching (~84 ms)
-    Flink->>Flink: decode (0.02 ms)
-    Flink->>Flink: read this sender's state, build 21 features (1.58 ms)
+    App->>Kafka: transactions.raw, keyed by sender (1.7 ms)
+    Kafka->>Flink: the record, fetched and batched (92 ms)
+    Flink->>Flink: decode (0.05 ms)
+    Flink->>Flink: read this sender's state (0.12 ms)
     Flink->>Redis: how many people paid this receiver?
-    Redis-->>Flink: counts for the hour, day and week (0.84 ms)
-    Flink->>Flink: run the 10 hard rules (0.32 ms)
-    Flink->>Flink: score with the model (0.21 ms)
-    Flink->>Flink: decide: allow or review (0.01 ms)
-    Flink->>Kafka: transactions.scored, and fraud.alerts when it is an alert (86 ms in all)
+    Redis-->>Flink: counts for the hour, day and week (2.07 ms)
+    Flink->>Flink: build 21 features, run the 10 hard rules (0.90 ms)
+    Flink->>Flink: score with the model (0.46 ms)
+    Flink->>Flink: decide: allow or review (0.03 ms)
+    Flink->>Kafka: transactions.scored, and fraud.alerts when it is an alert (97 ms in all)
     Kafka->>Sink: every decision
     Sink->>DB: the decision, its audit record, and alerts into the graph
     Kafka->>Case: fraud.alerts
@@ -219,16 +219,16 @@ ACTORS = ["Bank app", "Kafka", "Flink engine", "Redis", "Sink writer",
 X = {name: 11 + i * 19.4 for i, name in enumerate(ACTORS)}
 
 MESSAGES = [
-    ("Bank app", "Kafka", "the transfer, keyed by sender", "0 ms", False),
-    ("Kafka", "Flink engine", "the record, after the queue and batching", "~84 ms", False),
-    ("Flink engine", "Flink engine", "decode the record", "0.02 ms", False),
-    ("Flink engine", "Flink engine", "read the sender's state, build 21 features", "1.58 ms", False),
+    ("Bank app", "Kafka", "the transfer, keyed by sender", "1.7 ms", False),
+    ("Kafka", "Flink engine", "the record, fetched and batched", "92 ms", False),
+    ("Flink engine", "Flink engine", "decode the record", "0.05 ms", False),
+    ("Flink engine", "Flink engine", "read the sender's state", "0.12 ms", False),
     ("Flink engine", "Redis", "how many people paid this receiver?", "", False),
-    ("Redis", "Flink engine", "counts for the hour, day and week", "0.84 ms", True),
-    ("Flink engine", "Flink engine", "run the 10 hard rules", "0.32 ms", False),
-    ("Flink engine", "Flink engine", "score with the model", "0.21 ms", False),
-    ("Flink engine", "Flink engine", "decide: allow, or send to review", "0.01 ms", False),
-    ("Flink engine", "Kafka", "scored, and an alert when it is one", "86 ms in all", False),
+    ("Redis", "Flink engine", "counts for the hour, day and week", "2.07 ms", True),
+    ("Flink engine", "Flink engine", "build 21 features, run the 10 hard rules", "0.90 ms", False),
+    ("Flink engine", "Flink engine", "score with the model", "0.46 ms", False),
+    ("Flink engine", "Flink engine", "decide: allow, or send to review", "0.03 ms", False),
+    ("Flink engine", "Kafka", "scored, and an alert when it is one", "97 ms in all", False),
     ("Kafka", "Sink writer", "every decision", "", False),
     ("Sink writer", "ClickHouse\nNeo4j", "the decision, its audit record, the graph", "", False),
     ("Kafka", "Case manager", "fraud.alerts", "", False),
@@ -245,8 +245,8 @@ fig.patch.set_facecolor("white")
 
 ax.text(0, 96, "One transfer through the system, step by step",
         fontsize=18, fontweight="bold", color=INK, family=FAMILY, va="bottom")
-ax.text(0, 92.8, "The same path as the diagram, read top to bottom. Times are the medians "
-                 "measured on the running stack.",
+ax.text(0, 92.8, "The same path as the diagram, read top to bottom. Times are averages over "
+                 "1,000 transfers at 10 a second, measured on the running stack on 30 September 2026.",
         fontsize=10.5, color=MUTED, family=FAMILY, va="bottom")
 
 top_y, step = 86, 4.6

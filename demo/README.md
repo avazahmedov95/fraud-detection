@@ -1,42 +1,60 @@
 # demo
 
-One page for showing the system at work: the transfers streaming through, a
-fraud episode replayed on demand with the decision and the reasons for it, the
-analyst queue those decisions fill, the Grafana dashboard, and what the model
-scored on its own data and on each public dataset. Russian and English, switched
-on the page.
+One page for showing the system at work: the transfers streaming through, a fraud
+case replayed on demand with the decision and the reasons for it, the analyst queue
+those decisions fill, the Grafana dashboard, where the decision time goes, and what
+the model scored when it was trained. Russian and English, switched on the page.
 
 ```powershell
-.\run.ps1 up                                  # the stack
-.\run.ps1 submit-job                          # the Flink job, if it is not running
-.venv311\Scripts\python.exe demo\server.py    # then open http://localhost:8090
+.\run.ps1 up            # the stack, the demo container with it
+.\run.ps1 submit-job    # the Flink job; the page opens once it is running
 ```
 
-## Five views, and where each comes from
+Then http://localhost:8090, from this machine only: the page can send transfers and
+close cases, so the port is published on the loopback address alone.
+
+## It shows the running system or nothing
+
+The page is the stack's `demo` container (`infra/demo/Dockerfile`), not a host
+process, for two reasons. It exists only while the stack does. And the transfers it
+sends are stamped on the containers' clock, the one the job and Kafka stamp theirs
+on; the host's clock drifts from it by hundreds of milliseconds, which is why the
+latency runs moved their producer into the Docker network.
+
+Until Kafka, ClickHouse, the Flink job and the generator's dataset are all there,
+the page shows one screen: which of the four is missing and the command that
+starts it. The API refuses everything but its status in the meantime. Nothing on
+the page is sample data.
+
+## Three tabs, and where each comes from
 
 It holds no detection logic. Everything on the page is the running system's own
 output, read where the rest of the project reads it:
 
 | view | what it shows | reads | writes |
 |---|---|---|---|
-| Stream | every decision since the server started - amount, route, decision, risk, rules fired - with counts and the median decision time | `transactions.scored` | the background replay: `data-generator/kafka_producer.py`, unchanged, at 100-500x the dataset's own pacing, into `transactions.raw` |
-| Scenarios | one episode row by row - the sender's usual transfers, then the fraud - with what was caught, what was falsely flagged, and why | `transactions.scored`; case-manager's `Explainer` for the reasons | the episode's rows, into `transactions.raw` |
-| Analyst | the case queue in case-manager's own order, with the reasons; by default only the cases opened since the server started | `fraud.cases`, through case-manager's `CaseStore` | a verdict, through the same store (`resolved_by = demo`) |
+| Desk: stream | every decision since the container started - amount, route, risk, decision - with the counts and the median time from arrival to decision | `transactions.scored` | the background replay: `data-generator/kafka_producer.py`, unchanged, at 100-500x the dataset's own pacing, from a random row of the held-out part, into `transactions.raw` |
+| Desk: fraud cases | one real episode sent through the job - the sender's usual transfers, then the fraud - with what was caught and what was falsely flagged; its last alert opens by itself | `transactions.scored` | the episode's rows, into `transactions.raw` |
+| Desk: selected transfer | the model's risk against the alert level, its reasons, and the hard rules that fired, with what each one did: decide by itself (the two the regulator requires), name the alert, or neither | case-manager's `Explainer`; `ml/models/thresholds.json` | - |
+| Desk: analyst queue | the cases opened since the container started, in case-manager's own order | `fraud.cases`, through case-manager's `CaseStore` | a verdict, through the same store (`resolved_by = demo`) |
 | Grafana | the provisioned overview dashboard, in a frame | ClickHouse, through Grafana | - |
-| Data & results | the model's test figures and split, and what each public dataset showed | `ml/models/metrics.json` as `ml/train.py` wrote it; `results.json` | - |
+| Data & results, live | each stage's average time over the latest 1,000 decisions, adding up to the time from arrival to decision; the analyst's verdicts | `transactions_scored.stage_*_ms`; `fraud.cases` | - |
+| Data & results, at training | the model's test figures and split, dated by its export, and what each public dataset showed | `ml/models/metrics.json` and `manifest.json` as `ml/` wrote them; `results.json` | - |
 
 The analyst does not release or block a payment. The system has already decided,
 and the prototype records the decision without enforcing it
 (`case-manager/README.md`), so the analyst's two buttons are a verdict - the only
 real label the system gets.
 
-The public-dataset figures are not computed here. `results.json` summarises
-`validation/README.md` and carries each figure with the line it came from; the
-audit fails when that line is gone.
+The training figures are not live, and the page says so: `ml/train.py` measured them
+once, on the part of the data the model never saw. The public-dataset figures are
+not computed here either. `results.json` summarises `validation/README.md` and
+carries each figure with the line it came from; the audit fails when that line is
+gone.
 
-## The scenarios are real episodes, not scripts
+## The fraud cases are real episodes, not scripts
 
-Each scenario is picked from the held-out 20% of the dataset - the rows after
+Each case is picked from the held-out 20% of the dataset - the rows after
 `ml/train.py`'s cut, which the model never trained on - and replayed:
 
 - **the sender gets a new card** with the same six-digit BIN, so the issuing bank
@@ -48,20 +66,23 @@ Each scenario is picked from the held-out 20% of the dataset - the rows after
 - **times move, gaps stay**: the episode is shifted to end now, with every gap
   between its rows kept, since the job's windows run on event time.
 
-Ordinary transfer, phone scam (APP), account takeover, money mule, structuring.
-Each run is scored against the rows' own labels: fraudulent transfers caught, and
-false alarms on the ordinary ones.
+Phone scam (APP), account takeover, money mule, structuring, and an ordinary
+transfer as the control. Each run is scored against the rows' own labels:
+fraudulent transfers caught, and false alarms on the ordinary ones. A miss shows
+as a miss.
 
 ## What it does not show
 
-- **Anything before the server started.** The stream begins when `server.py` does.
-- **End-to-end latency.** The decision time is the job's own `scoring_ms`, on one
-  clock. The host's and the containers' clocks drift apart by hundreds of
-  milliseconds (Makefile, `produce-stream-docker`), so an end-to-end figure needs
-  the in-network producer, not this page.
+- **Anything before the container started**, on the desk. The stream and the queue
+  begin when `server.py` does; the warehouse holds every earlier run, and the
+  Data & results tab reads it.
+- **The stage times of a producer outside Docker.** The first stage runs from the
+  producer's `ingested_at` to Kafka's append time, two clocks that agree only
+  inside the Docker network.
 - **A clean warehouse.** The background replay sends dataset rows under their
-  original ids, and ClickHouse keeps every copy. The scenarios use new ids.
+  original ids, and ClickHouse keeps every copy. The fraud cases use new ids.
 
 `server.py` is the whole server - standard-library HTTP, kafka-python and
 case-manager's own modules; `index.html` is the page; `tests/` covers which rows
-make an episode and how they are replayed.
+make an episode and how they are replayed, when the page counts the system as
+running, and that the stages and mandatory rules it names are the job's.

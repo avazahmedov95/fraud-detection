@@ -185,7 +185,7 @@ def _job_output_keys():
     src = _read("stream-processor", "fraud_job.py")
     block = src.split("out = {", 1)[1].split("\n        }", 1)[0]
     keys = set(re.findall(r'^\s*"([a-z_]+)":', block, re.M))
-    keys |= {"label_is_fraud", "label_fraud_type", "features"}   # conditional
+    keys |= set(re.findall(r'out\["([a-z_]+)"\]\s*=', src))     # added after the literal
     return keys
 
 
@@ -237,6 +237,9 @@ def b_scored_row_matches_the_schema():
     R = pkg("sink-writer", "record")
     sql = _read("infra", "clickhouse", "init", "01-schema.sql")
     declared = _ddl_columns(sql, "fraud.transactions_scored")
+    # The stage columns come later, from the migration sink-writer applies on connect.
+    stages = re.sub(r"--[^\n]*", "", _read("infra", "clickhouse", "init", "03-stages.sql"))
+    declared += re.findall(r"ADD COLUMN IF NOT EXISTS\s+([a-z_]+)\s", stages)
     extra = [c for c in R.SCORED_COLUMNS if c not in declared]
     if extra:
         return f"scored_row writes columns the table does not have: {extra}"

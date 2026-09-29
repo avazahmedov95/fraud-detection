@@ -5,177 +5,305 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fraud detection — live demo</title>
 <style>
-:root{--bg:#f5f6f8;--card:#fff;--ink:#18202c;--muted:#667085;--line:#e3e6eb;
---allow:#12a15f;--review:#e98a07;--block:#e0412f;--accent:#2a64d6;--head:#0f1b2d}
+:root{--bg:#fff;--panel:#fff;--panel-2:#f3f5f8;--line:#e2e7ee;--ink:#0f1b2d;--muted:#5d6b7e;
+--accent:#2a64d6;--accent-soft:#e9f0fd;--alert:#b4530a;--alert-bar:#f08c2e;--alert-soft:#fff1e3;
+--ok:#0f7a47;--ok-dot:#12a15f;--ok-soft:#e6f5ed;--bad:#c2372b;
+--mono:ui-monospace,"Cascadia Mono",Consolas,monospace}
 *{box-sizing:border-box}
-body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
-header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 24px;background:var(--head);color:#fff}
-header h1{font-size:17px;margin:0;font-weight:600}
-.chips{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
-.chip{font-size:12px;padding:3px 10px;border-radius:999px;background:#24324a}
-.chip.ok::before,.chip.bad::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
-.chip.ok::before{background:#32d583}.chip.bad::before{background:#f97066}
-.lang button{background:transparent;color:#aab4c5;border:1px solid #3a4a66;padding:3px 9px;cursor:pointer;font-weight:600}
-.lang button:first-child{border-radius:6px 0 0 6px}.lang button:last-child{border-radius:0 6px 6px 0}
-.lang button.on{background:#fff;color:var(--head)}
-nav{display:flex;gap:2px;padding:0 24px;background:var(--head)}
-nav button{background:transparent;border:0;color:#aab4c5;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer;border-bottom:3px solid transparent}
-nav button.on{color:#fff;border-bottom-color:#5b8def}
-main{max-width:1240px;margin:0 auto;padding:18px 24px 40px}
-.hint{color:var(--muted);margin:0 0 14px;max-width:900px}
-.banner{background:#fff5e6;border:1px solid #f6c98a;padding:10px 14px;border-radius:8px;margin-bottom:14px}
-.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 14px}
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px}
-.tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
-.tile span{color:var(--muted);font-size:12px}.tile b{display:block;font-size:22px;font-weight:650}
-.wrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:10px}
-table{width:100%;border-collapse:collapse}
-th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;white-space:nowrap}
-td.wide{white-space:normal}
-th{font-size:12px;color:var(--muted);font-weight:600;background:#fafbfc}
-tr:last-child td{border-bottom:0}
-.num{text-align:right;font-variant-numeric:tabular-nums}
-.badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:650;color:#fff}
-.ALLOW{background:var(--allow)}.REVIEW{background:var(--review)}
-.rule{display:inline-block;margin:1px 4px 1px 0;padding:1px 7px;border-radius:6px;background:#edf1f8;font-size:12px}
-.bar{display:inline-block;width:80px;height:7px;border-radius:4px;background:#edf0f3;vertical-align:middle;margin-right:6px}
-.bar i{display:block;height:100%;border-radius:4px}
-button.primary{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer}
-button.primary:disabled{opacity:.5;cursor:default}
-button.ghost{background:#fff;border:1px solid var(--line);border-radius:8px;padding:7px 12px;font:inherit;cursor:pointer}
-select{font:inherit;padding:6px;border-radius:8px;border:1px solid var(--line)}
-.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:12px;margin-bottom:18px}
-.scn{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px}
-.scn h3{margin:0;font-size:15px}.scn p{margin:0;color:var(--muted);font-size:13px;flex:1}
-.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
-.panel h2{margin:0 0 6px;font-size:16px}
-.summary{display:flex;gap:18px;flex-wrap:wrap;margin:10px 0 12px;font-weight:600}
-tr.hist td{color:var(--muted)}
-.why{margin:6px 0 2px}.why div{display:flex;align-items:center;gap:8px;margin:3px 0;font-size:13px}
-.why .w{height:8px;border-radius:4px;background:var(--block);min-width:4px}
-.split{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px;align-items:start}
-tr.pick{cursor:pointer}tr.pick:hover td{background:#f7f9fd}tr.sel td{background:#eaf1ff}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1280px;margin:0 auto;padding:0 16px 40px}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:16px 0 12px}
+.top h1{font-size:1.2rem;margin:0}.top h1 .sub{color:var(--muted);font-weight:400}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-left:auto}
+.chip{font-size:.74rem;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:3px 10px}
+.chip b{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:var(--bad)}
+.chip b.on{background:var(--ok-dot)}
+.lang button{background:var(--panel);color:var(--muted);border:1px solid var(--line);padding:3px 9px;font:inherit;font-size:.78rem;font-weight:600;cursor:pointer}
+.lang button:first-child{border-radius:6px 0 0 6px}.lang button:last-child{border-radius:0 6px 6px 0;border-left:0}
+.lang button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:14px;overflow-x:auto}
+.tabs button{background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);padding:8px 12px;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
+button{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 11px;cursor:pointer;font-size:.82rem}
+button:hover{border-color:var(--accent)}button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button:disabled{opacity:.5;cursor:default}
+select{font:inherit;font-size:.82rem;padding:4px;border-radius:6px;border:1px solid var(--line);background:var(--panel)}
 .muted{color:var(--muted)}
-.st-used{background:var(--allow)}.st-inconclusive{background:var(--review)}.st-rejected{background:#98a2b3}
+.banner{background:var(--alert-soft);border:1px solid var(--alert-bar);padding:10px 14px;border-radius:8px;margin-bottom:14px}
+.gate{max-width:640px;margin:40px auto;border:1px solid var(--line);border-radius:12px;padding:24px}
+.gate h2{margin:0 0 6px;font-size:1.3rem}
+.gate ul{list-style:none;padding:0;margin:16px 0}
+.gate li{display:grid;grid-template-columns:22px 1fr;gap:4px 8px;padding:8px 0;border-top:1px solid var(--line)}
+.gate li b{font-size:1rem}.gate li b.ok{color:var(--ok)}.gate li b.bad{color:var(--bad)}
+.gate code{grid-column:2;font:.85rem var(--mono);background:var(--panel-2);border-radius:6px;padding:4px 8px;justify-self:start}
+.gate .err{grid-column:2;font-size:.8rem;color:var(--muted)}
+.strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
+@media (max-width:760px){.strip{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stat{background:var(--panel-2);border-radius:10px;padding:10px 14px}
+.stat span{display:block;font-size:.7rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.stat b{display:block;font:600 1.45rem var(--mono);font-variant-numeric:tabular-nums;margin-top:2px}
+.stat small{color:var(--muted);font-size:.74rem}.stat.hot b{color:var(--alert)}
+.grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:14px;align-items:start}
+@media (max-width:920px){.grid{grid-template-columns:1fr}}
+.col{display:grid;gap:14px;min-width:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.panel-h{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:12px 14px 10px}
+.panel-h h2{font-size:.74rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0}
+.panel-h .grow{flex:1}.panel-h .ctl{font-size:.8rem;color:var(--muted)}
+.panel-sub{margin:-4px 14px 12px;color:var(--muted);font-size:.84rem}
+.note{margin:0 14px 10px;padding:8px 11px;border-radius:8px;background:var(--accent-soft);font-size:.84rem}
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{text-align:left;font-weight:500;font-size:.67rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 12px 7px;white-space:nowrap}
+td{padding:7px 12px;border-top:1px solid var(--line);white-space:nowrap;font-variant-numeric:tabular-nums}
+td.num,th.num{text-align:right}
+#stream tr{cursor:pointer}#stream tr:hover td{background:var(--panel-2)}#stream tr.sel td{background:var(--accent-soft)}
+#stream tr.rev td:first-child{box-shadow:inset 3px 0 var(--alert-bar)}
+@media (max-width:560px){.route{display:none}}
+.mono{font-family:var(--mono)}
+.tag{font-size:.68rem;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 5px;margin-left:6px}
+.tag.fraud{color:var(--alert);border-color:var(--alert-bar)}
+.dec{display:inline-block;font-size:.7rem;font-weight:600;letter-spacing:.03em;border-radius:5px;padding:2px 7px}
+.dec.ALLOW{background:var(--ok-soft);color:var(--ok)}.dec.REVIEW{background:var(--alert-soft);color:var(--alert)}
+.rbar{display:inline-block;vertical-align:middle;width:64px;height:5px;border-radius:3px;background:var(--panel-2);position:relative;margin-right:7px}
+.rbar i{position:absolute;inset:0 auto 0 0;border-radius:3px;background:var(--accent)}.rbar.hot i{background:var(--alert-bar)}
+.scen{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 14px 14px}
+.scen button{text-align:left;padding:10px 12px;display:grid;gap:3px;align-content:start}
+.scen button b{font-size:.88rem}.scen button span{color:var(--muted);font-size:.76rem;line-height:1.35}
+.scen button.control{grid-column:1/-1}
+.empty{color:var(--muted);font-size:.86rem;padding:4px 14px 16px;margin:0}
+.case{padding:2px 14px 14px}
+.case-top{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px}
+.case .amount{font:600 1.6rem var(--mono)}.case .amount small{font-size:.8rem;color:var(--muted)}
+.case .route{color:var(--muted);font:.82rem var(--mono)}
+.part{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
+.part-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px}
+.part-h span{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.part-h b{font:600 .95rem var(--mono)}
+.track{height:9px;border-radius:5px;background:var(--panel-2);position:relative}
+.track i{position:absolute;inset:0 auto 0 0;border-radius:5px;background:linear-gradient(90deg,var(--accent),var(--alert-bar))}
+.track .cut{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink)}
+.small-note{color:var(--muted);font-size:.78rem;margin:6px 0 0}
+.sub-h{font-size:.8rem;font-weight:600;margin:12px 0 8px}
+.why-row{margin-bottom:9px;font-size:.85rem}
+.why-row .txt{display:flex;justify-content:space-between;gap:10px}.why-row .txt b{font-family:var(--mono);font-weight:500;white-space:nowrap}
+.why-row .wb{display:flex;align-items:center;gap:8px;margin-top:3px}
+.why-row .wb span{flex:1;height:6px;border-radius:3px;background:var(--panel-2);position:relative}
+.why-row .wb span i{position:absolute;inset:0 auto 0 0;border-radius:3px;background:var(--alert-bar)}
+.why-row .wb em{font:normal .74rem var(--mono);color:var(--alert);width:44px;text-align:right}
+.rules{display:flex;flex-wrap:wrap;gap:6px}
+.rule{font-size:.76rem;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:2px 8px}
+.rule.must{border-color:var(--alert-bar);color:var(--alert);background:var(--alert-soft)}
+.queue{list-style:none;margin:0;padding:0}
+.queue li{border-top:1px solid var(--line);padding:10px 14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 10px;align-items:center;cursor:pointer}
+.queue li:hover{background:var(--panel-2)}.queue li.sel{background:var(--accent-soft)}
+.queue .amt{font:600 .95rem var(--mono)}.queue .kind{color:var(--muted);font-size:.76rem}
+.queue .acts{display:flex;gap:6px;flex-wrap:wrap}.queue .acts button{padding:5px 9px;font-size:.76rem}
+.count{font-family:var(--mono);color:var(--muted)}
+.timing{max-width:860px;margin-bottom:14px}
+.live{font-size:.7rem;font-weight:600;color:var(--ok);background:var(--ok-soft);border-radius:999px;padding:2px 9px}
+.lead{margin:-4px 14px 12px;color:var(--muted);font-size:.88rem;max-width:70ch}
+.stages{list-style:none;margin:0;padding:0;counter-reset:stage}
+.stages li{counter-increment:stage;display:grid;grid-template-columns:26px minmax(0,1fr) minmax(70px,180px) 84px;gap:4px 12px;align-items:center;padding:9px 14px;border-top:1px solid var(--line)}
+.stages li::before{content:counter(stage);font:600 .78rem var(--mono);color:var(--muted)}
+.stages .name{font-weight:600;font-size:.9rem}.stages .desc{display:block;color:var(--muted);font-size:.78rem;font-weight:400}
+.stages .sbar{height:8px;border-radius:4px;background:var(--panel-2);position:relative}
+.stages .sbar i{position:absolute;inset:0 auto 0 0;border-radius:4px;background:var(--accent);min-width:2px}
+.stages li.model .sbar i{background:var(--alert-bar)}
+.stages .v{font:500 .88rem var(--mono);text-align:right;white-space:nowrap}
+@media (max-width:560px){.stages li{grid-template-columns:22px minmax(0,1fr) 70px}.stages .sbar{display:none}}
+.total{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;padding:12px 14px;border-top:2px solid var(--ink)}
+.total span{font-weight:600}.total b{font:600 1.2rem var(--mono);margin-left:auto}
+.fine{color:var(--muted);font-size:.8rem;margin:0;padding:0 14px 14px;max-width:75ch}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;padding:0 14px 14px}
+.tile{background:var(--panel-2);border-radius:10px;padding:10px 14px}
+.tile span{color:var(--muted);font-size:.78rem}.tile b{display:block;font:600 1.25rem var(--mono)}
+.part-title{font-size:1.05rem;margin:26px 0 4px}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+.box h3{margin:0 0 6px;font-size:1rem}
+.box .tiles{padding:0;margin:10px 0}
+.badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:.72rem;font-weight:600;color:#fff;vertical-align:middle}
+.st-used{background:var(--ok)}.st-inconclusive{background:var(--alert)}.st-rejected{background:#98a2b3}
 .facts{margin:6px 0 10px;padding-left:20px}.facts li{margin:4px 0}
 .frame{width:100%;height:78vh;border:1px solid var(--line);border-radius:10px;background:#fff}
-@media (max-width:900px){.split{grid-template-columns:1fr}}
+.hint{color:var(--muted);margin:0 0 12px;max-width:900px;font-size:.9rem}
 </style>
 </head>
 <body>
-<header>
-  <h1 data-t="title"></h1>
-  <div class="chips"><span class="chip" id="c-kafka"></span><span class="chip" id="c-bg"></span><span class="chip" id="c-model"></span></div>
-  <div class="lang"><button data-lang="ru">RU</button><button data-lang="en">EN</button></div>
-</header>
-<nav>
-  <button data-tab="live" data-t="tab_live"></button>
-  <button data-tab="scn" data-t="tab_scn"></button>
-  <button data-tab="cases" data-t="tab_cases"></button>
-  <button data-tab="grafana" data-t="tab_grafana"></button>
-  <button data-tab="results" data-t="tab_results"></button>
-</nav>
-<main>
-  <div id="banner" class="banner" hidden></div>
+<div class="wrap">
+  <header class="top">
+    <h1><span data-t="title"></span> <span class="sub" data-t="subtitle"></span></h1>
+    <div class="chips" id="chips"></div>
+    <div class="lang"><button type="button" data-lang="ru">RU</button><button type="button" data-lang="en">EN</button></div>
+  </header>
 
-  <section id="live">
-    <p class="hint" data-t="live_hint"></p>
-    <div class="row">
-      <button class="primary" id="bg-btn"></button>
-      <label><span data-t="speed"></span>
-        <select id="bg-speed"><option value="100">×100</option><option value="200" selected>×200</option><option value="500">×500</option></select></label>
-      <label><input type="checkbox" id="alerts-only"> <span data-t="alerts_only"></span></label>
-    </div>
-    <div class="tiles" id="tiles"></div>
-    <div class="wrap"><table><thead><tr>
-      <th data-t="h_time"></th><th class="num" data-t="h_amount"></th><th data-t="h_route"></th>
-      <th data-t="h_decision"></th><th data-t="h_risk"></th><th data-t="h_rules"></th>
-    </tr></thead><tbody id="stream"></tbody></table></div>
-  </section>
-
-  <section id="scn" hidden>
-    <p class="hint" data-t="scn_hint"></p>
-    <div class="cards" id="cards"></div>
-    <div id="result"></div>
-  </section>
-
-  <section id="cases" hidden>
-    <p class="hint" data-t="cases_hint"></p>
-    <div class="row"><label><input type="checkbox" id="new-only" checked> <span data-t="new_only"></span></label></div>
-    <div class="tiles" id="case-stats"></div>
-    <div class="split">
-      <div class="wrap"><table><thead><tr>
-        <th data-t="h_time"></th><th class="num" data-t="h_amount"></th>
-        <th data-t="h_decision"></th><th data-t="h_type"></th>
-      </tr></thead><tbody id="case-list"></tbody></table></div>
-      <div class="panel" id="case-detail"></div>
+  <section id="gate" hidden>
+    <div class="gate">
+      <h2 data-t="gate_title"></h2>
+      <p class="muted" data-t="gate_hint"></p>
+      <ul id="gate-list"></ul>
+      <p class="muted" data-t="gate_auto"></p>
     </div>
   </section>
 
-  <section id="grafana" hidden>
-    <p class="hint" data-t="grafana_hint"></p>
-    <div class="row"><a id="grafana-link" target="_blank" rel="noopener" data-t="grafana_open"></a></div>
-    <iframe id="grafana-frame" class="frame" title="Grafana"></iframe>
-  </section>
+  <div id="app" hidden>
+    <nav class="tabs">
+      <button type="button" data-tab="desk" data-t="tab_desk"></button>
+      <button type="button" data-tab="grafana" data-t="tab_grafana"></button>
+      <button type="button" data-tab="results" data-t="tab_results"></button>
+    </nav>
+    <div id="banner" class="banner" hidden></div>
 
-  <section id="results" hidden>
-    <p class="hint" data-t="results_hint"></p>
-    <div id="own"></div>
-    <div id="public"></div>
-  </section>
-</main>
+    <section id="desk">
+      <div class="strip" id="strip"></div>
+      <div class="grid">
+        <div class="col">
+          <div class="panel">
+            <div class="panel-h">
+              <h2 data-t="stream_title"></h2><span class="grow"></span>
+              <button type="button" class="primary" id="bg-btn"></button>
+              <label class="ctl"><span data-t="speed"></span>
+                <select id="bg-speed"><option value="100">×100</option><option value="200" selected>×200</option><option value="500">×500</option></select></label>
+              <label class="ctl"><input type="checkbox" id="alerts-only"> <span data-t="alerts_only"></span></label>
+            </div>
+            <p class="panel-sub" data-t="stream_hint"></p>
+            <div class="note" id="note" hidden></div>
+            <div class="tbl"><table>
+              <thead><tr><th data-t="h_time"></th><th class="num" data-t="h_amount"></th><th class="route" data-t="h_route"></th><th data-t="h_risk"></th><th data-t="h_decision"></th></tr></thead>
+              <tbody id="stream"></tbody>
+            </table></div>
+          </div>
+          <div class="panel">
+            <div class="panel-h"><h2 data-t="cases_title"></h2></div>
+            <p class="panel-sub" data-t="cases_hint"></p>
+            <div class="scen" id="scen"></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="panel">
+            <div class="panel-h"><h2 data-t="selected_title"></h2></div>
+            <div id="detail"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-h"><h2 data-t="queue_title"></h2><span class="grow"></span><span class="count" id="q-count"></span></div>
+            <p class="panel-sub" data-t="queue_hint"></p>
+            <ul class="queue" id="queue"></ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="grafana" hidden>
+      <p class="hint" data-t="grafana_hint"></p>
+      <p><a id="grafana-link" target="_blank" rel="noopener" data-t="grafana_open"></a></p>
+      <iframe id="grafana-frame" class="frame" title="Grafana"></iframe>
+    </section>
+
+    <section id="results" hidden>
+      <div class="panel timing">
+        <div class="panel-h"><h2 data-t="time_title"></h2><span class="grow"></span><span class="live" data-t="live_tag"></span></div>
+        <p class="lead" data-t="time_lead"></p>
+        <ol class="stages" id="stages"></ol>
+        <div class="total" id="total"></div>
+        <p class="fine" id="time-fine"></p>
+      </div>
+      <div class="panel timing">
+        <div class="panel-h"><h2 data-t="verdicts_title"></h2><span class="grow"></span><span class="live" data-t="live_tag"></span></div>
+        <p class="lead" data-t="verdicts_hint"></p>
+        <div class="tiles" id="verdicts"></div>
+      </div>
+      <h2 class="part-title" id="trained-title"></h2>
+      <p class="hint" data-t="trained_hint"></p>
+      <div id="own"></div>
+      <p class="hint" data-t="public_hint"></p>
+      <div id="public"></div>
+    </section>
+  </div>
+</div>
 
 <script>
 const T = {
 ru: {
-  title: "Обнаружение мошенничества в P2P-переводах — живое демо",
-  tab_live: "Поток", tab_scn: "Сценарии", tab_cases: "Аналитик",
-  tab_grafana: "Grafana", tab_results: "Данные и результаты",
-  kafka_on: "Kafka: подключено", kafka_off: "Kafka: нет связи",
-  bg_on: "Фоновый поток: идёт", bg_off: "Фоновый поток: выключен", model: "Модель",
-  bg_start: "Запустить фоновый поток", bg_stop: "Остановить фоновый поток",
-  speed: "Скорость ", alerts_only: "Только тревоги",
-  live_hint: "Каждая строка — перевод, который система только что оценила: решение, риск от 0 до 1 и сработавшие правила. Фоновый поток — переводы из набора данных в их исходном ритме, ускоренном в выбранное число раз.",
-  t_total: "Решений", t_allow: "Пропущено", t_review: "На проверку", t_ms: "Время решения, медиана",
-  h_time: "Время", h_amount: "Сумма", h_route: "Откуда → куда", h_decision: "Решение", h_risk: "Риск",
-  h_rules: "Сработавшие правила", h_role: "Роль", h_when: "Когда", h_type: "Тип",
-  empty_live: "Пока нет решений. Запустите фоновый поток или проиграйте сценарий.",
-  scn_hint: "Каждый сценарий — настоящий эпизод из той части данных, которую модель не видела при обучении. Отправитель получает новую карту, поэтому система знакомится с ним с нуля: сначала его обычные переводы, затем сам эпизод.",
-  real_note: "Настоящий эпизод из данных, которых модель не видела",
-  play: "Проиграть", role_history: "история", role_episode: "эпизод",
-  now: "сейчас", u_min: "мин", u_h: "ч", u_d: "дн",
-  waiting: "ждём решения…", sending: "отправляем…",
-  caught: "Поймано мошеннических переводов: {a} из {b}",
-  false_alarms: "Ложных тревог на обычных переводах: {a} из {b}",
-  why: "Почему модель насторожилась", why_status: {NO_MODEL: "файл модели для объяснений не найден", MODEL_MISMATCH: "модель объяснений не совпадает с рабочей — объяснение не показано", NO_FEATURES: "решение принято без признаков модели", FAILED: "объяснение не удалось посчитать"},
-  cases_hint: "Тревоги, по которым система уже приняла решение за доли секунды: «Заблокирован» или «На проверку». В настоящем банке это решение останавливало бы или откладывало перевод; прототип решение записывает, но сам платёж не трогает. Аналитик здесь не пропускает и не блокирует платёж — он отмечает, было ли это мошенничество на самом деле. Эти отметки — единственные настоящие метки в системе: по ним считается точность, и на них банк переобучал бы модель. Самые срочные — сверху.",
-  confirm: "Подтвердить мошенничество", fp: "Ложная тревога",
-  st_open: "Открыто дел", st_conf: "Подтверждено", st_fp: "Ложных тревог", st_prec: "Точность по разобранным",
-  empty_cases: "Открытых дел нет. Проиграйте сценарий — тревоги появятся здесь через несколько секунд.",
-  pick_case: "Выберите дело в списке.",
-  new_only: "Только новые — открытые с начала показа",
-  grafana_hint: "Панель мониторинга Grafana из этого же стека: те же решения, собранные в хранилище, — число переводов и тревог, типы, распределение риска, регионы, последние тревоги с причинами. Если в рамке появится вход: логин admin, пароль из файла .env.",
+  title: "Обнаружение мошенничества в P2P-переводах", subtitle: "· живое демо",
+  tab_desk: "Рабочее место", tab_grafana: "Grafana", tab_results: "Данные и результаты",
+  part: {kafka: "Kafka — очередь сообщений", clickhouse: "ClickHouse — база данных",
+    job: "Задача Flink — принимает решения", data: "Данные генератора"},
+  fix: {kafka: ".\\run.ps1 up", clickhouse: ".\\run.ps1 up", job: ".\\run.ps1 submit-job",
+    data: ".\\run.ps1 generate; docker compose restart demo"},
+  gate_title: "Система не запущена",
+  gate_hint: "Демо показывает только работающую систему. Запустите то, что отмечено крестиком:",
+  gate_auto: "Страница откроется сама, как только всё заработает.",
+  gate_down: "Сервер демо не отвечает. Запустите стек: .\\run.ps1 up",
+  model: "Модель",
+  t_total: "Оценено переводов", t_review: "Отправлено на проверку",
+  t_prec: "Подтверждено мошенничества", t_prec_sub: "{a} из {b} разобранных тревог", t_prec_none: "тревоги ещё не разбирали",
+  t_ms: "От прихода до решения, медиана", t_ms_sub: "99% — быстрее {p99}",
+  stream_title: "Переводы по мере решения",
+  stream_hint: "Каждая строка — перевод из данных генератора, который система только что оценила. Нажмите строку, чтобы увидеть, как она решила.",
+  bg_start: "Запустить поток", bg_stop: "Остановить поток", speed: "Скорость ", alerts_only: "Только тревоги",
+  h_time: "Время", h_amount: "Сумма, сум", h_route: "Откуда → куда", h_risk: "Риск", h_decision: "Решение",
+  empty_live: "Пока нет решений. Запустите поток или покажите случай мошенничества.",
+  tag_history: "история", tag_case: "случай: {kind}", tag_control: "контроль",
+  cases_title: "Показать случай мошенничества",
+  cases_hint: "Настоящий случай из той части данных, которую модель не видела, отправляется в систему сейчас: сначала обычные переводы человека, затем само мошенничество.",
+  sending: "Отправляем: {kind}…",
+  caught: "поймано мошеннических переводов: {a} из {b}", false_alarms: "ложных тревог на обычных переводах: {a} из {b}",
+  no_decisions: "Переводы отправлены, но решений нет. Проверьте задачу Flink: http://localhost:8081",
+  selected_title: "Выбранный перевод",
+  pick: "Нажмите перевод в списке или дело в очереди, чтобы увидеть, как система решила.",
+  part_model: "Модель", part_rules: "Жёсткие правила", risk: "риск",
+  cut_note: "Чёрная черта — уровень тревоги {cut}. Правее неё перевод уходит аналитику.",
+  rules_fired: "сработало {n} из 10",
+  note_must: "Это правило требует регулятор. Оно само отправляет перевод на проверку, что бы ни сказала модель.",
+  note_named: "Эти правила не решают. Они дают тревоге название: {type}.",
+  note_reasons: "Эти правила не решают. Аналитик видит их как причины.",
+  note_model_only: "Ни одно правило не сработало. Тревогу подняла одна модель, поэтому у неё нет названия.",
+  note_allowed: "Пропущен: риск ниже уровня тревоги, и ни одно правило не требует проверки.",
+  why: "Почему модель насторожилась",
+  why_status: {NO_MODEL: "файл модели для объяснений не найден", MODEL_MISMATCH: "модель объяснений не совпадает с рабочей — объяснение не показано", NO_FEATURES: "решение принято без признаков модели", FAILED: "объяснение не удалось посчитать"},
+  queue_title: "Очередь аналитика",
+  queue_hint: "Тревоги с начала показа. Аналитик не пропускает и не блокирует платёж: он отмечает, было ли это мошенничеством. Эти отметки — единственные настоящие метки в системе.",
+  confirm: "Мошенничество", fp: "Ложная тревога", type_none: "тип не назван",
+  empty_cases: "Новых тревог нет. Покажите случай мошенничества — тревога появится здесь через несколько секунд.",
+  no_store: "Очередь недоступна: ",
+  grafana_hint: "Панель мониторинга Grafana из этого же стека: те же решения, собранные в базе, — число переводов и тревог, типы, распределение риска, регионы, последние тревоги с причинами. Если в рамке появится вход: логин admin, пароль из файла .env.",
   grafana_open: "Открыть Grafana в отдельной вкладке",
-  results_hint: "На публичных данных модель тоже обучали — отдельно на каждом наборе и только для проверки подхода: обучили на одной части набора, проверили на другой, сравнили с опубликованными работами, и эта модель на этом закончилась. Модель, которая работает в системе, обучена на наших искусственных данных: в публичных наборах нет половины наших признаков (устройство, сессия, возраст счёта получателя), в них другие деньги и суммы, а обучившись на данных, по которым себя проверяем, мы потеряли бы независимую проверку.",
-  own_title: "Наши данные — реалистичный генератор переводов под Узбекистан",
+  live_tag: "живые данные из базы",
+  time_title: "Сколько времени занимает каждый этап",
+  time_lead: "Путь одного перевода от прихода до решения. Каждое число — среднее по последним решениям в базе, и этапы складываются в общее время.",
+  stage: {kafka: ["Во входную очередь", "Перевод записывается в Kafka."],
+    handoff: ["Передача на обработку", "Flink читает очередь и передаёт переводы дальше небольшими пачками: пачка уходит через 50 мс или когда в ней 100 переводов."],
+    decode: ["Чтение сообщения", "Перевод распаковывается."],
+    state: ["История отправителя", "Что этот отправитель делал раньше; хранится во Flink."],
+    redis: ["Сторона получателя", "Последние платежи этому получателю, из Redis."],
+    rules: ["Признаки и правила", "21 признак, 10 правил."],
+    model: ["Модель", "Один прогноз модели LightGBM."],
+    decide: ["Решение", "Пропустить или на проверку, название тревоги, запись результата."]},
+  total_avg: "От прихода до решения, в среднем",
+  time_fine: "Среднее по последним {n} решениям в базе. Половина из них принята быстрее {median}, 99% — быстрее {p99}. Решения попадают в базу примерно через полминуты.",
+  time_empty: "В базе ещё нет решений со временем этапов. Запустите поток или покажите случай — через полминуты они появятся здесь.",
+  verdicts_title: "Отметки аналитика", verdicts_hint: "Все дела в базе, включая прошлые показы.",
+  v_open: "Ждут разбора", v_conf: "Подтверждено", v_fp: "Ложных тревог", v_prec: "Точность по разобранным",
+  trained_title: "Измерено при обучении модели, {date}",
+  trained_hint: "Эти цифры не живые: их посчитали один раз, когда обучали модель, на той части данных генератора, которую она не видела. Меняются только при переобучении.",
+  public_hint: "На публичных данных модель тоже обучали — отдельно на каждом наборе и только для проверки подхода: обучили на одной части, проверили на другой и сравнили с опубликованными работами. Модель, которая работает в системе, обучена на данных нашего генератора: в публичных наборах нет половины наших признаков, и обучившись на них, мы потеряли бы независимую проверку.",
+  own_title: "Наши данные — генератор переводов под Узбекистан",
   own_split: "{rows} переводов, мошенничества {share}. Модель учится на первых {fit} по времени, порог тревоги подбирается на следующих {val}, проверка — на последних {test}, среди них {tf} мошеннических; эту часть модель не видела.",
   m_prec: "Точность: доля настоящего мошенничества среди тревог", m_rec: "Полнота: доля пойманного мошенничества",
   m_prauc: "Качество ранжирования (PR-AUC, 0–1)", m_rocauc: "ROC-AUC (0–1)", m_rules: "Только правила: точность / полнота",
   by_type: "Поймано по типам",
-  own_caveat: "Данные искусственные, но сделаны похожими на жизнь: мошенничества 0,2%, честные люди иногда ведут себя «подозрительно», часть мошенничества никто не заявил. Прежние 93% точности были на слишком простых данных.",
-  st_used: "использован", st_inconclusive: "не смог ответить", st_rejected: "отброшены",
+  own_caveat: "Данные искусственные, но похожи на жизнь: мошенничества 0,2%, честные люди иногда ведут себя «подозрительно», часть мошенничества никто не заявил.",
+  st_used: "использован", st_inconclusive: "не смог ответить", st_rejected: "отброшен",
   what: "Что это", how: "Что проверяли", verdict: "Вывод", source: "Подробно",
-  no_kafka: "Нет связи с Kafka. Запустите стек (.\\run.ps1 up) и задачу (.\\run.ps1 submit-job), страница подключится сама.",
-  no_decisions: "Переводы отправлены, но решений нет. Проверьте, что задача Flink запущена: http://localhost:8081",
-  no_store: "Очередь недоступна: ",
-  sum: "сум", score: "риск",
+  sum: "сум", ms: "мс",
   dec: {ALLOW: "Пропущен", REVIEW: "На проверку"},
-  kind: {NORMAL: "Обычный перевод", APP: "Мошенник по телефону", ATO: "Захват аккаунта", MULE: "Дроп-счёт", STRUCTURING: "Дробление сумм", NONE: "обычный"},
+  kind: {NORMAL: "Обычный перевод", APP: "Мошенник по телефону", ATO: "Захват аккаунта", MULE: "Дроп-счёт", STRUCTURING: "Дробление сумм"},
   kind_desc: {
-    NORMAL: "Привычный перевод знакомому получателю после обычной истории отправителя. Ожидаем: пропуск.",
+    NORMAL: "Контрольный случай: привычный перевод знакомому получателю. Должен пройти.",
     APP: "Мошенник по телефону убеждает жертву перевести крупную сумму на новый, недавно открытый счёт.",
     ATO: "Кто-то получил доступ к чужой карте и выводит с неё деньги новым получателям.",
-    MULE: "Дроп-счёт: деньги многих людей за короткое время стекаются на один счёт и уходят дальше.",
+    MULE: "Деньги многих людей за короткое время стекаются на один счёт и уходят дальше.",
     STRUCTURING: "Крупная сумма дробится на части чуть ниже порога отчётности в 10 млн сум, в течение часа."},
   rules: {NEW_PAYEE_HIGH_AMOUNT: "новый получатель и крупная сумма",
     VELOCITY: "много переводов за 10 минут", STRUCTURING: "суммы чуть ниже порога отчётности",
@@ -192,58 +320,88 @@ ru: {
     sender_payees_24h: "разным получателям заплатил отправитель за сутки", sender_payees_7d: "разным получателям заплатил отправитель за неделю",
     secs_since_sender_inbound: "прошло с тех пор, как отправителю самому заплатили",
     geo_is_anomaly: "операция вне обычного региона",
-    active_call: "звонок во время подтверждения", secs_login_z: "задержка подтверждения против привычки",
-    cep_score: "оценка правил"}
+    active_call: "звонок во время подтверждения", secs_login_z: "задержка подтверждения против привычки"}
 },
 en: {
-  title: "P2P transfer fraud detection — live demo",
-  tab_live: "Stream", tab_scn: "Scenarios", tab_cases: "Analyst",
-  tab_grafana: "Grafana", tab_results: "Data & results",
-  kafka_on: "Kafka: connected", kafka_off: "Kafka: unreachable",
-  bg_on: "Background stream: on", bg_off: "Background stream: off", model: "Model",
-  bg_start: "Start background stream", bg_stop: "Stop background stream",
-  speed: "Speed ", alerts_only: "Alerts only",
-  live_hint: "Each row is a transfer the system has just scored: the decision, a risk from 0 to 1 and the rules that fired. The background stream replays the dataset at its own pacing, sped up by the chosen factor.",
-  t_total: "Decisions", t_allow: "Allowed", t_review: "Review", t_ms: "Decision time, median",
-  h_time: "Time", h_amount: "Amount", h_route: "From → to", h_decision: "Decision", h_risk: "Risk",
-  h_rules: "Rules fired", h_role: "Role", h_when: "When", h_type: "Type",
-  empty_live: "No decisions yet. Start the background stream or replay a scenario.",
-  scn_hint: "Each scenario is a real episode from the part of the data the model never trained on. The sender gets a new card, so the system meets them from scratch: their usual transfers first, then the episode itself.",
-  real_note: "A real episode from data the model never saw",
-  play: "Replay", role_history: "history", role_episode: "episode",
-  now: "now", u_min: "min", u_h: "h", u_d: "d",
-  waiting: "waiting for the decision…", sending: "sending…",
-  caught: "Fraudulent transfers caught: {a} of {b}",
-  false_alarms: "False alarms on ordinary transfers: {a} of {b}",
-  why: "Why the model was suspicious", why_status: {NO_MODEL: "no model file for explanations", MODEL_MISMATCH: "the explanation model disagrees with the scorer — not shown", NO_FEATURES: "decided without model features", FAILED: "the explanation could not be computed"},
-  cases_hint: "Alerts the system has already raised in a fraction of a second. It never blocks on its own: in a real bank the transfer would be held for a person; the prototype records the alert and does not touch the payment. The analyst does not release or block anything here — they mark whether it really was fraud. Those marks are the only real labels the system gets: precision is computed from them, and a bank would retrain the model on them. Most urgent first.",
-  confirm: "Confirm fraud", fp: "False alarm",
-  st_open: "Open cases", st_conf: "Confirmed", st_fp: "False alarms", st_prec: "Precision on resolved",
-  empty_cases: "No open cases. Replay a scenario — its alerts appear here within seconds.",
-  pick_case: "Pick a case from the list.",
-  new_only: "Only new — opened since this demo started",
-  grafana_hint: "The Grafana monitoring dashboard from the same stack: the same decisions as stored in the warehouse — transfer and alert counts, types, the risk distribution, regions, the latest alerts with their reasons. If a login appears in the frame: user admin, password from the .env file.",
+  title: "P2P transfer fraud detection", subtitle: "· live demo",
+  tab_desk: "Desk", tab_grafana: "Grafana", tab_results: "Data & results",
+  part: {kafka: "Kafka — the message queue", clickhouse: "ClickHouse — the database",
+    job: "Flink job — makes the decisions", data: "The generator's data"},
+  fix: {kafka: ".\\run.ps1 up", clickhouse: ".\\run.ps1 up", job: ".\\run.ps1 submit-job",
+    data: ".\\run.ps1 generate; docker compose restart demo"},
+  gate_title: "The system is not running",
+  gate_hint: "The demo shows only the running system. Start what is crossed out:",
+  gate_auto: "The page opens by itself once everything is up.",
+  gate_down: "The demo server is not answering. Start the stack: .\\run.ps1 up",
+  model: "Model",
+  t_total: "Transfers scored", t_review: "Sent to review",
+  t_prec: "Confirmed fraud", t_prec_sub: "{a} of {b} resolved alerts", t_prec_none: "no alert resolved yet",
+  t_ms: "Arrival → decision, median", t_ms_sub: "99% within {p99}",
+  stream_title: "Transfers as they are decided",
+  stream_hint: "Each row is a transfer from the generator's data that the system has just scored. Click a row to see how it was judged.",
+  bg_start: "Start the stream", bg_stop: "Stop the stream", speed: "Speed ", alerts_only: "Alerts only",
+  h_time: "Time", h_amount: "Amount, UZS", h_route: "From → to", h_risk: "Risk", h_decision: "Decision",
+  empty_live: "No decisions yet. Start the stream or show a fraud case.",
+  tag_history: "history", tag_case: "case: {kind}", tag_control: "control",
+  cases_title: "Show a fraud case",
+  cases_hint: "A real case from the part of the data the model never saw is sent through the running system now: first the person's usual transfers, then the fraud.",
+  sending: "Sending: {kind}…",
+  caught: "fraudulent transfers caught: {a} of {b}", false_alarms: "false alarms on ordinary transfers: {a} of {b}",
+  no_decisions: "The transfers were sent but no decision came back. Check the Flink job: http://localhost:8081",
+  selected_title: "Selected transfer",
+  pick: "Click a transfer in the list or a case in the queue to see how the system judged it.",
+  part_model: "Model", part_rules: "Hard rules", risk: "risk",
+  cut_note: "The black line is the alert level, {cut}. Past it, the transfer goes to an analyst.",
+  rules_fired: "{n} of 10 fired",
+  note_must: "The regulator requires this rule. It sends the transfer to review by itself, whatever the model says.",
+  note_named: "These rules do not decide. They give the alert its name: {type}.",
+  note_reasons: "These rules do not decide. The analyst sees them as reasons.",
+  note_model_only: "No rule fired. The model alone raised this alert, so it has no name.",
+  note_allowed: "Allowed: the risk is under the alert level and no rule asked for a review.",
+  why: "Why the model was suspicious",
+  why_status: {NO_MODEL: "no model file for explanations", MODEL_MISMATCH: "the explanation model disagrees with the scorer — not shown", NO_FEATURES: "decided without model features", FAILED: "the explanation could not be computed"},
+  queue_title: "Analyst queue",
+  queue_hint: "Alerts since this demo started. The analyst does not release or block a payment: they mark whether it was fraud. Those marks are the only real labels the system gets.",
+  confirm: "Fraud", fp: "False alarm", type_none: "type not named",
+  empty_cases: "No new alerts. Show a fraud case — its alert appears here within seconds.",
+  no_store: "Queue unavailable: ",
+  grafana_hint: "The Grafana dashboard from the same stack: the same decisions as stored in the database — transfer and alert counts, types, the risk distribution, regions, the latest alerts with their reasons. If a login appears in the frame: user admin, password from the .env file.",
   grafana_open: "Open Grafana in its own tab",
-  results_hint: "Models were trained on the public data too — separately on each set, and only to check the approach: trained on one part of the set, tested on another, compared with published work, and that was the end of that model. The model running in the system is trained on our synthetic data: the public sets lack half of our features (device, session, the payee's account age), use other money and amounts, and training on the data we check ourselves against would have cost the independent check.",
-  own_title: "Our data — the realistic transfer generator calibrated to Uzbekistan",
-  own_split: "{rows} transfers, {share} of them fraud. The model learns on the first {fit} in time, the alert cutoff is chosen on the next {val}, and it is tested on the last {test}, {tf} of them fraud; the model never saw that part.",
+  live_tag: "live, from the database",
+  time_title: "How long each stage takes",
+  time_lead: "One transfer's path from arrival to decision. Each figure is the average over the latest decisions in the database, and the stages add up to the total.",
+  stage: {kafka: ["Into the incoming queue", "The transfer is written to Kafka."],
+    handoff: ["Handed to the processing step", "Flink reads the queue and passes transfers on in small batches: a batch leaves after 50 ms or at 100 transfers."],
+    decode: ["Reading the message", "The transfer is unpacked."],
+    state: ["The sender's history", "What this sender did before, kept in Flink."],
+    redis: ["The receiver's side", "Recent payments to this receiver, from Redis."],
+    rules: ["Features and rules", "21 features computed, 10 rules checked."],
+    model: ["The model", "One prediction by the LightGBM model."],
+    decide: ["The decision", "Allow or review, the alert named, the record written."]},
+  total_avg: "From arrival to decision, on average",
+  time_fine: "Average over the latest {n} decisions in the database. Half of them were decided within {median}, 99% within {p99}. Decisions reach the database about half a minute after they are made.",
+  time_empty: "The database holds no decision with stage times yet. Start the stream or show a case: they appear here within half a minute.",
+  verdicts_title: "Analyst verdicts", verdicts_hint: "Every case in the database, earlier demos included.",
+  v_open: "Waiting", v_conf: "Confirmed", v_fp: "False alarms", v_prec: "Precision on resolved",
+  trained_title: "Measured when the model was trained, {date}",
+  trained_hint: "These figures are not live: they were computed once, when the model was trained, on the part of the generator's data it never saw. They change only when the model is retrained.",
+  public_hint: "Models were trained on the public data too — separately on each set, and only to check the approach: trained on one part, tested on another, compared with published work. The model running in the system is trained on our generator's data: the public sets lack half of our features, and training on them would have cost the independent check.",
+  own_title: "Our data — the transfer generator calibrated to Uzbekistan",
+  own_split: "{rows} transfers, {share} of them fraud. The model learns on the first {fit} in time, the alert level is chosen on the next {val}, and it is tested on the last {test}, {tf} of them fraud; the model never saw that part.",
   m_prec: "Precision: share of alerts that are real fraud", m_rec: "Recall: share of fraud caught",
   m_prauc: "Ranking quality (PR-AUC, 0-1)", m_rocauc: "ROC-AUC (0-1)", m_rules: "Rules alone: precision / recall",
   by_type: "Caught by type",
-  own_caveat: "Synthetic, but shaped like life: 0.2% fraud, honest people who sometimes look suspicious, fraud nobody reported. The earlier 93% precision was measured on data that was too easy.",
+  own_caveat: "Synthetic, but shaped like life: 0.2% fraud, honest people who sometimes look suspicious, fraud nobody reported.",
   st_used: "used", st_inconclusive: "could not answer", st_rejected: "rejected",
   what: "What it is", how: "What was checked", verdict: "Verdict", source: "In full",
-  no_kafka: "Kafka is unreachable. Start the stack (.\\run.ps1 up) and the job (.\\run.ps1 submit-job); the page reconnects by itself.",
-  no_decisions: "The transfers were sent but no decision came back. Check that the Flink job is running: http://localhost:8081",
-  no_store: "Queue unavailable: ",
-  sum: "UZS", score: "risk",
-  dec: {ALLOW: "Allowed", REVIEW: "Review"},
-  kind: {NORMAL: "Ordinary transfer", APP: "Phone scam (APP)", ATO: "Account takeover", MULE: "Money mule", STRUCTURING: "Structuring", NONE: "ordinary"},
+  sum: "UZS", ms: "ms",
+  dec: {ALLOW: "ALLOW", REVIEW: "REVIEW"},
+  kind: {NORMAL: "Ordinary transfer", APP: "Phone scam", ATO: "Account takeover", MULE: "Money mule", STRUCTURING: "Structuring"},
   kind_desc: {
-    NORMAL: "A usual transfer to a known payee after the sender's ordinary history. Expected: allowed.",
+    NORMAL: "The control case: a usual transfer to a known payee, which should pass.",
     APP: "A caller talks the victim into sending a large amount to a new, freshly opened account.",
     ATO: "Someone has taken over a card and is draining it to new payees.",
-    MULE: "A mule account: money from many people converges on one account within a short time and moves on.",
+    MULE: "Money from many people converges on one account within a short time and moves on.",
     STRUCTURING: "A large amount split into pieces just under the 10 million UZS reporting threshold, within an hour."},
   rules: {NEW_PAYEE_HIGH_AMOUNT: "new payee, large amount",
     VELOCITY: "many transfers in 10 minutes", STRUCTURING: "amounts just under the reporting threshold",
@@ -254,46 +412,28 @@ en: {
   feat: {}
 }};
 
+// The job's MANDATORY_REVIEW_RULES (stream-processor/config.py): these send a
+// transfer to review by themselves.
+const MUST = new Set(["STRUCTURING", "DAILY_LIMIT_BREACH"]);
+const PARTS = ["kafka", "clickhouse", "job", "data"];
+const FRAUD_KINDS = ["APP", "ATO", "MULE", "STRUCTURING"];
+
 const $ = s => document.querySelector(s);
-const esc = v => String(v ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let lang = "ru", tab = "live", runId = null, runStarted = 0, selCase = null, lastCases = null, status = null;
+const esc = v => String(v ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+let lang = "ru", tab = "desk", status = null, runId = null, runStarted = 0, runPicked = null;
+let selected = null, streamRows = [], lastCases = null, results = null;
 try { lang = localStorage.getItem("demo-lang") || "ru"; } catch (e) {}
 const t = k => (T[lang][k] ?? T.en[k] ?? k);
-const fmtAmount = n => Number(n || 0).toLocaleString("ru-RU").replace(/ /g, " ") + " " + t("sum");
-const fmtTime = s => s ? new Date((typeof s === "number" ? s * 1000 : Date.parse(String(s).replace(" ", "T") + "Z"))).toLocaleTimeString(lang === "ru" ? "ru-RU" : "en-GB") : "";
-const badge = d => d ? `<span class="badge ${esc(d)}">${esc(t("dec")[d] || d)}</span>` : `<span class="muted">${t("waiting")}</span>`;
-const bar = (s, d) => s == null ? "" : `<span class="bar"><i style="width:${Math.round(Math.min(1, s) * 100)}%;background:var(--${(d || "ALLOW").toLowerCase()})"></i></span>${Number(s).toFixed(2)}`;
-const rules = rs => (rs || []).map(r => `<span class="rule" title="${esc(r)}">${esc(t("rules")[r] || r)}</span>`).join("");
-// An alert with no rule behind it - the model alone - has no pattern type.
-const kindName = k => (k ? (t("kind")[k] || k) : "—");
-
-function ago(sec) {
-  const s = Math.round(-sec);
-  if (s < 60) return t("now");
-  const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
-  if (d) return `−${d} ${t("u_d")} ${h} ${t("u_h")}`;
-  if (h) return `−${h} ${t("u_h")} ${m} ${t("u_min")}`;
-  return `−${m} ${t("u_min")}`;
-}
-
-function shown(s) {
-  if (lang !== "ru") return s;
-  return String(s).replace(/\byes\b/g, "да").replace(/\bno\b/g, "нет").replace("unknown", "неизвестно")
-    .replace(" days", " дн.").replace(" min", " мин").replace(" sigma", " σ").replace(" UZS", " сум");
-}
-
-function whyBlock(why) {
-  if (!why) return "";
-  if (!why.items || !why.items.length) {
-    const st = t("why_status")[why.status];
-    return st ? `<div class="why muted">${esc(st)}</div>` : "";
-  }
-  const max = Math.max(...why.items.map(i => i.weight), 0.01);
-  return `<div class="why"><div class="muted">${t("why")}:</div>` + why.items.map(i =>
-    `<div><span class="w" style="width:${Math.round(90 * i.weight / max)}px"></span>` +
-    `${esc(lang === "ru" ? (T.ru.feat[i.feature] || i.label_en) : i.label_en)}: <b>${esc(shown(i.shown))}</b>` +
-    `<span class="muted">(+${i.weight.toFixed(2)})</span></div>`).join("") + "</div>";
-}
+const fill = (s, vals) => Object.entries(vals).reduce((a, [k, v]) => a.replace(`{${k}}`, v), s);
+const locale = () => lang === "ru" ? "ru-RU" : "en-GB";
+const fmtInt = n => Number(n || 0).toLocaleString(locale());
+const dec = (v, d) => v == null ? "—" : Number(v).toFixed(d).replace(".", lang === "ru" ? "," : ".");
+const pct = v => v == null ? "—" : dec(v * 100, 1) + "%";
+const fmtMs = v => v == null ? "—" : dec(v, v < 10 ? 2 : 0) + " " + t("ms");
+const fmtTime = s => s ? new Date(typeof s === "number" ? s * 1000 : Date.parse(String(s).replace(" ", "T") + "Z")).toLocaleTimeString(locale()) : "";
+const kindName = k => (k && t("kind")[k]) || k || "";
+const badge = d => d ? `<span class="dec ${esc(d)}">${esc(t("dec")[d] || d)}</span>` : "";
+const last4 = m => "…" + String(m || "").slice(-4);
 
 async function api(path, body) {
   const r = await fetch(path, body ? {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)} : {cache: "no-store"});
@@ -304,100 +444,166 @@ function applyLang() {
   document.documentElement.lang = lang;
   document.querySelectorAll("[data-t]").forEach(el => el.textContent = t(el.dataset.t));
   document.querySelectorAll("[data-lang]").forEach(b => b.classList.toggle("on", b.dataset.lang === lang));
-  renderCards(); renderStatus(); refreshTab(); if (runId) refreshRun();
+  renderScenarios(); renderStatus(); renderStream(); renderQueue(); renderDetail(); renderResults();
 }
 
 function renderStatus() {
   if (!status) return;
-  const k = status.kafka.connected, bg = status.background.on;
-  $("#c-kafka").className = "chip " + (k ? "ok" : "bad"); $("#c-kafka").textContent = t(k ? "kafka_on" : "kafka_off");
-  $("#c-bg").className = "chip " + (bg ? "ok" : ""); $("#c-bg").textContent = t(bg ? "bg_on" : "bg_off");
-  $("#c-model").textContent = `${t("model")}: ${status.model || "—"}`;
-  $("#bg-btn").textContent = t(bg ? "bg_stop" : "bg_start");
+  const p = status.parts;
+  $("#chips").innerHTML = ["kafka", "clickhouse", "job"].map(k =>
+    `<span class="chip"><b class="${p[k] ? "on" : ""}"></b>${esc(t("part")[k].split(" — ")[0])}</span>`).join("") +
+    (status.model ? `<span class="chip">${t("model")}: ${esc(status.model)}</span>` : "");
+  $("#gate").hidden = status.ready;
+  $("#app").hidden = !status.ready;
+  if (!status.ready) {
+    $("#gate-list").innerHTML = PARTS.map(k => `<li><b class="${p[k] ? "ok" : "bad"}">${p[k] ? "✓" : "✗"}</b>` +
+      `<span>${esc(t("part")[k])}</span>` + (p[k] ? "" : `<code>${esc(t("fix")[k])}</code>`) +
+      (k === "data" && !p[k] && status.data_error ? `<span class="err">${esc(status.data_error)}</span>` : "") + `</li>`).join("");
+    return;
+  }
   const c = status.counts || {}, total = Object.values(c).reduce((a, b) => a + b, 0);
-  $("#tiles").innerHTML = [["t_total", total], ["t_allow", c.ALLOW || 0], ["t_review", c.REVIEW || 0],
-    ["t_ms", status.median_ms == null ? "—" : status.median_ms.toFixed(1) + " ms"]]
-    .map(([k, v]) => `<div class="tile"><span>${t(k)}</span><b>${esc(v)}</b></div>`).join("");
+  const st = (lastCases && lastCases.stats) || {}, done = (st.CONFIRMED_FRAUD || 0) + (st.FALSE_POSITIVE || 0);
+  $("#strip").innerHTML =
+    `<div class="stat"><span>${t("t_total")}</span><b>${fmtInt(total)}</b></div>` +
+    `<div class="stat hot"><span>${t("t_review")}</span><b>${fmtInt(c.REVIEW || 0)}</b></div>` +
+    `<div class="stat"><span>${t("t_prec")}</span><b>${st._precision == null ? "—" : Math.round(st._precision * 100) + "%"}</b>` +
+    `<small>${done ? fill(t("t_prec_sub"), {a: fmtInt(st.CONFIRMED_FRAUD || 0), b: fmtInt(done)}) : t("t_prec_none")}</small></div>` +
+    `<div class="stat"><span>${t("t_ms")}</span><b>${fmtMs(status.median_ms)}</b>` +
+    `<small>${status.p99_ms == null ? "" : fill(t("t_ms_sub"), {p99: fmtMs(status.p99_ms)})}</small></div>`;
+  $("#bg-btn").textContent = t(status.background.on ? "bg_stop" : "bg_start");
   let msg = "";
-  if (!k) msg = t("no_kafka");
-  else if (runId && Date.now() - runStarted > 15000 && !(status.kafka.last && status.kafka.last * 1000 > runStarted)) msg = t("no_decisions");
+  if (runId && Date.now() - runStarted > 15000 && !(status.last_decision && status.last_decision * 1000 > runStarted)) msg = t("no_decisions");
   $("#banner").hidden = !msg; $("#banner").textContent = msg;
 }
 
-async function refreshStatus() { try { status = await api("/api/status"); renderStatus(); } catch (e) {} }
-
-async function refreshLive() {
-  const rows = await api("/api/stream" + ($("#alerts-only").checked ? "?alerts=1" : ""));
-  $("#stream").innerHTML = rows.length ? rows.map(r => `<tr><td>${fmtTime(r.at)}</td><td class="num">${fmtAmount(r.amount)}</td>` +
-    `<td>${esc(r.from)} → ${esc(r.to)}</td><td>${badge(r.decision)}</td><td>${bar(r.score, r.decision)}</td>` +
-    `<td class="wide">${rules(r.rules)}</td></tr>`).join("")
-    : `<tr><td colspan="6" class="muted">${t("empty_live")}</td></tr>`;
+async function refreshStatus() {
+  try { status = await api("/api/status"); }
+  catch (e) {
+    status = null;
+    $("#app").hidden = true; $("#gate").hidden = false;
+    $("#gate-list").innerHTML = `<li><b class="bad">✗</b><span>${esc(t("gate_down"))}</span></li>`;
+    return;
+  }
+  renderStatus();
 }
 
-function renderCards() {
-  $("#cards").innerHTML = ["NORMAL", "APP", "ATO", "MULE", "STRUCTURING"].map(k =>
-    `<div class="scn"><h3>${esc(kindName(k))}</h3><p>${esc(t("kind_desc")[k])}</p>` +
-    `<button class="primary" data-play="${k}">${t("play")}</button></div>`).join("");
+function tagFor(r) {
+  if (!r.role) return "";
+  if (r.role === "history") return `<span class="tag">${t("tag_history")}</span>`;
+  if (r.truth && r.truth !== "NONE") return `<span class="tag fraud">${esc(fill(t("tag_case"), {kind: kindName(r.truth).toLowerCase()}))}</span>`;
+  return `<span class="tag">${t("tag_control")}</span>`;
+}
+
+function renderStream() {
+  if (!status || !status.ready) return;
+  $("#stream").innerHTML = streamRows.length ? streamRows.map(r => {
+    const hot = r.decision === "REVIEW";
+    return `<tr data-row="${esc(r.id)}" class="${hot ? "rev" : ""} ${selected && selected.id === r.id ? "sel" : ""}">` +
+      `<td class="mono">${esc(fmtTime(r.at))}</td><td class="num mono">${fmtInt(r.amount)}</td>` +
+      `<td class="route"><span class="mono" title="${esc(r.from)} → ${esc(r.to)}">${esc(last4(r.from))} → ${esc(last4(r.to))}</span>${tagFor(r)}</td>` +
+      `<td><span class="rbar ${hot ? "hot" : ""}"><i style="width:${Math.max(3, Math.min(1, r.score || 0) * 100)}%"></i></span><span class="mono">${dec(r.score, 2)}</span></td>` +
+      `<td>${badge(r.decision)}</td></tr>`;
+  }).join("") : `<tr><td colspan="5" class="muted">${t("empty_live")}</td></tr>`;
+}
+
+async function refreshStream() {
+  streamRows = await api("/api/stream" + ($("#alerts-only").checked ? "?alerts=1" : ""));
+  if (!Array.isArray(streamRows)) streamRows = [];
+  renderStream();
+  if (!selected || selected.src === "stream") renderDetail();
+}
+
+function renderScenarios() {
+  $("#scen").innerHTML = [...FRAUD_KINDS, "NORMAL"].map(k =>
+    `<button type="button" data-play="${k}" class="${k === "NORMAL" ? "control" : ""}"><b>${esc(kindName(k))}</b><span>${esc(t("kind_desc")[k])}</span></button>`).join("");
 }
 
 async function play(kind) {
   document.querySelectorAll("[data-play]").forEach(b => b.disabled = true);
   try {
     const r = await api("/api/episode", {kind});
-    if (r.error) { $("#result").innerHTML = `<div class="banner">${esc(r.error)}</div>`; return; }
-    runId = r.id; runStarted = Date.now(); await refreshRun();
+    if (r.error) { note(r.error); return; }
+    runId = r.id; runStarted = Date.now(); runPicked = null;
+    note(fill(t("sending"), {kind: kindName(kind).toLowerCase()}));
   } finally { setTimeout(() => document.querySelectorAll("[data-play]").forEach(b => b.disabled = false), 1500); }
 }
 
+function note(text) { $("#note").textContent = text; $("#note").hidden = !text; }
+
 async function refreshRun() {
-  if (!runId) return;
   const run = await api("/api/episode/" + runId);
-  if (run.error && !run.rows) return;
-  const rows = run.rows, fraud = rows.filter(r => r.truth !== "NONE"), normal = rows.filter(r => r.truth === "NONE");
+  if (!run.rows) return;
+  const fraud = run.rows.filter(r => r.truth !== "NONE"), normal = run.rows.filter(r => r.truth === "NONE");
   const flagged = r => r.decision && r.decision !== "ALLOW";
-  let html = `<div class="panel"><h2>${esc(kindName(run.kind))}</h2><div class="muted">${esc(t("real_note"))}</div>`;
-  if (run.error) html += `<div class="banner">${esc(run.error)}</div>`;
-  html += `<div class="summary">`;
-  if (fraud.length) html += `<span>${t("caught").replace("{a}", fraud.filter(flagged).length).replace("{b}", fraud.length)}</span>`;
-  if (normal.length) html += `<span>${t("false_alarms").replace("{a}", normal.filter(flagged).length).replace("{b}", normal.length)}</span>`;
-  html += `</div><div class="wrap"><table><thead><tr><th>${t("h_role")}</th><th>${t("h_when")}</th><th class="num">${t("h_amount")}</th>` +
-    `<th>${t("h_route")}</th><th>${t("h_decision")}</th><th>${t("h_risk")}</th><th>${t("h_rules")}</th></tr></thead><tbody>` +
-    rows.map(r => `<tr class="${r.role === "history" ? "hist" : ""}"><td>${t("role_" + r.role)}${r.truth !== "NONE" ? ` <span class="rule">${esc(kindName(r.truth))}</span>` : ""}</td>` +
-      `<td>${ago(r.offset_s)}</td><td class="num">${fmtAmount(r.amount)}</td><td>${esc(r.from)} → ${esc(r.to)}</td>` +
-      `<td>${badge(r.decision)}</td><td>${bar(r.score, r.decision)}</td><td class="wide">${rules(r.rules)}</td></tr>` +
-      (r.why ? `<tr><td></td><td colspan="6" class="wide">${whyBlock(r.why)}</td></tr>` : "")).join("") +
-    `</tbody></table></div></div>`;
-  $("#result").innerHTML = html;
+  const parts = [];
+  if (fraud.length) parts.push(fill(t("caught"), {a: fraud.filter(flagged).length, b: fraud.length}));
+  if (normal.length) parts.push(fill(t("false_alarms"), {a: normal.filter(flagged).length, b: normal.length}));
+  note(`${kindName(run.kind)}: ${parts.join("; ")}.` + (run.error ? ` ${run.error}` : ""));
+  // The run's last alert on a fraudulent row opens by itself, once.
+  const hit = [...fraud].reverse().find(flagged);
+  if (hit && runPicked !== hit.id) { runPicked = hit.id; selected = {src: "stream", id: hit.id}; renderStream(); renderDetail(); }
+  if (run.rows.every(r => r.decision)) runId = null;
+}
+
+function whyBlock(why) {
+  if (!why) return "";
+  if (!why.items || !why.items.length) {
+    const s = t("why_status")[why.status];
+    return s ? `<p class="small-note">${esc(s)}</p>` : "";
+  }
+  const max = Math.max(...why.items.map(i => i.weight), 0.01);
+  return `<div class="sub-h">${t("why")}</div>` + why.items.map(i => {
+    const label = lang === "ru" ? (T.ru.feat[i.feature] || i.label_en) : i.label_en;
+    const shown = lang === "ru" ? String(i.shown).replace(/\byes\b/g, "да").replace(/\bno\b/g, "нет")
+      .replace(" days", " дн.").replace(" min", " мин").replace(" sigma", " σ").replace(" UZS", " сум") : i.shown;
+    return `<div class="why-row"><div class="txt"><span>${esc(label)}</span><b>${esc(shown)}</b></div>` +
+      `<div class="wb"><span><i style="width:${Math.round(100 * Math.max(0, i.weight) / max)}%"></i></span><em>+${dec(i.weight, 2)}</em></div></div>`;
+  }).join("");
+}
+
+function renderDetail() {
+  if (!status || !status.ready) return;
+  const pool = selected && selected.src === "case" ? ((lastCases && lastCases.cases) || []) : streamRows;
+  const x = selected && pool.find(r => r.id === selected.id);
+  if (!x) { $("#detail").innerHTML = `<p class="empty">${t("pick")}</p>`; return; }
+  const rules = x.rules || [], cut = status.cut;
+  let rnote = "";
+  if (rules.some(r => MUST.has(r))) rnote = t("note_must");
+  else if (rules.length) rnote = x.type ? fill(t("note_named"), {type: kindName(x.type).toLowerCase()}) : t("note_reasons");
+  else if (x.decision === "REVIEW") rnote = t("note_model_only");
+  $("#detail").innerHTML = `<div class="case">
+    <div class="case-top"><span class="amount">${fmtInt(x.amount)} <small>${t("sum")}</small></span>${badge(x.decision)}</div>
+    <div class="route">${esc(x.from)} → ${esc(x.to)}</div>
+    <div class="part">
+      <div class="part-h"><span>${t("part_model")}</span><b>${t("risk")} ${dec(x.score, 2)}</b></div>
+      <div class="track"><i style="width:${Math.max(2, Math.min(1, x.score || 0) * 100)}%"></i>${cut == null ? "" : `<span class="cut" style="left:${cut * 100}%"></span>`}</div>
+      ${cut == null ? "" : `<p class="small-note">${fill(t("cut_note"), {cut: dec(cut, 2)})}</p>`}
+      ${x.decision === "ALLOW" ? `<p class="small-note">${t("note_allowed")}</p>` : whyBlock(x.why)}
+    </div>
+    <div class="part">
+      <div class="part-h"><span>${t("part_rules")}</span><b>${fill(t("rules_fired"), {n: rules.length})}</b></div>
+      ${rules.length ? `<div class="rules">${rules.map(r => `<span class="rule ${MUST.has(r) ? "must" : ""}" title="${esc(r)}">${esc(t("rules")[r] || r)}</span>`).join("")}</div>` : ""}
+      ${rnote ? `<p class="small-note">${rnote}</p>` : ""}
+    </div></div>`;
+}
+
+function renderQueue() {
+  if (!lastCases) return;
+  if (lastCases.error) { $("#queue").innerHTML = `<p class="empty">${esc(t("no_store") + lastCases.error)}</p>`; return; }
+  const cs = lastCases.cases;
+  $("#q-count").textContent = cs.length;
+  $("#queue").innerHTML = cs.length ? cs.map(c => `<li data-case="${esc(c.id)}" class="${selected && selected.id === c.id ? "sel" : ""}">` +
+    `<div><div class="amt">${fmtInt(c.amount)} ${t("sum")}</div><div class="kind">${esc(c.type ? kindName(c.type) : t("type_none"))} · ${t("risk")} ${dec(c.score, 2)}</div></div>` +
+    `<div class="acts"><button type="button" class="primary" data-res="CONFIRMED_FRAUD">${t("confirm")}</button>` +
+    `<button type="button" data-res="FALSE_POSITIVE">${t("fp")}</button></div></li>`).join("")
+    : `<p class="empty">${t("empty_cases")}</p>`;
 }
 
 async function refreshCases() {
-  const r = await api("/api/cases" + ($("#new-only").checked ? "?new=1" : ""));
-  lastCases = r;
-  const s = r.stats || {};
-  $("#case-stats").innerHTML = [["st_open", s.NEW ?? 0], ["st_conf", s.CONFIRMED_FRAUD ?? 0], ["st_fp", s.FALSE_POSITIVE ?? 0],
-    ["st_prec", s._precision == null ? "—" : Math.round(s._precision * 100) + "%"]]
-    .map(([k, v]) => `<div class="tile"><span>${t(k)}</span><b>${esc(v)}</b></div>`).join("");
-  if (r.error) { $("#case-list").innerHTML = `<tr><td colspan="4">${esc(t("no_store") + r.error)}</td></tr>`; return; }
-  $("#case-list").innerHTML = r.cases.length ? r.cases.map(c => `<tr class="pick ${c.id === selCase ? "sel" : ""}" data-case="${esc(c.id)}">` +
-    `<td>${fmtTime(c.at)}</td><td class="num">${fmtAmount(c.amount)}</td><td>${badge(c.decision)}</td>` +
-    `<td>${esc(kindName(c.type))}</td></tr>`).join("")
-    : `<tr><td colspan="4" class="muted">${t("empty_cases")}</td></tr>`;
-  renderCase();
+  lastCases = await api("/api/cases?new=1");
+  renderQueue(); renderStatus();
+  if (selected && selected.src === "case") renderDetail();
 }
-
-function renderCase() {
-  const c = lastCases && lastCases.cases.find(x => x.id === selCase);
-  if (!c) { $("#case-detail").innerHTML = `<div class="muted">${t("pick_case")}</div>`; return; }
-  $("#case-detail").innerHTML = `<h2>${fmtAmount(c.amount)} ${badge(c.decision)}</h2>` +
-    `<div>${esc(c.from)} → ${esc(c.to)}</div><div class="muted">${esc(kindName(c.type))} · ${t("score")} ${Number(c.score).toFixed(2)}</div>` +
-    `<div style="margin:10px 0">${rules(c.rules)}</div>${whyBlock(c.why)}` +
-    `<div class="row" style="margin-top:14px"><button class="primary" data-res="CONFIRMED_FRAUD">${t("confirm")}</button>` +
-    `<button class="ghost" data-res="FALSE_POSITIVE">${t("fp")}</button></div>`;
-}
-
-const fmtInt = n => Number(n).toLocaleString(lang === "ru" ? "ru-RU" : "en-GB");
-const dec = (v, d) => v == null ? "—" : Number(v).toFixed(d).replace(".", lang === "ru" ? "," : ".");
-const pct = v => v == null ? "—" : dec(v * 100, 1) + "%";
 
 function showGrafana() {
   const url = status && status.grafana;
@@ -405,68 +611,98 @@ function showGrafana() {
   if (url && !$("#grafana-frame").getAttribute("src")) $("#grafana-frame").src = url;
 }
 
-let results = null;
-async function refreshResults() {
-  if (!results) results = await api("/api/results");
-  const o = results.own || {}, L = lang;
-  let h = `<div class="panel"><h2>${t("own_title")}</h2>`;
+let live = null;
+async function refreshLive() { live = await api("/api/live"); renderLive(); }
+
+function renderLive() {
+  if (!live) return;
+  const tm = live.timing || {};
+  if (tm.error) { $("#stages").innerHTML = ""; $("#total").innerHTML = ""; $("#time-fine").textContent = tm.error; }
+  else {
+    const scale = tm.total_ms || 1;
+    $("#stages").innerHTML = (tm.stages || []).map(s => {
+      const [name, desc] = t("stage")[s.name] || [s.name, ""];
+      return `<li class="${s.name === "model" ? "model" : ""}"><span class="name">${esc(name)}<span class="desc">${esc(desc)}</span></span>` +
+        `<span class="sbar">${s.ms == null ? "" : `<i style="width:${100 * s.ms / scale}%"></i>`}</span><span class="v">${fmtMs(s.ms)}</span></li>`;
+    }).join("");
+    $("#total").innerHTML = `<span>${t("total_avg")}</span><b>${fmtMs(tm.total_ms)}</b>`;
+    $("#time-fine").textContent = tm.n ? fill(t("time_fine"), {n: fmtInt(tm.n), median: fmtMs(tm.median_ms), p99: fmtMs(tm.p99_ms)}) : t("time_empty");
+  }
+  const v = live.verdicts || {};
+  $("#verdicts").innerHTML = [["v_open", fmtInt(v.NEW || 0)], ["v_conf", fmtInt(v.CONFIRMED_FRAUD || 0)],
+    ["v_fp", fmtInt(v.FALSE_POSITIVE || 0)], ["v_prec", v._precision == null ? "—" : pct(v._precision)]]
+    .map(([k, val]) => `<div class="tile"><span>${t(k)}</span><b>${val}</b></div>`).join("");
+}
+
+function renderResults() {
+  renderLive();
+  if (!results) return;
+  const o = results.own || {};
+  const date = o.trained_at ? new Date(o.trained_at).toLocaleDateString(locale(), {day: "numeric", month: "long", year: "numeric"}) : "—";
+  $("#trained-title").textContent = fill(t("trained_title"), {date});
+  let h = `<div class="box"><h3>${t("own_title")}</h3>`;
   if (o.error) h += `<div class="banner">${esc(o.error)}</div>`;
-  if (o.rows) h += `<p>${t("own_split").replace("{rows}", fmtInt(o.rows)).replace("{share}", pct(o.fraud_share))
-    .replace("{fit}", fmtInt(o.fit)).replace("{val}", fmtInt(o.val)).replace("{test}", fmtInt(o.test))
-    .replace("{tf}", fmtInt(o.test_fraud))}</p>`;
+  if (o.rows) h += `<p>${fill(t("own_split"), {rows: fmtInt(o.rows), share: pct(o.fraud_share), fit: fmtInt(o.fit),
+    val: fmtInt(o.val), test: fmtInt(o.test), tf: fmtInt(o.test_fraud)})}</p>`;
   h += `<div class="tiles">` + [["m_prec", pct(o.precision)], ["m_rec", pct(o.recall)], ["m_prauc", dec(o.pr_auc, 3)],
     ["m_rocauc", dec(o.roc_auc, 3)], ["m_rules", pct(o.rules_precision) + " / " + pct(o.rules_recall)]]
     .map(([k, v]) => `<div class="tile"><span>${t(k)}</span><b>${esc(v)}</b></div>`).join("") + `</div>`;
   if (o.by_type) h += `<p>${t("by_type")}: ` + Object.entries(o.by_type).map(([k, v]) => `${esc(kindName(k))} ${pct(v)}`).join(" · ") + `</p>`;
   $("#own").innerHTML = h + `<p class="muted">${t("own_caveat")}</p></div>`;
-  $("#public").innerHTML = (results.public || []).map(d => `<div class="panel"><h2>${esc(d.name[L])} ` +
-    `<span class="badge st-${esc(d.status)}">${t("st_" + d.status)}</span></h2>` +
-    (d.what ? `<p><b>${t("what")}:</b> ${esc(d.what[L])}</p>` : "") +
-    (d.how ? `<p><b>${t("how")}:</b> ${esc(d.how[L])}</p>` : "") +
-    `<ul class="facts">` + d.findings[L].map(f => `<li>${esc(f)}</li>`).join("") + `</ul>` +
-    (d.verdict ? `<p><b>${t("verdict")}:</b> ${esc(d.verdict[L])}</p>` : "") +
+  $("#public").innerHTML = (results.public || []).map(d => `<div class="box"><h3>${esc(d.name[lang])} ` +
+    `<span class="badge st-${esc(d.status)}">${t("st_" + d.status)}</span></h3>` +
+    (d.what ? `<p><b>${t("what")}:</b> ${esc(d.what[lang])}</p>` : "") +
+    (d.how ? `<p><b>${t("how")}:</b> ${esc(d.how[lang])}</p>` : "") +
+    `<ul class="facts">` + d.findings[lang].map(f => `<li>${esc(f)}</li>`).join("") + `</ul>` +
+    (d.verdict ? `<p><b>${t("verdict")}:</b> ${esc(d.verdict[lang])}</p>` : "") +
     `<div class="muted">${t("source")}: ${esc(d.source)}</div></div>`).join("");
 }
 
-function refreshTab() {
-  if (tab === "live") refreshLive().catch(() => {});
-  if (tab === "cases") refreshCases().catch(() => {});
+async function openTab(name) {
+  tab = name;
+  document.querySelectorAll("#app section").forEach(s => s.hidden = s.id !== tab);
+  document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
   if (tab === "grafana") showGrafana();
-  if (tab === "results") refreshResults().catch(() => {});
+  if (tab === "results") {
+    if (!results) results = await api("/api/results");
+    renderResults(); refreshLive();
+  }
 }
 
 document.addEventListener("click", async e => {
-  const el = e.target.closest("[data-tab],[data-lang],[data-play],[data-case],[data-res],#bg-btn");
+  const el = e.target.closest("[data-tab],[data-lang],[data-play],[data-row],[data-res],[data-case],#bg-btn");
   if (!el) return;
-  if (el.dataset.tab) {
-    tab = el.dataset.tab;
-    document.querySelectorAll("section").forEach(s => s.hidden = s.id !== tab);
-    document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
-    refreshTab();
-  } else if (el.dataset.lang) {
-    lang = el.dataset.lang; try { localStorage.setItem("demo-lang", lang); } catch (err) {}
-    applyLang();
-  } else if (el.dataset.play) {
-    play(el.dataset.play);
-  } else if (el.dataset.case) {
-    selCase = el.dataset.case; refreshCases();
-  } else if (el.dataset.res) {
+  if (el.dataset.tab) openTab(el.dataset.tab);
+  else if (el.dataset.lang) { lang = el.dataset.lang; try { localStorage.setItem("demo-lang", lang); } catch (err) {} applyLang(); }
+  else if (el.dataset.play) play(el.dataset.play);
+  else if (el.dataset.row) { selected = {src: "stream", id: el.dataset.row}; renderStream(); renderQueue(); renderDetail(); }
+  else if (el.dataset.res) {
+    const li = el.closest("[data-case]");
     el.disabled = true;
-    await api(`/api/cases/${encodeURIComponent(selCase)}/resolve`, {disposition: el.dataset.res});
-    selCase = null; refreshCases();
-  } else if (el.id === "bg-btn") {
+    await api(`/api/cases/${encodeURIComponent(li.dataset.case)}/resolve`, {disposition: el.dataset.res});
+    if (selected && selected.id === li.dataset.case) selected = null;
+    refreshCases();
+  }
+  else if (el.dataset.case) { selected = {src: "case", id: el.dataset.case}; renderStream(); renderQueue(); renderDetail(); }
+  else if (el.id === "bg-btn") {
     await api("/api/background", {on: !(status && status.background.on), speed: Number($("#bg-speed").value)});
     refreshStatus();
   }
 });
-$("#alerts-only").addEventListener("change", () => refreshLive());
-$("#new-only").addEventListener("change", () => refreshCases());
+$("#alerts-only").addEventListener("change", () => refreshStream());
 
-document.querySelector('[data-tab="live"]').classList.add("on");
-applyLang(); refreshStatus();
-setInterval(() => { refreshStatus(); if (tab === "live") refreshLive().catch(() => {}); }, 1000);
-setInterval(() => { if (runId && tab === "scn") refreshRun().catch(() => {}); }, 700);
-setInterval(() => { if (tab === "cases") refreshCases().catch(() => {}); }, 5000);
+document.querySelector('[data-tab="desk"]').classList.add("on");
+applyLang();
+const ready = () => status && status.ready;
+async function tick() {
+  await refreshStatus();
+  if (ready() && tab === "desk") refreshStream().catch(() => {});
+}
+tick(); refreshCases().catch(() => {});
+setInterval(tick, 1000);
+setInterval(() => { if (ready() && tab === "desk") refreshCases().catch(() => {}); }, 3000);
+setInterval(() => { if (ready() && runId) refreshRun().catch(() => {}); }, 700);
+setInterval(() => { if (ready() && tab === "results") refreshLive().catch(() => {}); }, 5000);
 </script>
 </body>
 </html>

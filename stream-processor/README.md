@@ -117,11 +117,13 @@ python ../ml/experiments/layers.py     # CEP-only vs ML-only vs fused, held-out 
 
 ## Where the decision time goes
 
-`STAGE_TIMING_EVERY=N` (0 by default, set in `.env`) makes the job print one line
-per N records with the median and p95 of each stage inside the operator. Measured
-at 50 records/s: state 1.58 ms, Redis 0.84 ms, features and rules 0.32 ms, the
-model 0.21 ms, decode and decide 0.02 ms each - about 3 ms of the median 86 ms
-from ingest to decision (`docs/irp-framing.md` 7.1c).
+Every decision carries eight stage times, `stage_ms`, in the order of `STAGES` in
+`fraud_job.py`: kafka, handoff, decode, state, redis, rules, model, decide.
+sink-writer stores them as `stage_<name>_ms`, and their means add up to the time
+from arrival to decision. At 10 records/s that is 97 ms on average: 91.5 ms of it
+waiting between Kafka and the operator, 3.6 ms of work, 0.46 ms of it the model
+(`docs/irp-framing.md` 7.1c). The first two stages need Kafka's own append time on
+`transactions.raw`, which `infra/kafka/create-topics.sh` sets.
 
 ## Verify without the cluster
 

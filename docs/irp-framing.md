@@ -311,28 +311,44 @@ pause. The audit-chain anchor for this run is in `audit-anchors.md`.
 
 ### 7.1c Where the decision time goes, stage by stage
 
-`scoring_ms` times the whole operator; `STAGE_TIMING_EVERY` (off by default) times
-the six stages inside it and prints one line per N records to the taskmanager log.
-Measured 2026-09-26 on the running stack: 6,000 records at a paced 50/s, twelve
-windows of 500, medians of the per-window figures.
+Every decision carries its own eight stage times (`stage_ms`, `fraud_job.py`
+`STAGES`), stored as `stage_<name>_ms` in `transactions_scored`. The two stages
+before the operator are split by Kafka's own append time: `transactions.raw` is
+`LogAppendTime` (`infra/kafka/create-topics.sh`), a stamp the job reads for nothing
+else. The stages are consecutive intervals, so their **means add up** to the time
+from arrival to decision; medians do not. Measured 2026-09-30 on the running stack,
+producer inside the Docker network, deadline pacing: 1,000 records at 10/s and
+6,000 at 50/s. Mean (p50), ms:
 
-| stage | what it is | p50 | p95 |
+| stage | what it is | 10/s | 50/s |
 |---|---|---|---|
-| decode | parse, and decrypt when the record is encrypted | 0.02 ms | 0.05 ms |
-| state | read this sender's own state from Flink | **1.58 ms** | 7.56 ms |
-| redis | the receiver's inbound window and the sender's last inbound | 0.84 ms | 6.56 ms |
-| rules | build 21 features, run 10 rules, write both states back | 0.32 ms | 3.17 ms |
-| model | one ONNX inference | **0.21 ms** | 0.97 ms |
-| decide | fuse, label the type, build the record | 0.01 ms | 0.05 ms |
+| kafka | producer to Kafka's log | 1.65 (0.32) | 1.02 (0.47) |
+| handoff | Kafka's log to the operator: the Flink fetch, the keyed exchange, the PyFlink bundle | **91.5 (102.4)** | **174.6 (169.2)** |
+| decode | parse, and decrypt when the record is encrypted | 0.05 (0.04) | 0.04 (0.02) |
+| state | read this sender's own state from Flink | 0.12 (0.10) | 1.86 (1.15) |
+| redis | the receiver's inbound window and the sender's last inbound | 2.07 (1.05) | 1.72 (0.64) |
+| rules | build 21 features, run 10 rules, write both states back | 0.90 (0.37) | 0.72 (0.30) |
+| model | one ONNX inference | **0.46 (0.24)** | **0.37 (0.20)** |
+| decide | fuse, label the type, build the record | 0.03 (0.01) | 0.02 (0.01) |
+| arrival -> decision | the two stamps; the stage means sum to 96.8 and 180.4 | **97.0** (p50 106, p99 219) | **180.4** (p50 174, p99 359) |
 
-**The model is the fastest of the five real steps, not the slowest**: 0.21 ms
-against 1.58 ms to read one sender's state and 0.84 ms to ask Redis for the
-receiver's side. Together the stages account for about 3 ms, against a median 86 ms
-from ingest to decision (7.1b) - so **97% of the decision time is transport and
-batching**, not computation: the Kafka fetch (`fetch.max.wait.ms` 20 ms) and the
-PyFlink bundle (`python.fn-execution.bundle.time` 50 ms) that 7.5a had to tune down
-from a second. That is the same conclusion the throughput sweep reached from the
-other end (7.6), and it says where an optimisation would pay: not in the model.
+**The work is 3.6 ms at 10/s and 4.7 ms at 50/s, and the model is under half a
+millisecond of it.** 94-97% of the decision time is the handoff - the record
+waiting between Kafka's log and the operator - and it is the only stage that grows
+with load, 91.5 to 174.6 ms: the queueing 7.6 found from the other end. An
+optimisation pays there, in the Flink fetch and the PyFlink bundle
+(`fetch.max.wait.ms` 20 ms, `python.fn-execution.bundle.time` 50 ms, both tuned
+down from defaults in 7.5a), not in the model.
+
+Two corrections to what stood here before. The 2026-09-26 version timed only the
+six operator stages, at 50/s, and set their 3 ms against the 86 ms of 7.1b, taken
+at a far lower rate: the conclusion held, the arithmetic mixed two loads. Both
+sides now come from the same decisions. And this run was slower than the earlier
+ones at the same rates - p50 106 ms at 10/s against 87 ms in 7.6 and 86 ms in 7.1b,
+174 ms at 50/s against 156 ms. Not the timing: writing eight numbers per decision
+costs about 3 µs (the JSON and the rounding, measured). Otherwise unattributed,
+like 7.1b's 15 ms. The demo page shows these means live, over the latest 1,000
+decisions (`demo/README.md`).
 
 ### 7.2 The enrichment lookup, removed 2026-09-19
 

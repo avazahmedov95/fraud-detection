@@ -2,6 +2,7 @@
 but every discarded row is logged with a running total, never silently."""
 
 import logging
+import os
 import time
 
 import record as R
@@ -10,6 +11,26 @@ import integrity
 log = logging.getLogger("ch_writer")
 
 RECONNECT_INTERVAL_S = 10.0  # retry throttle; every flush would hammer a down server
+
+#: The stage columns, applied on every connect: ClickHouse runs its init scripts
+#: only on an empty data directory, and an insert naming a column the table lacks
+#: fails whole.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_MIGRATION_CANDIDATES = (
+    os.path.join(_HERE, "03-stages.sql"),                                     # in the image
+    os.path.join(_HERE, "..", "infra", "clickhouse", "init", "03-stages.sql"),  # in the repo
+)
+
+
+def _migration_sql():
+    """03-stages.sql as one query: comments stripped, no trailing semicolon."""
+    path = next((p for p in _MIGRATION_CANDIDATES if os.path.exists(p)), None)
+    if path is None:
+        raise FileNotFoundError("03-stages.sql is missing; check the COPY in "
+                                "infra/sink-writer/Dockerfile")
+    with open(path, encoding="utf-8") as fh:
+        sql = "\n".join(ln.split("--", 1)[0] for ln in fh.read().splitlines())
+    return sql.strip().rstrip(";")
 
 
 class ClickHouseWriter:
@@ -35,6 +56,7 @@ class ClickHouseWriter:
             import clickhouse_connect
             self._client = clickhouse_connect.get_client(**self._cfg)
             self._client.ping()
+            self._client.command(_migration_sql())
             log.info("ClickHouse connected (%s:%s/%s)",
                      self._cfg["host"], self._cfg["port"], self._db)
             self._resume_chain()

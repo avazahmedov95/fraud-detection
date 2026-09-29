@@ -11,16 +11,16 @@ sequenceDiagram
     actor Analyst
 
     Customer->>App: confirms a transfer
-    App->>Kafka: transactions.raw (keyed by sender)
-    Kafka->>Flink: the record, after the queue and batching (~84 ms)
-    Flink->>Flink: decode (0.02 ms)
-    Flink->>Flink: read this sender's state, build 21 features (1.58 ms)
+    App->>Kafka: transactions.raw, keyed by sender (1.7 ms)
+    Kafka->>Flink: the record, fetched and batched (92 ms)
+    Flink->>Flink: decode (0.05 ms)
+    Flink->>Flink: read this sender's state (0.12 ms)
     Flink->>Redis: how many people paid this receiver?
-    Redis-->>Flink: counts for the hour, day and week (0.84 ms)
-    Flink->>Flink: run the 10 hard rules (0.32 ms)
-    Flink->>Flink: score with the model (0.21 ms)
-    Flink->>Flink: decide: allow or review (0.01 ms)
-    Flink->>Kafka: transactions.scored, and fraud.alerts when it is an alert (86 ms in all)
+    Redis-->>Flink: counts for the hour, day and week (2.07 ms)
+    Flink->>Flink: build 21 features, run the 10 hard rules (0.90 ms)
+    Flink->>Flink: score with the model (0.46 ms)
+    Flink->>Flink: decide: allow or review (0.03 ms)
+    Flink->>Kafka: transactions.scored, and fraud.alerts when it is an alert (97 ms in all)
     Kafka->>Sink: every decision
     Sink->>DB: the decision, its audit record, and alerts into the graph
     Kafka->>Case: fraud.alerts

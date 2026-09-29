@@ -67,7 +67,7 @@ def bottom(b):
 ax.text(0, 87, "Real-time fraud detection: one transfer, end to end",
         fontsize=19, fontweight="bold", color=INK, family=FAMILY, va="bottom")
 ax.text(0, 83.6, "Every component the system runs, what it does, and how long each stage "
-                 "of the decision takes. Measured 26 September 2026 on the running stack.",
+                 "of the decision takes. Measured 30 September 2026 on the running stack.",
         fontsize=10.5, color=MUTED, family=FAMILY, va="bottom")
 
 # --- row 1: into the engine ------------------------------------------------
@@ -79,24 +79,24 @@ ax.add_patch(FancyBboxPatch((56, 57.5), 104, 23, boxstyle="round,pad=0,rounding_
 ax.text(58, 78.6, "Apache Flink (PyFlink)  |  one keyed operator per sender  |  4 slots",
         fontsize=10, fontweight="bold", color=ACCENT, family=FAMILY, va="top")
 
-dec = box(58, 61, 18, 12, "Decode", "parse, decrypt\nif encrypted", "0.02 ms")
-fea = box(79, 61, 18, 12, "Features", "21, from this\nsender's state", "1.58 ms")
-rul = box(100, 61, 18, 12, "10 hard rules", "known fraud\npatterns", "0.32 ms")
-mod = box(121, 61, 18, 12, "Model", "gradient boosting,\nserved as ONNX", "0.21 ms",
+dec = box(58, 61, 18, 12, "Decode", "parse, decrypt\nif encrypted", "0.05 ms")
+fea = box(79, 61, 18, 12, "Sender's history", "this sender's state,\nkept in Flink", "0.12 ms")
+rul = box(100, 61, 18, 12, "Features, rules", "21 features,\n10 hard rules", "0.90 ms")
+mod = box(121, 61, 18, 12, "Model", "gradient boosting,\nserved as ONNX", "0.46 ms",
           fill=ACCENT_SOFT, edge=ACCENT)
-dcd = box(142, 61, 16, 12, "Decision", "allow, or\nsend to review", "0.01 ms")
+dcd = box(142, 61, 16, 12, "Decision", "allow, or\nsend to review", "0.03 ms")
 
-arrow(right(app), left(raw))
-arrow(right(raw), (58, 67), label="86 ms median, ingest to decision")
+arrow(right(app), left(raw), label="1.7 ms")
+arrow(right(raw), (58, 67), label="92 ms")
 for a, b in ((dec, fea), (fea, rul), (rul, mod), (mod, dcd)):
     arrow(right(a), left(b))
 
-red = box(79, 40, 18, 12, "Redis", "the receiver's side:\nwho paid this account", "0.84 ms",
+red = box(79, 40, 18, 12, "Redis", "the receiver's side:\nwho paid this account", "2.07 ms",
           fill=STORE_FILL)
 arrow(top(red), bottom(fea), style="<|-|>", color=MUTED, lw=1.3)
 
-ax.text(104, 47, "The engine's own work is about 3 ms.\nThe rest of the 86 ms is the transfer "
-                 "waiting in\nthe queue and in the engine's batching.",
+ax.text(104, 47, "The engine's own work is 3.6 ms.\nThe other 93 ms is the transfer waiting "
+                 "between\nKafka and the engine, in batches.",
         fontsize=9.5, color=MUTED, family=FAMILY, va="center",
         bbox=dict(boxstyle="round,pad=0.6", facecolor="white", edgecolor=LINE))
 
@@ -135,8 +135,8 @@ trn = box(0, 42, 32, 18, "Training (ml/)", "replays the same feature code,\nfits
                                            "exports ONNX and the cut-off", sub_size=8.5)
 arrow(right(trn), (56, 62), dashed=True, color=MUTED, label="model.onnx", label_dy=0.8)
 
-ax.text(0, 1.2, "Times are medians over 6,000 transfers paced at 50/s; 99% of decisions are inside "
-                "0.21 s against a 0.3 s target. Nothing is blocked automatically: every alert goes to a person.",
+ax.text(0, 1.2, "Times are averages over 1,000 transfers at 10 a second and add up to 97 ms; 99% of decisions "
+                "are inside 0.22 s against a 0.3 s target. Nothing is blocked automatically: every alert goes to a person.",
         fontsize=9, color=MUTED, family=FAMILY, va="bottom")
 
 for ext in ("png", "svg"):

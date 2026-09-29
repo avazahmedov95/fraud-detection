@@ -2,8 +2,11 @@
 
 import csv
 import random
+import re
 from datetime import datetime, timedelta
 from types import SimpleNamespace
+
+import pytest
 
 import server as S  # first: it puts case-manager, where explain lives, on the path
 import explain as EX  # noqa: E402
@@ -104,6 +107,9 @@ def test_the_case_queue_reads_only_what_case_manager_stores():
     row.update(opened_at=T0, rule_hits=[], explanation=[])
 
     class Store:
+        def _ensure(self):
+            return True
+
         def open_cases(self, limit):
             return [row]
 
@@ -112,6 +118,23 @@ def test_the_case_queue_reads_only_what_case_manager_stores():
 
     app = SimpleNamespace(started=0, store=Store)
     assert len(S.App.cases(app)["cases"]) == 1
+
+
+def test_a_store_that_cannot_connect_is_an_error_not_an_empty_queue():
+    """It once answered [] for a missing schema file, and the page said "no new
+    alerts" while 33 were waiting."""
+    class Store:
+        def _ensure(self):
+            return False
+
+        def open_cases(self, limit):
+            return []
+
+        def stats(self):
+            return {}
+
+    out = S.App.cases(SimpleNamespace(started=0, store=Store))
+    assert out["error"] and out["cases"] == []
 
 
 def test_times_with_and_without_a_fraction_both_load(tmp_path):
@@ -124,6 +147,65 @@ def test_times_with_and_without_a_fraction_both_load(tmp_path):
 
 def test_a_masked_card_shows_the_bin_head_and_the_last_four():
     assert S.mask("8600031234562655") == "8600 03** **** 2655"
+
+
+def test_the_background_replay_starts_in_the_part_the_model_never_saw(tmp_path):
+    lib = _app_library(tmp_path)
+    rng = random.Random(4)
+    assert all(lib.replay_start(rng) >= lib.cut for _ in range(50))
+
+
+def test_the_page_opens_only_when_the_fraud_job_itself_is_running():
+    job = {"name": S.JOB_NAME, "state": "RUNNING"}
+    assert S.job_running({"jobs": [job]})
+    assert not S.job_running({"jobs": [{**job, "state": "RESTARTING"}]})
+    assert not S.job_running({"jobs": [{**job, "name": "some-other-job"}]})
+    assert not S.job_running(None)                     # Flink not answering
+
+
+def test_the_system_is_ready_only_with_every_part_up():
+    health = S.Health(data_error="")
+    health.parts.update(kafka=True, clickhouse=True, job=True)
+    assert health.ready
+    health.parts["job"] = False
+    assert not health.ready
+    assert not S.Health(data_error="no such file").parts["data"]
+
+
+def test_decision_time_runs_from_arrival_to_decision():
+    assert S.decision_ms({"ingested_at": 100.0, "scored_at_job": 100.086}) == pytest.approx(86.0)
+    assert S.decision_ms({"scored_at_job": 100.0}) is None      # a producer that stamps nothing
+
+
+def test_the_stage_averages_add_up_and_an_empty_window_says_so():
+    row = [1000, 1.2, 71.5, 0.02, 1.58, 0.84, 0.32, 0.21, 0.01, 84, 197]
+    out = S.stage_summary(row)
+    assert [s["name"] for s in out["stages"]] == list(S.STAGES)
+    assert out["total_ms"] == pytest.approx(sum(row[1:9]))
+    assert (out["median_ms"], out["p99_ms"]) == (84, 197)
+    empty = S.stage_summary([0] + [float("nan")] * 8 + [0, 0])
+    assert empty["total_ms"] is None and empty["median_ms"] is None
+    assert all(s["ms"] is None for s in empty["stages"])
+
+
+def test_the_demo_names_the_same_stages_as_the_job():
+    import ast
+    import os
+    job = os.path.join(os.path.dirname(S.__file__), "..", "stream-processor", "fraud_job.py")
+    tree = ast.parse(open(job, encoding="utf-8").read())
+    stages = next(n.value for n in tree.body if isinstance(n, ast.Assign)
+                  and getattr(n.targets[0], "id", "") == "STAGES")
+    assert ast.literal_eval(stages) == S.STAGES
+
+
+def test_the_page_marks_the_same_rules_mandatory_as_the_job():
+    import os
+    root = os.path.dirname(os.path.dirname(S.__file__))
+    config = open(os.path.join(root, "stream-processor", "config.py"), encoding="utf-8").read()
+    page = open(os.path.join(root, "demo", "index.html"), encoding="utf-8").read()
+    job = re.search(r"MANDATORY_REVIEW_RULES = \(([^)]*)\)", config).group(1)
+    shown = re.search(r"const MUST = new Set\(\[([^\]]*)\]\)", page).group(1)
+    assert re.findall(r'"(\w+)"', job) == re.findall(r'"(\w+)"', shown)
 
 
 def test_the_results_file_says_everything_in_both_languages():
