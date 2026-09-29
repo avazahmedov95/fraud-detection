@@ -705,6 +705,17 @@ they disagreed - 0.965 served against 0.988 native - because 32-bit inference ti
 
 ### Other model families, measured 2026-09-26
 
+```bash
+cd ml
+python experiments/models.py --cache models_matrix.npz            # the table below
+python experiments/models.py --cache models_matrix.npz --paired   # the forest, five pairs
+python experiments/models.py --cache models_matrix.npz --small        --tabpfn-model <checkpoint>                                # everyone on TabPFN's terms
+```
+
+The first run builds the cache from `train.py`'s own matrix; the rest read it.
+XGBoost and TabPFN are not installed here and the table simply drops those rows
+(point 7 below).
+
 `experiments/models.py` fits five alternatives on the rows `train.py` fits on and
 reads them on the same held-out slice, each with its own cutoff at the F1 peak of
 the cutoff rows. The served committee is the first row, refitted here so the
