@@ -104,7 +104,7 @@ td.num,th.num{text-align:right}
 .more{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 14px;border-top:1px solid var(--line);font-size:.8rem;color:var(--muted)}
 .more:empty{display:none}
 .about-intro{max-width:78ch;margin:0 0 14px}
-.flow{position:relative;padding:0 14px 14px;display:grid;gap:12px}
+.flow{padding:0 14px 14px;display:grid;gap:12px}
 .flow-group{display:grid;gap:6px}
 .flow-group h3{margin:0;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .flow-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
@@ -112,17 +112,35 @@ td.num,th.num{text-align:right}
 .comp .kind{font:500 .64rem var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .comp .name{font-weight:600;font-size:.88rem}.comp .sub{color:var(--muted);font-size:.76rem;line-height:1.35}
 .comp.store{background:var(--panel-2)}.comp.ml{border-color:var(--accent)}
-.comp.past{border-color:#b9c8e6}.comp.on{border-color:var(--accent);background:var(--accent-soft)}
-#packet{position:absolute;left:0;top:0;width:16px;height:16px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 5px var(--accent-soft);transition:transform .5s cubic-bezier(.4,.1,.3,1);pointer-events:none;z-index:2}
-#packet.alert{background:var(--alert-bar);box-shadow:0 0 0 5px var(--alert-soft)}
-@media (prefers-reduced-motion:reduce){#packet{transition-duration:.01ms}}
-.walk{border-top:1px solid var(--line);padding:12px 14px;display:grid;gap:10px}
-.walk-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.comp.on{border-color:var(--accent);background:var(--accent-soft)}
+.walk{margin-top:14px}
+.walk-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:0 14px 12px}
+.walk-controls .grow{flex:1}
 .walk-controls button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
-.walk h4{margin:0 0 4px;font-size:1rem}.walk p{margin:0;max-width:78ch}
-.walk-meta{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:.8rem;color:var(--muted)}
-.walk-meta b{font-family:var(--mono);color:var(--ink);font-weight:600}
-.about-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:14px;align-items:start;margin-top:14px}
+#walk-body{padding:0 14px 14px}
+.walk-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:16px;align-items:start}
+@media (max-width:920px){.walk-grid{grid-template-columns:1fr}}
+.walk-card{background:var(--panel-2);border-radius:10px;padding:12px 14px}
+.walk-card .amount{font:600 1.4rem var(--mono)}.walk-card .amount small{font-size:.8rem;color:var(--muted)}
+.walk-card .route{color:var(--muted);font:.8rem var(--mono);margin-top:2px}
+.walk-card dl{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:12px 0 0;font-size:.84rem}
+.walk-card dt{color:var(--muted)}.walk-card dd{margin:0}
+.timeline{list-style:none;margin:0;padding:0;position:relative}
+.timeline::before{content:"";position:absolute;left:8px;top:12px;bottom:12px;width:2px;background:var(--line)}
+.tl{position:relative;padding:6px 8px 6px 30px;cursor:pointer;border-radius:8px}
+.tl:hover{background:var(--panel-2)}.tl.on{background:var(--accent-soft)}
+.tl-dot{position:absolute;left:2px;top:11px;width:14px;height:14px;border-radius:50%;background:var(--panel);border:2px solid var(--line);transition:background .3s,border-color .3s,box-shadow .3s}
+.tl.past .tl-dot{background:var(--accent-soft);border-color:var(--accent)}
+.tl.on .tl-dot{background:var(--accent);border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+@media (prefers-reduced-motion:reduce){.tl-dot{transition:none}}
+.tl-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.tl-head b{font-size:.9rem}.tl-where{font:.72rem var(--mono);color:var(--muted)}
+.tl-ms{margin-left:auto;font:600 .82rem var(--mono)}
+.tl-text{display:none;margin:4px 0 2px;font-size:.86rem;max-width:70ch}.tl.on .tl-text{display:block}
+.feat-group{margin:14px 0 6px;font-size:.76rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.feat-list{margin:0;padding-left:18px;display:grid;gap:5px;font-size:.88rem}
+.feat-list code{font:.72rem var(--mono);color:var(--muted);margin-left:6px}
+.about-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start;margin-top:14px}
 @media (max-width:920px){.about-grid{grid-template-columns:1fr}}
 .model-list{margin:0;padding:0 14px 14px 32px;display:grid;gap:7px;font-size:.88rem}
 .rules-table td{white-space:normal;vertical-align:top;font-size:.84rem}
@@ -133,6 +151,13 @@ td.num,th.num{text-align:right}
 .modal{position:fixed;inset:0;background:rgba(15,27,45,.45);display:grid;place-items:center;padding:16px;z-index:10}
 .modal[hidden]{display:none}
 .modal-card{background:var(--panel);border-radius:12px;max-width:560px;width:100%;padding:18px 20px;max-height:85vh;overflow:auto;box-shadow:0 10px 40px rgba(15,27,45,.3)}
+.modal-card.wide{max-width:900px}
+.filter{display:grid;gap:12px;margin-top:14px}
+.filter label{display:grid;gap:4px;font-size:.82rem;color:var(--muted)}
+.filter input,.filter select{font:inherit;font-size:.9rem;color:var(--ink);padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel);width:100%;min-width:0}
+.filter .pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.filter-actions{display:flex;gap:8px;flex-wrap:wrap}
+button.on-filter{border-color:var(--accent);background:var(--accent-soft)}
 .modal-card h3{margin:2px 0 0;font-size:1.1rem}.modal-card ul{margin:12px 0 0;padding-left:18px;display:grid;gap:6px;font-size:.9rem}
 .modal-card .kind{font:500 .7rem var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .modal-close{float:right}
@@ -197,10 +222,10 @@ td.num,th.num{text-align:right}
           <div class="panel">
             <div class="panel-h">
               <h2 data-t="stream_title"></h2><span class="grow"></span>
+              <button type="button" data-filter="stream"></button>
               <button type="button" class="primary" id="bg-btn"></button>
               <label class="ctl"><span data-t="speed"></span>
                 <select id="bg-speed"><option value="100">×100</option><option value="200" selected>×200</option><option value="500">×500</option></select></label>
-              <label class="ctl"><input type="checkbox" id="alerts-only"> <span data-t="alerts_only"></span></label>
             </div>
             <p class="panel-sub" data-t="stream_hint"></p>
             <div class="note" id="note" hidden></div>
@@ -222,7 +247,8 @@ td.num,th.num{text-align:right}
             <div id="detail"></div>
           </div>
           <div class="panel">
-            <div class="panel-h"><h2 data-t="queue_title"></h2><span class="grow"></span><span class="count" id="q-count"></span></div>
+            <div class="panel-h"><h2 data-t="queue_title"></h2><span class="grow"></span><span class="count" id="q-count"></span>
+              <button type="button" data-filter="queue"></button></div>
             <p class="panel-sub" data-t="queue_hint"></p>
             <ul class="queue" id="queue"></ul>
             <div class="more" id="queue-more"></div>
@@ -260,6 +286,8 @@ td.num,th.num{text-align:right}
       </table></div>
       <p class="hint" data-t="public_note"></p>
     </section>
+
+    <div class="modal" id="modal" hidden><div class="modal-card" id="modal-card" role="dialog" aria-modal="true"></div></div>
   </div>
 </div>
 
@@ -282,8 +310,13 @@ ru: {
   t_prec: "Подтверждено мошенничества", t_prec_sub: "{a} из {b} разобранных тревог", t_prec_none: "тревоги ещё не разбирали",
   t_ms: "От прихода до решения, медиана", t_ms_sub: "99% — быстрее {p99}",
   stream_title: "Переводы по мере решения",
-  stream_hint: "Каждая строка — перевод из данных генератора, который система только что оценила. Нажмите строку, чтобы увидеть, как она решила.",
-  bg_start: "Запустить поток", bg_stop: "Остановить поток", speed: "Скорость ", alerts_only: "Только тревоги",
+  stream_hint: "Каждая строка — перевод из данных генератора, который система только что оценила. Нажмите строку, чтобы увидеть, как она решила. «Ускорение» — во сколько раз быстрее, чем переводы шли в данных генератора.",
+  bg_start: "Запустить поток", bg_stop: "Остановить поток", speed: "Ускорение ",
+  filter: "Фильтр", f_title_stream: "Фильтр потока", f_title_queue: "Фильтр очереди",
+  f_sender: "Карта отправителя", f_receiver: "Карта получателя", f_card_hint: "первые 6 или последние 4 цифры",
+  f_min: "Сумма от, сум", f_max: "Сумма до, сум", f_since: "Время с", f_until: "Время по",
+  f_decision: "Решение", f_type: "Тип тревоги", f_all: "все", f_apply: "Применить", f_reset: "Сбросить",
+  close: "Закрыть", empty_filtered: "Под фильтр ничего не подходит.",
   h_time: "Время", h_amount: "Сумма, сум", h_route: "Откуда → куда", h_risk: "Риск", h_decision: "Решение",
   empty_live: "Пока нет решений. Запустите поток или покажите случай мошенничества.",
   tag_history: "история", tag_case: "случай: {kind}", tag_control: "контроль",
@@ -378,8 +411,13 @@ en: {
   t_prec: "Confirmed fraud", t_prec_sub: "{a} of {b} resolved alerts", t_prec_none: "no alert resolved yet",
   t_ms: "Arrival → decision, median", t_ms_sub: "99% within {p99}",
   stream_title: "Transfers as they are decided",
-  stream_hint: "Each row is a transfer from the generator's data that the system has just scored. Click a row to see how it was judged.",
-  bg_start: "Start the stream", bg_stop: "Stop the stream", speed: "Speed ", alerts_only: "Alerts only",
+  stream_hint: "Each row is a transfer from the generator's data that the system has just scored. Click a row to see how it was judged. The speed-up says how many times faster than in the generator's data the transfers arrive.",
+  bg_start: "Start the stream", bg_stop: "Stop the stream", speed: "Speed-up ",
+  filter: "Filter", f_title_stream: "Filter the stream", f_title_queue: "Filter the queue",
+  f_sender: "Sender's card", f_receiver: "Payee's card", f_card_hint: "the first 6 or the last 4 digits",
+  f_min: "Amount from, UZS", f_max: "Amount to, UZS", f_since: "Time from", f_until: "Time to",
+  f_decision: "Decision", f_type: "Alert type", f_all: "all", f_apply: "Apply", f_reset: "Clear",
+  close: "Close", empty_filtered: "Nothing matches the filter.",
   h_time: "Time", h_amount: "Amount, UZS", h_route: "From → to", h_risk: "Risk", h_decision: "Decision",
   empty_live: "No decisions yet. Start the stream or show a fraud case.",
   tag_history: "history", tag_case: "case: {kind}", tag_control: "control",
@@ -461,6 +499,7 @@ const PAGE = 20;                   // rows shown before "show more", as server.p
 let lang = "ru", tab = "desk", status = null, runId = null, runStarted = 0, runPicked = null;
 let selected = null, streamRows = [], streamTotal = 0, lastCases = null, results = null;
 const limits = {stream: PAGE, queue: PAGE};
+const filters = {stream: {}, queue: {}};
 try { lang = localStorage.getItem("demo-lang") || "ru"; } catch (e) {}
 const t = k => (T[lang][k] ?? T.en[k] ?? k);
 const fill = (s, vals) => Object.entries(vals).reduce((a, [k, v]) => a.replace(`{${k}}`, v), s);
@@ -484,7 +523,75 @@ function applyLang() {
   document.querySelectorAll("[data-t]").forEach(el => el.textContent = t(el.dataset.t));
   document.querySelectorAll("[data-lang]").forEach(b => b.classList.toggle("on", b.dataset.lang === lang));
   renderScenarios(); renderStatus(); renderStream(); renderQueue(); renderDetail(); renderResults();
+  renderFilterButtons();
   if (tab === "about") renderAbout();
+}
+
+function openModal(html, wide) {
+  $("#modal-card").className = "modal-card" + (wide ? " wide" : "");
+  $("#modal-card").innerHTML = `<button type="button" class="modal-close" data-close>${t("close")}</button>` + html;
+  $("#modal").hidden = false;
+  ($("#modal-card input") || $("#modal-card .modal-close")).focus();
+}
+
+function closeModal() { $("#modal").hidden = true; }
+
+// The filter as the server reads it (server.py parse_filter); the typed times stay
+// on the page only.
+const filterQuery = which => Object.entries(filters[which])
+  .filter(([k, v]) => v !== "" && v != null && !k.endsWith("Text"))
+  .map(([k, v]) => `&${k}=${encodeURIComponent(v)}`).join("");
+
+function filterCount(which) {
+  const f = filters[which], set = k => f[k] !== "" && f[k] != null;
+  return ["sender", "receiver", "decision", "type"].filter(set).length
+    + (set("min") || set("max") ? 1 : 0) + (set("since") || set("until") ? 1 : 0);
+}
+
+function renderFilterButtons() {
+  document.querySelectorAll("[data-filter]").forEach(b => {
+    const n = filterCount(b.dataset.filter);
+    b.textContent = t("filter") + (n ? ` · ${n}` : "");
+    b.classList.toggle("on-filter", n > 0);
+  });
+}
+
+function openFilter(which) {
+  const f = filters[which];
+  const choice = which === "stream"
+    ? `<label>${t("f_decision")}<select id="f-choice"><option value="">${t("f_all")}</option>` +
+      ["ALLOW", "REVIEW"].map(d => `<option value="${d}">${esc(t("dec")[d])}</option>`).join("") + `</select></label>`
+    : `<label>${t("f_type")}<select id="f-choice"><option value="">${t("f_all")}</option>` +
+      [...FRAUD_KINDS, "NONE"].map(k => `<option value="${k}">${esc(k === "NONE" ? t("type_none") : kindName(k))}</option>`).join("") + `</select></label>`;
+  openModal(`<h3>${t(which === "stream" ? "f_title_stream" : "f_title_queue")}</h3>
+    <form class="filter" id="filter-form" data-which="${which}">
+      <label>${t("f_sender")}<input id="f-sender" inputmode="numeric" placeholder="${t("f_card_hint")}" value="${esc(f.sender || "")}"></label>
+      <label>${t("f_receiver")}<input id="f-receiver" inputmode="numeric" placeholder="${t("f_card_hint")}" value="${esc(f.receiver || "")}"></label>
+      <div class="pair"><label>${t("f_min")}<input id="f-min" type="number" min="0" value="${esc(f.min ?? "")}"></label>
+        <label>${t("f_max")}<input id="f-max" type="number" min="0" value="${esc(f.max ?? "")}"></label></div>
+      <div class="pair"><label>${t("f_since")}<input id="f-since" type="time" value="${esc(f.sinceText || "")}"></label>
+        <label>${t("f_until")}<input id="f-until" type="time" value="${esc(f.untilText || "")}"></label></div>
+      ${choice}
+      <div class="filter-actions"><button type="submit" class="primary">${t("f_apply")}</button>
+        <button type="button" data-filter-reset="${which}">${t("f_reset")}</button></div>
+    </form>`);
+  $("#f-choice").value = (which === "stream" ? f.decision : f.type) || "";
+}
+
+// "HH:MM" today, as epoch seconds; the end of a range takes the whole minute.
+function todayAt(hhmm, end) {
+  if (!hhmm) return null;
+  const [h, m] = hhmm.split(":").map(Number), d = new Date();
+  d.setHours(h, m, end ? 59 : 0, end ? 999 : 0);
+  return d.getTime() / 1000;
+}
+
+function applyFilter(which, f) {
+  filters[which] = f;
+  limits[which] = PAGE;
+  closeModal();
+  renderFilterButtons();
+  (which === "stream" ? refreshStream : refreshCases)();
 }
 
 // "Showing n of total", then "show more" while there is more and "show fewer" once
@@ -552,12 +659,12 @@ function renderStream() {
       `<td class="route"><span class="mono" title="${esc(r.from)} → ${esc(r.to)}">${esc(last4(r.from))} → ${esc(last4(r.to))}</span>${tagFor(r)}</td>` +
       `<td><span class="rbar ${hot ? "hot" : ""}"><i style="width:${Math.max(3, Math.min(1, r.score || 0) * 100)}%"></i></span><span class="mono">${dec(r.score, 2)}</span></td>` +
       `<td>${badge(r.decision)}</td></tr>`;
-  }).join("") : `<tr><td colspan="5" class="muted">${t("empty_live")}</td></tr>`;
+  }).join("") : `<tr><td colspan="5" class="muted">${t(filterCount("stream") ? "empty_filtered" : "empty_live")}</td></tr>`;
   $("#stream-more").innerHTML = moreBar("stream", streamRows.length, streamTotal);
 }
 
 async function refreshStream() {
-  const r = await api(`/api/stream?limit=${limits.stream}` + ($("#alerts-only").checked ? "&alerts=1" : ""));
+  const r = await api(`/api/stream?limit=${limits.stream}` + filterQuery("stream"));
   streamRows = r.rows || [];
   streamTotal = r.total || 0;
   renderStream();
@@ -651,11 +758,11 @@ function renderQueue() {
     `<div><div class="amt">${fmtInt(c.amount)} ${t("sum")}</div><div class="kind">${esc(c.type ? kindName(c.type) : t("type_none"))} · ${t("risk")} ${dec(c.score, 2)}</div></div>` +
     `<div class="acts"><button type="button" class="primary" data-res="CONFIRMED_FRAUD">${t("confirm")}</button>` +
     `<button type="button" data-res="FALSE_POSITIVE">${t("fp")}</button></div></li>`).join("")
-    : `<p class="empty">${t("empty_cases")}</p>`;
+    : `<p class="empty">${t(filterCount("queue") ? "empty_filtered" : "empty_cases")}</p>`;
 }
 
 async function refreshCases() {
-  lastCases = await api(`/api/cases?new=1&limit=${limits.queue}`);
+  lastCases = await api(`/api/cases?new=1&limit=${limits.queue}` + filterQuery("queue"));
   renderQueue(); renderStatus();
   if (selected && selected.src === "case") renderDetail();
 }
@@ -717,9 +824,13 @@ async function openTab(name) {
 }
 
 document.addEventListener("click", async e => {
-  const el = e.target.closest("[data-tab],[data-lang],[data-play],[data-row],[data-res],[data-case],[data-more],[data-less],#bg-btn");
+  const el = e.target.closest("[data-tab],[data-lang],[data-play],[data-row],[data-res],[data-case],[data-more],[data-less],[data-filter],[data-filter-reset],[data-close],#modal,#bg-btn");
   if (!el) return;
-  if (el.dataset.tab) openTab(el.dataset.tab);
+  if (el.id === "modal") { if (e.target === el) closeModal(); }
+  else if (el.hasAttribute("data-close")) closeModal();
+  else if (el.dataset.filter) openFilter(el.dataset.filter);
+  else if (el.dataset.filterReset) applyFilter(el.dataset.filterReset, {});
+  else if (el.dataset.tab) openTab(el.dataset.tab);
   else if (el.dataset.lang) { lang = el.dataset.lang; try { localStorage.setItem("demo-lang", lang); } catch (err) {} applyLang(); }
   else if (el.dataset.play) play(el.dataset.play);
   else if (el.dataset.more || el.dataset.less) {
@@ -741,7 +852,15 @@ document.addEventListener("click", async e => {
     refreshStatus();
   }
 });
-$("#alerts-only").addEventListener("change", () => refreshStream());
+document.addEventListener("submit", e => {
+  if (e.target.id !== "filter-form") return;
+  e.preventDefault();
+  const which = e.target.dataset.which, v = id => $(id).value.trim();
+  applyFilter(which, {sender: v("#f-sender"), receiver: v("#f-receiver"), min: v("#f-min"), max: v("#f-max"),
+    since: todayAt(v("#f-since")), until: todayAt(v("#f-until"), true), sinceText: v("#f-since"), untilText: v("#f-until"),
+    [which === "stream" ? "decision" : "type"]: v("#f-choice")});
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
 
 document.querySelector('[data-tab="desk"]').classList.add("on");
 applyLang();

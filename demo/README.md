@@ -33,11 +33,11 @@ output, read where the rest of the project reads it:
 
 | view | what it shows | reads | writes |
 |---|---|---|---|
-| Desk: stream | every decision since the container started, twenty at a time and more on request - amount, route, risk, decision - with the counts and the median time from arrival to decision | `transactions.scored` | the background replay: `data-generator/kafka_producer.py`, unchanged, at 100-500x the dataset's own pacing, from a random row of the held-out part, into `transactions.raw` |
+| Desk: stream | every decision since the container started, twenty at a time and more on request, filtered by either card, amount, time and decision - amount, route, risk, decision - with the counts and the median time from arrival to decision | `transactions.scored` | the background replay: `data-generator/kafka_producer.py`, unchanged, at 100-500x the dataset's own pacing, from a random row of the held-out part, into `transactions.raw` |
 | Desk: fraud cases | one real episode sent through the job - the sender's usual transfers, then the fraud - with what was caught and what was falsely flagged; its last alert opens by itself | `transactions.scored` | the episode's rows, into `transactions.raw` |
 | Desk: selected transfer | the model's risk against the alert level, its reasons, and the hard rules that fired, with what each one did: decide by itself (the two the regulator requires), name the alert, or neither | case-manager's `Explainer`; `ml/models/thresholds.json` | - |
-| Desk: analyst queue | the cases opened since the container started, in case-manager's own order, twenty at a time | `fraud.cases`, through case-manager's `CaseStore` | a verdict, through the same store (`resolved_by = demo`) |
-| About the project | the components, each opening its details; one real decision walked through them with its own stage times; the model; the ten rules with the numbers they check and what each does | `transactions.scored` (the decision and its `stage_ms`); `ml/models/metrics.json`; the warehouse's stage averages | - |
+| Desk: analyst queue | the cases opened since the container started, in case-manager's own order, twenty at a time, filtered by either card, amount, time and alert type | `fraud.cases`, through case-manager's `CaseStore` | a verdict, through the same store (`resolved_by = demo`) |
+| About the project | the components, each opening its details; the path one real decision took, step by step with its own stage times; the model; its 21 features and the 10 rules - with the numbers each checks and what it does - each list behind a button | `transactions.scored` (the decision and its `stage_ms`); `ml/models/metrics.json`; the warehouse's stage averages | - |
 | Grafana | the provisioned overview dashboard, in a frame | ClickHouse, through Grafana | - |
 | Data & results, live | each stage's average time over the latest 1,000 decisions, adding up to the time from arrival to decision; the analyst's verdicts | `transactions_scored.stage_*_ms`; `fraud.cases` | - |
 | Data & results, at training | one table dated by the model's export: each dataset, what it holds, our result on it and the published one | `ml/models/metrics.json` and `manifest.json` as `ml/` wrote them; `results.json` | - |
@@ -86,5 +86,6 @@ as a miss.
 `server.py` is the whole server - standard-library HTTP, kafka-python and
 case-manager's own modules; `index.html` is the page and `about.js` its About
 tab; `tests/` covers which rows make an episode and how they are replayed, when
-the page counts the system as running, and that the stages, the rules, their
-numbers and the alert names it shows are the job's.
+the page counts the system as running, what the filter lets through, and that the
+stages, the features, the rules, their numbers and the alert names it shows are
+the job's.

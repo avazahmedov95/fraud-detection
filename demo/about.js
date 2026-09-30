@@ -1,8 +1,9 @@
 /* The "About the project" tab: what the system is made of (a click on a part opens
-   its details), one decision of the running system walked through it with that
-   decision's own stage times, the model and the rules. Nothing here is sample data.
-   Loaded after index.html's script, whose helpers it uses (t, esc, fill, dec, pct,
-   fmtInt, fmtMs, fmtTime, badge, last4, api, lang, status, results, selected, MUST). */
+   its details), the path one real decision of the running system took through it,
+   with that decision's own stage times, and the model, its features and the rules.
+   Nothing here is sample data. Loaded after index.html's script, whose helpers it
+   uses (t, esc, fill, dec, pct, fmtInt, fmtMs, fmtTime, badge, kindName, last4, api,
+   openModal, lang, status, results, selected, MUST, T). */
 
 // The rules the job runs, in rules.py's order, with the numbers each one checks as
 // stream-processor/config.py sets them. demo/tests pins both against the job.
@@ -24,29 +25,42 @@ const NAMED_BY = [["STRUCTURING", ["STRUCTURING"]],
                   ["ATO", ["GEO_ANOMALY", "VELOCITY", "DISTINCT_PAYEE_BURST"]],
                   ["MULE", ["MULE_FAN_IN"]],
                   ["APP", ["NEW_PAYEE_HIGH_AMOUNT", "AMOUNT_DEVIATION"]]];
+// The model's 21 features in ml/models/feature_names.json's order, grouped as
+// stream-processor/capabilities.py groups them (demo/tests pins the list).
+const FEATURE_GROUPS = [
+  ["sender", ["log_amount", "amount_to_mean", "amount_z", "is_new_payee", "vel_10m", "vel_1h",
+              "distinct_payees_10m", "sub_threshold_1h", "secs_since_last", "daily_sum_ratio", "hour"]],
+  ["receiver", ["rcv_distinct_senders_1h", "rcv_inflow_1h"]],
+  ["place", ["geo_is_anomaly"]],
+  ["session", ["active_call", "secs_login_z"]],
+  ["links", ["payee_payers_24h", "payee_payers_7d", "sender_payees_24h", "sender_payees_7d",
+             "secs_since_sender_inbound"]]
+];
 
-const GROUPS = ["in", "engine", "out", "offline"];
+const GROUPS = ["in", "engine", "out"];
 const COMPONENTS = [
   {id: "gen", group: "in"}, {id: "raw", group: "in"},
   {id: "decode", group: "engine"}, {id: "state", group: "engine"}, {id: "redis", group: "engine", store: true},
   {id: "rules", group: "engine"}, {id: "model", group: "engine", ml: true}, {id: "decide", group: "engine"},
   {id: "out", group: "out"}, {id: "sink", group: "out"}, {id: "ch", group: "out", store: true},
-  {id: "neo", group: "out", store: true}, {id: "cases", group: "out"}, {id: "dash", group: "out"},
-  {id: "train", group: "offline"}
+  {id: "neo", group: "out", store: true}, {id: "cases", group: "out"}, {id: "dash", group: "out"}
 ];
-// The path one transfer takes. `stage` names its time in the decision's stage_ms.
+// The path one transfer takes: the component it is at, and the stage of the
+// decision's stage_ms that times it.
 const WALK = [
-  {at: "gen"}, {at: "raw", stage: "kafka"}, {at: "decode", stage: "handoff"}, {at: "decode", stage: "decode"},
-  {at: "state", stage: "state"}, {at: "redis", stage: "redis"}, {at: "rules", stage: "rules"},
-  {at: "model", stage: "model"}, {at: "decide", stage: "decide"}, {at: "out"}, {at: "sink"}, {at: "ch"},
-  {at: "neo", alertOnly: true}, {at: "cases", alertOnly: true}, {at: "dash"}
+  {key: "gen", at: "gen"}, {key: "raw", at: "raw", stage: "kafka"},
+  {key: "handoff", at: "decode", stage: "handoff"}, {key: "decode", at: "decode", stage: "decode"},
+  {key: "state", at: "state", stage: "state"}, {key: "redis", at: "redis", stage: "redis"},
+  {key: "rules", at: "rules", stage: "rules"}, {key: "model", at: "model", stage: "model"},
+  {key: "decide", at: "decide", stage: "decide"}, {key: "stored", at: "ch"}, {key: "analyst", at: "cases"}
 ];
 
 const ABOUT = {
 ru: {
-  intro: "Система проверяет каждый P2P-перевод по картам в реальном времени: жёсткие правила и модель машинного обучения оценивают его за доли секунды, а подозрительные переводы уходят аналитику. Сама система ничего не блокирует — решает человек. Нажмите на любой компонент, чтобы прочитать о нём подробнее.",
+  intro: "Система проверяет каждый P2P-перевод по картам в реальном времени: жёсткие правила и модель машинного обучения оценивают его за доли секунды, а подозрительные переводы уходят аналитику. Сама система ничего не блокирует — решает человек.",
   flow_title: "Из чего состоит система",
-  group: {in: "Приём перевода", engine: "Flink: решение за миллисекунды", out: "После решения", offline: "Офлайн, не в живом пути"},
+  legend: "Нажмите на карточку, чтобы прочитать о компоненте. Серые карточки — хранилища данных; синяя рамка — модель машинного обучения.",
+  group: {in: "Приём перевода", engine: "Flink: решение за миллисекунды", out: "После решения"},
   parts: {
     gen: ["Генератор переводов", "Python", "откуда берутся переводы", [
       "Наш генератор создаёт реалистичные P2P-переводы по картам UzCard и HUMO: суммы, регионы, время, привычки людей.",
@@ -69,7 +83,7 @@ ru: {
       "Так ловится дроп-счёт: много людей платят одному счёту, и деньги сразу уходят дальше."]],
     rules: ["Признаки и правила", "Flink", "21 признак, 10 правил", [
       "21 признак: суммы и привычки отправителя, новизна получателя, скорость переводов, приток денег получателю, звонок во время подтверждения и другие.",
-      "10 жёстких правил — известные схемы мошенничества. Подробно — в блоке «Правила» ниже."]],
+      "10 жёстких правил — известные схемы мошенничества. Полные списки — по кнопкам в блоках «Модель» и «Правила» ниже."]],
     model: ["Модель", "LightGBM · ONNX", "оценка риска", [
       "Пять моделей градиентного бустинга на деревьях решений, их ответы усредняются.",
       "Работает внутри Flink как файл ONNX, без обращения к внешнему сервису.",
@@ -96,55 +110,73 @@ ru: {
       "Аналитик отмечает: мошенничество или ложная тревога. Эти отметки — единственные настоящие метки в системе, на них банк переобучал бы модель."]],
     dash: ["Мониторинг", "Grafana · демо", "что видит банк", [
       "Grafana показывает число переводов и тревог, типы, распределение риска, регионы.",
-      "Это демо показывает те же решения вживую."]],
-    train: ["Обучение модели", "Python", "не в живом пути", [
-      "Прогоняет тот же код признаков по данным генератора, поэтому признаки при обучении и в работе одинаковые.",
-      "Обучает пять моделей LightGBM, подбирает уровень тревоги на отдельных данных и выгружает модель в ONNX.",
-      "Подробно — в блоке «Модель» ниже."]]
+      "Это демо показывает те же решения вживую."]]
   },
-  close: "Закрыть",
-  walk_title: "Путь одного перевода",
-  walk_hint: "Выберите настоящее решение системы и нажмите «Показать путь»: перевод пройдёт по компонентам, на каждом шаге — его собственное время.",
-  w_alert: "Последняя тревога", w_allow: "Обычный перевод", w_selected: "Выбранный на рабочем месте",
-  w_play: "Показать путь", w_pause: "Пауза", w_prev: "◀ Назад", w_next: "Вперёд ▶",
+  walk_title: "Путь настоящего перевода",
+  walk_hint: "Берём перевод, который система только что обработала, и показываем, через что он прошёл и сколько занял каждый шаг. Нажмите «Проиграть путь» или на любой шаг.",
+  w_alert: "Последняя тревога", w_allow: "Последний обычный перевод", w_selected: "Выбранный на рабочем месте",
+  w_play: "▶ Проиграть путь", w_pause: "Пауза",
   w_none: "Пока нет решений: запустите поток или покажите случай мошенничества на рабочем месте.",
-  w_ready: "Нажмите «Показать путь» или «Вперёд».",
-  m_stage: "этот этап", m_elapsed: "с прихода перевода",
+  c_risk: "Риск модели", c_level: "уровень тревоги {cut}", c_rules: "Правила", c_named: "Название тревоги",
+  c_reason: "Главная причина", c_total: "От прихода до решения", c_none: "не сработали",
   walk: {
-    gen: ["Перевод отправлен", "Перевод {amount} сум с карты {from} на карту {to}. Он взят из данных нашего генератора и отправлен в систему."],
-    raw: ["Во входную очередь", "Kafka записала перевод во входную очередь. Ключ — карта отправителя, поэтому вся история одного человека попадает к одному обработчику."],
-    handoff: ["Ожидание передачи", "Flink забирает переводы из очереди и передаёт на обработку небольшими пачками. Это ожидание — почти всё время решения."],
-    decode: ["Чтение", "Перевод распакован и проверен."],
+    gen: ["Перевод отправлен", "Перевод взят из данных нашего генератора и отправлен в систему, как его отправил бы банк."],
+    raw: ["Записан в очередь", "Kafka записала перевод во входную очередь. Ключ — карта отправителя, поэтому вся история одного человека попадает к одному обработчику."],
+    handoff: ["Ждёт передачи", "Flink забирает переводы из очереди и передаёт на обработку небольшими пачками. Это ожидание — почти всё время решения."],
+    decode: ["Прочитан", "Перевод распакован и проверен."],
     state: ["История отправителя", "Из памяти Flink прочитана история этого отправителя: обычные суммы, получатели, время прошлых переводов."],
     redis: ["Сторона получателя", "Из Redis прочитано, сколько разных людей платили этому счёту за час, сутки и неделю."],
     rules: ["Признаки и правила", "Посчитан 21 признак и проверены 10 правил. {rules}"],
     model: ["Модель", "Модель взвесила все 21 признак и оценила риск: {score}."],
     decide: ["Решение", "{decision}. {why}"],
-    out: ["Решение отправлено", "Решение ушло в Kafka{alert}. От прихода перевода до решения прошло {total}."],
-    sink: ["Запись в базу", "Служба записи забирает решения пачками. Решение уже принято, поэтому здесь спешить не нужно."],
-    ch: ["ClickHouse", "В базе сохранены решение, время каждого этапа и запись в цепочке аудита."],
-    neo: ["Граф связей", "Тревога стала связью в графе Neo4j: кто кому платил."],
-    neo_allow: ["Граф связей", "Обычный перевод в граф не попадает: там только тревоги."],
-    cases: ["Аналитик", "Открыто дело с причинами словами{reason}. Аналитик отметит: мошенничество или ложная тревога."],
-    cases_allow: ["Аналитик", "Тревоги нет, поэтому аналитик этот перевод не увидит."],
-    dash: ["Мониторинг", "Grafana и это демо показывают весь поток: число переводов, тревоги, типы и время."]
+    stored: ["Записан в базу", "Решение ушло в Kafka{alert} и записано в ClickHouse вместе со временем каждого этапа."],
+    analyst: ["У аналитика", "Открыто дело с причинами словами, а тревога стала связью в графе Neo4j. Аналитик отметит: мошенничество или ложная тревога."],
+    analyst_allow: ["Аналитик не нужен", "Тревоги нет, поэтому перевод прошёл, а аналитик его не увидит."]
   },
   fired: "Сработали: {list}.", none_fired: "Ни одно правило не сработало.",
   why_must: "Сработало обязательное правило регулятора — такой перевод всегда идёт на проверку.",
   why_review: "Риск {score} выше уровня тревоги {cut}.",
   why_allow: "Риск {score} ниже уровня тревоги {cut}, и ни одно правило не требует проверки.",
   alert_too: ", а тревога — ещё и в очередь тревог",
-  reason: "; главная причина — «{label}»",
   model_title: "Модель",
   model_lines: [
     "Пять моделей LightGBM — градиентный бустинг на деревьях решений; их ответы усредняются.",
-    "Смотрит на 21 признак: суммы и привычки отправителя, новизну получателя, скорость переводов, приток денег получателю, звонок во время подтверждения.",
+    "Смотрит на 21 признак перевода — список по кнопке ниже.",
     "Обучена на первых {fit} переводах генератора по времени. Уровень тревоги {cut} подобран на следующих {val}.",
     "Проверена на последних {test} переводах ({tf} мошеннических), которых не видела: поймано {rec} мошенничества, {prec} тревог настоящие.",
     "Работает внутри Flink как файл ONNX: {model_ms} на перевод в среднем по последним решениям.",
     "Каждую тревогу объясняет: считает вклад признаков в риск и показывает аналитику главные причины словами."],
+  features_btn: "Список признаков ({n})",
+  features_title: "Признаки модели",
+  features_intro: "Задача Flink считает их для каждого перевода; модель смотрит на все сразу.",
+  fgroup: {sender: "Отправитель и сумма", receiver: "Получатель за последний час", place: "Место",
+           session: "Сессия в приложении", links: "Связи за сутки и неделю"},
+  feature: {
+    log_amount: "Сумма перевода.",
+    amount_to_mean: "Во сколько раз сумма больше обычной суммы этого отправителя.",
+    amount_z: "Насколько сумма выбивается из обычного разброса сумм отправителя.",
+    is_new_payee: "Платит ли отправитель этому получателю впервые.",
+    vel_10m: "Сколько переводов отправитель сделал за последние 10 минут.",
+    vel_1h: "Сколько переводов он сделал за последний час.",
+    distinct_payees_10m: "Скольким разным получателям он заплатил за 10 минут.",
+    sub_threshold_1h: "Сколько его переводов за час чуть ниже порога отчётности 10 млн сум.",
+    secs_since_last: "Сколько времени прошло с его прошлого перевода.",
+    daily_sum_ratio: "Какую долю дневного лимита он уже потратил.",
+    hour: "Час суток.",
+    rcv_distinct_senders_1h: "Сколько разных людей заплатили получателю за час.",
+    rcv_inflow_1h: "Сколько денег пришло получателю за час.",
+    geo_is_anomaly: "Перевод не из обычного региона отправителя.",
+    active_call: "Шёл ли телефонный звонок, пока человек подтверждал перевод.",
+    secs_login_z: "Насколько дольше обычного человек подтверждал перевод.",
+    payee_payers_24h: "Сколько разных людей платили получателю за сутки.",
+    payee_payers_7d: "Сколько разных людей платили получателю за неделю.",
+    sender_payees_24h: "Скольким разным получателям платил отправитель за сутки.",
+    sender_payees_7d: "Скольким разным получателям платил отправитель за неделю.",
+    secs_since_sender_inbound: "Сколько времени прошло с тех пор, как отправителю самому заплатили: дроп-счёт быстро отправляет полученное дальше."
+  },
   rules_title: "Правила",
   rules_intro: "Правила — известные схемы мошенничества, записанные заранее. Решение принимает модель; два правила регулятор требует проверять всегда, остальные дают тревоге название или понятную аналитику причину.",
+  rules_btn: "Список правил ({n})",
   r_rule: "Правило", r_checks: "Что проверяет", r_does: "Что делает",
   role_must: "сам отправляет на проверку — требует регулятор", role_name: "даёт название: {type}", role_reason: "причина для аналитика",
   rule_text: {
@@ -161,9 +193,10 @@ ru: {
   }
 },
 en: {
-  intro: "The system checks every P2P card transfer in real time: hard rules and a machine-learning model judge it in a fraction of a second, and suspicious transfers go to an analyst. The system blocks nothing by itself — a person decides. Click any component to read about it.",
+  intro: "The system checks every P2P card transfer in real time: hard rules and a machine-learning model judge it in a fraction of a second, and suspicious transfers go to an analyst. The system blocks nothing by itself — a person decides.",
   flow_title: "What the system is made of",
-  group: {in: "Taking the transfer in", engine: "Flink: the decision, in milliseconds", out: "After the decision", offline: "Offline, not in the live path"},
+  legend: "Click a card to read about the component. Grey cards hold data; the blue frame is the machine-learning model.",
+  group: {in: "Taking the transfer in", engine: "Flink: the decision, in milliseconds", out: "After the decision"},
   parts: {
     gen: ["Transfer generator", "Python", "where the transfers come from", [
       "Our generator creates realistic P2P transfers on UzCard and HUMO cards: amounts, regions, times, people's habits.",
@@ -186,7 +219,7 @@ en: {
       "That is how a money mule is caught: many people pay one account, and the money moves straight on."]],
     rules: ["Features and rules", "Flink", "21 features, 10 rules", [
       "21 features: the sender's amounts and habits, whether the payee is new, how fast transfers come, money flowing into the payee, a call during confirmation and more.",
-      "10 hard rules — known fraud patterns. In full in the Rules panel below."]],
+      "10 hard rules — known fraud patterns. The full lists open from the Model and Rules panels below."]],
     model: ["The model", "LightGBM · ONNX", "the risk score", [
       "Five gradient-boosted decision-tree models, their answers averaged.",
       "It runs inside Flink as an ONNX file, with no call to an outside service.",
@@ -213,55 +246,73 @@ en: {
       "The analyst marks it fraud or a false alarm. Those marks are the only real labels the system gets; a bank would retrain the model on them."]],
     dash: ["Monitoring", "Grafana · demo", "what the bank watches", [
       "Grafana shows transfer and alert counts, types, the risk distribution, regions.",
-      "This demo shows the same decisions live."]],
-    train: ["Model training", "Python", "not in the live path", [
-      "Runs the same feature code over the generator's data, so the features in training and in production are the same.",
-      "Trains five LightGBM models, chooses the alert level on separate data and exports the model to ONNX.",
-      "In full in the Model panel below."]]
+      "This demo shows the same decisions live."]]
   },
-  close: "Close",
-  walk_title: "One transfer's path",
-  walk_hint: "Pick a real decision of the system and press Show the path: the transfer moves through the components, each step with its own time.",
-  w_alert: "Latest alert", w_allow: "Ordinary transfer", w_selected: "Selected on the desk",
-  w_play: "Show the path", w_pause: "Pause", w_prev: "◀ Back", w_next: "Next ▶",
+  walk_title: "The path of a real transfer",
+  walk_hint: "We take a transfer the system has just handled and show what it passed through and how long each step took. Press Play the path, or click any step.",
+  w_alert: "Latest alert", w_allow: "Latest ordinary transfer", w_selected: "Selected on the desk",
+  w_play: "▶ Play the path", w_pause: "Pause",
   w_none: "No decisions yet: start the stream or show a fraud case on the desk.",
-  w_ready: "Press Show the path, or Next.",
-  m_stage: "this stage", m_elapsed: "since the transfer arrived",
+  c_risk: "Model risk", c_level: "alert level {cut}", c_rules: "Rules", c_named: "Alert name",
+  c_reason: "Main reason", c_total: "From arrival to decision", c_none: "none fired",
   walk: {
-    gen: ["The transfer is sent", "A transfer of {amount} UZS from card {from} to card {to}. It comes from our generator's data and is sent into the system."],
-    raw: ["Into the incoming queue", "Kafka wrote the transfer to the incoming queue. The key is the sender's card, so one person's whole history reaches one worker."],
+    gen: ["Sent", "The transfer comes from our generator's data and is sent into the system as a bank would send it."],
+    raw: ["Queued", "Kafka wrote the transfer to the incoming queue. The key is the sender's card, so one person's whole history reaches one worker."],
     handoff: ["Waiting to be handed on", "Flink takes transfers from the queue and passes them on in small batches. This wait is almost all of the decision time."],
-    decode: ["Reading", "The transfer is unpacked and checked."],
+    decode: ["Read", "The transfer is unpacked and checked."],
     state: ["The sender's history", "This sender's history is read from Flink's memory: usual amounts, payees, the times of earlier transfers."],
     redis: ["The receiver's side", "Redis gives how many different people paid this account in the last hour, day and week."],
     rules: ["Features and rules", "21 features are computed and 10 rules checked. {rules}"],
     model: ["The model", "The model weighs all 21 features and scores the risk: {score}."],
     decide: ["The decision", "{decision}. {why}"],
-    out: ["The decision leaves", "The decision goes to Kafka{alert}. From the transfer's arrival to the decision: {total}."],
-    sink: ["Written down", "The sink writer takes the decisions in batches. The decision is already made, so nothing here needs to hurry."],
-    ch: ["ClickHouse", "The database keeps the decision, the time of every stage and a record in the audit chain."],
-    neo: ["The graph", "The alert becomes a link in the Neo4j graph: who paid whom."],
-    neo_allow: ["The graph", "An ordinary transfer does not reach the graph: it holds alerts only."],
-    cases: ["The analyst", "A case opens with its reasons in words{reason}. The analyst will mark it fraud or a false alarm."],
-    cases_allow: ["The analyst", "There is no alert, so the analyst never sees this transfer."],
-    dash: ["Monitoring", "Grafana and this demo show the whole flow: transfers, alerts, types and times."]
+    stored: ["Written down", "The decision went to Kafka{alert} and was written to ClickHouse with the time of every stage."],
+    analyst: ["With the analyst", "A case opened with its reasons in words, and the alert became a link in the Neo4j graph. The analyst will mark it fraud or a false alarm."],
+    analyst_allow: ["No analyst needed", "There is no alert, so the transfer went through and no analyst sees it."]
   },
   fired: "Fired: {list}.", none_fired: "No rule fired.",
   why_must: "A rule the regulator requires fired, and such a transfer always goes to review.",
   why_review: "The risk {score} is past the alert level {cut}.",
   why_allow: "The risk {score} is under the alert level {cut}, and no rule asked for a review.",
   alert_too: ", and the alert to the alert queue as well",
-  reason: "; the main one: '{label}'",
   model_title: "The model",
   model_lines: [
     "Five LightGBM models — gradient boosting on decision trees; their answers are averaged.",
-    "It reads 21 features: the sender's amounts and habits, whether the payee is new, how fast transfers come, money flowing into the payee, a call during confirmation.",
+    "It reads 21 features of the transfer — the list opens from the button below.",
     "Trained on the generator's first {fit} transfers in time. The alert level {cut} was chosen on the next {val}.",
     "Tested on the last {test} transfers ({tf} of them fraud), which it never saw: it caught {rec} of the fraud, and {prec} of its alerts were real.",
     "It runs inside Flink as an ONNX file: {model_ms} per transfer on average over the latest decisions.",
     "It explains every alert: each feature's share of the risk, with the main reasons shown to the analyst in words."],
+  features_btn: "List of features ({n})",
+  features_title: "The model's features",
+  features_intro: "The Flink job computes them for every transfer; the model reads all of them at once.",
+  fgroup: {sender: "The sender and the amount", receiver: "The payee in the last hour", place: "Place",
+           session: "The app session", links: "Links over a day and a week"},
+  feature: {
+    log_amount: "The amount.",
+    amount_to_mean: "How many times the sender's usual amount this is.",
+    amount_z: "How far the amount falls outside the sender's usual spread.",
+    is_new_payee: "Whether the sender pays this payee for the first time.",
+    vel_10m: "How many transfers the sender made in the last 10 minutes.",
+    vel_1h: "How many they made in the last hour.",
+    distinct_payees_10m: "How many different payees they paid in 10 minutes.",
+    sub_threshold_1h: "How many of their transfers in an hour sat just under the 10 million UZS reporting threshold.",
+    secs_since_last: "How long since their previous transfer.",
+    daily_sum_ratio: "How much of the daily limit they have used.",
+    hour: "The hour of the day.",
+    rcv_distinct_senders_1h: "How many different people paid the payee in the hour.",
+    rcv_inflow_1h: "How much money reached the payee in the hour.",
+    geo_is_anomaly: "The transfer comes from outside the sender's usual region.",
+    active_call: "Whether a phone call was active while the person confirmed.",
+    secs_login_z: "How much longer than usual the person took to confirm.",
+    payee_payers_24h: "How many different people paid the payee in a day.",
+    payee_payers_7d: "How many different people paid the payee in a week.",
+    sender_payees_24h: "How many different payees the sender paid in a day.",
+    sender_payees_7d: "How many different payees the sender paid in a week.",
+    secs_since_sender_inbound: "How long since the sender was last paid: a mule forwards what it receives quickly."
+  },
   rules_title: "The rules",
   rules_intro: "The rules are known fraud patterns, written down in advance. The model makes the decision; the regulator requires two rules to be reviewed every time, and the others give the alert a name or the analyst a readable reason.",
+  rules_btn: "List of rules ({n})",
   r_rule: "Rule", r_checks: "What it checks", r_does: "What it does",
   role_must: "sends to review by itself — the regulator requires it", role_name: "names the alert: {type}", role_reason: "a reason for the analyst",
   rule_text: {
@@ -302,53 +353,47 @@ function candidates() {
 
 function drawAbout() {
   const o = (results && results.own) || {};
-  const byGroup = g => COMPONENTS.filter(c => c.group === g).map(c => {
+  const card = c => {
     const [name, kind, sub] = ab("parts")[c.id];
     return `<button type="button" class="comp ${c.store ? "store" : ""} ${c.ml ? "ml" : ""}" data-comp="${c.id}">` +
       `<span class="kind">${esc(kind)}</span><span class="name">${esc(name)}</span><span class="sub">${esc(sub)}</span></button>`;
-  }).join("");
+  };
   const modelMs = (((walk.timing || {}).stages || []).find(s => s.name === "model") || {}).ms;
+  const features = FEATURE_GROUPS.reduce((n, [, names]) => n + names.length, 0);
   const cut = status && status.cut;
   $("#about").innerHTML = `
     <p class="about-intro">${esc(ab("intro"))}</p>
     <div class="panel">
       <div class="panel-h"><h2>${esc(ab("flow_title"))}</h2></div>
-      <div class="flow" id="flow">
-        ${GROUPS.map(g => `<div class="flow-group"><h3>${esc(ab("group")[g])}</h3><div class="flow-row">${byGroup(g)}</div></div>`).join("")}
-        <span id="packet" hidden></span>
+      <p class="panel-sub">${esc(ab("legend"))}</p>
+      <div class="flow">${GROUPS.map(g => `<div class="flow-group"><h3>${esc(ab("group")[g])}</h3>` +
+        `<div class="flow-row">${COMPONENTS.filter(c => c.group === g).map(card).join("")}</div></div>`).join("")}</div>
+    </div>
+    <div class="panel walk">
+      <div class="panel-h"><h2>${esc(ab("walk_title"))}</h2></div>
+      <p class="panel-sub">${esc(ab("walk_hint"))}</p>
+      <div class="walk-controls">
+        ${["alert", "allow", "selected"].map(k => `<button type="button" data-walk="${k}" aria-pressed="${walk.choice === k}"` +
+          `${candidates()[k] ? "" : " disabled"}>${esc(ab("w_" + k))}</button>`).join("")}
+        <span class="grow"></span>
+        <button type="button" class="primary" data-walk-play ${walk.rec ? "" : "disabled"}>${esc(ab(walk.timer ? "w_pause" : "w_play"))}</button>
       </div>
-      <div class="walk">
-        <div><h4>${esc(ab("walk_title"))}</h4><p class="small-note">${esc(ab("walk_hint"))}</p></div>
-        <div class="walk-controls">
-          ${["alert", "allow", "selected"].map(k => `<button type="button" data-walk="${k}" aria-pressed="${walk.choice === k}"` +
-            `${candidates()[k] ? "" : " disabled"}>${esc(ab("w_" + k))}</button>`).join("")}
-        </div>
-        <div class="walk-controls">
-          <button type="button" class="primary" data-walk-play ${walk.rec ? "" : "disabled"}>${esc(ab(walk.timer ? "w_pause" : "w_play"))}</button>
-          <button type="button" data-walk-step="-1" ${walk.rec ? "" : "disabled"}>${esc(ab("w_prev"))}</button>
-          <button type="button" data-walk-step="1" ${walk.rec ? "" : "disabled"}>${esc(ab("w_next"))}</button>
-        </div>
-        <div id="walk-step"></div>
-      </div>
+      <div id="walk-body"></div>
     </div>
     <div class="about-grid">
       <div class="panel">
-        <div class="panel-h"><h2>${esc(ab("model_title"))}</h2></div>
+        <div class="panel-h"><h2>${esc(ab("model_title"))}</h2><span class="grow"></span>
+          <button type="button" data-features>${esc(fill(ab("features_btn"), {n: features}))}</button></div>
         <ul class="model-list">${ab("model_lines").map(line => `<li>${esc(fill(line, {
           fit: fmtInt(o.fit), val: fmtInt(o.val), test: fmtInt(o.test), tf: fmtInt(o.test_fraud),
           rec: pct(o.recall), prec: pct(o.precision), cut: dec(cut, 4), model_ms: fmtMs(modelMs)}))}</li>`).join("")}</ul>
       </div>
       <div class="panel">
-        <div class="panel-h"><h2>${esc(ab("rules_title"))}</h2></div>
+        <div class="panel-h"><h2>${esc(ab("rules_title"))}</h2><span class="grow"></span>
+          <button type="button" data-rules>${esc(fill(ab("rules_btn"), {n: Object.keys(RULE_FACTS).length}))}</button></div>
         <p class="panel-sub">${esc(ab("rules_intro"))}</p>
-        <div class="tbl"><table class="rules-table">
-          <thead><tr><th>${esc(ab("r_rule"))}</th><th>${esc(ab("r_checks"))}</th><th>${esc(ab("r_does"))}</th></tr></thead>
-          <tbody>${Object.keys(RULE_FACTS).map(code => `<tr><td>${esc(t("rules")[code] || code)}</td>` +
-            `<td>${esc(ruleText(code))}</td><td>${roles(code)}</td></tr>`).join("")}</tbody>
-        </table></div>
       </div>
-    </div>
-    <div class="modal" id="modal" hidden><div class="modal-card" role="dialog" aria-modal="true" id="modal-card"></div></div>`;
+    </div>`;
   paintWalk();
 }
 
@@ -371,67 +416,72 @@ function openComponent(id) {
   const [name, kind, , lines] = ab("parts")[id];
   const o = (results && results.own) || {};
   const vals = {rows: fmtInt(o.rows), share: o.fraud_share == null ? "—" : dec(o.fraud_share * 100, 2) + "%"};
-  $("#modal-card").innerHTML = `<button type="button" class="modal-close" data-close>${esc(ab("close"))}</button>` +
-    `<span class="kind">${esc(kind)}</span><h3>${esc(name)}</h3>` +
-    `<ul>${lines.map(line => `<li>${esc(fill(line, vals))}</li>`).join("")}</ul>`;
-  $("#modal").hidden = false;
-  $("#modal-card .modal-close").focus();
+  openModal(`<span class="kind">${esc(kind)}</span><h3>${esc(name)}</h3>` +
+    `<ul>${lines.map(line => `<li>${esc(fill(line, vals))}</li>`).join("")}</ul>`);
 }
 
-function closeComponent() { const m = $("#modal"); if (m) m.hidden = true; }
-
-// Each step's own time, and the time since arrival once the step is done.
-function stepTimes(i) {
-  const st = walk.rec.stages || {};
-  let since = 0;
-  for (let k = 0; k <= i; k++) since += Number(st[WALK[k].stage]) || 0;
-  const s = WALK[i].stage;
-  return {own: s && st[s] != null ? Number(st[s]) : null, since};
+function openFeatures() {
+  openModal(`<h3>${esc(ab("features_title"))}</h3><p class="small-note">${esc(ab("features_intro"))}</p>` +
+    FEATURE_GROUPS.map(([g, names]) => `<h4 class="feat-group">${esc(ab("fgroup")[g])}</h4>` +
+      `<ul class="feat-list">${names.map(n => `<li>${esc(ab("feature")[n])} <code>${esc(n)}</code></li>`).join("")}</ul>`).join(""), true);
 }
 
-function stepText(i) {
-  const r = walk.rec, step = WALK[i], alert = r.decision === "REVIEW";
-  const key = step.alertOnly && !alert ? step.at + "_allow" : (step.stage === "handoff" ? "handoff" : step.at);
+function openRules() {
+  openModal(`<h3>${esc(ab("rules_title"))}</h3><p class="small-note">${esc(ab("rules_intro"))}</p>` +
+    `<div class="tbl"><table class="rules-table"><thead><tr><th>${esc(ab("r_rule"))}</th><th>${esc(ab("r_checks"))}</th>` +
+    `<th>${esc(ab("r_does"))}</th></tr></thead><tbody>${Object.keys(RULE_FACTS).map(code =>
+      `<tr><td>${esc(t("rules")[code] || code)}</td><td>${esc(ruleText(code))}</td><td>${roles(code)}</td></tr>`).join("")}` +
+    `</tbody></table></div>`, true);
+}
+
+function stepText(step, r) {
+  const alert = r.decision === "REVIEW";
+  const key = step.key === "analyst" && !alert ? "analyst_allow" : step.key;
   const [title, text] = ab("walk")[key];
   const rules = r.rules || [], cut = status && status.cut;
-  const top = r.why && r.why.items && r.why.items[0];
-  const label = top ? (lang === "ru" ? (T.ru.feat[top.feature] || top.label_en) : top.label_en) : "";
   return [title, fill(text, {
-    amount: fmtInt(r.amount), from: r.from, to: r.to,
     rules: rules.length ? fill(ab("fired"), {list: rules.map(x => t("rules")[x] || x).join(", ")}) : ab("none_fired"),
     score: dec(r.score, 2), decision: t("dec")[r.decision] || r.decision,
     why: rules.some(x => MUST.has(x)) ? ab("why_must")
       : fill(ab(alert ? "why_review" : "why_allow"), {score: dec(r.score, 2), cut: dec(cut, 2)}),
-    alert: alert ? ab("alert_too") : "", total: fmtMs(r.ms),
-    reason: label ? fill(ab("reason"), {label}) : ""})];
+    alert: alert ? ab("alert_too") : ""})];
 }
 
 function paintWalk() {
-  const box = $("#walk-step");
-  if (!box) return;
-  document.querySelectorAll("#flow .comp").forEach(el => el.classList.remove("on", "past"));
-  const packet = $("#packet");
-  if (!walk.rec) { box.innerHTML = `<p class="small-note">${esc(ab("w_none"))}</p>`; packet.hidden = true; return; }
+  const body = $("#walk-body");
+  if (!body) return;
   const r = walk.rec;
-  const head = `<div class="walk-meta"><span><b>${fmtInt(r.amount)} ${t("sum")}</b></span>` +
-    `<span>${esc(last4(r.from))} → ${esc(last4(r.to))}</span><span>${badge(r.decision)}</span><span>${esc(fmtTime(r.at))}</span></div>`;
-  if (walk.idx < 0) { box.innerHTML = head + `<p class="small-note">${esc(ab("w_ready"))}</p>`; packet.hidden = true; return; }
-  const [title, text] = stepText(walk.idx);
-  const times = stepTimes(walk.idx);
-  box.innerHTML = head + `<h4>${esc(title)}</h4><p>${esc(text)}</p>` +
-    `<div class="walk-meta">${times.own == null ? "" : `<span>${esc(ab("m_stage"))}: <b>${fmtMs(times.own)}</b></span>`}` +
-    `<span>${esc(ab("m_elapsed"))}: <b>${fmtMs(times.since)}</b></span></div>`;
-  WALK.forEach((s, k) => {
-    const el = document.querySelector(`#flow [data-comp="${s.at}"]`);
-    if (el && k < walk.idx) el.classList.add("past");
-  });
-  const at = document.querySelector(`#flow [data-comp="${WALK[walk.idx].at}"]`);
-  at.classList.remove("past");
-  at.classList.add("on");
-  const flow = $("#flow").getBoundingClientRect(), b = at.getBoundingClientRect();
-  packet.hidden = false;
-  packet.classList.toggle("alert", r.decision === "REVIEW" && walk.idx >= WALK.findIndex(s => s.at === "decide"));
-  packet.style.transform = `translate(${b.left - flow.left + b.width / 2 - 8}px, ${b.top - flow.top - 8}px)`;
+  if (!r) { body.innerHTML = `<p class="empty">${esc(ab("w_none"))}</p>`; return; }
+  const cut = status && status.cut, rules = r.rules || [];
+  const top = r.why && r.why.items && r.why.items[0];
+  const reason = top ? (lang === "ru" ? (T.ru.feat[top.feature] || top.label_en) : top.label_en) : "";
+  const facts = [
+    [ab("c_risk"), `${dec(r.score, 2)} · ${fill(ab("c_level"), {cut: dec(cut, 2)})}`],
+    [ab("c_rules"), rules.length ? rules.map(x => t("rules")[x] || x).join(", ") : ab("c_none")],
+    ...(r.type ? [[ab("c_named"), kindName(r.type)]] : []),
+    ...(reason ? [[ab("c_reason"), reason]] : []),
+    [ab("c_total"), fmtMs(r.ms)]];
+  const steps = WALK.map((s, i) => {
+    const [title, text] = stepText(s, r);
+    const ms = s.stage && r.stages && r.stages[s.stage] != null ? fmtMs(Number(r.stages[s.stage])) : "";
+    const state = i === walk.idx ? "on" : i < walk.idx ? "past" : "";
+    // Where it happens: the technology, or the service's name where that is just "Python".
+    const [name, kind] = ab("parts")[s.at];
+    return `<li class="tl ${state}" data-walk-at="${i}">` +
+      `<span class="tl-dot"></span><div class="tl-head"><b>${esc(title)}</b>` +
+      `<span class="tl-where">${esc(kind === "Python" ? name : kind)}</span><span class="tl-ms">${ms}</span></div>` +
+      `<p class="tl-text">${esc(text)}</p></li>`;
+  }).join("");
+  body.innerHTML = `<div class="walk-grid">
+    <div class="walk-card">
+      <div class="case-top"><span class="amount">${fmtInt(r.amount)} <small>${t("sum")}</small></span>${badge(r.decision)}</div>
+      <div class="route">${esc(r.from)} → ${esc(r.to)} · ${esc(fmtTime(r.at))}</div>
+      <dl>${facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
+    </div>
+    <ol class="timeline">${steps}</ol>
+  </div>`;
+  document.querySelectorAll("#about .comp").forEach(el =>
+    el.classList.toggle("on", walk.idx >= 0 && el.dataset.comp === WALK[walk.idx].at));
 }
 
 function walkStop() {
@@ -441,23 +491,25 @@ function walkStop() {
   if (btn) btn.textContent = ab("w_play");
 }
 
-function walkGo(delta) {
-  walk.idx = Math.max(0, Math.min(WALK.length - 1, walk.idx + delta));
+function walkTo(i) {
+  walk.idx = Math.max(0, Math.min(WALK.length - 1, i));
   paintWalk();
 }
 
 function walkPlay() {
   if (walk.timer) { walkStop(); return; }
   if (walk.idx >= WALK.length - 1) walk.idx = -1;
-  walkGo(1);
-  walk.timer = setInterval(() => (walk.idx >= WALK.length - 1 ? walkStop() : walkGo(1)), 2200);
+  walkTo(walk.idx + 1);
+  walk.timer = setInterval(() => (walk.idx >= WALK.length - 1 ? walkStop() : walkTo(walk.idx + 1)), 1800);
   document.querySelector("[data-walk-play]").textContent = ab("w_pause");
 }
 
 document.addEventListener("click", e => {
-  const el = e.target.closest("[data-comp],[data-walk],[data-walk-play],[data-walk-step],[data-close],#modal");
+  const el = e.target.closest("#about [data-comp],[data-walk],[data-walk-play],[data-walk-at],[data-features],[data-rules]");
   if (!el) return;
   if (el.dataset.comp) openComponent(el.dataset.comp);
+  else if (el.hasAttribute("data-features")) openFeatures();
+  else if (el.hasAttribute("data-rules")) openRules();
   else if (el.dataset.walk) {
     walkStop();
     walk.choice = el.dataset.walk;
@@ -466,8 +518,5 @@ document.addEventListener("click", e => {
     drawAbout();
   }
   else if (el.hasAttribute("data-walk-play")) walkPlay();
-  else if (el.dataset.walkStep) { walkStop(); walkGo(Number(el.dataset.walkStep)); }
-  else if (el.hasAttribute("data-close") || e.target === el) closeComponent();
+  else if (el.dataset.walkAt) { walkStop(); walkTo(Number(el.dataset.walkAt)); }
 });
-document.addEventListener("keydown", e => { if (e.key === "Escape") closeComponent(); });
-window.addEventListener("resize", () => { if (walk.idx >= 0) paintWalk(); });

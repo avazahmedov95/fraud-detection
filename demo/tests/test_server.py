@@ -216,6 +216,18 @@ def test_the_about_tab_describes_the_jobs_rules_with_the_jobs_numbers():
         assert float(set_to.group(1).replace("_", "")) == float(value), name
 
 
+def test_the_about_tab_lists_the_models_features_in_order_and_describes_each():
+    import json
+    about = _repo("demo", "about.js")
+    block = about.split("const FEATURE_GROUPS = [", 1)[1].split("];", 1)[0]
+    groups = re.findall(r'\["(\w+)", \[', block)
+    names = [n for n in re.findall(r'"(\w+)"', block) if n not in groups]
+    assert names == json.loads(_repo("ml", "models", "feature_names.json"))
+    described = [re.findall(r'^\s*(\w+): "', part.split("}", 1)[0], re.M)
+                 for part in about.split("feature: {")[1:]]
+    assert described == [names, names]                           # Russian and English
+
+
 def test_the_about_tab_names_alerts_as_the_job_does():
     import ast
     import json
@@ -253,6 +265,36 @@ def test_the_queue_sends_a_page_and_says_how_many_are_open():
 
     out = S.App.cases(SimpleNamespace(started=0, store=Store), limit=S.PAGE)
     assert len(out["cases"]) == S.PAGE and out["total"] == 25
+
+
+def test_the_filter_reads_what_the_page_shows_of_a_card():
+    f = S.parse_filter({"sender": ["8600 03"], "receiver": ["2655"], "min": ["1000"],
+                        "max": ["many"], "decision": ["REVIEW"], "type": [""]})
+    assert f == {"sender": "860003", "receiver": "2655", "min": 1000.0, "decision": "REVIEW"}
+    card = "8600031234562655"
+    assert S._card_matches(card, "860003") and S._card_matches(card, "2655")
+    assert S._card_matches(card, card)
+    assert not S._card_matches(card, "1234")                    # the hidden middle stays hidden
+
+
+def test_the_filter_checks_every_condition():
+    row = ("8600031234562655", "9860449876543210", 9_600_000, 1000.0, "REVIEW", "STRUCTURING")
+    assert S.passes({}, *row)
+    assert S.passes({"min": 9e6, "max": 1e7, "since": 999.0, "until": 1001.0,
+                     "decision": "REVIEW", "type": "STRUCTURING"}, *row)
+    assert not S.passes({"max": 9e6}, *row)
+    assert not S.passes({"since": 1001.0}, *row)
+    assert not S.passes({"decision": "ALLOW"}, *row)
+    assert S.passes({"type": "NONE"}, *row[:5], None)            # the model alone named nothing
+
+
+def test_a_filtered_stream_counts_only_what_passes():
+    decisions = S.Decisions()
+    for i in range(30):
+        decisions.add({"transaction_id": f"t{i}", "decision": "REVIEW" if i % 3 == 0 else "ALLOW"})
+    app = SimpleNamespace(decisions=decisions, runs={}, _why=lambda rec: None)
+    out = S.App.stream(app, flt={"decision": "REVIEW"}, limit=S.PAGE)
+    assert out["total"] == 10 and all(r["decision"] == "REVIEW" for r in out["rows"])
 
 
 def test_a_page_size_stays_within_what_the_server_keeps():

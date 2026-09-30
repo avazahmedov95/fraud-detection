@@ -125,6 +125,46 @@ def _limit(query):
         return PAGE
 
 
+def parse_filter(query):
+    """The page's filter: card digits, an amount range, a time range (epoch
+    seconds), a decision, an alert type. Anything empty or unreadable is left out."""
+    f = {}
+    for key in ("sender", "receiver"):
+        digits = "".join(ch for ch in query.get(key, [""])[0] if ch.isdigit())
+        if digits:
+            f[key] = digits
+    for key in ("min", "max", "since", "until"):
+        try:
+            f[key] = float(query[key][0])
+        except (KeyError, IndexError, ValueError):
+            pass
+    for key in ("decision", "type"):
+        if query.get(key, [""])[0]:
+            f[key] = query[key][0]
+    return f
+
+
+def _card_matches(card, digits):
+    """Typed digits against what the page shows of a card - its first six and last
+    four - or the whole number."""
+    card = str(card or "")
+    return (card == digits or (len(digits) <= 6 and card.startswith(digits))
+            or (len(digits) <= 4 and card.endswith(digits)))
+
+
+def passes(f, sender, receiver, amount, at, decision, kind):
+    """Whether one decision or case passes the filter `parse_filter` read."""
+    amount = float(amount or 0)
+    return not (
+        ("sender" in f and not _card_matches(sender, f["sender"]))
+        or ("receiver" in f and not _card_matches(receiver, f["receiver"]))
+        or ("min" in f and amount < f["min"]) or ("max" in f and amount > f["max"])
+        or ("since" in f and (at is None or at < f["since"]))
+        or ("until" in f and (at is None or at > f["until"]))
+        or ("decision" in f and decision != f["decision"])
+        or ("type" in f and (kind or "NONE") != f["type"]))
+
+
 def mask(card):
     """8600 03** **** 2655 - enough to tell cards apart on screen, not to use one."""
     c = str(card or "")
@@ -481,14 +521,16 @@ class App:
                 "last_decision": d.last_at, "model": d.model, "cut": self.cut,
                 "grafana": self.grafana}
 
-    def stream(self, alerts_only=False, limit=PAGE):
-        """The latest `limit` decisions, newest first, each with the reasons if it is
-        an alert and, if a scenario sent it, its role and true type; and how many the
-        server holds, so the page can offer the rest."""
+    def stream(self, flt=None, limit=PAGE):
+        """The latest `limit` decisions that pass the filter, newest first, each with
+        the reasons if it is an alert and, if a scenario sent it, its role and true
+        type; and how many pass, so the page can offer the rest."""
         with self.decisions.lock:
             recs = list(self.decisions.recent)
-        if alerts_only:
-            recs = [r for r in recs if r.get("decision") != "ALLOW"]
+        if flt:
+            recs = [r for r in recs if passes(
+                flt, r.get("sender_card"), r.get("receiver_card"), r.get("amount_uzs"),
+                _finite(r.get("scored_at_job")), r.get("decision"), r.get("predicted_type"))]
         roles = {row["id"]: row for run in list(self.runs.values()) for row in run["rows"]}
         out = []
         for rec in reversed(recs[-limit:]):
@@ -593,11 +635,11 @@ class App:
             timing = {"error": str(exc)[:300]}
         return {"timing": timing, "verdicts": self.cases()["stats"]}
 
-    def cases(self, new_only=False, limit=PAGE):
-        """case-manager's queue, in its own order: the first `limit` cases and how
-        many there are. `new_only` keeps the cases opened since this server started:
-        the warehouse also holds every alert of every earlier measurement run, and
-        the case a scenario just opened drowns in them."""
+    def cases(self, new_only=False, limit=PAGE, flt=None):
+        """case-manager's queue, in its own order: the first `limit` cases that pass
+        the filter and how many do. `new_only` keeps the cases opened since this
+        server started: the warehouse also holds every alert of every earlier
+        measurement run, and the case a scenario just opened drowns in them."""
         try:
             s = self.store()
             # A store that cannot connect answers with an empty queue, which the page
@@ -609,6 +651,10 @@ class App:
             return {"error": str(exc)[:300], "cases": [], "total": 0, "stats": {}}
         if new_only:
             items = [c for c in items if _as_epoch(c["opened_at"]) >= self.started]
+        if flt:
+            items = [c for c in items if passes(
+                flt, c["sender_card"], c["receiver_card"], c["amount_uzs"],
+                _as_epoch(c["opened_at"]), c["decision"], c["predicted_type"])]
         total, items = len(items), items[:limit]
         return {"total": total,
                 "cases": [{"id": c["case_id"], "at": c["opened_at"], "amount": c["amount_uzs"],
@@ -661,7 +707,7 @@ class Handler(BaseHTTPRequestHandler):
         elif not APP.health.ready:
             self._json({"error": "the system is not running"}, 503)
         elif path == "/api/stream":
-            self._json(APP.stream(alerts_only=q.get("alerts") == ["1"], limit=_limit(q)))
+            self._json(APP.stream(flt=parse_filter(q), limit=_limit(q)))
         elif path.startswith("/api/episode/"):
             run = APP.run(path.rsplit("/", 1)[1])
             self._json(run if run else {"error": "unknown run"}, 200 if run else 404)
@@ -670,7 +716,8 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/results":
             self._json(APP.results())
         elif path == "/api/cases":
-            self._json(APP.cases(new_only=q.get("new") == ["1"], limit=_limit(q)))
+            self._json(APP.cases(new_only=q.get("new") == ["1"], limit=_limit(q),
+                                 flt=parse_filter(q)))
         else:
             self._json({"error": "not found"}, 404)
 
