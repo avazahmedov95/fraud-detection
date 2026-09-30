@@ -39,7 +39,7 @@ output, read where the rest of the project reads it:
 | Desk: analyst queue | the cases opened since the container started, in case-manager's own order | `fraud.cases`, through case-manager's `CaseStore` | a verdict, through the same store (`resolved_by = demo`) |
 | Grafana | the provisioned overview dashboard, in a frame | ClickHouse, through Grafana | - |
 | Data & results, live | each stage's average time over the latest 1,000 decisions, adding up to the time from arrival to decision; the analyst's verdicts | `transactions_scored.stage_*_ms`; `fraud.cases` | - |
-| Data & results, at training | the model's test figures and split, dated by its export, and what each public dataset showed | `ml/models/metrics.json` and `manifest.json` as `ml/` wrote them; `results.json` | - |
+| Data & results, at training | one table dated by the model's export: each dataset, what it holds, our result on it and the published one | `ml/models/metrics.json` and `manifest.json` as `ml/` wrote them; `results.json` | - |
 
 The analyst does not release or block a payment. The system has already decided,
 and the prototype records the decision without enforcing it

@@ -1,7 +1,6 @@
 # External validation
 
-Two datasets in use - one for decisions, one for information - and more examined
-and rejected. The adapter owns the file's
+Two datasets in use - one for decisions, one for information. The adapter owns the file's
 shape; everything downstream of a translated event - the unit conversion, the
 replay over the deployed rule engine, the report sections - is in
 **`harness.py`**, so another dataset would be one measurement with it.
@@ -30,7 +29,7 @@ published:
 So the two halves are validated unequally: PaySim tests the sender-side
 relational features, and the receiver side - fan-in and the counterparty
 counters - is tested only on IBM AML, which reports for information because its
-accounts include banks and companies (section 4).
+accounts include banks and companies (section 2).
 
 ---
 
@@ -117,7 +116,7 @@ no session timing - on the published baseline's own split (24 days / 7 days).
    moves PR-AUC by 0.001, where on this project's data it costs the most (before
    the penalty the removal *improved* PR-AUC by 0.036). PaySim drains one account
    straight to cash-out with no collection stage, so no run on PaySim can
-   validate that finding; IBM AML is where it is read (section 4).
+   validate that finding; IBM AML is where it is read (section 2).
 3. **With matching recipes the feature set beats the published model**: 0.529
    against 0.380, 58.8% against 49.4% of the fraud inside a 2% alert budget, and
    8.6× against 7.0× lift - once PaySim's own transaction type is added to both.
@@ -158,70 +157,13 @@ every layer is read on the 15,474 rows after step 576.
    the scaled amounts sit far below a daily limit.
 2. **The rules' precision is not comparable across datasets**: this slice runs at
    5.9% fraud, where this project's own held-out month and IBM's test slice both sit
-   at 0.18%. PaySim's legitimate volume collapses in the last week (section 2, item
-   4), and precision rises with prevalence whatever the detector does.
+   at 0.18%. PaySim's legitimate volume collapses in the last week (item 4 of the
+   `--our-model` result), and precision rises with prevalence whatever the detector does.
 
 The run also found an extractor defect: with no `receiver_card`, `payee_key`
 returned "" and every payee shared one receiver state, fabricating fan-in.
 `features.py` now warns, and the harness refuses such a stream
 (`harness._require_a_payee_key`).
-
----
-
-## 2. Zenodo 20030065 - examined and NOT used as claimed
-
-DOI [10.5281/zenodo.20030065](https://doi.org/10.5281/zenodo.20030065),
-published as *"A Production-Collected Online Banking Fraud Detection Dataset
-from a Live Cloud-Based Deep Learning System"*. **It should not be cited as
-production data.**
-
-| Check | Result |
-|---|---|
-| rows | 57,394 in the file vs **56,962** claimed |
-| fraud | 111 in the file vs **98** claimed |
-| response latency (promised per record) | **absent** |
-| `v7..v28` | max pairwise correlation 0.10, σ ≈ 1.17 → **PCA components** |
-| `v1..v6` | σ ≈ 110,000, one pair correlated **0.9996** → balance-like |
-
-Split on the shape of `transaction_id`, the counts resolve exactly: 56,962 rows
-and 98 fraud are the described dataset - a 1/5 sample of the ULB credit-card set
-to within rounding - and 432 rows of a live demo session (no `test_date`,
-timestamps months later, a PaySim-shaped schema, what look like real IP
-addresses) were appended after publication. The publisher did not miscount; the
-release is contaminated. The PCA features rule it out anyway: features without
-meaning carry no SHAP explanation, and CBU 3759 requires an explainable decision.
-
-**What survives.** The fraud base rate does not depend on what the features mean,
-and ~0.17–0.19% is a real figure from real card traffic - cited to the ULB dataset
-directly.
-
----
-
-## Rejected: IEEE-CIS
-
-590k real transactions with pseudo card identifiers, but card-not-present
-e-commerce: **there is no receiver as a party**, so the fan-in finding cannot be
-tested at all. Also rejected: the Kaggle credit-card set,
-PCA-anonymised into V1..V28, which makes the SHAP explanations CBU 3759 requires
-meaningless.
-
-## Rejected: Kaggle aryan208, "Financial Transactions Dataset for Fraud Detection"
-
-5,000,000 transactions over 2023 naming a sender and a receiver account - the shape this
-project needs - and a label that carries nothing. Screened on 2026-09-19:
-
-| check | result |
-|---|---|
-| fraud | 3.59%, one type only: card_not_present |
-| fraud share by transaction type | 3.56-3.63% for deposit, payment, transfer and withdrawal alike |
-| history per account | median 5 transactions in the year |
-| each supplied column alone against the label, AUC | amount, velocity, geo-anomaly, spending-deviation, time-since-last: 0.500-0.501 |
-| time_since_last_transaction against the sender's real previous transaction | correlation 0.002 |
-
-The label is independent of every column, including the ones named after fraud
-signals, and the time-since-last column does not describe the file it is in: there is
-nothing to detect. The Mendeley set of section 3 was downloaded again the same day and
-is the one already rejected.
 
 ---
 
@@ -237,7 +179,7 @@ anything is downloaded.
 
 ---
 
-## 4. IBM AML - removed 2026-09-19, returned 2026-09-20 for information
+## 2. IBM AML - removed 2026-09-19, returned 2026-09-20 for information
 
 It left because its accounts include banks and companies and this project is about
 transfers between people. It is back because it is the only dataset here with a
@@ -717,30 +659,7 @@ of its fan-in typology, which is why the relative mode exists
 and the full results are in git history (`git show 71c3cdc:validation/README.md`,
 section 3).
 
-The lesson it left holds for every dataset here - this generator, PaySim, Zenodo,
+The lesson it left holds for every dataset here - this generator, PaySim,
 AMLSim: each placed its positive class where the method of placement is itself the
 strongest predictor. **The first step in using a foreign dataset is a screen for
 it, not the last.**
-
----
-
-## 3. Mendeley ktbthg777x - examined and NOT used
-
-*"Synthetic Banking Transaction Dataset with Multi-Pattern Fraud Labels for
-Machine Learning Research"*, [doi 10.17632/ktbthg777x.1](https://data.mendeley.com/datasets/ktbthg777x/1),
-CC BY 4.0: 1,000,000 rows, and the only public dataset found with `device_id` and
-coordinates. It does not survive contact.
-
-**1. The coordinates are random, and the release says so.** Labelled
-`geo_anomaly` rows sit a median 9,880 km from the customer's previous transaction,
-legitimate ones 9,995 km - the median distance between two random points on a
-globe.
-
-**2. The history is too sparse**: ten transactions per customer per year, so the
-windows are empty and 14 of 20 features degenerate.
-
-**3. The "laundering ring" has no collection stage**: 80 transfers to 80 distinct
-receivers, each receiving once.
-
-Nothing quotable survives; recorded so the next reader does not spend the same
-day on it.

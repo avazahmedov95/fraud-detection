@@ -1,6 +1,6 @@
 """Replays the deployed rules over IBM's AML transaction sets (Altman et al.,
 NeurIPS 2023), at minute resolution over 17 days - to retest MULE_FAN_IN, whose
-null result on AMLSim was ambiguous with a day-long clock (README.md 4), and to
+null result on AMLSim was ambiguous with a day-long clock (README.md 2), and to
 score this project's model on a published benchmark. Section D measures the
 remaining window gap. The shared replay is in harness.py.
 """

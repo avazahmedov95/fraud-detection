@@ -120,12 +120,11 @@ td.num,th.num{text-align:right}
 .tile{background:var(--panel-2);border-radius:10px;padding:10px 14px}
 .tile span{color:var(--muted);font-size:.78rem}.tile b{display:block;font:600 1.25rem var(--mono)}
 .part-title{font-size:1.05rem;margin:26px 0 4px}
-.box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
-.box h3{margin:0 0 6px;font-size:1rem}
-.box .tiles{padding:0;margin:10px 0}
-.badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:.72rem;font-weight:600;color:#fff;vertical-align:middle}
-.st-used{background:var(--ok)}.st-inconclusive{background:var(--alert)}.st-rejected{background:#98a2b3}
-.facts{margin:6px 0 10px;padding-left:20px}.facts li{margin:4px 0}
+.cmp-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin-bottom:10px}
+.cmp{min-width:720px}.cmp th{padding-top:10px}
+.cmp td{white-space:normal;vertical-align:top;font-size:.86rem;padding:10px 12px}
+.cmp td:first-child{font-weight:600;white-space:nowrap}.cmp td.ours{font-weight:600}
+.cmp a{color:var(--accent)}
 .frame{width:100%;height:78vh;border:1px solid var(--line);border-radius:10px;background:#fff}
 .hint{color:var(--muted);margin:0 0 12px;max-width:900px;font-size:.9rem}
 </style>
@@ -215,9 +214,11 @@ td.num,th.num{text-align:right}
       </div>
       <h2 class="part-title" id="trained-title"></h2>
       <p class="hint" data-t="trained_hint"></p>
-      <div id="own"></div>
-      <p class="hint" data-t="public_hint"></p>
-      <div id="public"></div>
+      <div class="cmp-wrap"><table class="cmp">
+        <thead><tr><th data-t="c_data"></th><th data-t="c_what"></th><th data-t="c_ours"></th><th data-t="c_published"></th></tr></thead>
+        <tbody id="cmp"></tbody>
+      </table></div>
+      <p class="hint" data-t="public_note"></p>
     </section>
   </div>
 </div>
@@ -286,16 +287,13 @@ ru: {
   verdicts_title: "Отметки аналитика", verdicts_hint: "Все дела в базе, включая прошлые показы.",
   v_open: "Ждут разбора", v_conf: "Подтверждено", v_fp: "Ложных тревог", v_prec: "Точность по разобранным",
   trained_title: "Измерено при обучении модели, {date}",
-  trained_hint: "Эти цифры не живые: их посчитали один раз, когда обучали модель, на той части данных генератора, которую она не видела. Меняются только при переобучении.",
-  public_hint: "На публичных данных модель тоже обучали — отдельно на каждом наборе и только для проверки подхода: обучили на одной части, проверили на другой и сравнили с опубликованными работами. Модель, которая работает в системе, обучена на данных нашего генератора: в публичных наборах нет половины наших признаков, и обучившись на них, мы потеряли бы независимую проверку.",
-  own_title: "Наши данные — генератор переводов под Узбекистан",
-  own_split: "{rows} переводов, мошенничества {share}. Модель учится на первых {fit} по времени, порог тревоги подбирается на следующих {val}, проверка — на последних {test}, среди них {tf} мошеннических; эту часть модель не видела.",
-  m_prec: "Точность: доля настоящего мошенничества среди тревог", m_rec: "Полнота: доля пойманного мошенничества",
-  m_prauc: "Качество ранжирования (PR-AUC, 0–1)", m_rocauc: "ROC-AUC (0–1)", m_rules: "Только правила: точность / полнота",
-  by_type: "Поймано по типам",
-  own_caveat: "Данные искусственные, но похожи на жизнь: мошенничества 0,2%, честные люди иногда ведут себя «подозрительно», часть мошенничества никто не заявил.",
-  st_used: "использован", st_inconclusive: "не смог ответить", st_rejected: "отброшен",
-  what: "Что это", how: "Что проверяли", verdict: "Вывод", source: "Подробно",
+  trained_hint: "Эти цифры не живые: их посчитали один раз, при обучении, на данных, которых модель не видела. Меняются только при переобучении.",
+  c_data: "Данные", c_what: "Из чего состоят", c_ours: "Наш результат", c_published: "Опубликованный результат",
+  own_name: "Наш генератор",
+  own_what: "{rows} переводов под Узбекистан, мошенничества {share}, типов мошенничества: {types}. Проверка на последних {test} переводах, среди них {tf} мошеннических; эту часть модель не видела.",
+  own_ours: "поймано {rec} мошенничества, {prec} тревог настоящие (PR-AUC {prauc})",
+  own_published: "нет: данные наши",
+  public_note: "Публичные наборы только проверяют подход. Модель в системе обучена на данных нашего генератора: в публичных наборах нет половины наших признаков.",
   sum: "сум", ms: "мс",
   dec: {ALLOW: "Пропущен", REVIEW: "На проверку"},
   kind: {NORMAL: "Обычный перевод", APP: "Мошенник по телефону", ATO: "Захват аккаунта", MULE: "Дроп-счёт", STRUCTURING: "Дробление сумм"},
@@ -384,16 +382,13 @@ en: {
   verdicts_title: "Analyst verdicts", verdicts_hint: "Every case in the database, earlier demos included.",
   v_open: "Waiting", v_conf: "Confirmed", v_fp: "False alarms", v_prec: "Precision on resolved",
   trained_title: "Measured when the model was trained, {date}",
-  trained_hint: "These figures are not live: they were computed once, when the model was trained, on the part of the generator's data it never saw. They change only when the model is retrained.",
-  public_hint: "Models were trained on the public data too — separately on each set, and only to check the approach: trained on one part, tested on another, compared with published work. The model running in the system is trained on our generator's data: the public sets lack half of our features, and training on them would have cost the independent check.",
-  own_title: "Our data — the transfer generator calibrated to Uzbekistan",
-  own_split: "{rows} transfers, {share} of them fraud. The model learns on the first {fit} in time, the alert level is chosen on the next {val}, and it is tested on the last {test}, {tf} of them fraud; the model never saw that part.",
-  m_prec: "Precision: share of alerts that are real fraud", m_rec: "Recall: share of fraud caught",
-  m_prauc: "Ranking quality (PR-AUC, 0-1)", m_rocauc: "ROC-AUC (0-1)", m_rules: "Rules alone: precision / recall",
-  by_type: "Caught by type",
-  own_caveat: "Synthetic, but shaped like life: 0.2% fraud, honest people who sometimes look suspicious, fraud nobody reported.",
-  st_used: "used", st_inconclusive: "could not answer", st_rejected: "rejected",
-  what: "What it is", how: "What was checked", verdict: "Verdict", source: "In full",
+  trained_hint: "These figures are not live: they were computed once, at training, on data the model never saw. They change only when the model is retrained.",
+  c_data: "Data", c_what: "What it holds", c_ours: "Our result", c_published: "Published result",
+  own_name: "Our generator",
+  own_what: "{rows} transfers calibrated to Uzbekistan, {share} of them fraud, of {types} types. Tested on the last {test}, {tf} of them fraud, which the model never saw.",
+  own_ours: "caught {rec} of the fraud, {prec} of alerts real (PR-AUC {prauc})",
+  own_published: "none: the data is ours",
+  public_note: "The public sets only check the approach. The model in the system is trained on our generator's data: the public sets lack half of our features.",
   sum: "UZS", ms: "ms",
   dec: {ALLOW: "ALLOW", REVIEW: "REVIEW"},
   kind: {NORMAL: "Ordinary transfer", APP: "Phone scam", ATO: "Account takeover", MULE: "Money mule", STRUCTURING: "Structuring"},
@@ -640,22 +635,14 @@ function renderResults() {
   const o = results.own || {};
   const date = o.trained_at ? new Date(o.trained_at).toLocaleDateString(locale(), {day: "numeric", month: "long", year: "numeric"}) : "—";
   $("#trained-title").textContent = fill(t("trained_title"), {date});
-  let h = `<div class="box"><h3>${t("own_title")}</h3>`;
-  if (o.error) h += `<div class="banner">${esc(o.error)}</div>`;
-  if (o.rows) h += `<p>${fill(t("own_split"), {rows: fmtInt(o.rows), share: pct(o.fraud_share), fit: fmtInt(o.fit),
-    val: fmtInt(o.val), test: fmtInt(o.test), tf: fmtInt(o.test_fraud)})}</p>`;
-  h += `<div class="tiles">` + [["m_prec", pct(o.precision)], ["m_rec", pct(o.recall)], ["m_prauc", dec(o.pr_auc, 3)],
-    ["m_rocauc", dec(o.roc_auc, 3)], ["m_rules", pct(o.rules_precision) + " / " + pct(o.rules_recall)]]
-    .map(([k, v]) => `<div class="tile"><span>${t(k)}</span><b>${esc(v)}</b></div>`).join("") + `</div>`;
-  if (o.by_type) h += `<p>${t("by_type")}: ` + Object.entries(o.by_type).map(([k, v]) => `${esc(kindName(k))} ${pct(v)}`).join(" · ") + `</p>`;
-  $("#own").innerHTML = h + `<p class="muted">${t("own_caveat")}</p></div>`;
-  $("#public").innerHTML = (results.public || []).map(d => `<div class="box"><h3>${esc(d.name[lang])} ` +
-    `<span class="badge st-${esc(d.status)}">${t("st_" + d.status)}</span></h3>` +
-    (d.what ? `<p><b>${t("what")}:</b> ${esc(d.what[lang])}</p>` : "") +
-    (d.how ? `<p><b>${t("how")}:</b> ${esc(d.how[lang])}</p>` : "") +
-    `<ul class="facts">` + d.findings[lang].map(f => `<li>${esc(f)}</li>`).join("") + `</ul>` +
-    (d.verdict ? `<p><b>${t("verdict")}:</b> ${esc(d.verdict[lang])}</p>` : "") +
-    `<div class="muted">${t("source")}: ${esc(d.source)}</div></div>`).join("");
+  const own = o.error ? `<tr><td>${t("own_name")}</td><td colspan="3">${esc(o.error)}</td></tr>`
+    : `<tr><td>${t("own_name")}</td>` +
+      `<td>${fill(t("own_what"), {rows: fmtInt(o.rows), share: dec(o.fraud_share * 100, 2) + "%", types: o.types, test: fmtInt(o.test), tf: fmtInt(o.test_fraud)})}</td>` +
+      `<td class="ours">${fill(t("own_ours"), {rec: pct(o.recall), prec: pct(o.precision), prauc: dec(o.pr_auc, 3)})}</td>` +
+      `<td>${t("own_published")}</td></tr>`;
+  $("#cmp").innerHTML = own + (results.public || []).map(d => `<tr><td>${esc(d.name[lang])}</td>` +
+    `<td>${esc(d.what[lang])}</td><td class="ours">${esc(d.ours[lang])}</td>` +
+    `<td>${esc(d.published[lang])}<br><a href="${esc(d.link.url)}" target="_blank" rel="noopener">${esc(d.link.label)}</a></td></tr>`).join("");
 }
 
 async function openTab(name) {

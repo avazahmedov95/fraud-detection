@@ -113,7 +113,7 @@ reported. Three changes, each measured before it was adopted:
 
 *IBM AML, which the gates below use, was removed on 2026-09-19 - its accounts
 include banks and companies, and this project is about transfers between people -
-and returned on 2026-09-20 for information only (`validation/README.md` §4): it
+and returned on 2026-09-20 for information only (`validation/README.md` §2): it
 decides no gate now. The gates below stay as the record of the decisions they made.*
 
 ### Following the money a hop further: tried, not adopted, removed
@@ -168,7 +168,7 @@ its run, stopped the build; PaySim, asked last, restarted it for a strict cutoff
 decision on the held-out month: 25 of 176 fraud at 1.1% precision, 118 at 63.4%,
 and 118 at 63.1% - the mandatory rules add one alert, a false one. The adapters'
 `--layers` mode is the same reading on PaySim and on IBM AML
-(`validation/README.md` 1 and 4), and IBM is where it says something this file
+(`validation/README.md` 1 and 2), and IBM is where it says something this file
 cannot: there the same mandatory rules raise 165,282 of 897,427 rows, because a
 retail daily limit means nothing to a company's account.
 

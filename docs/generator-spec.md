@@ -18,9 +18,7 @@ protect participants. The alternatives, assessed in full in `docs/related-work.m
 
 | Option | Why not |
 |---|---|
-| IEEE-CIS (590k txns) | Real, but e-commerce card-not-present: no counterparty, no session signals. |
 | CCF / Kaggle credit card | PCA-anonymised into V1..V28, so SHAP explanations - a hard requirement under CBU 3759 - are meaningless. |
-| Zenodo 20030065 (57k txns) | Published as production data; examined and rejected (`validation/README.md` §2). |
 | IBM Synthetic Data Sets (SynDS) | Labelled P2P payment data, but a **commercial product**, not reproducible by a reader who has not bought it; US consumer-app semantics, no session signals. |
 | Kaggle UPI sets (several) | **Themselves synthetic and published without a generating specification** - strictly worse than a documented generator (§7). |
 
@@ -301,7 +299,7 @@ control *harder*.
 
 **Why parametric sampling rather than copulas or a GAN.** Both estimate a joint
 distribution **from data**, and there is no Uzbek P2P data to fit: a GAN trained
-on IEEE-CIS would produce e-commerce covariance under Uzbek field names. The
+on a public card set would produce that set's covariance under Uzbek field names. The
 precedent is PaySim, parametric and agent-based for the same reason, and the trade
 is the point: **a parametric generator's assumptions are legible and falsifiable,
 a fitted generator's are implicit in weights.** PaySim is also the cautionary
@@ -437,7 +435,7 @@ Checked on seed 42, baseline profile, 50,000 events:
 `generator.py --profile realistic` - the dataset of record since 2026-09-14.
 
 The baseline profile separates too easily: fraud at 1.5% of traffic, about ten
-times what real card traffic carries (0.17-0.19%, `validation/README.md` 2); every
+times what real card traffic carries (0.17% in the ULB card dataset, `related-work.md`); every
 legitimate transfer looks legitimate; and the labels are exact. The model it
 trained scored 0.937 PR-AUC on it and 0.42 on data shaped like the profile below.
 This profile keeps every mechanism and moves each parameter toward overlap:

@@ -526,29 +526,22 @@ class App:
 
     def results(self):
         """The model's test figures as ml/train.py wrote them to metrics.json, when
-        it was trained, the split they were measured on, and the public datasets
-        from results.json."""
+        it was trained, what the data it was tested on holds, and the public
+        datasets from results.json."""
         own = {}
         try:
             with open(os.path.join(MODELS, "metrics.json"), encoding="utf-8") as fh:
                 m = json.load(fh)
-            own = {"roc_auc": m["roc_auc"], "pr_auc": m["pr_auc"],
-                   "precision": m["at_review"]["precision"],
-                   "recall": m["at_review"]["recall"],
-                   "review": m["thresholds"]["review"],
-                   "rules_precision": m["cep_only"]["precision"],
-                   "rules_recall": m["cep_only"]["recall"],
-                   "by_type": {k: v["recall"] for k, v in m["by_fraud_type"].items()}}
+            own = {"pr_auc": m["pr_auc"], "precision": m["at_review"]["precision"],
+                   "recall": m["at_review"]["recall"], "types": len(m["by_fraud_type"])}
             with open(os.path.join(MODELS, "manifest.json"), encoding="utf-8") as fh:
                 own["trained_at"] = json.load(fh)["exported_at"]
         except (OSError, KeyError, ValueError) as exc:
             own = {"error": str(exc)[:200]}
         lib = self.library
-        n, cut = len(lib.df), lib.cut
-        fit = int(cut * 0.80)                  # ml/train.py's FIT_SHARE
-        own.update(rows=n, fit=fit, val=cut - fit, test=n - cut,
+        own.update(rows=len(lib.df), test=len(lib.df) - lib.cut,
                    fraud_share=float(lib.is_fraud.mean()),
-                   test_fraud=int(lib.is_fraud[cut:].sum()))
+                   test_fraud=int(lib.is_fraud[lib.cut:].sum()))
         with open(os.path.join(HERE, "results.json"), encoding="utf-8") as fh:
             return {"own": own, "public": json.load(fh)["datasets"]}
 

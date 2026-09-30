@@ -1,112 +1,55 @@
 {
-  "_about": "What the demo's results tab says about the public datasets. Every figure in the text is carried in `quotes` with the exact line of the document it came from, and tools/boundary_audit.py fails when a quoted line is gone - so a document that moves a figure cannot leave this page showing the old one.",
+  "_about": "What the demo's results tab says about the public datasets: what each is made of, our model's result on it and the published one. Every figure is carried in `quotes` with the exact line of the document it came from, and tools/boundary_audit.py fails when a quoted line is gone - so a document that moves a figure cannot leave this page showing the old one.",
   "datasets": [
     {
       "key": "paysim",
-      "status": "used",
-      "name": {
-        "ru": "PaySim",
-        "en": "PaySim"
-      },
+      "name": {"ru": "PaySim", "en": "PaySim"},
       "what": {
-        "ru": "Искусственные мобильные переводы, собранные по образцу африканского сервиса: 6,4 млн операций. Проверяли на 500 тыс. переводов, из них 2 520 мошеннических.",
-        "en": "Synthetic mobile-money transfers modelled on an African service: 6.4M operations. Checked on 500,000 transfers, 2,520 of them fraud."
+        "ru": "6,36 млн искусственных переводов мобильных денег по образцу африканского сервиса. Разбивка как в опубликованной работе: 24 дня на обучение, 7 на проверку.",
+        "en": "6.36 million simulated mobile-money transfers modelled on an African service. Split as in the published work: 24 days to train, 7 to test."
       },
-      "how": {
-        "ru": "Наши правила — как есть, без переобучения. Копию модели переобучили на наших признаках и оценили на опубликованном разбиении: 24 дня обучения, 7 дней проверки.",
-        "en": "Our rules as deployed, no retraining. A copy of the model retrained on our features and scored on the published split: 24 days to train, 7 to test."
+      "ours": {
+        "ru": "PR-AUC 0,364 на наших признаках; 0,529 с типом операции из самого PaySim",
+        "en": "PR-AUC 0.364 on our features; 0.529 with PaySim's own transaction type"
       },
-      "findings": {
-        "ru": [
-          "Правило «новый получатель + крупная сумма» срабатывает на мошенничестве в 4 раза чаще, чем на честных переводах.",
-          "Правило «много отправителей на один счёт» молчит — так и должно быть: схемы сбора денег в PaySim нет.",
-          "Модель на наших признаках: 0,364 (качество ранжирования, PR-AUC) — вровень с опубликованной работой (0,380). С колонкой «тип операции» из самого PaySim — 0,529, заметно выше неё.",
-          "Наши пороги не переносятся: с ними поймано 0% мошенничества, с пересчитанными — 6%.",
-          "Обучение с большим весом мошенническим примерам ломается при такой редкости мошенничества: 0,030 вместо 0,364. Поэтому при мошенничестве реже 0,5% модель обучается без весов."
-        ],
-        "en": [
-          "The rule \"new payee + large amount\" fires on fraud 4 times as often as on honest transfers.",
-          "The rule \"many senders into one account\" stays silent, as it should: PaySim has no collection scheme.",
-          "The model on our features: 0.364 (ranking quality, PR-AUC), level with the published work (0.380). With PaySim's own transaction type: 0.529, well above it.",
-          "Our thresholds do not transfer: they catch 0% of the fraud, rescaled ones 6%.",
-          "Training with a heavy weight on fraud collapses at this rarity: 0.030 instead of 0.364. Below 0.5% fraud the model is therefore fitted unweighted."
-        ]
+      "published": {
+        "ru": "PR-AUC 0,380",
+        "en": "PR-AUC 0.380"
       },
-      "verdict": {
-        "ru": "Признаки по истории отправителя работают на чужих данных. Пороги нужно настраивать под каждый банк.",
-        "en": "The sender-history features work on foreign data. Thresholds have to be set per bank."
-      },
+      "link": {"label": "ris3abh/aml-p2p-fraud-detection", "url": "https://github.com/ris3abh/aml-p2p-fraud-detection"},
       "source": "validation/README.md, section 1",
       "quotes": [
-        {
-          "file": "validation/README.md",
-          "text": "| `NEW_PAYEE_HIGH_AMOUNT` | 5.95% | 1.49% | **4.0x** |"
-        },
-        {
-          "file": "validation/README.md",
-          "text": "| `MULE_FAN_IN` | 0.00% | 0.07% | 0.0x |"
-        },
-        {
-          "file": "validation/README.md",
-          "text": "| this project, all it can compute | 18 | **0.364** |"
-        },
-        {
-          "file": "validation/README.md",
-          "text": "| — plus PaySim's own transaction type | 23 | **0.529** |"
-        },
-        {
-          "file": "validation/README.md",
-          "text": "| published generic baseline (§6 of `related-work.md`) | ~24 | 0.380 |"
-        },
-        {
-          "file": "validation/README.md",
-          "text": "| fraud flagged | 0 / 2,520 (0.0%) | **150 / 2,520 (6.0%)** |"
-        },
-        {
-          "file": "validation/README.md",
-          "text": "**0.030 weighted against 0.364 unweighted**"
-        }
+        {"file": "validation/README.md", "text": "| rows | 6.36M |"},
+        {"file": "validation/README.md", "text": "on the published baseline's own split (24 days / 7 days)"},
+        {"file": "validation/README.md", "text": "| this project, all it can compute | 18 | **0.364** |"},
+        {"file": "validation/README.md", "text": "| — plus PaySim's own transaction type | 23 | **0.529** |"},
+        {"file": "validation/README.md", "text": "| published generic baseline (§6 of `related-work.md`) | ~24 | 0.380 |"}
       ]
     },
     {
-      "key": "rejected",
-      "status": "rejected",
-      "name": {
-        "ru": "Отброшены после проверки",
-        "en": "Rejected after examination"
+      "key": "ibm_aml",
+      "name": {"ru": "IBM AML, для информации", "en": "IBM AML, for information"},
+      "what": {
+        "ru": "Искусственные банковские переводы IBM с отмыванием денег: 4,49 млн строк, из них 5 166 — отмывание. Среди счетов есть банки и компании, поэтому набор только для информации.",
+        "en": "IBM's simulated bank transfers with money laundering: 4.49 million rows, 5,166 of them laundering. Its accounts include banks and companies, so it is for information only."
       },
-      "findings": {
-        "ru": [
-          "Zenodo 20030065: признаки сжаты в безымянные числа, поэтому решение нельзя объяснить, и есть подсказка ответа. Оставили только реальную долю мошенничества в картах — 0,17–0,19%.",
-          "Mendeley ktbthg777x: координаты случайные, у клиента около 10 операций в год, «кольца отмывания» без сбора денег.",
-          "IEEE-CIS: покупки в интернет-магазинах — получателя-человека нет, проверить главное нечем.",
-          "Kaggle, кредитные карты: признаки сжаты в безымянные числа."
-        ],
-        "en": [
-          "Zenodo 20030065: features compressed into nameless numbers, so no decision can be explained, and the answer leaks. Kept: the real fraud share in card traffic, 0.17-0.19%.",
-          "Mendeley ktbthg777x: random coordinates, about 10 operations per customer a year, laundering rings with no collection.",
-          "IEEE-CIS: online-shop purchases — there is no person on the receiving side, so the key idea cannot be tested.",
-          "Kaggle credit cards: features compressed into nameless numbers."
-        ]
+      "ours": {
+        "ru": "F1 56,7 на наших признаках; 67,0 с форматом платежа и валютой из самого файла",
+        "en": "F1 56.7 on our features; 67.0 with the file's own payment format and currency"
       },
-      "source": "validation/README.md, sections 2 and 3, and \"Rejected: IEEE-CIS\"",
+      "published": {
+        "ru": "F1 21,3 у обычного бустинга (LightGBM); 56,8 у лучшей графовой нейросети (PNA); 62,9–64,8 у бустинга с графовыми признаками",
+        "en": "F1 21.3 for plain gradient boosting (LightGBM); 56.8 for the best graph network (PNA); 62.9-64.8 for boosting with graph features"
+      },
+      "link": {"label": "arXiv:2402.08593", "url": "https://arxiv.org/abs/2402.08593"},
+      "source": "validation/README.md, section 2",
       "quotes": [
-        {
-          "file": "validation/README.md",
-          "text": "~0.17–0.19% is a real figure from real card traffic"
-        },
-        {
-          "file": "validation/README.md",
-          "text": "**1. The coordinates are random, and the release says so.**"
-        },
-        {
-          "file": "validation/README.md",
-          "text": "## Rejected: IEEE-CIS"
-        },
-        {
-          "file": "validation/README.md",
-          "text": "PCA-anonymised into V1..V28"
-        }
+        {"file": "validation/README.md", "text": "### Result (4,487,133 rows, 5,166 laundering, full file)"},
+        {"file": "validation/README.md", "text": "| this project, all it can compute | 18 | **56.7 +/- 0.4** |"},
+        {"file": "validation/README.md", "text": "| - plus the file's payment format and currency | 25 | **67.0 +/- 0.3** |"},
+        {"file": "validation/README.md", "text": "file's own columns 21.3 +/- 0.3 (LightGBM)"},
+        {"file": "validation/README.md", "text": "PNA 56.8 +/- 2.4"},
+        {"file": "validation/README.md", "text": "graph features 62.9 +/- 0.3 and 64.8 +/- 0.5"}
       ]
     }
   ]

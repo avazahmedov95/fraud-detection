@@ -214,10 +214,7 @@ def test_the_results_file_says_everything_in_both_languages():
     with open(os.path.join(os.path.dirname(S.__file__), "results.json"), encoding="utf-8") as fh:
         datasets = json.load(fh)["datasets"]
     for ds in datasets:
-        assert ds["status"] in ("used", "inconclusive", "rejected"), ds["key"]
         assert ds["quotes"], ds["key"]
-        fields = ("name", "findings") + (() if ds["status"] == "rejected"
-                                         else ("what", "how", "verdict"))
-        for field in fields:
+        assert ds["link"]["url"].startswith("https://"), ds["key"]
+        for field in ("name", "what", "ours", "published"):
             assert set(ds[field]) == {"ru", "en"}, (ds["key"], field)
-        assert len(ds["findings"]["ru"]) == len(ds["findings"]["en"]), ds["key"]

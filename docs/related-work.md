@@ -306,14 +306,14 @@ Extends the table in `generator-spec.md` §0; the datasets actually run are in
   next day, for information.
 - **The AI4FCF catalogue** (`sites.google.com/view/ai4fcf/open-datasets`): BankSim
   (customer→merchant, so receiver concentration is normal), IBM AML-Data (run, and
-  reported for information since 2026-09-20 - `validation/README.md` §4), Amaretto (capital markets), the Czech financial
+  reported for information since 2026-09-20 - `validation/README.md` §2), Amaretto (capital markets), the Czech financial
   dataset (no fraud labels), the Libra Bank graph, Paradise/Panama Papers.
 - **`CiferAI/Cifer-Fraud-Detection-Dataset-AF`** - 21M rows of PaySim's
   phenomenology: no collection stage, balance-column leakage, and `isFlaggedFraud`
   is a system decision, not ground truth.
-- **`ealaxi/banksim1`** - customer→merchant, the same disqualifier as IEEE-CIS.
-- **`mlg-ulb/creditcardfraud`** / OpenML 42175 - the ULB set, PCA-anonymised, and
-  the source the Zenodo file was sampled from.
+- **`ealaxi/banksim1`** - customer→merchant: no person receives the money.
+- **`mlg-ulb/creditcardfraud`** / OpenML 42175 - the ULB set, PCA-anonymised; its
+  0.17% fraud is the real card base rate the generator is held against.
 - **`amazon-science/fraud-dataset-benchmark`** - loaders for nine datasets and
   **no P2P payment dataset at all**: evidence for the gap in §8.
 - **Kaggle `sriharshaeedala/financial-fraud-detection-dataset`** (a PaySim
@@ -336,7 +336,7 @@ Extends the table in `generator-spec.md` §0; the datasets actually run are in
 - **No P2P evidence for receiver-side aggregation.** The only external evidence
   is IBM AML, which is interbank laundering rather than transfers between people:
   fan-in is its best-caught typology for the rules and the model alike, and the
-  counterparty counters add twenty F1 points there (`validation/README.md` §4). PaySim has no collection stage, and AMLSim,
+  counterparty counters add twenty F1 points there (`validation/README.md` §2). PaySim has no collection stage, and AMLSim,
   removed, ran on a daily clock that cannot see one.
 
 ---
@@ -365,8 +365,8 @@ Extends the table in `generator-spec.md` §0; the datasets actually run are in
 | **Wang, Liu, He & Du 2020** (§6c) | Relational structure beats demographics on real data, with explanations; delinquency as a label. | Receiver-side aggregation and SHAP as a pair; the label caveat as contrast. |
 | **Wang 2018** (§3) | AUC 0.780 at >10% fraud, "insensitive to class balance". | Cited as contrast. |
 
-**Saad et al. 2011** (§5) and **Zenodo 20030065** supply nothing; recorded so the
-search is not repeated.
+**Saad et al. 2011** (§5) supplies nothing; recorded so the search is not
+repeated.
 
 **Six sources reached the code; the rest shaped how results are reported** -
 Machado, Afriyie, Hemel and both Wang papers appear nowhere in this repository

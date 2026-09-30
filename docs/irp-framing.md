@@ -170,13 +170,9 @@ Everything owed to the review is now done; the items keep their numbers.
      information since 2026-09-20: the one file with a collection stage on a
      minute clock. Fan-in is the best-caught typology for the rules and the
      model alike, and the counterparty counters add twenty F1 points there
-     (`validation/README.md` §4).
+     (`validation/README.md` §2).
    - **Base rate**, from the ULB card dataset: ~0.17% against the generator's
      1.5%, so precision measured on synthetic data is optimistic.
-   - **Rejected**: IEEE-CIS (e-commerce, no receiver), CCF/Kaggle for detection
-     (PCA-anonymised), and Zenodo 20030065 - published as production data, it is
-     a 1/5 sample of the ULB dataset with 432 rows of someone's demo session
-     appended. The checks are cheap and the failure mode is severe.
 
 ### RQ3, second result: additive thresholds do not survive capability loss
 
