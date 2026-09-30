@@ -34,6 +34,7 @@ import uuid
 from collections import Counter, OrderedDict, deque
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs
 
 import numpy as np
 import pandas as pd
@@ -60,6 +61,7 @@ KINDS = ("NORMAL", "APP", "ATO", "MULE", "STRUCTURING")
 #: sink-writer as stage_<name>_ms.
 STAGES = ("kafka", "handoff", "decode", "state", "redis", "rules", "model", "decide")
 LIVE_WINDOW = 1000      # how many of the latest decisions the time figures cover
+PAGE = 20               # rows the stream and the queue show before "show more"
 
 KAFKA = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
 CLICKHOUSE = dict(host=os.getenv("CLICKHOUSE_HOST", "clickhouse"),
@@ -113,6 +115,14 @@ def _finite(v):
 
 def _quantile(ordered, q):
     return ordered[min(len(ordered) - 1, int(q * len(ordered)))] if ordered else None
+
+
+def _limit(query):
+    """?limit=N from the page, within what the server keeps."""
+    try:
+        return max(1, min(400, int(query.get("limit", [PAGE])[0])))
+    except ValueError:
+        return PAGE
 
 
 def mask(card):
@@ -400,6 +410,7 @@ class Background:
     def stop(self):
         if self.running():
             self.proc.terminate()
+            self.proc.wait(timeout=5)          # so the answer says "off" when it is
 
 
 class Sender:
@@ -429,7 +440,8 @@ def view(rec):
             "amount": rec.get("amount_uzs"), "from": mask(rec.get("sender_card")),
             "to": mask(rec.get("receiver_card")), "decision": rec.get("decision"),
             "score": rec.get("final_score"), "type": rec.get("predicted_type"),
-            "rules": rec.get("rule_hits") or [], "ms": decision_ms(rec)}
+            "rules": rec.get("rule_hits") or [], "ms": decision_ms(rec),
+            "stages": rec.get("stage_ms") or {}}
 
 
 class App:
@@ -469,9 +481,10 @@ class App:
                 "last_decision": d.last_at, "model": d.model, "cut": self.cut,
                 "grafana": self.grafana}
 
-    def stream(self, alerts_only=False, limit=60):
-        """The latest decisions, newest first, each with the reasons if it is an
-        alert and, if a scenario sent it, its role and true type."""
+    def stream(self, alerts_only=False, limit=PAGE):
+        """The latest `limit` decisions, newest first, each with the reasons if it is
+        an alert and, if a scenario sent it, its role and true type; and how many the
+        server holds, so the page can offer the rest."""
         with self.decisions.lock:
             recs = list(self.decisions.recent)
         if alerts_only:
@@ -485,7 +498,7 @@ class App:
             if sent:
                 v["role"], v["truth"] = sent["role"], sent["truth"]
             out.append(v)
-        return out
+        return {"rows": out, "total": len(recs)}
 
     def start_background(self, speed):
         self.background.start(speed, self.library.replay_start())
@@ -539,7 +552,8 @@ class App:
         except (OSError, KeyError, ValueError) as exc:
             own = {"error": str(exc)[:200]}
         lib = self.library
-        own.update(rows=len(lib.df), test=len(lib.df) - lib.cut,
+        fit = int(lib.cut * 0.80)              # ml/train.py's FIT_SHARE
+        own.update(rows=len(lib.df), fit=fit, val=lib.cut - fit, test=len(lib.df) - lib.cut,
                    fraud_share=float(lib.is_fraud.mean()),
                    test_fraud=int(lib.is_fraud[lib.cut:].sum()))
         with open(os.path.join(HERE, "results.json"), encoding="utf-8") as fh:
@@ -579,10 +593,11 @@ class App:
             timing = {"error": str(exc)[:300]}
         return {"timing": timing, "verdicts": self.cases()["stats"]}
 
-    def cases(self, new_only=False):
-        """case-manager's queue, in its own order. `new_only` keeps the cases opened
-        since this server started: the warehouse also holds every alert of every
-        earlier measurement run, and the case a scenario just opened drowns in them."""
+    def cases(self, new_only=False, limit=PAGE):
+        """case-manager's queue, in its own order: the first `limit` cases and how
+        many there are. `new_only` keeps the cases opened since this server started:
+        the warehouse also holds every alert of every earlier measurement run, and
+        the case a scenario just opened drowns in them."""
         try:
             s = self.store()
             # A store that cannot connect answers with an empty queue, which the page
@@ -591,11 +606,12 @@ class App:
                 raise RuntimeError("the case store cannot reach ClickHouse; see docker logs demo")
             items, stats = s.open_cases(limit=500), s.stats()
         except Exception as exc:                       # noqa: BLE001 - shown on the page
-            return {"error": str(exc)[:300], "cases": [], "stats": {}}
+            return {"error": str(exc)[:300], "cases": [], "total": 0, "stats": {}}
         if new_only:
             items = [c for c in items if _as_epoch(c["opened_at"]) >= self.started]
-        items = items[:40]
-        return {"cases": [{"id": c["case_id"], "at": c["opened_at"], "amount": c["amount_uzs"],
+        total, items = len(items), items[:limit]
+        return {"total": total,
+                "cases": [{"id": c["case_id"], "at": c["opened_at"], "amount": c["amount_uzs"],
                            "from": mask(c["sender_card"]), "to": mask(c["receiver_card"]),
                            "decision": c["decision"], "type": c["predicted_type"],
                            "score": c["final_score"], "rules": list(c["rule_hits"] or []),
@@ -634,15 +650,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path, _, query = self.path.partition("?")
-        if path in ("/", "/index.html"):
-            with open(os.path.join(HERE, "index.html"), "rb") as fh:
-                self._send(fh.read(), "text/html; charset=utf-8")
+        q = parse_qs(query)
+        if path in ("/", "/index.html", "/about.js"):
+            name = path.strip("/") or "index.html"
+            with open(os.path.join(HERE, name), "rb") as fh:
+                self._send(fh.read(), "text/javascript; charset=utf-8" if name.endswith(".js")
+                           else "text/html; charset=utf-8")
         elif path == "/api/status":
             self._json(APP.status())
         elif not APP.health.ready:
             self._json({"error": "the system is not running"}, 503)
         elif path == "/api/stream":
-            self._json(APP.stream(alerts_only="alerts=1" in query))
+            self._json(APP.stream(alerts_only=q.get("alerts") == ["1"], limit=_limit(q)))
         elif path.startswith("/api/episode/"):
             run = APP.run(path.rsplit("/", 1)[1])
             self._json(run if run else {"error": "unknown run"}, 200 if run else 404)
@@ -651,7 +670,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/results":
             self._json(APP.results())
         elif path == "/api/cases":
-            self._json(APP.cases(new_only="new=1" in query))
+            self._json(APP.cases(new_only=q.get("new") == ["1"], limit=_limit(q)))
         else:
             self._json({"error": "not found"}, 404)
 

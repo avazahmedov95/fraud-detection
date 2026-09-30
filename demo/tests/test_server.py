@@ -198,6 +198,69 @@ def test_the_demo_names_the_same_stages_as_the_job():
     assert ast.literal_eval(stages) == S.STAGES
 
 
+def _repo(*parts):
+    import os
+    return open(os.path.join(os.path.dirname(os.path.dirname(S.__file__)), *parts), encoding="utf-8").read()
+
+
+def test_the_about_tab_describes_the_jobs_rules_with_the_jobs_numbers():
+    """Every rule rules.py runs, in its order, and every number the tab quotes for
+    one, as stream-processor/config.py sets it."""
+    block = _repo("demo", "about.js").split("const RULE_FACTS = {", 1)[1].split("};", 1)[0]
+    rules = re.findall(r'hits\.append\("(\w+)"\)', _repo("stream-processor", "rules.py"))
+    assert re.findall(r"^\s*(\w+): \{", block, re.M) == rules
+    config = _repo("stream-processor", "config.py")
+    for name, value in re.findall(r"\b([A-Z][A-Z_]+): ([\d.]+)", block):
+        set_to = re.search(rf"^{name}\s*=\s*([\d_.]+)", config, re.M)
+        assert set_to, name
+        assert float(set_to.group(1).replace("_", "")) == float(value), name
+
+
+def test_the_about_tab_names_alerts_as_the_job_does():
+    import ast
+    import json
+    tree = ast.parse(_repo("stream-processor", "fusion.py"))
+    priority = next(n.value for n in tree.body if isinstance(n, ast.Assign)
+                    and getattr(n.targets[0], "id", "") == "_TYPE_PRIORITY")
+    shown = _repo("demo", "about.js").split("const NAMED_BY = ", 1)[1].split(";", 1)[0]
+    assert json.loads(shown) == [[kind, list(rules)] for kind, rules in ast.literal_eval(priority)]
+
+
+def test_the_stream_sends_a_page_and_says_how_many_there_are():
+    decisions = S.Decisions()
+    for i in range(30):
+        decisions.add({"transaction_id": f"t{i}", "decision": "ALLOW"})
+    app = SimpleNamespace(decisions=decisions, runs={}, _why=lambda rec: None)
+    out = S.App.stream(app, limit=S.PAGE)
+    assert len(out["rows"]) == S.PAGE and out["total"] == 30
+    assert out["rows"][0]["id"] == "t29"                         # newest first
+
+
+def test_the_queue_sends_a_page_and_says_how_many_are_open():
+    import case as CASE
+    rows = [dict(dict.fromkeys(CASE.CASE_COLUMNS, ""), case_id=f"c{i}", opened_at=T0,
+                 rule_hits=[], explanation=[]) for i in range(25)]
+
+    class Store:
+        def _ensure(self):
+            return True
+
+        def open_cases(self, limit):
+            return rows
+
+        def stats(self):
+            return {}
+
+    out = S.App.cases(SimpleNamespace(started=0, store=Store), limit=S.PAGE)
+    assert len(out["cases"]) == S.PAGE and out["total"] == 25
+
+
+def test_a_page_size_stays_within_what_the_server_keeps():
+    assert S._limit({"limit": ["40"]}) == 40
+    assert S._limit({"limit": ["100000"]}) == 400
+    assert S._limit({"limit": ["many"]}) == S._limit({}) == S.PAGE
+
+
 def test_the_page_marks_the_same_rules_mandatory_as_the_job():
     import os
     root = os.path.dirname(os.path.dirname(S.__file__))

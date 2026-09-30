@@ -101,6 +101,41 @@ td.num,th.num{text-align:right}
 .queue .amt{font:600 .95rem var(--mono)}.queue .kind{color:var(--muted);font-size:.76rem}
 .queue .acts{display:flex;gap:6px;flex-wrap:wrap}.queue .acts button{padding:5px 9px;font-size:.76rem}
 .count{font-family:var(--mono);color:var(--muted)}
+.more{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 14px;border-top:1px solid var(--line);font-size:.8rem;color:var(--muted)}
+.more:empty{display:none}
+.about-intro{max-width:78ch;margin:0 0 14px}
+.flow{position:relative;padding:0 14px 14px;display:grid;gap:12px}
+.flow-group{display:grid;gap:6px}
+.flow-group h3{margin:0;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.flow-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.comp{text-align:left;display:grid;gap:2px;align-content:start;padding:9px 11px;border-radius:10px}
+.comp .kind{font:500 .64rem var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.comp .name{font-weight:600;font-size:.88rem}.comp .sub{color:var(--muted);font-size:.76rem;line-height:1.35}
+.comp.store{background:var(--panel-2)}.comp.ml{border-color:var(--accent)}
+.comp.past{border-color:#b9c8e6}.comp.on{border-color:var(--accent);background:var(--accent-soft)}
+#packet{position:absolute;left:0;top:0;width:16px;height:16px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 5px var(--accent-soft);transition:transform .5s cubic-bezier(.4,.1,.3,1);pointer-events:none;z-index:2}
+#packet.alert{background:var(--alert-bar);box-shadow:0 0 0 5px var(--alert-soft)}
+@media (prefers-reduced-motion:reduce){#packet{transition-duration:.01ms}}
+.walk{border-top:1px solid var(--line);padding:12px 14px;display:grid;gap:10px}
+.walk-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.walk-controls button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.walk h4{margin:0 0 4px;font-size:1rem}.walk p{margin:0;max-width:78ch}
+.walk-meta{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:.8rem;color:var(--muted)}
+.walk-meta b{font-family:var(--mono);color:var(--ink);font-weight:600}
+.about-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:14px;align-items:start;margin-top:14px}
+@media (max-width:920px){.about-grid{grid-template-columns:1fr}}
+.model-list{margin:0;padding:0 14px 14px 32px;display:grid;gap:7px;font-size:.88rem}
+.rules-table td{white-space:normal;vertical-align:top;font-size:.84rem}
+.rules-table td:first-child{font-weight:600}
+.role{display:inline-block;font-size:.72rem;border-radius:5px;padding:1px 6px;margin:1px 0}
+.role.must{background:var(--alert-soft);color:var(--alert)}.role.name{background:var(--accent-soft);color:var(--accent)}
+.role.reason{background:var(--panel-2);color:var(--muted)}
+.modal{position:fixed;inset:0;background:rgba(15,27,45,.45);display:grid;place-items:center;padding:16px;z-index:10}
+.modal[hidden]{display:none}
+.modal-card{background:var(--panel);border-radius:12px;max-width:560px;width:100%;padding:18px 20px;max-height:85vh;overflow:auto;box-shadow:0 10px 40px rgba(15,27,45,.3)}
+.modal-card h3{margin:2px 0 0;font-size:1.1rem}.modal-card ul{margin:12px 0 0;padding-left:18px;display:grid;gap:6px;font-size:.9rem}
+.modal-card .kind{font:500 .7rem var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.modal-close{float:right}
 .timing{max-width:860px;margin-bottom:14px}
 .live{font-size:.7rem;font-weight:600;color:var(--ok);background:var(--ok-soft);border-radius:999px;padding:2px 9px}
 .lead{margin:-4px 14px 12px;color:var(--muted);font-size:.88rem;max-width:70ch}
@@ -149,6 +184,7 @@ td.num,th.num{text-align:right}
   <div id="app" hidden>
     <nav class="tabs">
       <button type="button" data-tab="desk" data-t="tab_desk"></button>
+      <button type="button" data-tab="about" data-t="tab_about"></button>
       <button type="button" data-tab="grafana" data-t="tab_grafana"></button>
       <button type="button" data-tab="results" data-t="tab_results"></button>
     </nav>
@@ -172,6 +208,7 @@ td.num,th.num{text-align:right}
               <thead><tr><th data-t="h_time"></th><th class="num" data-t="h_amount"></th><th class="route" data-t="h_route"></th><th data-t="h_risk"></th><th data-t="h_decision"></th></tr></thead>
               <tbody id="stream"></tbody>
             </table></div>
+            <div class="more" id="stream-more"></div>
           </div>
           <div class="panel">
             <div class="panel-h"><h2 data-t="cases_title"></h2></div>
@@ -188,10 +225,13 @@ td.num,th.num{text-align:right}
             <div class="panel-h"><h2 data-t="queue_title"></h2><span class="grow"></span><span class="count" id="q-count"></span></div>
             <p class="panel-sub" data-t="queue_hint"></p>
             <ul class="queue" id="queue"></ul>
+            <div class="more" id="queue-more"></div>
           </div>
         </div>
       </div>
     </section>
+
+    <section id="about" hidden></section>
 
     <section id="grafana" hidden>
       <p class="hint" data-t="grafana_hint"></p>
@@ -227,7 +267,8 @@ td.num,th.num{text-align:right}
 const T = {
 ru: {
   title: "Обнаружение мошенничества в P2P-переводах", subtitle: "· живое демо",
-  tab_desk: "Рабочее место", tab_grafana: "Grafana", tab_results: "Данные и результаты",
+  tab_desk: "Рабочее место", tab_about: "О проекте", tab_grafana: "Grafana", tab_results: "Данные и результаты",
+  shown_of: "Показано {n} из {total}", more: "Показать ещё {step}", less: "Свернуть",
   part: {kafka: "Kafka — очередь сообщений", clickhouse: "ClickHouse — база данных",
     job: "Задача Flink — принимает решения", data: "Данные генератора"},
   fix: {kafka: ".\\run.ps1 up", clickhouse: ".\\run.ps1 up", job: ".\\run.ps1 submit-job",
@@ -322,7 +363,8 @@ ru: {
 },
 en: {
   title: "P2P transfer fraud detection", subtitle: "· live demo",
-  tab_desk: "Desk", tab_grafana: "Grafana", tab_results: "Data & results",
+  tab_desk: "Desk", tab_about: "About the project", tab_grafana: "Grafana", tab_results: "Data & results",
+  shown_of: "Showing {n} of {total}", more: "Show {step} more", less: "Show fewer",
   part: {kafka: "Kafka — the message queue", clickhouse: "ClickHouse — the database",
     job: "Flink job — makes the decisions", data: "The generator's data"},
   fix: {kafka: ".\\run.ps1 up", clickhouse: ".\\run.ps1 up", job: ".\\run.ps1 submit-job",
@@ -415,8 +457,10 @@ const FRAUD_KINDS = ["APP", "ATO", "MULE", "STRUCTURING"];
 
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const PAGE = 20;                   // rows shown before "show more", as server.py's PAGE
 let lang = "ru", tab = "desk", status = null, runId = null, runStarted = 0, runPicked = null;
-let selected = null, streamRows = [], lastCases = null, results = null;
+let selected = null, streamRows = [], streamTotal = 0, lastCases = null, results = null;
+const limits = {stream: PAGE, queue: PAGE};
 try { lang = localStorage.getItem("demo-lang") || "ru"; } catch (e) {}
 const t = k => (T[lang][k] ?? T.en[k] ?? k);
 const fill = (s, vals) => Object.entries(vals).reduce((a, [k, v]) => a.replace(`{${k}}`, v), s);
@@ -440,6 +484,16 @@ function applyLang() {
   document.querySelectorAll("[data-t]").forEach(el => el.textContent = t(el.dataset.t));
   document.querySelectorAll("[data-lang]").forEach(b => b.classList.toggle("on", b.dataset.lang === lang));
   renderScenarios(); renderStatus(); renderStream(); renderQueue(); renderDetail(); renderResults();
+  if (tab === "about") renderAbout();
+}
+
+// "Showing n of total", then "show more" while there is more and "show fewer" once
+// the list has grown.
+function moreBar(which, n, total) {
+  if (total <= PAGE) return "";
+  return `<span>${fill(t("shown_of"), {n: fmtInt(n), total: fmtInt(total)})}</span>` +
+    (n < total && limits[which] < 400 ? `<button type="button" data-more="${which}">${fill(t("more"), {step: PAGE})}</button>` : "") +
+    (limits[which] > PAGE ? `<button type="button" data-less="${which}">${t("less")}</button>` : "");
 }
 
 function renderStatus() {
@@ -499,11 +553,13 @@ function renderStream() {
       `<td><span class="rbar ${hot ? "hot" : ""}"><i style="width:${Math.max(3, Math.min(1, r.score || 0) * 100)}%"></i></span><span class="mono">${dec(r.score, 2)}</span></td>` +
       `<td>${badge(r.decision)}</td></tr>`;
   }).join("") : `<tr><td colspan="5" class="muted">${t("empty_live")}</td></tr>`;
+  $("#stream-more").innerHTML = moreBar("stream", streamRows.length, streamTotal);
 }
 
 async function refreshStream() {
-  streamRows = await api("/api/stream" + ($("#alerts-only").checked ? "?alerts=1" : ""));
-  if (!Array.isArray(streamRows)) streamRows = [];
+  const r = await api(`/api/stream?limit=${limits.stream}` + ($("#alerts-only").checked ? "&alerts=1" : ""));
+  streamRows = r.rows || [];
+  streamTotal = r.total || 0;
   renderStream();
   if (!selected || selected.src === "stream") renderDetail();
 }
@@ -559,7 +615,10 @@ function whyBlock(why) {
 function renderDetail() {
   if (!status || !status.ready) return;
   const pool = selected && selected.src === "case" ? ((lastCases && lastCases.cases) || []) : streamRows;
-  const x = selected && pool.find(r => r.id === selected.id);
+  // The last copy seen stays on screen once newer rows push this one off the list.
+  const fresh = selected && pool.find(r => r.id === selected.id);
+  if (fresh) selected.row = fresh;
+  const x = selected && selected.row;
   if (!x) { $("#detail").innerHTML = `<p class="empty">${t("pick")}</p>`; return; }
   const rules = x.rules || [], cut = status.cut;
   let rnote = "";
@@ -586,7 +645,8 @@ function renderQueue() {
   if (!lastCases) return;
   if (lastCases.error) { $("#queue").innerHTML = `<p class="empty">${esc(t("no_store") + lastCases.error)}</p>`; return; }
   const cs = lastCases.cases;
-  $("#q-count").textContent = cs.length;
+  $("#q-count").textContent = fmtInt(lastCases.total);
+  $("#queue-more").innerHTML = moreBar("queue", cs.length, lastCases.total);
   $("#queue").innerHTML = cs.length ? cs.map(c => `<li data-case="${esc(c.id)}" class="${selected && selected.id === c.id ? "sel" : ""}">` +
     `<div><div class="amt">${fmtInt(c.amount)} ${t("sum")}</div><div class="kind">${esc(c.type ? kindName(c.type) : t("type_none"))} · ${t("risk")} ${dec(c.score, 2)}</div></div>` +
     `<div class="acts"><button type="button" class="primary" data-res="CONFIRMED_FRAUD">${t("confirm")}</button>` +
@@ -595,7 +655,7 @@ function renderQueue() {
 }
 
 async function refreshCases() {
-  lastCases = await api("/api/cases?new=1");
+  lastCases = await api(`/api/cases?new=1&limit=${limits.queue}`);
   renderQueue(); renderStatus();
   if (selected && selected.src === "case") renderDetail();
 }
@@ -650,18 +710,23 @@ async function openTab(name) {
   document.querySelectorAll("#app section").forEach(s => s.hidden = s.id !== tab);
   document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
   if (tab === "grafana") showGrafana();
-  if (tab === "results") {
+  if (tab === "results" || tab === "about") {
     if (!results) results = await api("/api/results");
-    renderResults(); refreshLive();
+    if (tab === "results") { renderResults(); refreshLive(); } else renderAbout();
   }
 }
 
 document.addEventListener("click", async e => {
-  const el = e.target.closest("[data-tab],[data-lang],[data-play],[data-row],[data-res],[data-case],#bg-btn");
+  const el = e.target.closest("[data-tab],[data-lang],[data-play],[data-row],[data-res],[data-case],[data-more],[data-less],#bg-btn");
   if (!el) return;
   if (el.dataset.tab) openTab(el.dataset.tab);
   else if (el.dataset.lang) { lang = el.dataset.lang; try { localStorage.setItem("demo-lang", lang); } catch (err) {} applyLang(); }
   else if (el.dataset.play) play(el.dataset.play);
+  else if (el.dataset.more || el.dataset.less) {
+    const which = el.dataset.more || el.dataset.less;
+    limits[which] = el.dataset.more ? limits[which] + PAGE : PAGE;
+    (which === "stream" ? refreshStream : refreshCases)();
+  }
   else if (el.dataset.row) { selected = {src: "stream", id: el.dataset.row}; renderStream(); renderQueue(); renderDetail(); }
   else if (el.dataset.res) {
     const li = el.closest("[data-case]");
@@ -691,5 +756,6 @@ setInterval(() => { if (ready() && tab === "desk") refreshCases().catch(() => {}
 setInterval(() => { if (ready() && runId) refreshRun().catch(() => {}); }, 700);
 setInterval(() => { if (ready() && tab === "results") refreshLive().catch(() => {}); }, 5000);
 </script>
+<script src="about.js"></script>
 </body>
 </html>
