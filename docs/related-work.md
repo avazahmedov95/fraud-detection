@@ -310,9 +310,16 @@ this data, or does something newer beat it?
   tree models at 0.67, the SVMs and logistic regression at 0.29-0.49. **Does not
   support** anything about fraud at a 0.18% base rate or about latency.
 - **"A Neural Network Alternative to Tree-based Models"**
-  ([arXiv:2410.17758](https://arxiv.org/abs/2410.17758)) - a sparse network meant
-  to match trees and stay interpretable. Read at the abstract, **not run**. It
-  claims the interpretability CBU 3759 requires, so it is the next family to try.
+  ([arXiv:2410.17758](https://arxiv.org/abs/2410.17758), Raieli et al., a preprint
+  of October 2024, revised April 2025) - sTAB-Net, a network whose connections are
+  cut down to groups of related features, meant to match trees and stay
+  interpretable. Read in full, **not run**. It was built for gene-expression data -
+  thousands of genes per patient, grouped by known biological pathways - and
+  tested on cancer and single-cell sets against XGBoost, with no imbalanced or
+  fraud data; its code is a research repository, not a library. **Does not
+  support** a claim here: this data has 21 features and 320,000 rows, the opposite
+  shape, and the case view's reasons are already exact tree contributions
+  (`case-manager/explain.py`).
 - **"A Survey on Tabular Data: From Tree-based Methods to Tabular Deep Learning"**
   (ACM Computing Surveys, 2026, [doi 10.1145/3807777](https://dl.acm.org/doi/10.1145/3807777)) -
   a survey. Read at the abstract; framing for the thesis's related-work chapter,
@@ -400,8 +407,8 @@ repeated.
 
 **The mentor's reading** (§6f): TabPFN was measured in an isolated experiment and
 changed nothing served; arXiv:2407.00956 agrees with the model comparison;
-arXiv:2410.17758 and the ACM survey are read at the abstract and supply nothing
-yet.
+arXiv:2410.17758, read in full, was built for another kind of table; the ACM
+survey is read at the abstract and supplies nothing yet.
 
 **Six sources reached the code; the rest shaped how results are reported** -
 Machado, Afriyie, Hemel and both Wang papers appear nowhere in this repository
