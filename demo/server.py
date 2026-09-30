@@ -427,23 +427,22 @@ class Decisions:
 
 class Background:
     """data-generator's producer run unchanged - the dataset at its own pacing,
-    100-500 times faster - so the stream is the one every figure was measured on.
+    200 times faster - so the stream is the one every figure was measured on.
     Starts at a random row of the held-out part, which the model never trained on,
     so that two demos do not show the same minutes."""
 
     def __init__(self):
-        self.proc, self.speed = None, 200
+        self.proc = None
 
     def running(self):
         return self.proc is not None and self.proc.poll() is None
 
-    def start(self, speed, skip):
+    def start(self, skip):
         if self.running():
             return
-        self.speed = int(speed)
         self.proc = subprocess.Popen(
             [sys.executable, "kafka_producer.py", "--file", os.path.join("out", "transactions.csv"),
-             "--realtime", "--speed", str(self.speed), "--skip", str(skip),
+             "--realtime", "--speed", "200", "--skip", str(skip),
              "--bootstrap", KAFKA, "--topic", TOPIC_RAW],
             cwd=GEN, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -516,7 +515,7 @@ class App:
             ms, counts = sorted(d.ms), dict(d.counts)
         return {"ready": self.health.ready, "parts": self.health.parts,
                 "data_error": self.library_error,
-                "background": {"on": self.background.running(), "speed": self.background.speed},
+                "background": {"on": self.background.running()},
                 "counts": counts, "median_ms": _quantile(ms, 0.5), "p99_ms": _quantile(ms, 0.99),
                 "last_decision": d.last_at, "model": d.model, "cut": self.cut,
                 "grafana": self.grafana}
@@ -542,8 +541,8 @@ class App:
             out.append(v)
         return {"rows": out, "total": len(recs)}
 
-    def start_background(self, speed):
-        self.background.start(speed, self.library.replay_start())
+    def start_background(self):
+        self.background.start(self.library.replay_start())
 
     def start_run(self, kind):
         if kind not in KINDS:
@@ -729,7 +728,7 @@ class Handler(BaseHTTPRequestHandler):
             n = int(self.headers.get("Content-Length") or 0)
             data = json.loads(self.rfile.read(n) or b"{}")
             if self.path == "/api/background":
-                (APP.start_background(data.get("speed", 200)) if data.get("on")
+                (APP.start_background() if data.get("on")
                  else APP.background.stop())
                 self._json({"on": APP.background.running()})
             elif self.path == "/api/episode":

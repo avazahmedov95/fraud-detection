@@ -28,7 +28,6 @@ button{font:inherit;color:var(--ink);background:var(--panel);border:1px solid va
 button:hover{border-color:var(--accent)}button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
 button:disabled{opacity:.5;cursor:default}
-select{font:inherit;font-size:.82rem;padding:4px;border-radius:6px;border:1px solid var(--line);background:var(--panel)}
 .muted{color:var(--muted)}
 .banner{background:var(--alert-soft);border:1px solid var(--alert-bar);padding:10px 14px;border-radius:8px;margin-bottom:14px}
 .gate{max-width:640px;margin:40px auto;border:1px solid var(--line);border-radius:12px;padding:24px}
@@ -50,7 +49,7 @@ select{font:inherit;font-size:.82rem;padding:4px;border-radius:6px;border:1px so
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .panel-h{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:12px 14px 10px}
 .panel-h h2{font-size:.74rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0}
-.panel-h .grow{flex:1}.panel-h .ctl{font-size:.8rem;color:var(--muted)}
+.panel-h .grow{flex:1}
 .panel-sub{margin:-4px 14px 12px;color:var(--muted);font-size:.84rem}
 .note{margin:0 14px 10px;padding:8px 11px;border-radius:8px;background:var(--accent-soft);font-size:.84rem}
 .tbl{overflow-x:auto}
@@ -224,8 +223,6 @@ button.on-filter{border-color:var(--accent);background:var(--accent-soft)}
               <h2 data-t="stream_title"></h2><span class="grow"></span>
               <button type="button" data-filter="stream"></button>
               <button type="button" class="primary" id="bg-btn"></button>
-              <label class="ctl"><span data-t="speed"></span>
-                <select id="bg-speed"><option value="100">×100</option><option value="200" selected>×200</option><option value="500">×500</option></select></label>
             </div>
             <p class="panel-sub" data-t="stream_hint"></p>
             <div class="note" id="note" hidden></div>
@@ -284,7 +281,6 @@ button.on-filter{border-color:var(--accent);background:var(--accent-soft)}
         <thead><tr><th data-t="c_data"></th><th data-t="c_what"></th><th data-t="c_ours"></th><th data-t="c_published"></th></tr></thead>
         <tbody id="cmp"></tbody>
       </table></div>
-      <p class="hint" data-t="public_note"></p>
     </section>
 
     <div class="modal" id="modal" hidden><div class="modal-card" id="modal-card" role="dialog" aria-modal="true"></div></div>
@@ -310,8 +306,8 @@ ru: {
   t_prec: "Подтверждено мошенничества", t_prec_sub: "{a} из {b} разобранных тревог", t_prec_none: "тревоги ещё не разбирали",
   t_ms: "От прихода до решения, медиана", t_ms_sub: "99% — быстрее {p99}",
   stream_title: "Переводы по мере решения",
-  stream_hint: "Каждая строка — перевод из данных генератора, который система только что оценила. Нажмите строку, чтобы увидеть, как она решила. «Ускорение» — во сколько раз быстрее, чем переводы шли в данных генератора.",
-  bg_start: "Запустить поток", bg_stop: "Остановить поток", speed: "Ускорение ",
+  stream_hint: "Каждая строка — перевод из данных генератора, который система только что оценила. Нажмите строку, чтобы увидеть, как она решила.",
+  bg_start: "Запустить поток", bg_stop: "Остановить поток",
   filter: "Фильтр", f_title_stream: "Фильтр потока", f_title_queue: "Фильтр очереди",
   f_sender: "Карта отправителя", f_receiver: "Карта получателя", f_card_hint: "первые 6 или последние 4 цифры",
   f_min: "Сумма от, сум", f_max: "Сумма до, сум", f_since: "Время с", f_until: "Время по",
@@ -367,7 +363,6 @@ ru: {
   own_what: "{rows} переводов под Узбекистан, мошенничества {share}, типов мошенничества: {types}. Проверка на последних {test} переводах, среди них {tf} мошеннических; эту часть модель не видела.",
   own_ours: "поймано {rec} мошенничества, {prec} тревог настоящие (PR-AUC {prauc})",
   own_published: "нет: данные наши",
-  public_note: "Публичные наборы только проверяют подход. Модель в системе обучена на данных нашего генератора: в публичных наборах нет половины наших признаков.",
   sum: "сум", ms: "мс",
   dec: {ALLOW: "Пропущен", REVIEW: "На проверку"},
   kind: {NORMAL: "Обычный перевод", APP: "Мошенник по телефону", ATO: "Захват аккаунта", MULE: "Дроп-счёт", STRUCTURING: "Дробление сумм"},
@@ -411,8 +406,8 @@ en: {
   t_prec: "Confirmed fraud", t_prec_sub: "{a} of {b} resolved alerts", t_prec_none: "no alert resolved yet",
   t_ms: "Arrival → decision, median", t_ms_sub: "99% within {p99}",
   stream_title: "Transfers as they are decided",
-  stream_hint: "Each row is a transfer from the generator's data that the system has just scored. Click a row to see how it was judged. The speed-up says how many times faster than in the generator's data the transfers arrive.",
-  bg_start: "Start the stream", bg_stop: "Stop the stream", speed: "Speed-up ",
+  stream_hint: "Each row is a transfer from the generator's data that the system has just scored. Click a row to see how it was judged.",
+  bg_start: "Start the stream", bg_stop: "Stop the stream",
   filter: "Filter", f_title_stream: "Filter the stream", f_title_queue: "Filter the queue",
   f_sender: "Sender's card", f_receiver: "Payee's card", f_card_hint: "the first 6 or the last 4 digits",
   f_min: "Amount from, UZS", f_max: "Amount to, UZS", f_since: "Time from", f_until: "Time to",
@@ -468,7 +463,6 @@ en: {
   own_what: "{rows} transfers calibrated to Uzbekistan, {share} of them fraud, of {types} types. Tested on the last {test}, {tf} of them fraud, which the model never saw.",
   own_ours: "caught {rec} of the fraud, {prec} of alerts real (PR-AUC {prauc})",
   own_published: "none: the data is ours",
-  public_note: "The public sets only check the approach. The model in the system is trained on our generator's data: the public sets lack half of our features.",
   sum: "UZS", ms: "ms",
   dec: {ALLOW: "ALLOW", REVIEW: "REVIEW"},
   kind: {NORMAL: "Ordinary transfer", APP: "Phone scam", ATO: "Account takeover", MULE: "Money mule", STRUCTURING: "Structuring"},
@@ -848,7 +842,7 @@ document.addEventListener("click", async e => {
   }
   else if (el.dataset.case) { selected = {src: "case", id: el.dataset.case}; renderStream(); renderQueue(); renderDetail(); }
   else if (el.id === "bg-btn") {
-    await api("/api/background", {on: !(status && status.background.on), speed: Number($("#bg-speed").value)});
+    await api("/api/background", {on: !(status && status.background.on)});
     refreshStatus();
   }
 });
