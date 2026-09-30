@@ -290,6 +290,36 @@ on real Uzbek traffic.
 
 ---
 
+## 6f. Model families for tables - the mentor's reading (2026-09-26)
+
+Four links, sent with the request to try models other than LightGBM, SVM among
+them, and read for one question: is a boosted tree still the right family for
+this data, or does something newer beat it?
+
+- **TabPFN** (Prior Labs, [huggingface.co/Prior-Labs](https://huggingface.co/Prior-Labs),
+  checkpoint 3.5) - a pretrained tabular model that answers without a fitting
+  loop. **Measured**, in `ml/experiments/models.py` and an environment of its own:
+  the best model on 5,000 rows (PR-AUC 0.966 against 0.937 for the served recipe),
+  but it takes 5,000 training rows on a CPU against the 320,000 here, and 86 ms a
+  row against about 0.2 ms for the served model (`ml/README.md`, Other model
+  families). **Does not support** a claim at full scale: that needs a GPU.
+- **"A Closer Look at Deep Learning Methods on Tabular Datasets"**
+  ([arXiv:2407.00956](https://arxiv.org/abs/2407.00956), reached through a
+  LinkedIn post) - a benchmark over 300+ tabular datasets in which boosted trees
+  remain very strong. **Agrees** with the eight-model comparison here: the three
+  tree models at 0.67, the SVMs and logistic regression at 0.29-0.49. **Does not
+  support** anything about fraud at a 0.18% base rate or about latency.
+- **"A Neural Network Alternative to Tree-based Models"**
+  ([arXiv:2410.17758](https://arxiv.org/abs/2410.17758)) - a sparse network meant
+  to match trees and stay interpretable. Read at the abstract, **not run**. It
+  claims the interpretability CBU 3759 requires, so it is the next family to try.
+- **"A Survey on Tabular Data: From Tree-based Methods to Tabular Deep Learning"**
+  (ACM Computing Surveys, 2026, [doi 10.1145/3807777](https://dl.acm.org/doi/10.1145/3807777)) -
+  a survey. Read at the abstract; framing for the thesis's related-work chapter,
+  **no measurement**.
+
+---
+
 ## 7. Datasets considered and not adopted
 
 Extends the table in `generator-spec.md` §0; the datasets actually run are in
@@ -367,6 +397,11 @@ Extends the table in `generator-spec.md` §0; the datasets actually run are in
 
 **Saad et al. 2011** (§5) supplies nothing; recorded so the search is not
 repeated.
+
+**The mentor's reading** (§6f): TabPFN was measured in an isolated experiment and
+changed nothing served; arXiv:2407.00956 agrees with the model comparison;
+arXiv:2410.17758 and the ACM survey are read at the abstract and supply nothing
+yet.
 
 **Six sources reached the code; the rest shaped how results are reported** -
 Machado, Afriyie, Hemel and both Wang papers appear nowhere in this repository
