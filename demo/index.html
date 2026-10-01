@@ -178,6 +178,7 @@ button.on-filter{border-color:var(--accent);background:var(--accent-soft)}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;padding:0 14px 14px}
 .tile{background:var(--panel-2);border-radius:10px;padding:10px 14px}
 .tile span{color:var(--muted);font-size:.78rem}.tile b{display:block;font:600 1.25rem var(--mono)}
+.tile small{display:block;color:var(--muted);font-size:.74rem;margin-top:2px}
 .part-title{font-size:1.05rem;margin:26px 0 4px}
 .cmp-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin-bottom:10px}
 .cmp{min-width:720px}.cmp th{padding-top:10px}
@@ -302,7 +303,7 @@ ru: {
   gate_auto: "Страница откроется сама, как только всё заработает.",
   gate_down: "Сервер демо не отвечает. Запустите стек: .\\run.ps1 up",
   model: "Модель",
-  t_total: "Оценено переводов", t_review: "Отправлено на проверку",
+  t_total: "Оценено переводов", t_review: "Задержано до решения аналитика",
   t_prec: "Подтверждено мошенничества", t_prec_sub: "{a} из {b} разобранных тревог", t_prec_none: "тревоги ещё не разбирали",
   t_ms: "От прихода до решения, медиана", t_ms_sub: "99% — быстрее {p99}",
   stream_title: "Переводы по мере решения",
@@ -324,19 +325,19 @@ ru: {
   selected_title: "Выбранный перевод",
   pick: "Нажмите перевод в списке или дело в очереди, чтобы увидеть, как система решила.",
   part_model: "Модель", part_rules: "Жёсткие правила", risk: "риск",
-  cut_note: "Чёрная черта — уровень тревоги {cut}. Правее неё перевод уходит аналитику.",
+  cut_note: "Чёрная черта — уровень тревоги {cut}. Правее неё перевод задерживается до решения аналитика.",
   rules_fired: "сработало {n} из 10",
-  note_must: "Это правило требует регулятор. Оно само отправляет перевод на проверку, что бы ни сказала модель.",
+  note_must: "Это правило требует регулятор. Оно само задерживает перевод, что бы ни сказала модель.",
   note_named: "Эти правила не решают. Они дают тревоге название: {type}.",
   note_reasons: "Эти правила не решают. Аналитик видит их как причины.",
   note_model_only: "Ни одно правило не сработало. Тревогу подняла одна модель, поэтому у неё нет названия.",
   note_allowed: "Пропущен: риск ниже уровня тревоги, и ни одно правило не требует проверки.",
   why: "Почему модель насторожилась",
   why_status: {NO_MODEL: "файл модели для объяснений не найден", MODEL_MISMATCH: "модель объяснений не совпадает с рабочей — объяснение не показано", NO_FEATURES: "решение принято без признаков модели", FAILED: "объяснение не удалось посчитать"},
-  queue_title: "Очередь аналитика",
-  queue_hint: "Тревоги с начала показа. Аналитик не пропускает и не блокирует платёж: он отмечает, было ли это мошенничеством. Эти отметки — единственные настоящие метки в системе.",
-  confirm: "Мошенничество", fp: "Ложная тревога", type_none: "тип не назван",
-  empty_cases: "Новых тревог нет. Покажите случай мошенничества — тревога появится здесь через несколько секунд.",
+  queue_title: "Задержанные переводы",
+  queue_hint: "Переводы, задержанные с начала показа. Каждый ждёт аналитика: «Заблокировать» — деньги остаются у отправителя, «Отпустить» — перевод уходит получателю. Эти решения — единственные настоящие метки в системе.",
+  confirm: "Заблокировать", fp: "Отпустить", held: "задержан {t}", type_none: "тип не назван",
+  empty_cases: "Задержанных переводов нет. Покажите случай мошенничества — он появится здесь через несколько секунд.",
   no_store: "Очередь недоступна: ",
   grafana_hint: "Панель мониторинга Grafana из этого же стека: те же решения, собранные в базе, — число переводов и тревог, типы, распределение риска, регионы, последние тревоги с причинами. Если в рамке появится вход: логин admin, пароль из файла .env.",
   grafana_open: "Открыть Grafana в отдельной вкладке",
@@ -350,12 +351,14 @@ ru: {
     redis: ["Сторона получателя", "Последние платежи этому получателю, из Redis."],
     rules: ["Признаки и правила", "21 признак, 10 правил."],
     model: ["Модель", "Один прогноз модели LightGBM."],
-    decide: ["Решение", "Пропустить или на проверку, название тревоги, запись результата."]},
+    decide: ["Решение", "Пропустить или задержать, название тревоги, запись результата."]},
   total_avg: "От прихода до решения, в среднем",
   time_fine: "Среднее по последним {n} решениям в базе. Половина из них принята быстрее {median}, 99% — быстрее {p99}. Решения попадают в базу примерно через полминуты.",
   time_empty: "В базе ещё нет решений со временем этапов. Запустите поток или покажите случай — через полминуты они появятся здесь.",
-  verdicts_title: "Отметки аналитика", verdicts_hint: "Все дела в базе, включая прошлые показы.",
-  v_open: "Ждут разбора", v_conf: "Подтверждено", v_fp: "Ложных тревог", v_prec: "Точность по разобранным",
+  verdicts_title: "Задержанные переводы и решения аналитика", verdicts_hint: "Все дела в базе, включая прошлые показы.",
+  v_open: "Задержаны сейчас", v_conf: "Заблокировано: мошенничество", v_fp: "Отпущено: ложные тревоги", v_prec: "Точность по разобранным",
+  v_open_sub: "дольше всех: {t}", v_conf_sub: "{amount} сум остались у отправителей",
+  v_fp_sub: "ждали: в среднем {median}, дольше всех {max}", sec: "с", min: "мин", hour: "ч",
   trained_title: "Измерено при обучении модели, {date}",
   trained_hint: "Эти цифры не живые: их посчитали один раз, при обучении, на данных, которых модель не видела. Меняются только при переобучении.",
   c_data: "Данные", c_what: "Из чего состоят", c_ours: "Наш результат", c_published: "Опубликованный результат",
@@ -364,7 +367,7 @@ ru: {
   own_ours: "поймано {rec} мошенничества, {prec} тревог настоящие (PR-AUC {prauc})",
   own_published: "нет: данные наши",
   sum: "сум", ms: "мс",
-  dec: {ALLOW: "Пропущен", REVIEW: "На проверку"},
+  dec: {ALLOW: "Пропущен", REVIEW: "Задержан"},
   kind: {NORMAL: "Обычный перевод", APP: "Мошенник по телефону", ATO: "Захват аккаунта", MULE: "Дроп-счёт", STRUCTURING: "Дробление сумм"},
   kind_desc: {
     NORMAL: "Контрольный случай: привычный перевод знакомому получателю. Должен пройти.",
@@ -402,7 +405,7 @@ en: {
   gate_auto: "The page opens by itself once everything is up.",
   gate_down: "The demo server is not answering. Start the stack: .\\run.ps1 up",
   model: "Model",
-  t_total: "Transfers scored", t_review: "Sent to review",
+  t_total: "Transfers scored", t_review: "Held for the analyst",
   t_prec: "Confirmed fraud", t_prec_sub: "{a} of {b} resolved alerts", t_prec_none: "no alert resolved yet",
   t_ms: "Arrival → decision, median", t_ms_sub: "99% within {p99}",
   stream_title: "Transfers as they are decided",
@@ -424,19 +427,19 @@ en: {
   selected_title: "Selected transfer",
   pick: "Click a transfer in the list or a case in the queue to see how the system judged it.",
   part_model: "Model", part_rules: "Hard rules", risk: "risk",
-  cut_note: "The black line is the alert level, {cut}. Past it, the transfer goes to an analyst.",
+  cut_note: "The black line is the alert level, {cut}. Past it, the transfer is held until an analyst decides.",
   rules_fired: "{n} of 10 fired",
-  note_must: "The regulator requires this rule. It sends the transfer to review by itself, whatever the model says.",
+  note_must: "The regulator requires this rule. It holds the transfer by itself, whatever the model says.",
   note_named: "These rules do not decide. They give the alert its name: {type}.",
   note_reasons: "These rules do not decide. The analyst sees them as reasons.",
   note_model_only: "No rule fired. The model alone raised this alert, so it has no name.",
   note_allowed: "Allowed: the risk is under the alert level and no rule asked for a review.",
   why: "Why the model was suspicious",
   why_status: {NO_MODEL: "no model file for explanations", MODEL_MISMATCH: "the explanation model disagrees with the scorer — not shown", NO_FEATURES: "decided without model features", FAILED: "the explanation could not be computed"},
-  queue_title: "Analyst queue",
-  queue_hint: "Alerts since this demo started. The analyst does not release or block a payment: they mark whether it was fraud. Those marks are the only real labels the system gets.",
-  confirm: "Fraud", fp: "False alarm", type_none: "type not named",
-  empty_cases: "No new alerts. Show a fraud case — its alert appears here within seconds.",
+  queue_title: "Held transfers",
+  queue_hint: "Transfers held since this demo started. Each waits for the analyst: Block keeps the money with the sender, Release sends it on. These verdicts are the only real labels the system gets.",
+  confirm: "Block", fp: "Release", held: "held {t}", type_none: "type not named",
+  empty_cases: "Nothing is held. Show a fraud case — it appears here within seconds.",
   no_store: "Queue unavailable: ",
   grafana_hint: "The Grafana dashboard from the same stack: the same decisions as stored in the database — transfer and alert counts, types, the risk distribution, regions, the latest alerts with their reasons. If a login appears in the frame: user admin, password from the .env file.",
   grafana_open: "Open Grafana in its own tab",
@@ -450,12 +453,14 @@ en: {
     redis: ["The receiver's side", "Recent payments to this receiver, from Redis."],
     rules: ["Features and rules", "21 features computed, 10 rules checked."],
     model: ["The model", "One prediction by the LightGBM model."],
-    decide: ["The decision", "Allow or review, the alert named, the record written."]},
+    decide: ["The decision", "Allow or hold, the alert named, the record written."]},
   total_avg: "From arrival to decision, on average",
   time_fine: "Average over the latest {n} decisions in the database. Half of them were decided within {median}, 99% within {p99}. Decisions reach the database about half a minute after they are made.",
   time_empty: "The database holds no decision with stage times yet. Start the stream or show a case: they appear here within half a minute.",
-  verdicts_title: "Analyst verdicts", verdicts_hint: "Every case in the database, earlier demos included.",
-  v_open: "Waiting", v_conf: "Confirmed", v_fp: "False alarms", v_prec: "Precision on resolved",
+  verdicts_title: "Held transfers and the analyst's verdicts", verdicts_hint: "Every case in the database, earlier demos included.",
+  v_open: "Held now", v_conf: "Blocked: fraud", v_fp: "Released: false alarms", v_prec: "Precision on resolved",
+  v_open_sub: "the longest: {t}", v_conf_sub: "{amount} UZS kept with the senders",
+  v_fp_sub: "waited {median} at the median, {max} at the longest", sec: "s", min: "min", hour: "h",
   trained_title: "Measured when the model was trained, {date}",
   trained_hint: "These figures are not live: they were computed once, at training, on data the model never saw. They change only when the model is retrained.",
   c_data: "Data", c_what: "What it holds", c_ours: "Our result", c_published: "Published result",
@@ -464,7 +469,7 @@ en: {
   own_ours: "caught {rec} of the fraud, {prec} of alerts real (PR-AUC {prauc})",
   own_published: "none: the data is ours",
   sum: "UZS", ms: "ms",
-  dec: {ALLOW: "ALLOW", REVIEW: "REVIEW"},
+  dec: {ALLOW: "ALLOW", REVIEW: "HELD"},
   kind: {NORMAL: "Ordinary transfer", APP: "Phone scam", ATO: "Account takeover", MULE: "Money mule", STRUCTURING: "Structuring"},
   kind_desc: {
     NORMAL: "The control case: a usual transfer to a known payee, which should pass.",
@@ -502,6 +507,8 @@ const fmtInt = n => Number(n || 0).toLocaleString(locale());
 const dec = (v, d) => v == null ? "—" : Number(v).toFixed(d).replace(".", lang === "ru" ? "," : ".");
 const pct = v => v == null ? "—" : dec(v * 100, 1) + "%";
 const fmtMs = v => v == null ? "—" : dec(v, v < 10 ? 2 : 0) + " " + t("ms");
+const fmtDur = s => s == null ? "—" : s < 60 ? Math.round(s) + " " + t("sec")
+  : s < 3600 ? Math.round(s / 60) + " " + t("min") : dec(s / 3600, 1) + " " + t("hour");
 const fmtTime = s => s ? new Date(typeof s === "number" ? s * 1000 : Date.parse(String(s).replace(" ", "T") + "Z")).toLocaleTimeString(locale()) : "";
 const kindName = k => (k && t("kind")[k]) || k || "";
 const badge = d => d ? `<span class="dec ${esc(d)}">${esc(t("dec")[d] || d)}</span>` : "";
@@ -749,7 +756,7 @@ function renderQueue() {
   $("#q-count").textContent = fmtInt(lastCases.total);
   $("#queue-more").innerHTML = moreBar("queue", cs.length, lastCases.total);
   $("#queue").innerHTML = cs.length ? cs.map(c => `<li data-case="${esc(c.id)}" class="${selected && selected.id === c.id ? "sel" : ""}">` +
-    `<div><div class="amt">${fmtInt(c.amount)} ${t("sum")}</div><div class="kind">${esc(c.type ? kindName(c.type) : t("type_none"))} · ${t("risk")} ${dec(c.score, 2)}</div></div>` +
+    `<div><div class="amt">${fmtInt(c.amount)} ${t("sum")}</div><div class="kind">${esc(c.type ? kindName(c.type) : t("type_none"))} · ${t("risk")} ${dec(c.score, 2)} · ${fill(t("held"), {t: fmtDur(c.held_s)})}</div></div>` +
     `<div class="acts"><button type="button" class="primary" data-res="CONFIRMED_FRAUD">${t("confirm")}</button>` +
     `<button type="button" data-res="FALSE_POSITIVE">${t("fp")}</button></div></li>`).join("")
     : `<p class="empty">${t(filterCount("queue") ? "empty_filtered" : "empty_cases")}</p>`;
@@ -784,10 +791,16 @@ function renderLive() {
     $("#total").innerHTML = `<span>${t("total_avg")}</span><b>${fmtMs(tm.total_ms)}</b>`;
     $("#time-fine").textContent = tm.n ? fill(t("time_fine"), {n: fmtInt(tm.n), median: fmtMs(tm.median_ms), p99: fmtMs(tm.p99_ms)}) : t("time_empty");
   }
-  const v = live.verdicts || {};
-  $("#verdicts").innerHTML = [["v_open", fmtInt(v.NEW || 0)], ["v_conf", fmtInt(v.CONFIRMED_FRAUD || 0)],
-    ["v_fp", fmtInt(v.FALSE_POSITIVE || 0)], ["v_prec", v._precision == null ? "—" : pct(v._precision)]]
-    .map(([k, val]) => `<div class="tile"><span>${t(k)}</span><b>${val}</b></div>`).join("");
+  const v = live.verdicts || {}, h = live.holds || {};
+  const held = h.NEW || {}, kept = h.CONFIRMED_FRAUD || {}, freed = h.FALSE_POSITIVE || {};
+  $("#verdicts").innerHTML = [
+    ["v_open", fmtInt(v.NEW || 0), held.n ? fill(t("v_open_sub"), {t: fmtDur(held.max_s)}) : ""],
+    ["v_conf", fmtInt(v.CONFIRMED_FRAUD || 0), kept.n ? fill(t("v_conf_sub"), {amount: fmtInt(kept.amount)}) : ""],
+    ["v_fp", fmtInt(v.FALSE_POSITIVE || 0),
+     freed.n ? fill(t("v_fp_sub"), {median: fmtDur(freed.median_s), max: fmtDur(freed.max_s)}) : ""],
+    ["v_prec", v._precision == null ? "—" : pct(v._precision), ""]]
+    .map(([k, val, sub]) => `<div class="tile"><span>${t(k)}</span><b>${val}</b>` +
+      `${sub ? `<small>${esc(sub)}</small>` : ""}</div>`).join("");
 }
 
 function renderResults() {

@@ -178,6 +178,17 @@ class CaseStore:
         counts["_last_opened"] = rows[0][0] if rows else None
         return counts
 
+    def holds(self, now=None):
+        """What holding costs and keeps (case.hold_summary). A case opened without a
+        decision time has no hold to measure and is left out."""
+        if not self._ensure():
+            return {}
+        cols = ("disposition", "opened_at", "resolved_at", "amount_uzs")
+        q = (f"SELECT {', '.join(cols)} FROM {self._db}.{_TABLE} FINAL "
+             f"WHERE toUnixTimestamp64Milli(opened_at) > 0")
+        return CASE.hold_summary([dict(zip(cols, r)) for r in self._client.query(q).result_rows],
+                                 time.time() if now is None else now)
+
     def close(self):
         self.flush()
         if self._client is not None:

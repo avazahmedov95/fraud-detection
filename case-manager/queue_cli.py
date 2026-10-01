@@ -1,13 +1,19 @@
-"""The analyst surface: look at the queue, resolve a case, see what it implies.
+"""The analyst surface: look at the held transfers, block or release one, see what
+holding costs.
 
   queue_cli.py list | show ID | resolve ID VERDICT --by WHO | stats"""
 
 import argparse
 import logging
+import time
 
 import config as C
-from case import DISPOSITIONS
+from case import DISPOSITIONS, held_seconds
 from store import CaseStore
+
+#: What each verdict does to the held transfer.
+ACTION = {"CONFIRMED_FRAUD": "blocked: the money stays with the payer",
+          "FALSE_POSITIVE": "released to the payee"}
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -23,12 +29,19 @@ def _store():
 _ID_W = 38
 
 
+def _duration(s):
+    if s is None:
+        return "-"
+    return f"{s:.0f} s" if s < 60 else f"{s / 60:.0f} min" if s < 3600 else f"{s / 3600:.1f} h"
+
+
 def cmd_list(args):
     rows = _store().open_cases(args.limit)
     if not rows:
-        print("queue empty (or ClickHouse unreachable - check the log)")
+        print("nothing held (or ClickHouse unreachable - check the log)")
         return
-    print(f"{'case':<{_ID_W}}{'decision':<9}{'score':>7}{'amount, UZS':>16}"
+    now = time.time()
+    print(f"{'case':<{_ID_W}}{'held for':>9}{'score':>7}{'amount, UZS':>16}"
           f"  {'type':<12}reasons")
     unexplained = 0
     for r in rows:
@@ -41,10 +54,11 @@ def cmd_list(args):
             else:
                 reasons = f"(unexplained: {r.get('explanation_status') or 'none'})"
                 unexplained += 1
-        print(f"{r['case_id']:<{_ID_W}}{r['decision']:<9}"
+        print(f"{r['case_id']:<{_ID_W}}{_duration(held_seconds(r, now)):>9}"
               f"{r['final_score']:>7.3f}{r['amount_uzs']:>16,}"
               f"  {r['predicted_type'] or '-':<12}{reasons}")
-    print(f"\n{len(rows)} open case(s) shown: highest band first, then by amount.")
+    print(f"\n{len(rows)} held transfer(s) shown, largest amount first. Each waits "
+          f"until it is blocked or released.")
     if unexplained:
         print(f"{unexplained} case(s) have neither a rule hit nor a model "
               f"explanation. Check the case-manager log: the artefact is "
@@ -84,13 +98,16 @@ def cmd_resolve(args):
     ok = store.resolve(args.case_id, args.disposition, args.by)
     if not ok:
         raise SystemExit(f"no case {args.case_id!r} - nothing resolved")
-    print(f"{args.case_id} -> {args.disposition} (by {args.by})")
+    held = _duration(held_seconds(store.get(args.case_id), time.time()))
+    print(f"{args.case_id} -> {args.disposition} (by {args.by}): the transfer is "
+          f"{ACTION[args.disposition]}, after {held} held")
     print("Recorded as a label. It is attributable and it is revisable: the "
           "row is versioned, so a later verdict supersedes this one.")
 
 
 def cmd_stats(args):
-    s = _store().stats()
+    store = _store()
+    s, h = store.stats(), store.holds()
     if not s:
         raise SystemExit("ClickHouse unreachable")
     for d in DISPOSITIONS:
@@ -107,6 +124,16 @@ def cmd_stats(args):
         print(f"  {status:<40}{n:>8}")
     print(f"\nmost recent case opened: {s.get('_last_opened') or 'never'}")
 
+    if h:
+        held, blocked, released = h["NEW"], h["CONFIRMED_FRAUD"], h["FALSE_POSITIVE"]
+        print(f"\nheld now: {held['n']}, the longest for {_duration(held['max_s'])}")
+        print(f"blocked as fraud: {blocked['n']}, {blocked['amount']:,} UZS kept "
+              f"with the payers")
+        print(f"released as false alarms: {released['n']}, after "
+              f"{_duration(released['median_s'])} held at the median and "
+              f"{_duration(released['max_s'])} at the longest - the cost of holding, "
+              f"paid by honest customers")
+
     print("\nThis is the only figure in the system computed from human verdicts "
           "rather than generated ground truth. Over a small, non-random sample "
           "of resolved cases it is an indication, not a measurement: analysts "
@@ -119,7 +146,7 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    p = sub.add_parser("list", help="open cases, most urgent first")
+    p = sub.add_parser("list", help="held transfers, largest amount first")
     p.add_argument("--limit", type=int, default=20)
     p.set_defaults(func=cmd_list)
 
@@ -127,7 +154,8 @@ def main():
     p.add_argument("case_id")
     p.set_defaults(func=cmd_show)
 
-    p = sub.add_parser("resolve", help="record a verdict")
+    p = sub.add_parser("resolve", help="block (CONFIRMED_FRAUD) or release "
+                                       "(FALSE_POSITIVE) a held transfer")
     p.add_argument("case_id")
     p.add_argument("disposition",
                    choices=[d for d in DISPOSITIONS if d != "NEW"])
@@ -136,7 +164,8 @@ def main():
                         "cannot be audited or withdrawn")
     p.set_defaults(func=cmd_resolve)
 
-    p = sub.add_parser("stats", help="dispositions and the precision they imply")
+    p = sub.add_parser("stats", help="verdicts, the precision they imply, and what "
+                                     "holding costs")
     p.set_defaults(func=cmd_stats)
 
     args = ap.parse_args()

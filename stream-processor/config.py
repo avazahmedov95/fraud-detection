@@ -105,7 +105,7 @@ W_DAILY_LIMIT = 0.30
 # --- Decision thresholds ----------------------------------------------------
 # Calibrated against the FULL capability set; reduced deployments scale them.
 REVIEW_THRESHOLD = 0.40
-# No BLOCK: the system never blocks on its own; every alert goes to a person.
+# No BLOCK: the system never blocks on its own; a REVIEW holds the transfer for a person.
 
 # Off restores the fixed cutoffs, for comparison (capabilities.scaled_threshold).
 SCALE_THRESHOLDS_BY_CAPABILITY = (

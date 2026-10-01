@@ -708,10 +708,13 @@ conjure labels, but operating it produces them.
   (§9.1), and disclose ROC-AUC near 0.99 as a property of synthetic data.
 - For impossible travel the reportable result is 0 false positives on 775
   journeys; the detection rate is true by construction.
-- **Declare the scope in the introduction**: a *detection* system, not an
-  *enforcement* one - `fraud.alerts` opens an analyst case, and nothing declines a
-  transfer. The latency is the time to *reach* a decision.
-- The system never blocks on its own (since 2026-09-19): a false alert costs
-  analyst time, not a declined payment. A deployment that added automatic
-  declines would have to argue that operating point over declined payments, not
-  F1.
+- **Declare the scope in the introduction**: a REVIEW *holds* the transfer until
+  an analyst blocks or releases it (since 2026-10-01; an alert read after an
+  instant transfer has settled saves nothing). The prototype has no payment switch,
+  so the hold is the case's state; a switch would wait for the decision, whose
+  latency is the time measured here.
+- The system never blocks on its own (since 2026-09-19): a person blocks. A false
+  alert therefore costs analyst time and an honest customer's wait - measured from
+  the case's decision and verdict stamps (`case-manager/README.md`) - not a declined
+  payment. The cut-off is still F1's; with holds, a deployment would set it by what
+  a held honest payment costs against a missed fraud.

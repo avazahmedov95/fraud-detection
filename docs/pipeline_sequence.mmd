@@ -19,11 +19,11 @@ sequenceDiagram
     Redis-->>Flink: counts for the hour, day and week (2.07 ms)
     Flink->>Flink: build 21 features, run the 10 hard rules (0.90 ms)
     Flink->>Flink: score with the model (0.46 ms)
-    Flink->>Flink: decide: allow or review (0.03 ms)
+    Flink->>Flink: decide: allow or hold (0.03 ms)
     Flink->>Kafka: transactions.scored, and fraud.alerts when it is an alert (97 ms in all)
     Kafka->>Sink: every decision
     Sink->>DB: the decision, its audit record, and alerts into the graph
     Kafka->>Case: fraud.alerts
     Case->>DB: open a case, with its reason in words
-    Case->>Analyst: the case appears in the queue
-    Analyst->>DB: fraud, or false alarm
+    Case->>Analyst: the held transfer appears in the queue
+    Analyst->>DB: block it, or release it

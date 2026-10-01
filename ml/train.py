@@ -70,8 +70,8 @@ def make_model(scale_pos_weight, random_state=42):
 
 
 def choose_review_cutoff(y, p):
-    """REVIEW maximises F1 on the validation rows. There is no BLOCK: the system
-    never blocks on its own."""
+    """REVIEW maximises F1 on the validation rows. A REVIEW holds the transfer for a
+    person, who blocks or releases it; the system never blocks on its own."""
     prec, rec, thr = precision_recall_curve(y, p)
     f1 = 2 * prec[:-1] * rec[:-1] / np.maximum(prec[:-1] + rec[:-1], 1e-12)
     return float(thr[int(np.argmax(f1))])

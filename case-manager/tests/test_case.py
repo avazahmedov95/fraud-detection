@@ -126,3 +126,29 @@ def test_columns_match_the_clickhouse_schema():
 
     declared += re.findall(r"ADD COLUMN IF NOT EXISTS\s+([a-z_]+)\s", sql)
     assert declared == CASE.CASE_COLUMNS
+
+
+# --- holding: a case is a held transfer --------------------------------------
+
+def test_a_held_transfer_waits_until_the_verdict():
+    opened = _as_dict(CASE.case_row(ALERT))
+    assert CASE.held_seconds(opened, ALERT["scored_at_job"] + 90) == pytest.approx(90)
+    released = _as_dict(CASE.resolution_row(opened, "FALSE_POSITIVE", "analyst.k",
+                                            ALERT["scored_at_job"] + 300))
+    # Resolved, the clock stops: the wait no longer grows with `now`.
+    assert CASE.held_seconds(released, ALERT["scored_at_job"] + 9_999) == pytest.approx(300)
+
+
+def test_the_summary_separates_what_holding_costs_from_what_it_keeps():
+    base = ALERT["scored_at_job"]
+    opened = _as_dict(CASE.case_row(ALERT))
+    cases = [_as_dict(CASE.resolution_row(opened, "FALSE_POSITIVE", "a", base + 60)),
+             _as_dict(CASE.resolution_row(opened, "FALSE_POSITIVE", "a", base + 180)),
+             _as_dict(CASE.resolution_row(opened, "CONFIRMED_FRAUD", "a", base + 30)),
+             opened]
+    s = CASE.hold_summary(cases, base + 600)
+    assert s["FALSE_POSITIVE"]["n"] == 2
+    assert s["FALSE_POSITIVE"]["median_s"] == pytest.approx(120)
+    assert s["FALSE_POSITIVE"]["max_s"] == pytest.approx(180)
+    assert s["CONFIRMED_FRAUD"]["amount"] == ALERT["amount_uzs"]
+    assert s["NEW"]["max_s"] == pytest.approx(600)

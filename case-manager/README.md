@@ -7,13 +7,20 @@ topic, and nothing read it — a decision was a string in a warehouse, not work
 anyone did. This turns each alert into a **case**, queues it by exposure, and
 records what a human decided about it.
 
-## What it is not
+## A case is a held transfer
 
-It is not enforcement. Nothing here declines a transfer, holds an account, or
-challenges a customer. The system detects and queues; a production deployment
-would additionally answer the authorisation flow synchronously and trigger
-step-up authentication. That boundary is deliberate and is declared in
-`docs/irp-framing.md` rather than left to be discovered.
+Since 2026-10-01 a REVIEW holds the transfer until an analyst decides: an alert
+the analyst reads after the money has gone saves nothing on an instant transfer.
+`CONFIRMED_FRAUD` blocks it, and the money stays with the payer;
+`FALSE_POSITIVE` releases it. The system still never blocks on its own - a person
+makes that call - and it never declines what it did not hold.
+
+The prototype has no payment switch to hold money in, so the hold is the case's
+state, and what it costs is measured from the case's own two stamps: the decision
+(`opened_at`) and the verdict (`resolved_at`). `queue_cli.py stats` reports how long
+the released transfers - honest customers - waited, and how much the blocked ones
+kept. A production switch would ask for the decision and wait for it before moving
+the money; the job takes 0.22 s at the 99th percentile (`docs/irp-framing.md` 7.1c).
 
 ## Why the disposition matters more than the queue
 
@@ -32,14 +39,14 @@ the resolved set is biased towards high scores.
 
 | File | What it does |
 |---|---|
-| `case.py` | pure alert → case row; the resolution rule. No I/O |
-| `store.py` | ClickHouse access: open, read, resolve, count |
+| `case.py` | pure alert → case row; the resolution rule; how long a transfer was held. No I/O |
+| `store.py` | ClickHouse access: open, read, resolve, count, holds |
 | `explain.py` | exact tree contributions, in words, for alerts no rule explains |
 | `consumer.py` | the service: `fraud.alerts` → `fraud.cases` |
 | `queue_cli.py` | the analyst surface: `list` / `show` / `resolve` / `stats` |
 | `config.py` | connections and batch settings, all from the environment |
-| `tests/test_case.py` | 13 tests, incl. the replay-cannot-revert-a-verdict property |
-| `tests/test_store.py` | 13 tests against a fake ClickHouse: schema, FINAL, round trip |
+| `tests/test_case.py` | 15 tests, incl. the replay-cannot-revert-a-verdict property |
+| `tests/test_store.py` | 14 tests against a fake ClickHouse: schema, FINAL, round trip, holds |
 | `tests/test_explain.py` | 14 tests, mostly about refusing to give a wrong reason |
 
 ## The schema is applied by the service, not by ClickHouse
@@ -102,10 +109,10 @@ return both the open row and its resolution, and show a closed case as open.
 ## Use
 
 ```powershell
-.\run.ps1 cases                                                  # the queue
+.\run.ps1 cases                                                  # the held transfers
 .\run.ps1 cases -Case t_0041237                                  # one case in full
-.\run.ps1 cases -Case t_0041237 -Verdict CONFIRMED_FRAUD -By analyst.k
-.\run.ps1 cases -Stats                                           # dispositions + precision
+.\run.ps1 cases -Case t_0041237 -Verdict CONFIRMED_FRAUD -By analyst.k   # block it
+.\run.ps1 cases -Stats                                           # verdicts, precision, holds
 ```
 
 `-By` is required for a resolution: a label with no author cannot be audited or

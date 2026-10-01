@@ -104,7 +104,7 @@ def test_the_case_queue_reads_only_what_case_manager_stores():
     open case."""
     import case as CASE
     row = dict.fromkeys(CASE.CASE_COLUMNS, "")
-    row.update(opened_at=T0, rule_hits=[], explanation=[])
+    row.update(opened_at=T0, rule_hits=[], explanation=[], disposition="NEW")
 
     class Store:
         def _ensure(self):
@@ -114,6 +114,9 @@ def test_the_case_queue_reads_only_what_case_manager_stores():
             return [row]
 
         def stats(self):
+            return {}
+
+        def holds(self):
             return {}
 
     app = SimpleNamespace(started=0, store=Store)
@@ -251,7 +254,7 @@ def test_the_stream_sends_a_page_and_says_how_many_there_are():
 def test_the_queue_sends_a_page_and_says_how_many_are_open():
     import case as CASE
     rows = [dict(dict.fromkeys(CASE.CASE_COLUMNS, ""), case_id=f"c{i}", opened_at=T0,
-                 rule_hits=[], explanation=[]) for i in range(25)]
+                 rule_hits=[], explanation=[], disposition="NEW") for i in range(25)]
 
     class Store:
         def _ensure(self):
@@ -261,6 +264,9 @@ def test_the_queue_sends_a_page_and_says_how_many_are_open():
             return rows
 
         def stats(self):
+            return {}
+
+        def holds(self):
             return {}
 
     out = S.App.cases(SimpleNamespace(started=0, store=Store), limit=S.PAGE)

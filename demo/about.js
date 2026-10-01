@@ -57,7 +57,7 @@ const WALK = [
 
 const ABOUT = {
 ru: {
-  intro: "Система проверяет каждый P2P-перевод по картам в реальном времени: жёсткие правила и модель машинного обучения оценивают его за доли секунды, а подозрительные переводы уходят аналитику. Сама система ничего не блокирует — решает человек.",
+  intro: "Система проверяет каждый P2P-перевод по картам в реальном времени: жёсткие правила и модель машинного обучения оценивают его за доли секунды, а подозрительные переводы задерживаются до решения аналитика. Окончательно блокирует или отпускает перевод человек.",
   flow_title: "Из чего состоит система",
   legend: "Нажмите на карточку, чтобы прочитать о компоненте. Серые карточки — хранилища данных; синяя рамка — модель машинного обучения.",
   group: {in: "Приём перевода", engine: "Flink: решение за миллисекунды", out: "После решения"},
@@ -88,8 +88,8 @@ ru: {
       "Пять моделей градиентного бустинга на деревьях решений, их ответы усредняются.",
       "Работает внутри Flink как файл ONNX, без обращения к внешнему сервису.",
       "Подробно — в блоке «Модель» ниже."]],
-    decide: ["Решение", "Flink", "пропустить или на проверку", [
-      "Перевод идёт на проверку, если риск модели выше уровня тревоги или сработало обязательное правило регулятора.",
+    decide: ["Решение", "Flink", "пропустить или задержать", [
+      "Перевод задерживается, если риск модели выше уровня тревоги или сработало обязательное правило регулятора.",
       "Система сама ничего не блокирует: подозрительный перевод решает человек.",
       "Правила дают тревоге название — например, «мошенник по телефону»."]],
     out: ["Kafka: решения и тревоги", "Apache Kafka", "transactions.scored, fraud.alerts", [
@@ -107,7 +107,7 @@ ru: {
       "Кольцо дроп-счетов видно как много стрелок, сходящихся к одному счёту."]],
     cases: ["Разбор тревог", "Python", "case-manager", [
       "На каждую тревогу открывает дело с причинами словами — из вклада признаков в оценку модели.",
-      "Аналитик отмечает: мошенничество или ложная тревога. Эти отметки — единственные настоящие метки в системе, на них банк переобучал бы модель."]],
+      "Аналитик решает: заблокировать перевод (мошенничество) или отпустить (ложная тревога). Эти решения — единственные настоящие метки в системе, на них банк переобучал бы модель."]],
     dash: ["Мониторинг", "Grafana · демо", "что видит банк", [
       "Grafana показывает число переводов и тревог, типы, распределение риска, регионы.",
       "Это демо показывает те же решения вживую."]]
@@ -130,11 +130,11 @@ ru: {
     model: ["Модель", "Модель взвесила все 21 признак и оценила риск: {score}."],
     decide: ["Решение", "{decision}. {why}"],
     stored: ["Записан в базу", "Решение ушло в Kafka{alert} и записано в ClickHouse вместе со временем каждого этапа."],
-    analyst: ["У аналитика", "Открыто дело с причинами словами, а тревога стала связью в графе Neo4j. Аналитик отметит: мошенничество или ложная тревога."],
+    analyst: ["У аналитика", "Открыто дело с причинами словами, а тревога стала связью в графе Neo4j. Перевод задержан, пока аналитик его не заблокирует или не отпустит."],
     analyst_allow: ["Аналитик не нужен", "Тревоги нет, поэтому перевод прошёл, а аналитик его не увидит."]
   },
   fired: "Сработали: {list}.", none_fired: "Ни одно правило не сработало.",
-  why_must: "Сработало обязательное правило регулятора — такой перевод всегда идёт на проверку.",
+  why_must: "Сработало обязательное правило регулятора — такой перевод всегда задерживается для аналитика.",
   why_review: "Риск {score} выше уровня тревоги {cut}.",
   why_allow: "Риск {score} ниже уровня тревоги {cut}, и ни одно правило не требует проверки.",
   alert_too: ", а тревога — ещё и в очередь тревог",
@@ -178,7 +178,7 @@ ru: {
   rules_intro: "Правила — известные схемы мошенничества, записанные заранее. Решение принимает модель; два правила регулятор требует проверять всегда, остальные дают тревоге название или понятную аналитику причину.",
   rules_btn: "Список правил ({n})",
   r_rule: "Правило", r_checks: "Что проверяет", r_does: "Что делает",
-  role_must: "сам отправляет на проверку — требует регулятор", role_name: "даёт название: {type}", role_reason: "причина для аналитика",
+  role_must: "сам задерживает перевод — требует регулятор", role_name: "даёт название: {type}", role_reason: "причина для аналитика",
   rule_text: {
     NEW_PAYEE_HIGH_AMOUNT: "Первый перевод новому получателю: от {NEW_PAYEE_ABS_FLOOR} сум и больше чем в {NEW_PAYEE_AMOUNT_FACTOR} раза выше обычной суммы отправителя.",
     VELOCITY: "Больше {VELOCITY_MAX_COUNT} переводов за 10 минут.",
@@ -193,7 +193,7 @@ ru: {
   }
 },
 en: {
-  intro: "The system checks every P2P card transfer in real time: hard rules and a machine-learning model judge it in a fraction of a second, and suspicious transfers go to an analyst. The system blocks nothing by itself — a person decides.",
+  intro: "The system checks every P2P card transfer in real time: hard rules and a machine-learning model judge it in a fraction of a second, and suspicious transfers are held until an analyst decides. A person blocks or releases them.",
   flow_title: "What the system is made of",
   legend: "Click a card to read about the component. Grey cards hold data; the blue frame is the machine-learning model.",
   group: {in: "Taking the transfer in", engine: "Flink: the decision, in milliseconds", out: "After the decision"},
@@ -224,8 +224,8 @@ en: {
       "Five gradient-boosted decision-tree models, their answers averaged.",
       "It runs inside Flink as an ONNX file, with no call to an outside service.",
       "In full in the Model panel below."]],
-    decide: ["The decision", "Flink", "allow, or send to review", [
-      "A transfer goes to review when the model's risk is past the alert level or a rule the regulator requires fired.",
+    decide: ["The decision", "Flink", "allow, or hold", [
+      "A transfer is held when the model's risk is past the alert level or a rule the regulator requires fired.",
       "The system blocks nothing by itself: a person decides on a suspicious transfer.",
       "The rules give the alert its name — for example, 'phone scam'."]],
     out: ["Kafka: decisions and alerts", "Apache Kafka", "transactions.scored, fraud.alerts", [
@@ -243,7 +243,7 @@ en: {
       "A mule ring shows as many arrows converging on one account."]],
     cases: ["Case manager", "Python", "case-manager", [
       "Opens a case for every alert, with its reasons in words — from each feature's share of the model's score.",
-      "The analyst marks it fraud or a false alarm. Those marks are the only real labels the system gets; a bank would retrain the model on them."]],
+      "The analyst blocks the transfer (fraud) or releases it (false alarm). Those verdicts are the only real labels the system gets; a bank would retrain the model on them."]],
     dash: ["Monitoring", "Grafana · demo", "what the bank watches", [
       "Grafana shows transfer and alert counts, types, the risk distribution, regions.",
       "This demo shows the same decisions live."]]
@@ -266,11 +266,11 @@ en: {
     model: ["The model", "The model weighs all 21 features and scores the risk: {score}."],
     decide: ["The decision", "{decision}. {why}"],
     stored: ["Written down", "The decision went to Kafka{alert} and was written to ClickHouse with the time of every stage."],
-    analyst: ["With the analyst", "A case opened with its reasons in words, and the alert became a link in the Neo4j graph. The analyst will mark it fraud or a false alarm."],
+    analyst: ["With the analyst", "A case opened with its reasons in words, and the alert became a link in the Neo4j graph. The transfer is held until the analyst blocks or releases it."],
     analyst_allow: ["No analyst needed", "There is no alert, so the transfer went through and no analyst sees it."]
   },
   fired: "Fired: {list}.", none_fired: "No rule fired.",
-  why_must: "A rule the regulator requires fired, and such a transfer always goes to review.",
+  why_must: "A rule the regulator requires fired, and such a transfer is always held for the analyst.",
   why_review: "The risk {score} is past the alert level {cut}.",
   why_allow: "The risk {score} is under the alert level {cut}, and no rule asked for a review.",
   alert_too: ", and the alert to the alert queue as well",
@@ -314,7 +314,7 @@ en: {
   rules_intro: "The rules are known fraud patterns, written down in advance. The model makes the decision; the regulator requires two rules to be reviewed every time, and the others give the alert a name or the analyst a readable reason.",
   rules_btn: "List of rules ({n})",
   r_rule: "Rule", r_checks: "What it checks", r_does: "What it does",
-  role_must: "sends to review by itself — the regulator requires it", role_name: "names the alert: {type}", role_reason: "a reason for the analyst",
+  role_must: "holds the transfer by itself — the regulator requires it", role_name: "names the alert: {type}", role_reason: "a reason for the analyst",
   rule_text: {
     NEW_PAYEE_HIGH_AMOUNT: "A first transfer to a new payee: {NEW_PAYEE_ABS_FLOOR} UZS or more, and more than {NEW_PAYEE_AMOUNT_FACTOR} times the sender's usual amount.",
     VELOCITY: "More than {VELOCITY_MAX_COUNT} transfers in 10 minutes.",

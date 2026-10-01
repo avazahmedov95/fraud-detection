@@ -108,7 +108,8 @@ reported. Three changes, each measured before it was adopted:
   next 16%, and writes it to `thresholds.json`, which serve-prep ships beside
   `model.onnx` and the job reads (`stream-processor/config.py`). This run: cut at REVIEW = 0.1048, and
   **there is no BLOCK**: since 2026-09-19 the system never blocks on its own - the
-  owner's decision - and every alert goes to a person. The CEP-only fallback keeps
+  owner's decision - and every alert goes to a person, who since 2026-10-01 blocks
+  or releases the transfer the alert holds. The CEP-only fallback keeps
   its fixed cutoff, since an additive rule score is not a probability.
 
 *IBM AML, which the gates below use, was removed on 2026-09-19 - its accounts

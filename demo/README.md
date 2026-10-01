@@ -36,16 +36,18 @@ output, read where the rest of the project reads it:
 | Desk: stream | every decision since the container started, twenty at a time and more on request, filtered by either card, amount, time and decision - amount, route, risk, decision - with the counts and the median time from arrival to decision | `transactions.scored` | the background replay: `data-generator/kafka_producer.py`, unchanged, at 200x the dataset's own pacing, from a random row of the held-out part, into `transactions.raw` |
 | Desk: fraud cases | one real episode sent through the job - the sender's usual transfers, then the fraud - with what was caught and what was falsely flagged; its last alert opens by itself | `transactions.scored` | the episode's rows, into `transactions.raw` |
 | Desk: selected transfer | the model's risk against the alert level, its reasons, and the hard rules that fired, with what each one did: decide by itself (the two the regulator requires), name the alert, or neither | case-manager's `Explainer`; `ml/models/thresholds.json` | - |
-| Desk: analyst queue | the cases opened since the container started, in case-manager's own order, twenty at a time, filtered by either card, amount, time and alert type | `fraud.cases`, through case-manager's `CaseStore` | a verdict, through the same store (`resolved_by = demo`) |
+| Desk: held transfers | the transfers held since the container started and how long each has waited, in case-manager's own order, twenty at a time, filtered by either card, amount, time and alert type | `fraud.cases`, through case-manager's `CaseStore` | Block or Release - a verdict - through the same store (`resolved_by = demo`) |
 | About the project | the components, each opening its details; the path one real decision took, step by step with its own stage times; the model; its 21 features and the 10 rules - with the numbers each checks and what it does - each list behind a button | `transactions.scored` (the decision and its `stage_ms`); `ml/models/metrics.json`; the warehouse's stage averages | - |
 | Grafana | the provisioned overview dashboard, in a frame | ClickHouse, through Grafana | - |
-| Data & results, live | each stage's average time over the latest 1,000 decisions, adding up to the time from arrival to decision; the analyst's verdicts | `transactions_scored.stage_*_ms`; `fraud.cases` | - |
+| Data & results, live | each stage's average time over the latest 1,000 decisions, adding up to the time from arrival to decision; the transfers held now, the blocked with the money they kept, and the released with how long they waited | `transactions_scored.stage_*_ms`; `fraud.cases` | - |
 | Data & results, at training | one table dated by the model's export: each dataset, what it holds, our result on it and the published one | `ml/models/metrics.json` and `manifest.json` as `ml/` wrote them; `results.json` | - |
 
-The analyst does not release or block a payment. The system has already decided,
-and the prototype records the decision without enforcing it
-(`case-manager/README.md`), so the analyst's two buttons are a verdict - the only
-real label the system gets.
+A REVIEW holds the transfer until the analyst decides, and the two buttons are the
+decision: Block keeps the money with the sender, Release sends it on. Each is also
+a verdict - the only real label the system gets. With no payment switch to hold
+money in, the hold is the case's state (`case-manager/README.md`); the queue shows
+how long each transfer has been held, and Data & results how long the released
+ones waited.
 
 The training figures are not live, and the page says so: `ml/train.py` measured them
 once, on the part of the data the model never saw. The public-dataset figures are

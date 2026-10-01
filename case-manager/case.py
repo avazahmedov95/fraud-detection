@@ -2,8 +2,11 @@
 replacement. Column order matches infra/clickhouse/init/02-cases.sql."""
 
 from datetime import datetime, timezone
+from statistics import median
 
-#: NEW is the open state; the other two are terminal retrain labels.
+#: A case is a held transfer. NEW: still held; CONFIRMED_FRAUD blocks it, and the
+#: money stays with the payer; FALSE_POSITIVE releases it. Both verdicts are also
+#: the labels a retrain would use.
 DISPOSITIONS = ("NEW", "CONFIRMED_FRAUD", "FALSE_POSITIVE")
 
 #: Versions written when a case is OPENED - never wall clock, so a redelivered alert
@@ -87,3 +90,29 @@ def resolution_row(case: dict, disposition: str, by: str, at_epoch: float) -> li
     # alert re-inserting the open row can never win the merge.
     row[CASE_COLUMNS.index("version")] = int(at_epoch * 1000)
     return row
+
+
+def _seconds(dt):
+    """A stored DateTime as epoch seconds; the client returns it naive, in UTC."""
+    return (dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt).timestamp()
+
+
+def held_seconds(case: dict, now: float) -> float:
+    """How long the transfer was held: from the decision until the verdict, or until
+    `now` while nobody has decided."""
+    end = now if case["disposition"] == "NEW" else _seconds(case["resolved_at"])
+    return max(0.0, end - _seconds(case["opened_at"]))
+
+
+def hold_summary(cases, now) -> dict:
+    """Per disposition: how many, how much money, the median and the longest hold.
+    The released are honest customers kept waiting - what holding costs; the
+    blocked are the fraud money it kept."""
+    out = {}
+    for d in DISPOSITIONS:
+        group = [c for c in cases if c["disposition"] == d]
+        waits = [held_seconds(c, now) for c in group]
+        out[d] = {"n": len(group), "amount": sum(int(c["amount_uzs"]) for c in group),
+                  "median_s": median(waits) if waits else None,
+                  "max_s": max(waits) if waits else None}
+    return out

@@ -42,8 +42,9 @@ def score_and_decide(cep_score, ml_score, rule_hits):
 
 
 def decide(score: float, rule_hits, cep_only: bool = False) -> str:
-    """ALLOW or REVIEW - never BLOCK: every alert goes to a person. `cep_only`: the
-    score is the rule layer's because no model is loaded."""
+    """ALLOW or REVIEW - never BLOCK: a REVIEW holds the transfer until a person
+    blocks or releases it. `cep_only`: the score is the rule layer's because no
+    model is loaded."""
     mandatory = any(r in C.MANDATORY_REVIEW_RULES for r in rule_hits)
     if score >= review_cutoff(cep_only) or mandatory:
         return "REVIEW"

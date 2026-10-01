@@ -62,6 +62,10 @@ class FakeClient:
                 st = r[CASE.CASE_COLUMNS.index("explanation_status")]
                 counts[st] = counts.get(st, 0) + 1
             return FakeResult(list(counts.items()))
+        elif "SELECT disposition, opened_at, resolved_at, amount_uzs" in q:
+            cols = [CASE.CASE_COLUMNS.index(c) for c in
+                    ("disposition", "opened_at", "resolved_at", "amount_uzs")]
+            return FakeResult([[r[i] for i in cols] for r in rows])
         elif "max(opened_at)" in q:
             opened = [r[CASE.CASE_COLUMNS.index("opened_at")] for r in rows]
             return FakeResult([[max(opened)]] if opened else [])
@@ -223,3 +227,14 @@ def test_stats_report_why_explanations_are_missing(store):
     s = store.stats()
     assert s["_explanation"] == {"NO_FEATURES": 1}
     assert s["_last_opened"] is not None
+
+
+def test_holds_measure_the_wait_from_decision_to_verdict(store):
+    store.add(ALERT)
+    store.flush()
+    store.resolve("t_1", "FALSE_POSITIVE", "analyst.k", at_epoch=ALERT["scored_at_job"] + 240)
+    h = store.holds(now=ALERT["scored_at_job"] + 999)
+    assert "FINAL" in store._fake.queries[-1]
+    assert h["FALSE_POSITIVE"]["n"] == 1
+    assert h["FALSE_POSITIVE"]["median_s"] == pytest.approx(240)
+    assert h["NEW"]["n"] == 0

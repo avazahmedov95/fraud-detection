@@ -10,7 +10,7 @@ OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
 # Every task names what runs it, in brackets; the databases have a lane of their
 # own, read and written along dotted arrows. No counts: they change.
 
-POOL = dict(x=160, y=60, w=2880)
+POOL = dict(x=160, y=60, w=2980)
 LANES = [("Lane_channel", "Payment channel", 160),
          ("Lane_flink", "Apache Flink job", 360),
          ("Lane_sink", "Sink writer", 260),
@@ -43,17 +43,18 @@ NODES = [
     ("Decision", "businessRuleTask",
      "Decide from the model score and the rule results\n[Python in Flink]",
      1, (1810, 350, 180, 100), None),
-    ("Decide", "exclusiveGateway", "Send to review?",
+    ("Decide", "exclusiveGateway", "Hold the transfer?",
      1, (2030, 375, 50, 50), (1995, 347, 120, 20)),
     ("AllowOut", "sendTask", "Publish the decision ALLOW\n[Kafka: transactions.scored]",
      1, (2130, 350, 180, 100), None),
-    ("AlertOut", "sendTask", "Publish REVIEW and the alert\n[Kafka: transactions.scored, fraud.alerts]",
+    ("AlertOut", "sendTask",
+     "Hold the transfer, publish the alert\n[Kafka: transactions.scored, fraud.alerts]",
      1, (2130, 465, 180, 100), None),
     ("Fork", "parallelGateway", "", 2, (2195, 635, 50, 50), None),
     ("Merge", "exclusiveGateway", "", 2, (2335, 635, 50, 50), None),
     ("Store", "serviceTask", "Store the decision and its audit record\n[Python → ClickHouse]",
      2, (2425, 610, 180, 100), None),
-    ("IsReview", "exclusiveGateway", "Is the decision REVIEW?",
+    ("IsReview", "exclusiveGateway", "Is the transfer held?",
      2, (2645, 635, 50, 50), (2605, 598, 130, 28)),
     ("Allowed", "endEvent", "Transfer allowed and recorded",
      2, (2745, 642, 36, 36), (2789, 646, 130, 28)),
@@ -64,11 +65,13 @@ NODES = [
      4, (2130, 1005, 180, 100), None),
     ("Opened", "intermediateThrowEvent", "Case opened",
      4, (2350, 1037, 36, 36), (2325, 1077, 86, 20)),
-    ("Review", "userTask", "Review the case\n[analyst queue: demo page or CLI]",
+    ("Review", "userTask", "Review the held transfer\n[analyst queue: demo page or CLI]",
      5, (2415, 1155, 180, 100), None),
-    ("Verdict", "userTask", "Mark the case fraud or false alarm\n[saved to ClickHouse]",
+    ("Verdict", "userTask", "Decide: block it or release it\n[saved to ClickHouse]",
      5, (2635, 1155, 180, 100), None),
-    ("Closed", "endEvent", "Case closed", 5, (2855, 1187, 36, 36), (2830, 1227, 86, 20)),
+    ("Fraud", "exclusiveGateway", "Fraud?", 5, (2855, 1180, 50, 50), (2815, 1146, 60, 20)),
+    ("Blocked", "endEvent", "Transfer blocked", 5, (2955, 1147, 36, 36), (2999, 1155, 110, 20)),
+    ("Released", "endEvent", "Transfer released", 5, (2955, 1227, 36, 36), (2999, 1235, 110, 20)),
 ]
 
 FLOWS = [
@@ -102,10 +105,14 @@ FLOWS = [
     ("F_case", "Case", "Opened", "", [(2310, 1055), (2350, 1055)], None),
     ("F_opened", "Opened", "Review", "", [(2386, 1055), (2505, 1055), (2505, 1155)], None),
     ("F_review", "Review", "Verdict", "", [(2595, 1205), (2635, 1205)], None),
-    ("F_verdict", "Verdict", "Closed", "", [(2815, 1205), (2855, 1205)], None),
+    ("F_verdict", "Verdict", "Fraud", "", [(2815, 1205), (2855, 1205)], None),
+    ("F_block", "Fraud", "Blocked", "Yes", [(2880, 1180), (2880, 1165), (2955, 1165)],
+     (2888, 1146, 20, 14)),
+    ("F_release", "Fraud", "Released", "No", [(2880, 1230), (2880, 1245), (2955, 1245)],
+     (2888, 1248, 18, 14)),
 ]
 #: The "No" of each question is its default flow.
-DEFAULTS = {"Decide": "F_allow", "IsReview": "F_allowed"}
+DEFAULTS = {"Decide": "F_allow", "IsReview": "F_allowed", "Fraud": "F_release"}
 
 STORES = [
     # id, name, (x, y, w, h), label's box
@@ -128,8 +135,8 @@ DATA = [
 
 NOTES = [
     # id, text, (x, y, w, h), the task it explains, waypoints
-    ("Note_decision", "REVIEW when the model score is at or above the alert cut-off, "
-                      "or a mandatory rule fired; otherwise ALLOW",
+    ("Note_decision", "Hold (REVIEW) when the model score is at or above the alert "
+                      "cut-off, or a mandatory rule fired; otherwise allow",
      (1785, 232, 230, 58), "Decision", [(1900, 350), (1900, 290)]),
 ]
 
@@ -274,14 +281,14 @@ MERMAID = """sequenceDiagram
     Redis-->>Flink: counts for the hour, day and week (2.07 ms)
     Flink->>Flink: build 21 features, run the 10 hard rules (0.90 ms)
     Flink->>Flink: score with the model (0.46 ms)
-    Flink->>Flink: decide: allow or review (0.03 ms)
+    Flink->>Flink: decide: allow or hold (0.03 ms)
     Flink->>Kafka: transactions.scored, and fraud.alerts when it is an alert (97 ms in all)
     Kafka->>Sink: every decision
     Sink->>DB: the decision, its audit record, and alerts into the graph
     Kafka->>Case: fraud.alerts
     Case->>DB: open a case, with its reason in words
-    Case->>Analyst: the case appears in the queue
-    Analyst->>DB: fraud, or false alarm
+    Case->>Analyst: the held transfer appears in the queue
+    Analyst->>DB: block it, or release it
 """
 path = os.path.join(OUT, "pipeline_sequence.mmd")
 with open(path, "w", encoding="utf-8", newline="\n") as fh:
@@ -310,14 +317,14 @@ MESSAGES = [
     ("Redis", "Flink engine", "counts for the hour, day and week", "2.07 ms", True),
     ("Flink engine", "Flink engine", "build 21 features, run the 10 hard rules", "0.90 ms", False),
     ("Flink engine", "Flink engine", "score with the model", "0.46 ms", False),
-    ("Flink engine", "Flink engine", "decide: allow, or send to review", "0.03 ms", False),
+    ("Flink engine", "Flink engine", "decide: allow, or hold for the analyst", "0.03 ms", False),
     ("Flink engine", "Kafka", "scored, and an alert when it is one", "97 ms in all", False),
     ("Kafka", "Sink writer", "every decision", "", False),
     ("Sink writer", "ClickHouse\nNeo4j", "the decision, its audit record, the graph", "", False),
     ("Kafka", "Case manager", "fraud.alerts", "", False),
     ("Case manager", "ClickHouse\nNeo4j", "a case, with its reason in words", "", False),
-    ("Case manager", "Analyst", "the case appears in the queue", "", False),
-    ("Analyst", "ClickHouse\nNeo4j", "fraud, or false alarm", "", True),
+    ("Case manager", "Analyst", "the held transfer appears in the queue", "", False),
+    ("Analyst", "ClickHouse\nNeo4j", "block it, or release it", "", True),
 ]
 
 fig, ax = plt.subplots(figsize=(16, 10))
@@ -368,8 +375,8 @@ for src, dst, text, when, dashed in MESSAGES:
             ax.text(mid, y - 2.4, when, ha="center", va="bottom", fontsize=8.5,
                     color=ACCENT, fontweight="bold", family=FAMILY, zorder=4)
 
-ax.text(0, 1.5, "Nothing is blocked automatically: an alert only moves the transfer into a "
-                "person's queue. 999 of 1000 transfers stop at the warehouse.",
+ax.text(0, 1.5, "An alert holds the transfer until a person blocks or releases it; nothing is "
+                "blocked automatically. 999 of 1000 transfers stop at the warehouse.",
         fontsize=9, color=MUTED, family=FAMILY, va="bottom")
 
 for ext in ("png", "svg"):

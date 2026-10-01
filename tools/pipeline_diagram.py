@@ -84,7 +84,7 @@ fea = box(79, 61, 18, 12, "Sender's history", "this sender's state,\nkept in Fli
 rul = box(100, 61, 18, 12, "Features, rules", "21 features,\n10 hard rules", "0.90 ms")
 mod = box(121, 61, 18, 12, "Model", "gradient boosting,\nserved as ONNX", "0.46 ms",
           fill=ACCENT_SOFT, edge=ACCENT)
-dcd = box(142, 61, 16, 12, "Decision", "allow, or\nsend to review", "0.03 ms")
+dcd = box(142, 61, 16, 12, "Decision", "allow, or hold\nfor the analyst", "0.03 ms")
 
 arrow(right(app), left(raw), label="1.7 ms")
 arrow(right(raw), (58, 67), label="92 ms")
@@ -121,7 +121,7 @@ arrow(left(chs), right(dash), dashed=True, color=MUTED, label="read only")
 cas = box(136, 4, 24, 12, "Case manager", "opens a case per alert,\nwith its reason in words")
 arrow(bottom(sco), top(cas), color=ALERT, label="fraud.alerts", label_dy=0.4)
 
-ana = box(104, 4, 24, 12, "Analyst", "marks fraud or false alarm;\nthe verdict goes back\ninto ClickHouse",
+ana = box(104, 4, 24, 12, "Analyst", "blocks or releases the\nheld transfer; the verdict\ngoes back into ClickHouse",
           fill=ALERT_SOFT, edge=ALERT, sub_size=8.5)
 arrow(left(cas), right(ana), color=ALERT)
 
@@ -136,7 +136,7 @@ trn = box(0, 42, 32, 18, "Training (ml/)", "replays the same feature code,\nfits
 arrow(right(trn), (56, 62), dashed=True, color=MUTED, label="model.onnx", label_dy=0.8)
 
 ax.text(0, 1.2, "Times are averages over 1,000 transfers at 10 a second and add up to 97 ms; 99% of decisions "
-                "are inside 0.22 s against a 0.3 s target. Nothing is blocked automatically: every alert goes to a person.",
+                "are inside 0.22 s against a 0.3 s target. An alert holds the transfer until a person blocks or releases it.",
         fontsize=9, color=MUTED, family=FAMILY, va="bottom")
 
 for ext in ("png", "svg"):

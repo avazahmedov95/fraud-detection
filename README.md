@@ -82,7 +82,7 @@ python -m pytest stream-processor -q     # 190
 python -m pytest data-generator   -q     #  26
 python -m pytest sink-writer      -q     #  27
 python -m pytest validation       -q     #  25
-python -m pytest case-manager     -q     #  40
+python -m pytest case-manager     -q     #  43
 python -m pytest ml               -q     #  9
 python -m pytest demo             -q     #  26
 ```

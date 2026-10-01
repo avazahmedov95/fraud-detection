@@ -47,6 +47,7 @@ MODELS = os.path.join(ROOT, "ml", "models")
 # Imported from these: kafka_producer and integrity, store, case and explain. None
 # of them imports `config`, the one module name both directories hold.
 sys.path[:0] = [GEN, CM]
+import case as CASE           # noqa: E402
 import explain as EX          # noqa: E402
 import integrity              # noqa: E402
 import kafka_producer as KP   # noqa: E402
@@ -632,7 +633,8 @@ class App:
         except Exception as exc:                       # noqa: BLE001 - shown on the page
             self._warehouse = None
             timing = {"error": str(exc)[:300]}
-        return {"timing": timing, "verdicts": self.cases()["stats"]}
+        queue = self.cases()
+        return {"timing": timing, "verdicts": queue["stats"], "holds": queue["holds"]}
 
     def cases(self, new_only=False, limit=PAGE, flt=None):
         """case-manager's queue, in its own order: the first `limit` cases that pass
@@ -645,9 +647,10 @@ class App:
             # would show as "no new alerts".
             if not s._ensure():
                 raise RuntimeError("the case store cannot reach ClickHouse; see docker logs demo")
-            items, stats = s.open_cases(limit=500), s.stats()
+            items, stats, holds = s.open_cases(limit=500), s.stats(), s.holds()
         except Exception as exc:                       # noqa: BLE001 - shown on the page
-            return {"error": str(exc)[:300], "cases": [], "total": 0, "stats": {}}
+            return {"error": str(exc)[:300], "cases": [], "total": 0, "stats": {}, "holds": {}}
+        now = time.time()
         if new_only:
             items = [c for c in items if _as_epoch(c["opened_at"]) >= self.started]
         if flt:
@@ -660,13 +663,16 @@ class App:
                            "from": mask(c["sender_card"]), "to": mask(c["receiver_card"]),
                            "decision": c["decision"], "type": c["predicted_type"],
                            "score": c["final_score"], "rules": list(c["rule_hits"] or []),
+                           "held_s": round(CASE.held_seconds(c, now)),
                            "why": {"status": c.get("explanation_status") or "",
                                    "items": split_phrases(c.get("explanation") or [])}}
                           for c in items],
                 "stats": {k: v for k, v in stats.items()
-                          if k in ("NEW", "CONFIRMED_FRAUD", "FALSE_POSITIVE", "_precision")}}
+                          if k in ("NEW", "CONFIRMED_FRAUD", "FALSE_POSITIVE", "_precision")},
+                "holds": holds}
 
     def resolve(self, case_id, disposition):
+        """Block the held transfer (CONFIRMED_FRAUD) or release it (FALSE_POSITIVE)."""
         if disposition not in ("CONFIRMED_FRAUD", "FALSE_POSITIVE"):
             raise ValueError(f"unknown disposition {disposition!r}")
         return {"ok": bool(self.store().resolve(case_id, disposition, "demo"))}
