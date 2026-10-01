@@ -713,6 +713,7 @@ python experiments/models.py --cache models_matrix.npz --small        --tabpfn-m
 python experiments/models.py --cache models_matrix.npz --chunks       --tabpfn-model <checkpoint>                                # TabPFN on all of it, a piece at a time
 python experiments/models.py --cache models_matrix.npz --chunks --paired --tabpfn-model <checkpoint>                              # the same, five paired fits
 python experiments/second_opinion.py --cache models_matrix.npz --tabpfn-model <checkpoint>                                        # TabPFN after the served model
+python experiments/second_opinion.py --cache models_matrix.npz --tabpfn-model <checkpoint> --test                                 # its band, on the held-out slice
 ```
 
 The first run builds the cache from `train.py`'s own matrix; the rest read it.
@@ -902,11 +903,20 @@ extra fraud at three false alarms or more apiece.
 the context on every call, **0.19 s** with it cached, after 24 s to cache it once.
 Cached, either use fits a CPU.
 
-**What this does not show.** Each band's threshold was chosen and read on the same
-rows, and the first band holds 11 frauds - one more or less moves its result by a
-tenth. The band result is a candidate, to be confirmed on the held-out slice before
-anything is built; and building it would change the scoring job, which attaches the
-feature vector to alerts only. Nothing is adopted.
+**Read once on the held-out slice** (`--test`). Each band's threshold above was
+chosen and read on the same rows, so the first band was fixed there before the test
+slice was opened - served score from 0.0419 to the cut-off, TabPFN alerting at
+0.8674 (its context holds all the fraud, so its scores run high) - and the rule
+written down: TabPFN must find more fraud in the band than a cut-off lowered to
+raise as many alerts. On the 100,000 held-out rows the band holds 118 transfers
+(0.12%) and 18 of the frauds the served model misses. TabPFN raises 27 alerts there,
+**11 fraud and 16 false**; the lowered cut-off would catch **4**, and lowering it to
+the band's floor would catch all 18 at 100 false alarms. Recall on the slice goes
+from 67.0% to **73.3%**, alerts from 186 to 213.
+
+One held-out read, and small numbers: 11 against 4 out of 18. Building it would
+change the scoring job, which attaches the feature vector to alerts only. Nothing
+is adopted.
 
 ## Capability ablation
 

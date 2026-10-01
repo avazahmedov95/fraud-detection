@@ -305,8 +305,9 @@ this data, or does something newer beat it?
   paired fits) - at 590 ms a row against about 0.2 ms for the served model
   (`ml/README.md`, Other model families). **Does not support** a model for the
   decision before settlement: it ranks a little better and answers three thousand
-  times slower. As a second look at the transfers just under the cut-off it is a
-  candidate, not yet confirmed on held-out data.
+  times slower. As a second look at the transfers just under the cut-off it found,
+  on the held-out slice, 11 of the 18 frauds there at 16 false alarms, where a
+  lowered cut-off finds 4 - one read, and not built.
 - **"A Closer Look at Deep Learning Methods on Tabular Datasets"**
   ([arXiv:2407.00956](https://arxiv.org/abs/2407.00956), reached through a
   LinkedIn post) - a benchmark over 300+ tabular datasets in which boosted trees

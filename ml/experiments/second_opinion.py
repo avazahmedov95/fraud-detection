@@ -7,6 +7,7 @@ cutoff rows; the test slice stays for the decision itself.
    TabPFN worth asking - better than simply lowering the cut-off?
 3. What one answer costs on this machine.
 
+With --test, the band the cutoff rows chose is read once on the held-out slice.
 Read-only like models.py: it fits its own models and writes nothing the system
 serves.
 
@@ -28,6 +29,8 @@ import models as M  # noqa: E402
 PIECES = 5
 #: Bands under the cut-off, as the highest-scored rows below it.
 BANDS = (100, 250, 500, 1000, 2000)
+#: The band the cutoff rows chose, for the held-out read (--test).
+BAND = 100
 
 
 def queue(y, served, tab, log_amount):
@@ -82,18 +85,51 @@ def cost(Xfit, yfit, X, tabpfn_model):
               f"after {fitted:.0f} s to take the context")
 
 
+def held_out(Xfit, yfit, Xva, yva, Xte, yte, served_va, served_te, cut, tabpfn_model):
+    """The first band, read where nothing was chosen. The band's floor and TabPFN's
+    threshold in it are fixed on the cutoff rows first; the held-out slice only
+    answers whether TabPFN still finds more there than a lowered cut-off would."""
+    below = np.flatnonzero(served_va < cut)
+    band_va = below[np.argsort(-served_va[below])][:BAND]
+    floor = served_va[band_va[-1]]
+    band_te = np.flatnonzero((served_te >= floor) & (served_te < cut))
+    band_te = band_te[np.argsort(-served_te[band_te])]
+    *_, (_, tab, _) = M._in_pieces(Xfit, yfit, np.concatenate([Xva[band_va], Xte[band_te]]),
+                                   M._pieces(yfit)[:PIECES], tabpfn_model)
+    t = M._cut(yva[band_va], tab[:BAND])
+    print(f"fixed on the cutoff rows: the band from {floor:.4f} to the cut-off {cut:.4f}, "
+          f"TabPFN alerting at {t:.4f}\n")
+    y, flag = yte[band_te], tab[BAND:] >= t
+    m, hit = int(flag.sum()), int(y[flag].sum())
+    raised, caught, total = int((served_te >= cut).sum()), int(yte[served_te >= cut].sum()), int(yte.sum())
+    print(f"held-out slice: {len(yte):,} rows, {total} fraud; the served model raises "
+          f"{raised} alerts and catches {caught}")
+    print(f"the band holds {len(band_te)} rows ({len(band_te) / len(yte):.2%}), "
+          f"{int(y.sum())} of them fraud")
+    print(f"TabPFN raises {m} alerts there: {hit} fraud, {m - hit} false")
+    print(f"a cut-off lowered to raise {m} alerts would catch {int(y[:m].sum())}")
+    print(f"recall {caught / total:.1%} -> {(caught + hit) / total:.1%}, "
+          f"alerts {raised} -> {raised + m}")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--cache", help="npz of the deployed matrix (X, y, names)")
     ap.add_argument("--tabpfn-model", dest="tabpfn_model", default=None,
                     help="the TabPFN checkpoint, as for models.py")
+    ap.add_argument("--test", action="store_true",
+                    help="read the band the cutoff rows chose on the held-out slice")
     args = ap.parse_args()
 
-    Xfit, yfit, Xva, yva, _, _ = M._slices(args.cache)
+    Xfit, yfit, Xva, yva, Xte, yte = M._slices(args.cache)
     spw = M.T.class_weight(int(yfit.sum()), int((yfit == 0).sum()))
-    served = M._committee_score(M._committee(Xfit, yfit, spw), Xva)
+    members = M._committee(Xfit, yfit, spw)
+    served = M._committee_score(members, Xva)
     with open(os.path.join(M._PKG, "models", "thresholds.json"), encoding="utf-8") as fh:
         cut = json.load(fh)["review"]
+    if args.test:
+        return held_out(Xfit, yfit, Xva, yva, Xte, yte, served,
+                        M._committee_score(members, Xte), cut, args.tabpfn_model)
     alert = np.flatnonzero(served >= cut)
     below = np.flatnonzero(served < cut)
     near = below[np.argsort(-served[below])][:max(BANDS)]
