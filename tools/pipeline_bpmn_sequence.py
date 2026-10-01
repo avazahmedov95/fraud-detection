@@ -10,7 +10,7 @@ OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
 # Every task names what runs it, in brackets; the databases have a lane of their
 # own, read and written along dotted arrows. No counts: they change.
 
-POOL = dict(x=160, y=60, w=2660)
+POOL = dict(x=160, y=60, w=2880)
 LANES = [("Lane_channel", "Payment channel", 160),
          ("Lane_flink", "Apache Flink job", 360),
          ("Lane_sink", "Sink writer", 260),
@@ -40,33 +40,35 @@ NODES = [
     ("Model", "serviceTask", "Score the risk\n[LightGBM via ONNX Runtime]",
      1, (1500, 465, 180, 100), None),
     ("Join", "parallelGateway", "", 1, (1720, 375, 50, 50), None),
-    ("Decide", "exclusiveGateway",
-     "Model score at or above the alert cut-off, or a mandatory rule fired?",
-     1, (1810, 375, 50, 50), (1765, 312, 140, 56)),
+    ("Decision", "businessRuleTask",
+     "Decide from the model score and the rule results\n[Python in Flink]",
+     1, (1810, 350, 180, 100), None),
+    ("Decide", "exclusiveGateway", "Send to review?",
+     1, (2030, 375, 50, 50), (1995, 347, 120, 20)),
     ("AllowOut", "sendTask", "Publish the decision ALLOW\n[Kafka: transactions.scored]",
-     1, (1910, 350, 180, 100), None),
+     1, (2130, 350, 180, 100), None),
     ("AlertOut", "sendTask", "Publish REVIEW and the alert\n[Kafka: transactions.scored, fraud.alerts]",
-     1, (1910, 465, 180, 100), None),
-    ("Fork", "parallelGateway", "", 2, (1975, 635, 50, 50), None),
-    ("Merge", "exclusiveGateway", "", 2, (2115, 635, 50, 50), None),
+     1, (2130, 465, 180, 100), None),
+    ("Fork", "parallelGateway", "", 2, (2195, 635, 50, 50), None),
+    ("Merge", "exclusiveGateway", "", 2, (2335, 635, 50, 50), None),
     ("Store", "serviceTask", "Store the decision and its audit record\n[Python → ClickHouse]",
-     2, (2205, 610, 180, 100), None),
+     2, (2425, 610, 180, 100), None),
     ("IsReview", "exclusiveGateway", "Is the decision REVIEW?",
-     2, (2425, 635, 50, 50), (2385, 598, 130, 28)),
+     2, (2645, 635, 50, 50), (2605, 598, 130, 28)),
     ("Allowed", "endEvent", "Transfer allowed and recorded",
-     2, (2525, 642, 36, 36), (2569, 646, 130, 28)),
+     2, (2745, 642, 36, 36), (2789, 646, 130, 28)),
     ("Graph", "serviceTask", "Add the alert to the graph\n[Python → Neo4j]",
-     2, (2505, 720, 180, 100), None),
-    ("AlertDone", "endEvent", "Alert recorded", 2, (2725, 752, 36, 36), (2700, 792, 90, 20)),
+     2, (2725, 720, 180, 100), None),
+    ("AlertDone", "endEvent", "Alert recorded", 2, (2945, 752, 36, 36), (2920, 792, 90, 20)),
     ("Case", "serviceTask", "Open a case with its reasons\n[Python service]",
-     4, (1910, 1005, 180, 100), None),
+     4, (2130, 1005, 180, 100), None),
     ("Opened", "intermediateThrowEvent", "Case opened",
-     4, (2130, 1037, 36, 36), (2105, 1077, 86, 20)),
+     4, (2350, 1037, 36, 36), (2325, 1077, 86, 20)),
     ("Review", "userTask", "Review the case\n[analyst queue: demo page or CLI]",
-     5, (2195, 1155, 180, 100), None),
-    ("Verdict", "userTask", "Mark the case fraud or false alarm\n[saved to ClickHouse]",
      5, (2415, 1155, 180, 100), None),
-    ("Closed", "endEvent", "Case closed", 5, (2635, 1187, 36, 36), (2610, 1227, 86, 20)),
+    ("Verdict", "userTask", "Mark the case fraud or false alarm\n[saved to ClickHouse]",
+     5, (2635, 1155, 180, 100), None),
+    ("Closed", "endEvent", "Case closed", 5, (2855, 1187, 36, 36), (2830, 1227, 86, 20)),
 ]
 
 FLOWS = [
@@ -82,24 +84,25 @@ FLOWS = [
     ("F_to_model", "Split", "Model", "", [(1435, 425), (1435, 515), (1500, 515)], None),
     ("F_rules", "Rules", "Join", "", [(1680, 285), (1745, 285), (1745, 375)], None),
     ("F_model", "Model", "Join", "", [(1680, 515), (1745, 515), (1745, 425)], None),
-    ("F_join", "Join", "Decide", "", [(1770, 400), (1810, 400)], None),
-    ("F_allow", "Decide", "AllowOut", "No", [(1860, 400), (1910, 400)], (1866, 381, 18, 14)),
-    ("F_alert", "Decide", "AlertOut", "Yes", [(1835, 425), (1835, 515), (1910, 515)],
-     (1842, 452, 20, 14)),
-    ("F_allow_out", "AllowOut", "Merge", "", [(2090, 400), (2140, 400), (2140, 635)], None),
-    ("F_alert_out", "AlertOut", "Fork", "", [(2000, 565), (2000, 635)], None),
-    ("F_to_merge", "Fork", "Merge", "", [(2025, 660), (2115, 660)], None),
-    ("F_to_case", "Fork", "Case", "", [(2000, 685), (2000, 1005)], None),
-    ("F_merge", "Merge", "Store", "", [(2165, 660), (2205, 660)], None),
-    ("F_store", "Store", "IsReview", "", [(2385, 660), (2425, 660)], None),
-    ("F_allowed", "IsReview", "Allowed", "No", [(2475, 660), (2525, 660)], (2481, 641, 18, 14)),
-    ("F_to_graph", "IsReview", "Graph", "Yes", [(2450, 685), (2450, 770), (2505, 770)],
-     (2457, 712, 20, 14)),
-    ("F_graph", "Graph", "AlertDone", "", [(2685, 770), (2725, 770)], None),
-    ("F_case", "Case", "Opened", "", [(2090, 1055), (2130, 1055)], None),
-    ("F_opened", "Opened", "Review", "", [(2166, 1055), (2285, 1055), (2285, 1155)], None),
-    ("F_review", "Review", "Verdict", "", [(2375, 1205), (2415, 1205)], None),
-    ("F_verdict", "Verdict", "Closed", "", [(2595, 1205), (2635, 1205)], None),
+    ("F_join", "Join", "Decision", "", [(1770, 400), (1810, 400)], None),
+    ("F_decided", "Decision", "Decide", "", [(1990, 400), (2030, 400)], None),
+    ("F_allow", "Decide", "AllowOut", "No", [(2080, 400), (2130, 400)], (2086, 381, 18, 14)),
+    ("F_alert", "Decide", "AlertOut", "Yes", [(2055, 425), (2055, 515), (2130, 515)],
+     (2062, 452, 20, 14)),
+    ("F_allow_out", "AllowOut", "Merge", "", [(2310, 400), (2360, 400), (2360, 635)], None),
+    ("F_alert_out", "AlertOut", "Fork", "", [(2220, 565), (2220, 635)], None),
+    ("F_to_merge", "Fork", "Merge", "", [(2245, 660), (2335, 660)], None),
+    ("F_to_case", "Fork", "Case", "", [(2220, 685), (2220, 1005)], None),
+    ("F_merge", "Merge", "Store", "", [(2385, 660), (2425, 660)], None),
+    ("F_store", "Store", "IsReview", "", [(2605, 660), (2645, 660)], None),
+    ("F_allowed", "IsReview", "Allowed", "No", [(2695, 660), (2745, 660)], (2701, 641, 18, 14)),
+    ("F_to_graph", "IsReview", "Graph", "Yes", [(2670, 685), (2670, 770), (2725, 770)],
+     (2677, 712, 20, 14)),
+    ("F_graph", "Graph", "AlertDone", "", [(2905, 770), (2945, 770)], None),
+    ("F_case", "Case", "Opened", "", [(2310, 1055), (2350, 1055)], None),
+    ("F_opened", "Opened", "Review", "", [(2386, 1055), (2505, 1055), (2505, 1155)], None),
+    ("F_review", "Review", "Verdict", "", [(2595, 1205), (2635, 1205)], None),
+    ("F_verdict", "Verdict", "Closed", "", [(2815, 1205), (2855, 1205)], None),
 ]
 #: The "No" of each question is its default flow.
 DEFAULTS = {"Decide": "F_allow", "IsReview": "F_allowed"}
@@ -107,23 +110,31 @@ DEFAULTS = {"Decide": "F_allow", "IsReview": "F_allowed"}
 STORES = [
     # id, name, (x, y, w, h), label's box
     ("Redis", "Redis: receivers' recent payers", (1035, 875, 50, 50), (985, 930, 150, 28)),
-    ("Cases", "ClickHouse: cases and verdicts", (2040, 875, 50, 50), (2096, 886, 120, 28)),
-    ("Warehouse", "ClickHouse: decisions, audit log", (2270, 875, 50, 50),
-     (2235, 930, 120, 28)),
-    ("GraphDb", "Neo4j: alert graph", (2570, 875, 50, 50), (2540, 930, 110, 20)),
+    ("Cases", "ClickHouse: cases and verdicts", (2260, 875, 50, 50), (2316, 886, 120, 28)),
+    ("Warehouse", "ClickHouse: decisions, audit log", (2490, 875, 50, 50),
+     (2455, 930, 120, 28)),
+    ("GraphDb", "Neo4j: alert graph", (2790, 875, 50, 50), (2760, 930, 110, 20)),
 ]
 
 DATA = [
     # id, task, store, "in" (the task reads) or "out" (the task writes), waypoints
     ("D_redis_read", "Receiver", "Redis", "in", [(1050, 875), (1050, 450)]),
     ("D_redis_write", "Receiver", "Redis", "out", [(1070, 450), (1070, 875)]),
-    ("D_store", "Store", "Warehouse", "out", [(2295, 710), (2295, 875)]),
-    ("D_graph", "Graph", "GraphDb", "out", [(2595, 820), (2595, 875)]),
-    ("D_case", "Case", "Cases", "out", [(2065, 1005), (2065, 925)]),
-    ("D_verdict", "Verdict", "Cases", "out", [(2505, 1155), (2085, 925)]),
+    ("D_store", "Store", "Warehouse", "out", [(2515, 710), (2515, 875)]),
+    ("D_graph", "Graph", "GraphDb", "out", [(2815, 820), (2815, 875)]),
+    ("D_case", "Case", "Cases", "out", [(2285, 1005), (2285, 925)]),
+    ("D_verdict", "Verdict", "Cases", "out", [(2725, 1155), (2305, 925)]),
 ]
 
-BOX = {n[0]: n[4] for n in NODES} | {s[0]: s[2] for s in STORES}
+NOTES = [
+    # id, text, (x, y, w, h), the task it explains, waypoints
+    ("Note_decision", "REVIEW when the model score is at or above the alert cut-off, "
+                      "or a mandatory rule fired; otherwise ALLOW",
+     (1785, 232, 230, 58), "Decision", [(1900, 350), (1900, 290)]),
+]
+
+BOX = ({n[0]: n[4] for n in NODES} | {s[0]: s[2] for s in STORES}
+       | {n[0]: n[2] for n in NOTES})
 
 
 def on_border(box, point):
@@ -139,6 +150,8 @@ for fid, src, tgt, _, points, _ in FLOWS:
 for did, task, store, way, points in DATA:
     src, tgt = (store, task) if way == "in" else (task, store)
     assert on_border(BOX[src], points[0]) and on_border(BOX[tgt], points[-1]), did
+for nid, _, _, task, points in NOTES:
+    assert on_border(BOX[task], points[0]) and on_border(BOX[nid], points[-1]), nid
 
 
 def esc(s):
@@ -193,6 +206,11 @@ for sid, sname, *_ in STORES:
 for fid, src, tgt, label, *_ in FLOWS:
     nm = f' name="{esc(label)}"' if label else ""
     parts.append(f'    <bpmn:sequenceFlow id="{fid}"{nm} sourceRef="{src}" targetRef="{tgt}" />')
+for nid, note, _, task, _ in NOTES:
+    parts += [f'    <bpmn:textAnnotation id="{nid}">',
+              f'      <bpmn:text>{esc(note)}</bpmn:text>',
+              '    </bpmn:textAnnotation>',
+              f'    <bpmn:association id="{nid}_link" sourceRef="{task}" targetRef="{nid}" />']
 parts.append('  </bpmn:process>')
 
 parts += ['  <bpmndi:BPMNDiagram id="Diagram_1">',
@@ -207,7 +225,8 @@ for lid, _, h in LANES:
               f'        {bounds(POOL["x"] + 30, top, POOL["w"] - 30, h)}',
               '      </bpmndi:BPMNShape>']
     top += h
-shapes = [(n[0], n[1], n[4], n[5]) for n in NODES] + [(s[0], "", s[2], s[3]) for s in STORES]
+shapes = ([(n[0], n[1], n[4], n[5]) for n in NODES] + [(s[0], "", s[2], s[3]) for s in STORES]
+          + [(n[0], "", n[2], None) for n in NOTES])
 for sid, kind, box, label in shapes:
     marker = ' isMarkerVisible="true"' if kind == "exclusiveGateway" else ""
     parts += [f'      <bpmndi:BPMNShape id="{sid}_di" bpmnElement="{sid}"{marker}>',
@@ -215,7 +234,9 @@ for sid, kind, box, label in shapes:
     if label:
         parts.append(f'        <bpmndi:BPMNLabel>{bounds(*label)}</bpmndi:BPMNLabel>')
     parts.append('      </bpmndi:BPMNShape>')
-for eid, points, label in [(f[0], f[4], f[5]) for f in FLOWS] + [(d[0], d[4], None) for d in DATA]:
+edges = ([(f[0], f[4], f[5]) for f in FLOWS] + [(d[0], d[4], None) for d in DATA]
+         + [(f"{n[0]}_link", n[4], None) for n in NOTES])
+for eid, points, label in edges:
     parts.append(f'      <bpmndi:BPMNEdge id="{eid}_di" bpmnElement="{eid}">')
     parts += [f'        <di:waypoint x="{x}" y="{y}" />' for x, y in points]
     if label:
