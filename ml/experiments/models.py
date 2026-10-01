@@ -17,6 +17,7 @@ import argparse
 import os
 import sys
 import time
+from functools import partial
 
 import numpy as np
 from scipy.special import expit
@@ -197,6 +198,30 @@ def _pieces(yfit, rows=TABPFN_ROWS, seed=42):
     return [np.concatenate([fraud, part]) for part in np.array_split(legit, count)]
 
 
+def _in_pieces(Xfit, yfit, X, pieces, tabpfn_model, seed=0):
+    """TabPFN reading the pieces one at a time, a one-member model for each: yields
+    the average over the pieces read so far and the seconds spent scoring."""
+    from tabpfn import TabPFNClassifier
+
+    total, scoring = np.zeros(len(X)), 0.0
+    for k, rows in enumerate(pieces, 1):
+        model = _scaled(TabPFNClassifier(model_path=tabpfn_model or "auto",
+                                         n_estimators=1, random_state=seed + k))
+        model.fit(Xfit[rows], yfit[rows])
+        started = time.time()
+        total += model.predict_proba(X)[:, 1]
+        scoring += time.time() - started
+        print(f"  piece {k} of {len(pieces)}", file=sys.stderr, flush=True)
+        yield k, total / k, scoring
+
+
+def _tabpfn_in_pieces(Xfit, yfit, X, seed, tabpfn_model=None):
+    """`paired`'s challenger: TabPFN over every piece, the pieces cut anew each pair."""
+    *_, (_, average, _) = _in_pieces(Xfit, yfit, X, _pieces(yfit, seed=seed),
+                                     tabpfn_model, seed)
+    return average
+
+
 def chunked(cache, tabpfn_model=None, eval_legit=3000, curve=(1, 5, 20)):
     """TabPFN on the whole training slice, a piece at a time - the mentor's way
     round its row limit (2026-09-30).
@@ -206,8 +231,6 @@ def chunked(cache, tabpfn_model=None, eval_legit=3000, curve=(1, 5, 20)):
     rows - every piece read so far - so both models have seen the same data. Read
     on the rows `small` reads, with its caveat: all the fraud, a sample of the
     rest."""
-    from tabpfn import TabPFNClassifier
-
     Xfit, yfit, Xva, yva, Xte, yte = _slices(cache)
     va_idx = _subsample(yva, eval_legit, seed=7)
     te_idx = _subsample(yte, eval_legit, seed=13)
@@ -219,25 +242,17 @@ def chunked(cache, tabpfn_model=None, eval_legit=3000, curve=(1, 5, 20)):
           f"{len(yte):,} ({int(yte.sum())}), the rows of --small\n")
     print(f"{'pieces':>7}{'rows':>10}{'TabPFN':>9}{'committee':>11}   PR-AUC")
 
-    total, scoring = np.zeros(len(Xev)), 0.0
-    for k, rows in enumerate(pieces, 1):
-        model = _scaled(TabPFNClassifier(model_path=tabpfn_model or "auto",
-                                         n_estimators=1, random_state=k))
-        model.fit(Xfit[rows], yfit[rows])
-        started = time.time()
-        total += model.predict_proba(Xev)[:, 1]
-        scoring += time.time() - started
-        print(f"  piece {k} of {len(pieces)}", file=sys.stderr, flush=True)
+    for k, tab, scoring in _in_pieces(Xfit, yfit, Xev, pieces, tabpfn_model):
         if k not in curve and k != len(pieces):
             continue
         seen = np.unique(np.concatenate(pieces[:k]))
         spw = T.class_weight(int(yfit[seen].sum()), int((yfit[seen] == 0).sum()))
         committee = _committee_score(_committee(Xfit[seen], yfit[seen], spw), Xev)
         print(f"{k:>7}{len(seen):>10,}"
-              f"{average_precision_score(yte, total[len(yva):] / k):>9.3f}"
+              f"{average_precision_score(yte, tab[len(yva):]):>9.3f}"
               f"{average_precision_score(yte, committee[len(yva):]):>11.3f}", flush=True)
 
-    tab, n = total / len(pieces), len(yva)
+    n = len(yva)
     print()
     for name, p in (("TabPFN", tab), ("committee", committee)):
         flag = p[n:] >= _cut(yva, p[:n])
@@ -332,25 +347,33 @@ def _table(candidates, Xfit, yfit, Xva, yva, Xte, yte, spw):
           "paired\nfits, then the decision (ml/README.md).")
 
 
-def paired(cache, sets=5):
-    """The forest against the served recipe, five times over, on the same rows.
+def _forest(Xfit, yfit, X, seed):
+    rf = make_pipeline(SimpleImputer(strategy="median"),
+                       RandomForestClassifier(n_estimators=300, n_jobs=-1,
+                                              min_samples_leaf=5, random_state=seed))
+    return rf.fit(Xfit, yfit).predict_proba(X)[:, 1]
+
+
+def paired(cache, sets=5, name="forest", challenger=_forest, eval_legit=None):
+    """A challenger against the served recipe, five times over, on the same rows.
 
     One table row cannot separate models four thousandths apart, so this repeats
     the pair with a different seed each time and reads the difference within each
     pair - the rule every capability in this project went through. Measured on the
     cutoff rows, never on the held-out slice: a decision read there is a decision
-    taken on the test set."""
+    taken on the test set. A challenger too slow to score them all reads the
+    cutoff rows `small` reads (`eval_legit`)."""
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from ablate_seeds import ci95
 
-    X, y = _load(cache)
-    n = len(y)
-    cut, fit = T.cut_index(n), int(T.cut_index(n) * T.FIT_SHARE)
-    Xfit, yfit, Xva, yva = X[:fit], y[:fit], X[fit:cut], y[fit:cut]
+    Xfit, yfit, Xva, yva, _, _ = _slices(cache)
+    if eval_legit:
+        idx = _subsample(yva, eval_legit, seed=7)
+        Xva, yva = Xva[idx], yva[idx]
     spw = T.class_weight(int(yfit.sum()), int((yfit == 0).sum()))
-    print(f"{sets} pairs on the same {fit:,} rows; read on the {cut - fit:,} cutoff "
+    print(f"{sets} pairs on the same {len(yfit):,} rows; read on {len(yva):,} cutoff "
           f"rows ({int(yva.sum())} fraud)\n")
-    print(f"{'pair':<8}{'committee':>12}{'forest':>10}{'difference':>13}")
+    print(f"{'pair':<8}{'committee':>12}{name:>10}{'difference':>13}")
 
     diffs = []
     for k in range(sets):
@@ -358,26 +381,22 @@ def paired(cache, sets=5):
         members = [T.make_model(spw, random_state=s).fit(Xfit, yfit)
                    for s in range(base, base + 5)]
         committee = average_precision_score(yva, _committee_score(members, Xva))
-        rf = make_pipeline(SimpleImputer(strategy="median"),
-                           RandomForestClassifier(n_estimators=300, n_jobs=-1,
-                                                  min_samples_leaf=5, random_state=base))
-        rf.fit(Xfit, yfit)
-        forest = average_precision_score(yva, rf.predict_proba(Xva)[:, 1])
-        diffs.append(forest - committee)
-        print(f"seeds {base:<3}{committee:>12.4f}{forest:>10.4f}{diffs[-1]:>+13.4f}",
+        other = average_precision_score(yva, challenger(Xfit, yfit, Xva, base))
+        diffs.append(other - committee)
+        print(f"seeds {base:<3}{committee:>12.4f}{other:>10.4f}{diffs[-1]:>+13.4f}",
               flush=True)
 
     mean = sum(diffs) / len(diffs)
     half = ci95(diffs)
     better = sum(1 for d in diffs if d > 0)
-    print(f"\npaired difference, forest minus committee: {mean:+.4f} "
-          f"[{mean - half:+.4f}, {mean + half:+.4f}], forest ahead on {better} of {sets}")
+    print(f"\npaired difference, {name} minus committee: {mean:+.4f} "
+          f"[{mean - half:+.4f}, {mean + half:+.4f}], {name} ahead on {better} of {sets}")
     if abs(mean) <= half:
         print("The interval spans zero: on this data the two are not distinguishable.")
     else:
         print("The interval clears zero: the difference is real at this sample size.")
-    print("Either way nothing changes here - a swap would be its own decision, with "
-          "its rule\nwritten down before the run.")
+    print("Either way nothing changes here - adopting it would be its own decision, "
+          "with its\nrule written down before the run.")
 
 
 def main():
@@ -396,11 +415,16 @@ def main():
                     help="TabPFN on the whole training slice, a piece at a time, "
                          "against the served recipe on the same rows")
     ap.add_argument("--paired", action="store_true",
-                    help="the forest against the served recipe, five paired fits")
+                    help="the forest against the served recipe, five paired fits; "
+                         "with --chunks, TabPFN read in pieces")
     ap.add_argument("--sets", type=int, default=5, help="how many pairs")
     args = ap.parse_args()
     if args.small:
         return small(args.cache, args.tabpfn_model)
+    if args.chunks and args.paired:
+        return paired(args.cache, args.sets, "TabPFN",
+                      partial(_tabpfn_in_pieces, tabpfn_model=args.tabpfn_model),
+                      eval_legit=3000)
     if args.chunks:
         return chunked(args.cache, args.tabpfn_model)
     if args.paired:

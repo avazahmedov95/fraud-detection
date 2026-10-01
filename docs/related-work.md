@@ -301,10 +301,12 @@ this data, or does something newer beat it?
   loop. **Measured**, in `ml/experiments/models.py` and an environment of its own:
   the best model on 5,000 rows (PR-AUC 0.966 against 0.937 for the served recipe),
   and still ahead when it reads all 320,000 in 73 pieces of 5,000, the mentor's way
-  round its CPU limit (0.968 against 0.954, +0.014 [+0.005, +0.024], one run) - at
-  590 ms a row against about 0.2 ms for the served model (`ml/README.md`, Other
-  model families). **Does not support** a model for the decision before
-  settlement: it ranks a little better and answers three thousand times slower.
+  round its CPU limit (0.968 against 0.954; +0.0137 [+0.0127, +0.0146] over five
+  paired fits) - at 590 ms a row against about 0.2 ms for the served model
+  (`ml/README.md`, Other model families). **Does not support** a model for the
+  decision before settlement: it ranks a little better and answers three thousand
+  times slower. As a second look at the transfers just under the cut-off it is a
+  candidate, not yet confirmed on held-out data.
 - **"A Closer Look at Deep Learning Methods on Tabular Datasets"**
   ([arXiv:2407.00956](https://arxiv.org/abs/2407.00956), reached through a
   LinkedIn post) - a benchmark over 300+ tabular datasets in which boosted trees

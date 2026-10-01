@@ -711,6 +711,8 @@ python experiments/models.py --cache models_matrix.npz            # the table be
 python experiments/models.py --cache models_matrix.npz --paired   # the forest, five pairs
 python experiments/models.py --cache models_matrix.npz --small        --tabpfn-model <checkpoint>                                # everyone on TabPFN's terms
 python experiments/models.py --cache models_matrix.npz --chunks       --tabpfn-model <checkpoint>                                # TabPFN on all of it, a piece at a time
+python experiments/models.py --cache models_matrix.npz --chunks --paired --tabpfn-model <checkpoint>                              # the same, five paired fits
+python experiments/second_opinion.py --cache models_matrix.npz --tabpfn-model <checkpoint>                                        # TabPFN after the served model
 ```
 
 The first run builds the cache from `train.py`'s own matrix; the rest read it.
@@ -837,10 +839,13 @@ PR-AUC on the 3,176 test rows (176 fraud). At its own cutoff TabPFN catches 95.5
 the fraud at 85.3% real, the committee 92.0% at 85.7%: six more frauds for the same
 share of real alerts.
 
-1. **The lead survives the data.** Given everything, TabPFN is ahead by **+0.014
-   PR-AUC [+0.005, +0.024]** over 2,000 resamples of the test rows. The interval
-   covers which rows were drawn, not a refit: this is one run, and this project's
-   rule for a claim is five paired fits - five hours of this machine, not run.
+1. **The lead survives the data, and five refits.** Given everything, TabPFN is
+   ahead by **+0.014 PR-AUC [+0.005, +0.024]** over 2,000 resamples of the test
+   rows. That interval covers which rows were drawn; this project's rule for a claim
+   is five paired fits, run with `--chunks --paired` on the cutoff rows of `--small`
+   (3,171, 171 fraud): **+0.0137 [+0.0127, +0.0146], ahead on 5 of 5 pairs**.
+   TabPFN's own score barely moves between pairs (0.9415 to 0.9418) - seventy-three
+   pieces averaged leave little to the draw - so the spread is the committee's seeds.
 2. **Neither model gains much from rows.** From 5,000 rows to 320,000 TabPFN moves
    0.965 to 0.968 and the committee 0.947 to 0.954. Every piece already holds all the
    fraud; what grows is the ordinary side, and 3,000 sampled ordinary transfers
@@ -852,6 +857,56 @@ share of real alerts.
 
 **Nothing is adopted.** The served model, its cutoff and the running job are
 untouched by this file: it reads the same matrix and prints a table.
+
+### TabPFN as a second opinion, measured 2026-10-01
+
+It cannot score the stream, so the question is whether it helps after the served
+model, where a second is affordable: on the alerts already in the analyst's queue,
+and on the transfers just under the cut-off. `experiments/second_opinion.py` reads
+the cutoff rows (80,000, 171 fraud) at the served cut-off, 0.1048, with TabPFN on
+five pieces of the training slice - one is already within 0.003 of all 73, above.
+
+**The queue.** 179 alerts, 103 of them fraud. Case-manager orders the queue by
+amount, money at risk first:
+
+| queue ordered by | first half: fraud | its money | first quarter: fraud | its money |
+|---|---|---|---|---|
+| amount (today) | 49 | **85%** | 28 | **67%** |
+| the served score | 66 | 71% | 33 | 38% |
+| TabPFN | **70** | 74% | **37** | 53% |
+
+The orders answer different questions: TabPFN's puts the most frauds first, the
+amount's the most fraud money, and neither wins both. Nor is TabPFN a safe mark of
+a probable false alarm: its lowest third of the queue holds 44 false alarms and 15
+frauds.
+
+**Under the cut-off.** 68 of the 171 frauds score below it. In bands of the
+highest-scored rows under the cut-off, TabPFN alerts at its own F1 peak in the band,
+against a cut-off lowered far enough to raise as many alerts:
+
+| band | of transfers | served score from | fraud in it | TabPFN finds | its false alarms | a lower cut-off finds |
+|---|---|---|---|---|---|---|
+| top 100 | 0.12% | 0.042 | 11 | **9** | 14 | 2 |
+| top 250 | 0.31% | 0.019 | 24 | 12 | 23 | 3 |
+| top 500 | 0.62% | 0.008 | 36 | 12 | 24 | 3 |
+| top 1,000 | 1.25% | 0.003 | 54 | 19 | 63 | 6 |
+| top 2,000 | 2.50% | 0.001 | 59 | 19 | 63 | 6 |
+
+"Just under" is the first band: transfers scored from about 0.04 to the cut-off,
+about 0.1% of the traffic. There TabPFN finds 9 of the 11 frauds at 14 false
+alarms, where a lower cut-off raising the same 23 alerts finds 2 - recall on these
+rows would go from 60% to 65.5% for 13% more alerts. Every wider band buys its
+extra fraud at three false alarms or more apiece.
+
+**The cost.** One answer with one piece of context: 23.7 s when TabPFN reprocesses
+the context on every call, **0.19 s** with it cached, after 24 s to cache it once.
+Cached, either use fits a CPU.
+
+**What this does not show.** Each band's threshold was chosen and read on the same
+rows, and the first band holds 11 frauds - one more or less moves its result by a
+tenth. The band result is a candidate, to be confirmed on the held-out slice before
+anything is built; and building it would change the scoring job, which attaches the
+feature vector to alerts only. Nothing is adopted.
 
 ## Capability ablation
 
