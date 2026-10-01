@@ -46,6 +46,8 @@ fraud-detection/
 │   └── boundary_audit.py   what one component produces vs what the next expects
 ├── demo/                   one page over the running stack: stream, fraud cases, queue, stage times
 └── docs/                   the evidence base — read irp-framing.md first
+    ├── architecture.png       what runs where, stage by stage, and the offline
+    │                          training path (tools/architecture_diagram.py)
     ├── pipeline_diagram.png   every component and the measured cost of each
     │                          stage (tools/pipeline_diagram.py redraws it)
     └── pipeline.bpmn  pipeline_sequence.mmd   the same flow as BPMN and as a

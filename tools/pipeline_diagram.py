@@ -91,7 +91,7 @@ arrow(right(raw), (58, 67), label="92 ms")
 for a, b in ((dec, fea), (fea, rul), (rul, mod), (mod, dcd)):
     arrow(right(a), left(b))
 
-red = box(79, 40, 18, 12, "Redis", "the receiver's side:\nwho paid this account", "2.07 ms",
+red = box(79, 40, 18, 12, "Redis", "who recently paid\neach receiving account", "2.07 ms",
           fill=STORE_FILL)
 arrow(top(red), bottom(fea), style="<|-|>", color=MUTED, lw=1.3)
 

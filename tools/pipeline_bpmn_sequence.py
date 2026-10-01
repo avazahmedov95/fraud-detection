@@ -7,71 +7,147 @@ import xml.dom.minidom as minidom
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs")
 
 # --------------------------------------------------------------- BPMN 2.0
+# Every task names what runs it, in brackets; the databases have a lane of their
+# own, read and written along dotted arrows. No counts: they change.
 
-POOL = dict(x=160, y=80, w=1700, h=660)
-LANES = [("Lane_channel", "Channel", 140),
-         ("Lane_engine", "Streaming engine (Apache Flink)", 160),
-         ("Lane_services", "Sink writer and case manager", 220),
-         ("Lane_analyst", "Analyst", 140)]
+POOL = dict(x=160, y=60, w=2660)
+LANES = [("Lane_channel", "Payment channel", 160),
+         ("Lane_flink", "Apache Flink job", 360),
+         ("Lane_sink", "Sink writer", 260),
+         ("Lane_data", "Data stores", 140),
+         ("Lane_case", "Case manager", 150),
+         ("Lane_analyst", "Fraud analyst", 150)]
 
 NODES = [
-    # id, kind, name, lane, x, y (top-left of the shape), w, h
-    ("Start_1", "startEvent", "Transfer confirmed", 0, 240, 132, 36, 36),
-    ("Task_publish", "task", "Publish to transactions.raw", 0, 330, 110, 150, 80),
-    ("Task_decode", "task", "Decode the record", 1, 530, 260, 150, 80),
-    ("Task_features", "task", "Build the 21 features", 1, 710, 260, 150, 80),
-    ("Task_rules", "task", "Run the 10 hard rules", 1, 890, 260, 150, 80),
-    ("Task_model", "task", "Score with the model", 1, 1070, 260, 150, 80),
-    ("Gateway_1", "exclusiveGateway", "Above the cut-off, or a mandatory rule?",
-     1, 1270, 278, 50, 50),
-    ("Task_record", "task", "Write the decision and the audit record", 2, 1380, 400, 160, 80),
-    ("End_allowed", "endEvent", "Allowed and recorded", 2, 1600, 422, 36, 36),
-    ("Task_graph", "task", "Write the alert to the graph", 2, 1380, 520, 160, 80),
-    ("Task_case", "task", "Open a case with its reason", 2, 1180, 520, 160, 80),
-    ("Task_verdict", "task", "Mark fraud or false alarm", 3, 1380, 760, 160, 80),
-    ("End_case", "endEvent", "Case closed", 3, 1600, 782, 36, 36),
+    # id, kind, name, lane, (x, y, w, h) of the shape, its label's box or None
+    ("Start", "startEvent", "Transfer confirmed by the payer", 0,
+     (232, 122, 36, 36), (195, 162, 110, 28)),
+    ("Create", "serviceTask", "Create the transfer event\n[payment switch, simulated in Python]",
+     0, (310, 90, 180, 100), None),
+    ("Publish", "sendTask", "Publish the event\n[Kafka: transactions.raw]",
+     0, (530, 90, 180, 100), None),
+    ("Read", "serviceTask", "Read and decode the event\n[Flink Kafka source]",
+     1, (530, 350, 180, 100), None),
+    ("Sender", "serviceTask", "Load the sender's history\n[Flink keyed state]",
+     1, (750, 350, 180, 100), None),
+    ("Receiver", "serviceTask", "Read and update the receiver's recent payers\n[Redis]",
+     1, (970, 350, 180, 100), None),
+    ("Features", "serviceTask", "Compute the features\n[Python in Flink]",
+     1, (1190, 350, 180, 100), None),
+    ("Split", "parallelGateway", "", 1, (1410, 375, 50, 50), None),
+    ("Rules", "businessRuleTask", "Check the hard rules, name the alert type\n[Python in Flink]",
+     1, (1500, 235, 180, 100), None),
+    ("Model", "serviceTask", "Score the risk\n[LightGBM via ONNX Runtime]",
+     1, (1500, 465, 180, 100), None),
+    ("Join", "parallelGateway", "", 1, (1720, 375, 50, 50), None),
+    ("Decide", "exclusiveGateway",
+     "Model score at or above the alert cut-off, or a mandatory rule fired?",
+     1, (1810, 375, 50, 50), (1765, 312, 140, 56)),
+    ("AllowOut", "sendTask", "Publish the decision ALLOW\n[Kafka: transactions.scored]",
+     1, (1910, 350, 180, 100), None),
+    ("AlertOut", "sendTask", "Publish REVIEW and the alert\n[Kafka: transactions.scored, fraud.alerts]",
+     1, (1910, 465, 180, 100), None),
+    ("Fork", "parallelGateway", "", 2, (1975, 635, 50, 50), None),
+    ("Merge", "exclusiveGateway", "", 2, (2115, 635, 50, 50), None),
+    ("Store", "serviceTask", "Store the decision and its audit record\n[Python → ClickHouse]",
+     2, (2205, 610, 180, 100), None),
+    ("IsReview", "exclusiveGateway", "Is the decision REVIEW?",
+     2, (2425, 635, 50, 50), (2385, 598, 130, 28)),
+    ("Allowed", "endEvent", "Transfer allowed and recorded",
+     2, (2525, 642, 36, 36), (2569, 646, 130, 28)),
+    ("Graph", "serviceTask", "Add the alert to the graph\n[Python → Neo4j]",
+     2, (2505, 720, 180, 100), None),
+    ("AlertDone", "endEvent", "Alert recorded", 2, (2725, 752, 36, 36), (2700, 792, 90, 20)),
+    ("Case", "serviceTask", "Open a case with its reasons\n[Python service]",
+     4, (1910, 1005, 180, 100), None),
+    ("Opened", "intermediateThrowEvent", "Case opened",
+     4, (2130, 1037, 36, 36), (2105, 1077, 86, 20)),
+    ("Review", "userTask", "Review the case\n[analyst queue: demo page or CLI]",
+     5, (2195, 1155, 180, 100), None),
+    ("Verdict", "userTask", "Mark the case fraud or false alarm\n[saved to ClickHouse]",
+     5, (2415, 1155, 180, 100), None),
+    ("Closed", "endEvent", "Case closed", 5, (2635, 1187, 36, 36), (2610, 1227, 86, 20)),
 ]
 
 FLOWS = [
-    ("Flow_start", "Start_1", "Task_publish", ""),
-    ("Flow_publish", "Task_publish", "Task_decode", "transactions.raw"),
-    ("Flow_decode", "Task_decode", "Task_features", ""),
-    ("Flow_features", "Task_features", "Task_rules", ""),
-    ("Flow_rules", "Task_rules", "Task_model", ""),
-    ("Flow_model", "Task_model", "Gateway_1", ""),
-    ("Flow_allow", "Gateway_1", "Task_record", "allow"),
-    ("Flow_recorded", "Task_record", "End_allowed", ""),
-    ("Flow_review", "Gateway_1", "Task_graph", "send to review"),
-    ("Flow_graph", "Task_graph", "Task_case", ""),
-    ("Flow_case", "Task_case", "Task_verdict", "fraud.alerts"),
-    ("Flow_verdict", "Task_verdict", "End_case", ""),
+    # id, from, to, label, waypoints, label's box
+    ("F_start", "Start", "Create", "", [(268, 140), (310, 140)], None),
+    ("F_create", "Create", "Publish", "", [(490, 140), (530, 140)], None),
+    ("F_publish", "Publish", "Read", "", [(620, 190), (620, 350)], None),
+    ("F_read", "Read", "Sender", "", [(710, 400), (750, 400)], None),
+    ("F_sender", "Sender", "Receiver", "", [(930, 400), (970, 400)], None),
+    ("F_receiver", "Receiver", "Features", "", [(1150, 400), (1190, 400)], None),
+    ("F_features", "Features", "Split", "", [(1370, 400), (1410, 400)], None),
+    ("F_to_rules", "Split", "Rules", "", [(1435, 375), (1435, 285), (1500, 285)], None),
+    ("F_to_model", "Split", "Model", "", [(1435, 425), (1435, 515), (1500, 515)], None),
+    ("F_rules", "Rules", "Join", "", [(1680, 285), (1745, 285), (1745, 375)], None),
+    ("F_model", "Model", "Join", "", [(1680, 515), (1745, 515), (1745, 425)], None),
+    ("F_join", "Join", "Decide", "", [(1770, 400), (1810, 400)], None),
+    ("F_allow", "Decide", "AllowOut", "No", [(1860, 400), (1910, 400)], (1866, 381, 18, 14)),
+    ("F_alert", "Decide", "AlertOut", "Yes", [(1835, 425), (1835, 515), (1910, 515)],
+     (1842, 452, 20, 14)),
+    ("F_allow_out", "AllowOut", "Merge", "", [(2090, 400), (2140, 400), (2140, 635)], None),
+    ("F_alert_out", "AlertOut", "Fork", "", [(2000, 565), (2000, 635)], None),
+    ("F_to_merge", "Fork", "Merge", "", [(2025, 660), (2115, 660)], None),
+    ("F_to_case", "Fork", "Case", "", [(2000, 685), (2000, 1005)], None),
+    ("F_merge", "Merge", "Store", "", [(2165, 660), (2205, 660)], None),
+    ("F_store", "Store", "IsReview", "", [(2385, 660), (2425, 660)], None),
+    ("F_allowed", "IsReview", "Allowed", "No", [(2475, 660), (2525, 660)], (2481, 641, 18, 14)),
+    ("F_to_graph", "IsReview", "Graph", "Yes", [(2450, 685), (2450, 770), (2505, 770)],
+     (2457, 712, 20, 14)),
+    ("F_graph", "Graph", "AlertDone", "", [(2685, 770), (2725, 770)], None),
+    ("F_case", "Case", "Opened", "", [(2090, 1055), (2130, 1055)], None),
+    ("F_opened", "Opened", "Review", "", [(2166, 1055), (2285, 1055), (2285, 1155)], None),
+    ("F_review", "Review", "Verdict", "", [(2375, 1205), (2415, 1205)], None),
+    ("F_verdict", "Verdict", "Closed", "", [(2595, 1205), (2635, 1205)], None),
+]
+#: The "No" of each question is its default flow.
+DEFAULTS = {"Decide": "F_allow", "IsReview": "F_allowed"}
+
+STORES = [
+    # id, name, (x, y, w, h), label's box
+    ("Redis", "Redis: receivers' recent payers", (1035, 875, 50, 50), (985, 930, 150, 28)),
+    ("Cases", "ClickHouse: cases and verdicts", (2040, 875, 50, 50), (2096, 886, 120, 28)),
+    ("Warehouse", "ClickHouse: decisions, audit log", (2270, 875, 50, 50),
+     (2235, 930, 120, 28)),
+    ("GraphDb", "Neo4j: alert graph", (2570, 875, 50, 50), (2540, 930, 110, 20)),
 ]
 
-STORES = [("Store_redis", "Redis: who paid this account", 710, 400, 50, 50),
-          ("Store_ch", "ClickHouse: decisions, audit, cases", 1600, 520, 50, 50),
-          ("Store_neo", "Neo4j: the alert graph", 1380, 640, 50, 50)]
-ASSOCIATIONS = [("Assoc_redis", "Task_features", "Store_redis"),
-                ("Assoc_ch", "Task_record", "Store_ch"),
-                ("Assoc_neo", "Task_graph", "Store_neo")]
+DATA = [
+    # id, task, store, "in" (the task reads) or "out" (the task writes), waypoints
+    ("D_redis_read", "Receiver", "Redis", "in", [(1050, 875), (1050, 450)]),
+    ("D_redis_write", "Receiver", "Redis", "out", [(1070, 450), (1070, 875)]),
+    ("D_store", "Store", "Warehouse", "out", [(2295, 710), (2295, 875)]),
+    ("D_graph", "Graph", "GraphDb", "out", [(2595, 820), (2595, 875)]),
+    ("D_case", "Case", "Cases", "out", [(2065, 1005), (2065, 925)]),
+    ("D_verdict", "Verdict", "Cases", "out", [(2505, 1155), (2085, 925)]),
+]
+
+BOX = {n[0]: n[4] for n in NODES} | {s[0]: s[2] for s in STORES}
 
 
-def centre(node):
-    return node[4] + node[6] / 2, node[5] + node[7] / 2
+def on_border(box, point):
+    x, y, w, h = box
+    px, py = point
+    return (x - 1 <= px <= x + w + 1 and y - 1 <= py <= y + h + 1
+            and min(abs(px - x), abs(px - x - w), abs(py - y), abs(py - y - h)) <= 1)
 
 
-by_id = {n[0]: n for n in NODES}
-store_by_id = {s[0]: s for s in STORES}
-
-
-def lane_y(i):
-    y = POOL["y"]
-    for k in range(i):
-        y += LANES[k][2]
-    return y
+# A line that starts or ends off its shape opens fine and looks broken.
+for fid, src, tgt, _, points, _ in FLOWS:
+    assert on_border(BOX[src], points[0]) and on_border(BOX[tgt], points[-1]), fid
+for did, task, store, way, points in DATA:
+    src, tgt = (store, task) if way == "in" else (task, store)
+    assert on_border(BOX[src], points[0]) and on_border(BOX[tgt], points[-1]), did
 
 
 def esc(s):
-    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+    return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+             .replace('"', "&quot;").replace("\n", "&#10;"))
+
+
+def bounds(x, y, w, h):
+    return f'<dc:Bounds x="{x}" y="{y}" width="{w}" height="{h}" />'
 
 
 parts = ['<?xml version="1.0" encoding="UTF-8"?>',
@@ -86,79 +162,65 @@ parts = ['<?xml version="1.0" encoding="UTF-8"?>',
          '  </bpmn:collaboration>',
          '  <bpmn:process id="Process_1" isExecutable="false">',
          '    <bpmn:laneSet id="LaneSet_1">']
-
 for i, (lid, lname, _) in enumerate(LANES):
     parts.append(f'      <bpmn:lane id="{lid}" name="{esc(lname)}">')
-    for n in NODES:
-        if n[3] == i:
-            parts.append(f'        <bpmn:flowNodeRef>{n[0]}</bpmn:flowNodeRef>')
+    parts += [f'        <bpmn:flowNodeRef>{n[0]}</bpmn:flowNodeRef>' for n in NODES if n[3] == i]
     parts.append('      </bpmn:lane>')
 parts.append('    </bpmn:laneSet>')
 
-for nid, kind, name, _, *_rest in NODES:
-    inc = [f[0] for f in FLOWS if f[2] == nid]
-    out = [f[0] for f in FLOWS if f[1] == nid]
-    parts.append(f'    <bpmn:{kind} id="{nid}" name="{esc(name)}">')
-    parts += [f'      <bpmn:incoming>{f}</bpmn:incoming>' for f in inc]
-    parts += [f'      <bpmn:outgoing>{f}</bpmn:outgoing>' for f in out]
+for nid, kind, name, *_ in NODES:
+    attrs = f' id="{nid}"' + (f' name="{esc(name)}"' if name else "")
+    if nid in DEFAULTS:
+        attrs += f' default="{DEFAULTS[nid]}"'
+    parts.append(f'    <bpmn:{kind}{attrs}>')
+    parts += [f'      <bpmn:incoming>{f[0]}</bpmn:incoming>' for f in FLOWS if f[2] == nid]
+    parts += [f'      <bpmn:outgoing>{f[0]}</bpmn:outgoing>' for f in FLOWS if f[1] == nid]
+    reads = [d for d in DATA if d[1] == nid and d[3] == "in"]
+    if reads:
+        parts.append(f'      <bpmn:property id="Property_{nid}" name="__targetRef_placeholder" />')
+    for did, _, store, _, _ in reads:
+        parts += [f'      <bpmn:dataInputAssociation id="{did}">',
+                  f'        <bpmn:sourceRef>{store}</bpmn:sourceRef>',
+                  f'        <bpmn:targetRef>Property_{nid}</bpmn:targetRef>',
+                  '      </bpmn:dataInputAssociation>']
+    for did, _, store, _, _ in (d for d in DATA if d[1] == nid and d[3] == "out"):
+        parts += [f'      <bpmn:dataOutputAssociation id="{did}">',
+                  f'        <bpmn:targetRef>{store}</bpmn:targetRef>',
+                  '      </bpmn:dataOutputAssociation>']
     parts.append(f'    </bpmn:{kind}>')
-
 for sid, sname, *_ in STORES:
     parts.append(f'    <bpmn:dataStoreReference id="{sid}" name="{esc(sname)}" />')
-for fid, src, tgt, label in FLOWS:
+for fid, src, tgt, label, *_ in FLOWS:
     nm = f' name="{esc(label)}"' if label else ""
     parts.append(f'    <bpmn:sequenceFlow id="{fid}"{nm} sourceRef="{src}" targetRef="{tgt}" />')
-for aid, src, tgt in ASSOCIATIONS:
-    parts.append(f'    <bpmn:association id="{aid}" sourceRef="{src}" targetRef="{tgt}" />')
 parts.append('  </bpmn:process>')
 
 parts += ['  <bpmndi:BPMNDiagram id="Diagram_1">',
           '    <bpmndi:BPMNPlane id="Plane_1" bpmnElement="Collaboration_1">',
-          f'      <bpmndi:BPMNShape id="Participant_1_di" bpmnElement="Participant_1"'
-          f' isHorizontal="true">',
-          f'        <dc:Bounds x="{POOL["x"]}" y="{POOL["y"]}" width="{POOL["w"]}"'
-          f' height="{POOL["h"]}" />',
+          '      <bpmndi:BPMNShape id="Participant_1_di" bpmnElement="Participant_1"'
+          ' isHorizontal="true">',
+          f'        {bounds(POOL["x"], POOL["y"], POOL["w"], sum(h for *_, h in LANES))}',
           '      </bpmndi:BPMNShape>']
-for i, (lid, _, h) in enumerate(LANES):
+top = POOL["y"]
+for lid, _, h in LANES:
     parts += [f'      <bpmndi:BPMNShape id="{lid}_di" bpmnElement="{lid}" isHorizontal="true">',
-              f'        <dc:Bounds x="{POOL["x"] + 30}" y="{lane_y(i)}"'
-              f' width="{POOL["w"] - 30}" height="{h}" />',
+              f'        {bounds(POOL["x"] + 30, top, POOL["w"] - 30, h)}',
               '      </bpmndi:BPMNShape>']
-for nid, kind, name, _, x, y, w, h in NODES:
-    label = ""
-    if kind in ("startEvent", "endEvent", "exclusiveGateway"):
-        label = (f'        <bpmndi:BPMNLabel>'
-                 f'<dc:Bounds x="{x - 40}" y="{y + h + 6}" width="{w + 80}" height="30" />'
-                 f'</bpmndi:BPMNLabel>')
-    parts.append(f'      <bpmndi:BPMNShape id="{nid}_di" bpmnElement="{nid}">')
-    parts.append(f'        <dc:Bounds x="{x}" y="{y}" width="{w}" height="{h}" />')
+    top += h
+shapes = [(n[0], n[1], n[4], n[5]) for n in NODES] + [(s[0], "", s[2], s[3]) for s in STORES]
+for sid, kind, box, label in shapes:
+    marker = ' isMarkerVisible="true"' if kind == "exclusiveGateway" else ""
+    parts += [f'      <bpmndi:BPMNShape id="{sid}_di" bpmnElement="{sid}"{marker}>',
+              f'        {bounds(*box)}']
     if label:
-        parts.append(label)
+        parts.append(f'        <bpmndi:BPMNLabel>{bounds(*label)}</bpmndi:BPMNLabel>')
     parts.append('      </bpmndi:BPMNShape>')
-for sid, _, x, y, w, h in STORES:
-    parts += [f'      <bpmndi:BPMNShape id="{sid}_di" bpmnElement="{sid}">',
-              f'        <dc:Bounds x="{x}" y="{y}" width="{w}" height="{h}" />',
-              f'        <bpmndi:BPMNLabel><dc:Bounds x="{x - 60}" y="{y + h + 5}"'
-              f' width="{w + 120}" height="40" /></bpmndi:BPMNLabel>',
-              '      </bpmndi:BPMNShape>']
-for fid, src, tgt, _ in FLOWS:
-    a, b = by_id[src], by_id[tgt]
-    ax, ay = centre(a)
-    bx, by = centre(b)
-    points = [(a[4] + a[6], ay), (b[4], by)] if abs(ay - by) < 1 else [
-        (ax, a[5] + a[7]), (ax, by), (b[4], by)]
-    if a[1] == "exclusiveGateway":
-        points = [(a[4] + a[6] / 2, a[5] + a[7]), (ax, by), (b[4], by)]
-    parts.append(f'      <bpmndi:BPMNEdge id="{fid}_di" bpmnElement="{fid}">')
-    for px, py in points:
-        parts.append(f'        <di:waypoint x="{int(px)}" y="{int(py)}" />')
+for eid, points, label in [(f[0], f[4], f[5]) for f in FLOWS] + [(d[0], d[4], None) for d in DATA]:
+    parts.append(f'      <bpmndi:BPMNEdge id="{eid}_di" bpmnElement="{eid}">')
+    parts += [f'        <di:waypoint x="{x}" y="{y}" />' for x, y in points]
+    if label:
+        parts.append(f'        <bpmndi:BPMNLabel>{bounds(*label)}</bpmndi:BPMNLabel>')
     parts.append('      </bpmndi:BPMNEdge>')
-for aid, src, tgt in ASSOCIATIONS:
-    a, s = by_id[src], store_by_id[tgt]
-    parts += [f'      <bpmndi:BPMNEdge id="{aid}_di" bpmnElement="{aid}">',
-              f'        <di:waypoint x="{int(a[4] + a[6] / 2)}" y="{int(a[5] + a[7])}" />',
-              f'        <di:waypoint x="{int(s[2] + s[4] / 2)}" y="{int(s[3])}" />',
-              '      </bpmndi:BPMNEdge>']
 parts += ['    </bpmndi:BPMNPlane>', '  </bpmndi:BPMNDiagram>', '</bpmn:definitions>']
 
 xml = "\n".join(parts)
