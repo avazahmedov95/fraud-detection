@@ -710,6 +710,7 @@ cd ml
 python experiments/models.py --cache models_matrix.npz            # the table below
 python experiments/models.py --cache models_matrix.npz --paired   # the forest, five pairs
 python experiments/models.py --cache models_matrix.npz --small        --tabpfn-model <checkpoint>                                # everyone on TabPFN's terms
+python experiments/models.py --cache models_matrix.npz --chunks       --tabpfn-model <checkpoint>                                # TabPFN on all of it, a piece at a time
 ```
 
 The first run builds the cache from `train.py`'s own matrix; the rest read it.
@@ -816,6 +817,38 @@ instrument for the problem itself.
 At this fraud rate `train.py`'s own rule weights the classes (11.4% in the fit
 slice, above its 0.5% threshold), where on the full slice it does not: the recipe
 followed its rule, and the rule read the slice it was given.
+
+**All of the data, a piece at a time** (`--chunks`, 2026-10-01). The mentor's way
+round the 5,000-row wall: cut the training slice into pieces TabPFN can read and
+average what it says about each. Every piece holds all 569 fraud rows and its own
+share of the ordinary ones - 73 pieces of at most 5,000, together the whole 320,000 -
+and each is read by a one-member TabPFN. At each step the served recipe is fitted on
+the same rows, every piece read so far, and both are read on the test rows of
+`--small`, with its caveat.
+
+| pieces | rows seen | TabPFN | committee (served recipe) |
+|---|---|---|---|
+| 1 | 4,945 | 0.965 | 0.947 |
+| 5 | 22,449 | 0.967 | 0.947 |
+| 20 | 88,089 | 0.968 | 0.948 |
+| 73 | 320,000 | **0.968** | 0.954 |
+
+PR-AUC on the 3,176 test rows (176 fraud). At its own cutoff TabPFN catches 95.5% of
+the fraud at 85.3% real, the committee 92.0% at 85.7%: six more frauds for the same
+share of real alerts.
+
+1. **The lead survives the data.** Given everything, TabPFN is ahead by **+0.014
+   PR-AUC [+0.005, +0.024]** over 2,000 resamples of the test rows. The interval
+   covers which rows were drawn, not a refit: this is one run, and this project's
+   rule for a claim is five paired fits - five hours of this machine, not run.
+2. **Neither model gains much from rows.** From 5,000 rows to 320,000 TabPFN moves
+   0.965 to 0.968 and the committee 0.947 to 0.954. Every piece already holds all the
+   fraud; what grows is the ordinary side, and 3,000 sampled ordinary transfers
+   cannot show what more of them teach - the rare legitimate transfer that scores
+   like fraud, which is where the full table's 0.673 is lost.
+3. **The pieces answer the accuracy question and make the speed one worse.** 590 ms a
+   row for all 73 pieces, in batches of 6,347 on this machine - about three thousand
+   times the 0.2 ms the served model takes in the job.
 
 **Nothing is adopted.** The served model, its cutoff and the running job are
 untouched by this file: it reads the same matrix and prints a table.

@@ -187,6 +187,77 @@ def small(cache, tabpfn_model=None, fit_rows=TABPFN_ROWS, eval_legit=3000):
            Xfit, yfit, Xva, yva, Xte, yte, spw)
 
 
+def _pieces(yfit, rows=TABPFN_ROWS, seed=42):
+    """The training slice in pieces TabPFN can read: every fraud row in each piece
+    and the ordinary rows dealt out between them, so that together they hold the
+    whole slice and none holds more rows than TabPFN takes on a CPU."""
+    fraud = np.flatnonzero(yfit == 1)
+    legit = np.random.default_rng(seed).permutation(np.flatnonzero(yfit == 0))
+    count = -(-len(legit) // (rows - len(fraud)))
+    return [np.concatenate([fraud, part]) for part in np.array_split(legit, count)]
+
+
+def chunked(cache, tabpfn_model=None, eval_legit=3000, curve=(1, 5, 20)):
+    """TabPFN on the whole training slice, a piece at a time - the mentor's way
+    round its row limit (2026-09-30).
+
+    Each piece is read by a one-member TabPFN and the members' probabilities are
+    averaged. At each point of the curve the served recipe is fitted on the same
+    rows - every piece read so far - so both models have seen the same data. Read
+    on the rows `small` reads, with its caveat: all the fraud, a sample of the
+    rest."""
+    from tabpfn import TabPFNClassifier
+
+    Xfit, yfit, Xva, yva, Xte, yte = _slices(cache)
+    va_idx = _subsample(yva, eval_legit, seed=7)
+    te_idx = _subsample(yte, eval_legit, seed=13)
+    yva, yte = yva[va_idx], yte[te_idx]
+    Xev = np.concatenate([Xva[va_idx], Xte[te_idx]])
+    pieces = _pieces(yfit)
+    print(f"fit {len(yfit):,} rows ({int(yfit.sum())} fraud) in {len(pieces)} pieces "
+          f"of at most {TABPFN_ROWS:,}, each holding all the fraud | test "
+          f"{len(yte):,} ({int(yte.sum())}), the rows of --small\n")
+    print(f"{'pieces':>7}{'rows':>10}{'TabPFN':>9}{'committee':>11}   PR-AUC")
+
+    total, scoring = np.zeros(len(Xev)), 0.0
+    for k, rows in enumerate(pieces, 1):
+        model = _scaled(TabPFNClassifier(model_path=tabpfn_model or "auto",
+                                         n_estimators=1, random_state=k))
+        model.fit(Xfit[rows], yfit[rows])
+        started = time.time()
+        total += model.predict_proba(Xev)[:, 1]
+        scoring += time.time() - started
+        print(f"  piece {k} of {len(pieces)}", file=sys.stderr, flush=True)
+        if k not in curve and k != len(pieces):
+            continue
+        seen = np.unique(np.concatenate(pieces[:k]))
+        spw = T.class_weight(int(yfit[seen].sum()), int((yfit[seen] == 0).sum()))
+        committee = _committee_score(_committee(Xfit[seen], yfit[seen], spw), Xev)
+        print(f"{k:>7}{len(seen):>10,}"
+              f"{average_precision_score(yte, total[len(yva):] / k):>9.3f}"
+              f"{average_precision_score(yte, committee[len(yva):]):>11.3f}", flush=True)
+
+    tab, n = total / len(pieces), len(yva)
+    print()
+    for name, p in (("TabPFN", tab), ("committee", committee)):
+        flag = p[n:] >= _cut(yva, p[:n])
+        tp = int((flag & (yte == 1)).sum())
+        print(f"{name:<11}caught {tp / int(yte.sum()):.1%}, "
+              f"real {tp / max(int(flag.sum()), 1):.1%} at its own cutoff")
+    rng = np.random.default_rng(0)
+    diffs = []
+    for _ in range(2000):
+        i = rng.integers(0, len(yte), len(yte))
+        diffs.append(average_precision_score(yte[i], tab[n:][i])
+                     - average_precision_score(yte[i], committee[n:][i]))
+    lo, hi = np.percentile(diffs, [2.5, 97.5])
+    print(f"PR-AUC, TabPFN minus committee: "
+          f"{average_precision_score(yte, tab[n:]) - average_precision_score(yte, committee[n:]):+.3f}"
+          f" [{lo:+.3f}, {hi:+.3f}] over 2,000 resamples of the test rows")
+    print(f"TabPFN took {1000 * scoring / len(Xev):,.0f} ms a row for all "
+          f"{len(pieces)} pieces, in batches of {len(Xev):,} on this machine")
+
+
 def _candidates(yfit, tabpfn_model=None, rbf_rows=RBF_ROWS):
     sub = _subsample(yfit, rbf_rows)
     return [
@@ -321,12 +392,17 @@ def main():
     ap.add_argument("--small", action="store_true",
                     help="every model on TabPFN's terms: the rows it can take and "
                          "the rows it can score")
+    ap.add_argument("--chunks", action="store_true",
+                    help="TabPFN on the whole training slice, a piece at a time, "
+                         "against the served recipe on the same rows")
     ap.add_argument("--paired", action="store_true",
                     help="the forest against the served recipe, five paired fits")
     ap.add_argument("--sets", type=int, default=5, help="how many pairs")
     args = ap.parse_args()
     if args.small:
         return small(args.cache, args.tabpfn_model)
+    if args.chunks:
+        return chunked(args.cache, args.tabpfn_model)
     if args.paired:
         return paired(args.cache, args.sets)
     run(args.cache, args.rbf_rows, args.tabpfn_model)

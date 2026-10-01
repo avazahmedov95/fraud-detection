@@ -300,9 +300,11 @@ this data, or does something newer beat it?
   checkpoint 3.5) - a pretrained tabular model that answers without a fitting
   loop. **Measured**, in `ml/experiments/models.py` and an environment of its own:
   the best model on 5,000 rows (PR-AUC 0.966 against 0.937 for the served recipe),
-  but it takes 5,000 training rows on a CPU against the 320,000 here, and 86 ms a
-  row against about 0.2 ms for the served model (`ml/README.md`, Other model
-  families). **Does not support** a claim at full scale: that needs a GPU.
+  and still ahead when it reads all 320,000 in 73 pieces of 5,000, the mentor's way
+  round its CPU limit (0.968 against 0.954, +0.014 [+0.005, +0.024], one run) - at
+  590 ms a row against about 0.2 ms for the served model (`ml/README.md`, Other
+  model families). **Does not support** a model for the decision before
+  settlement: it ranks a little better and answers three thousand times slower.
 - **"A Closer Look at Deep Learning Methods on Tabular Datasets"**
   ([arXiv:2407.00956](https://arxiv.org/abs/2407.00956), reached through a
   LinkedIn post) - a benchmark over 300+ tabular datasets in which boosted trees
