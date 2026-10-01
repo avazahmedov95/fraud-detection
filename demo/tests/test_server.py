@@ -329,3 +329,15 @@ def test_the_results_file_says_everything_in_both_languages():
         assert ds["link"]["url"].startswith("https://"), ds["key"]
         for field in ("name", "what", "ours", "published"):
             assert set(ds[field]) == {"ru", "en"}, (ds["key"], field)
+
+
+def test_a_transfer_decided_twice_counts_once_as_its_latest_decision():
+    """A transfer just under the cut-off is decided by the job, then by the second look."""
+    d = S.Decisions()
+    first = {"transaction_id": "t1", "decision": "SECOND_LOOK", "ingested_at": 1.0,
+             "scored_at_job": 1.1}
+    d.add(first)
+    d.add(dict(first, decision="REVIEW", model_version="second-look:tabpfn"))
+    assert d.counts["REVIEW"] == 1 and d.counts["SECOND_LOOK"] == 0
+    assert len(d.ms) == 1                       # its time to decision is the job's, once
+    assert S.view(d.by_id["t1"])["second"] is True

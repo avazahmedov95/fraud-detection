@@ -16,6 +16,8 @@ create transactions.raw     6
 create transactions.scored  6
 # high-risk decisions for downstream consumers
 create fraud.alerts         3
+# transfers just under the review cut-off, waiting for TabPFN (second-look/README.md)
+create fraud.second_look    3
 
 # Kafka stamps each raw event with its own append time. The job takes event_time
 # from the payload and reads this stamp only to split the wait before it into the

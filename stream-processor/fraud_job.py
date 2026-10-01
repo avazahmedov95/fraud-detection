@@ -123,6 +123,9 @@ class FraudDetector(KeyedProcessFunction):
                 _warn_cep_only(f"model file not found at {C.MODEL_ONNX_PATH}")
         except Exception as exc:                          # noqa: BLE001
             _warn_cep_only(f"ONNX init failed ({exc})")
+        print(f"[fraud_job] second look from {C.SECOND_LOOK_FROM:.4f} to the cut-off"
+              if C.SECOND_LOOK_FROM is not None else
+              f"[fraud_job] second look off: no {C.SECOND_LOOK_PATH} chosen under this cut-off")
 
     def _ml_score(self, feature_vector):
         if self._sess is None:
@@ -214,7 +217,8 @@ class FraudDetector(KeyedProcessFunction):
             # a substituted event.
             "ingress_hash": event.get("ingress_hash"),
         }
-        # The feature vector, on alerts only: case-manager explains from it and cannot
+        # The feature vector, on alerts and on transfers sent for a second look:
+        # case-manager explains from it, the second look scores it, and neither can
         # recompute sender state. NaN -> None, as a bare NaN is not valid JSON.
         if decision != "ALLOW":
             out["features"] = [None if v != v else round(float(v), 6)
@@ -326,9 +330,14 @@ def main():
     scored.sink_to(_kafka_sink(C.TOPIC_SCORED)).name("scored-sink")
 
     (scored
-     .filter(lambda v: json.loads(v)["decision"] != "ALLOW")
+     .filter(lambda v: json.loads(v)["decision"] == "REVIEW")
      .sink_to(_kafka_sink(C.TOPIC_ALERTS))
      .name("alerts-sink"))
+
+    (scored
+     .filter(lambda v: json.loads(v)["decision"] == "SECOND_LOOK")
+     .sink_to(_kafka_sink(C.TOPIC_SECOND_LOOK))
+     .name("second-look-sink"))
 
     env.execute("fraud-detection-cep-ml")
 

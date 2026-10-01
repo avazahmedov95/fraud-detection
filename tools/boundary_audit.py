@@ -207,6 +207,34 @@ def b_case_manager_reads_only_emitted_keys():
     return None
 
 
+def b_second_look_is_what_the_job_sends():
+    """The job sends a waiting transfer to the topic the second look reads, with the
+    keys it reads, and that topic is created."""
+    J, L = pkg("stream-processor", "config"), pkg("second-look", "config")
+    if J.TOPIC_SECOND_LOOK != L.TOPIC_SECOND_LOOK:
+        return f"the job writes {J.TOPIC_SECOND_LOOK}, the second look reads {L.TOPIC_SECOND_LOOK}"
+    if f"create {L.TOPIC_SECOND_LOOK} " not in _read("infra", "kafka", "create-topics.sh"):
+        return f"{L.TOPIC_SECOND_LOOK} is never created"
+    src = _read("second-look", "consumer.py") + _read("second-look", "decide.py")
+    read = set(re.findall(r'event(?:\.get\(\s*|\[)"([a-z_]+)"', src))
+    missing = sorted(read - _job_output_keys())
+    return f"the second look reads keys the job does not emit: {missing}" if missing else None
+
+
+def b_second_look_record_is_a_job_record():
+    """Its decision goes where the job's goes - warehouse, audit chain, queue - so it
+    carries everything the job's does; only the job's own stage times stay behind."""
+    D = pkg("second-look", "decide")
+    keys = _job_output_keys()
+    out = D.verdict(dict(dict.fromkeys(keys, 0), features=[0.0]), 1.0, 0.5, "checkpoint")
+    lost = sorted(keys - set(out) - {"stage_ms"})
+    if lost:
+        return f"the second look's record drops {lost}"
+    if out["decision"] != "REVIEW" or not out["model_version"].startswith(D.VERSION):
+        return "the second look's hold does not read as a REVIEW it made"
+    return None
+
+
 def b_neo4j_params_match_the_cypher():
     R = pkg("sink-writer", "record")
     src = _read("sink-writer", "neo4j_writer.py")
@@ -465,7 +493,7 @@ def b_every_module_is_documented():
     """Each package's README must mention every .py file beside it."""
     problems = []
     for pkg in ("stream-processor", "data-generator", "ml", "sink-writer",
-                "case-manager", "validation", "tools", "demo"):
+                "case-manager", "validation", "tools", "demo", "second-look"):
         d = os.path.join(ROOT, pkg)
         readme = os.path.join(d, "README.md")
         if not os.path.isdir(d) or not os.path.exists(readme):
@@ -662,6 +690,8 @@ CHECKS = [
     ("wire -> routing key, plaintext and encrypted", b_routing_key_survives_the_wire),
     ("job record -> sink-writer", b_sink_reads_only_emitted_keys),
     ("job record -> case-manager", b_case_manager_reads_only_emitted_keys),
+    ("job record -> second look (topic, keys)", b_second_look_is_what_the_job_sends),
+    ("second-look record -> where the job's goes", b_second_look_record_is_a_job_record),
     ("alert_params -> Neo4j Cypher", b_neo4j_params_match_the_cypher),
     ("scored_row -> ClickHouse 01-schema", b_scored_row_matches_the_schema),
     ("case_row -> ClickHouse 02-cases", b_case_row_matches_the_schema),

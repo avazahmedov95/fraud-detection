@@ -152,3 +152,8 @@ def test_the_summary_separates_what_holding_costs_from_what_it_keeps():
     assert s["FALSE_POSITIVE"]["max_s"] == pytest.approx(180)
     assert s["CONFIRMED_FRAUD"]["amount"] == ALERT["amount_uzs"]
     assert s["NEW"]["max_s"] == pytest.approx(600)
+
+
+def test_the_case_says_which_model_held_it():
+    row = _as_dict(CASE.case_row(dict(ALERT, model_version="second-look:tabpfn")))
+    assert row["model_version"] == "second-look:tabpfn"

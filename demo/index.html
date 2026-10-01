@@ -65,6 +65,7 @@ td.num,th.num{text-align:right}
 .tag.fraud{color:var(--alert);border-color:var(--alert-bar)}
 .dec{display:inline-block;font-size:.7rem;font-weight:600;letter-spacing:.03em;border-radius:5px;padding:2px 7px}
 .dec.ALLOW{background:var(--ok-soft);color:var(--ok)}.dec.REVIEW{background:var(--alert-soft);color:var(--alert)}
+.dec.SECOND_LOOK{background:#fdf1d8;color:#8a5a00}
 .rbar{display:inline-block;vertical-align:middle;width:64px;height:5px;border-radius:3px;background:var(--panel-2);position:relative;margin-right:7px}
 .rbar i{position:absolute;inset:0 auto 0 0;border-radius:3px;background:var(--accent)}.rbar.hot i{background:var(--alert-bar)}
 .scen{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 14px 14px}
@@ -367,7 +368,10 @@ ru: {
   own_ours: "поймано {rec} мошенничества, {prec} тревог настоящие (PR-AUC {prauc})",
   own_published: "нет: данные наши",
   sum: "сум", ms: "мс",
-  dec: {ALLOW: "Пропущен", REVIEW: "Задержан"},
+  dec: {ALLOW: "Пропущен", REVIEW: "Задержан", SECOND_LOOK: "Вторая проверка"},
+  part_second: "Вторая проверка — TabPFN", second_mark: "вторая проверка",
+  second_note: "Черта — порог TabPFN, {cut}: у неё своя шкала. Правее черты перевод задерживается до решения аналитика.",
+  note_waiting: "Риск чуть ниже уровня тревоги: перевод ждёт около секунды, пока его проверит вторая модель, TabPFN.",
   kind: {NORMAL: "Обычный перевод", APP: "Мошенник по телефону", ATO: "Захват аккаунта", MULE: "Дроп-счёт", STRUCTURING: "Дробление сумм"},
   kind_desc: {
     NORMAL: "Контрольный случай: привычный перевод знакомому получателю. Должен пройти.",
@@ -469,7 +473,10 @@ en: {
   own_ours: "caught {rec} of the fraud, {prec} of alerts real (PR-AUC {prauc})",
   own_published: "none: the data is ours",
   sum: "UZS", ms: "ms",
-  dec: {ALLOW: "ALLOW", REVIEW: "HELD"},
+  dec: {ALLOW: "ALLOW", REVIEW: "HELD", SECOND_LOOK: "SECOND LOOK"},
+  part_second: "Second look — TabPFN", second_mark: "second look",
+  second_note: "The line is TabPFN's own cut-off, {cut}: its scale is its own. Past it, the transfer is held for the analyst.",
+  note_waiting: "The risk is just under the alert level: the transfer waits about a second while a second model, TabPFN, looks at it.",
   kind: {NORMAL: "Ordinary transfer", APP: "Phone scam", ATO: "Account takeover", MULE: "Money mule", STRUCTURING: "Structuring"},
   kind_desc: {
     NORMAL: "The control case: a usual transfer to a known payee, which should pass.",
@@ -561,7 +568,7 @@ function openFilter(which) {
   const f = filters[which];
   const choice = which === "stream"
     ? `<label>${t("f_decision")}<select id="f-choice"><option value="">${t("f_all")}</option>` +
-      ["ALLOW", "REVIEW"].map(d => `<option value="${d}">${esc(t("dec")[d])}</option>`).join("") + `</select></label>`
+      ["ALLOW", "REVIEW", "SECOND_LOOK"].map(d => `<option value="${d}">${esc(t("dec")[d])}</option>`).join("") + `</select></label>`
     : `<label>${t("f_type")}<select id="f-choice"><option value="">${t("f_all")}</option>` +
       [...FRAUD_KINDS, "NONE"].map(k => `<option value="${k}">${esc(k === "NONE" ? t("type_none") : kindName(k))}</option>`).join("") + `</select></label>`;
   openModal(`<h3>${t(which === "stream" ? "f_title_stream" : "f_title_queue")}</h3>
@@ -728,7 +735,7 @@ function renderDetail() {
   if (fresh) selected.row = fresh;
   const x = selected && selected.row;
   if (!x) { $("#detail").innerHTML = `<p class="empty">${t("pick")}</p>`; return; }
-  const rules = x.rules || [], cut = status.cut;
+  const rules = x.rules || [], second = !!x.second, cut = second ? status.second_cut : status.cut;
   let rnote = "";
   if (rules.some(r => MUST.has(r))) rnote = t("note_must");
   else if (rules.length) rnote = x.type ? fill(t("note_named"), {type: kindName(x.type).toLowerCase()}) : t("note_reasons");
@@ -737,9 +744,10 @@ function renderDetail() {
     <div class="case-top"><span class="amount">${fmtInt(x.amount)} <small>${t("sum")}</small></span>${badge(x.decision)}</div>
     <div class="route">${esc(x.from)} → ${esc(x.to)}</div>
     <div class="part">
-      <div class="part-h"><span>${t("part_model")}</span><b>${t("risk")} ${dec(x.score, 2)}</b></div>
+      <div class="part-h"><span>${t(second ? "part_second" : "part_model")}</span><b>${t("risk")} ${dec(x.score, 2)}</b></div>
       <div class="track"><i style="width:${Math.max(2, Math.min(1, x.score || 0) * 100)}%"></i>${cut == null ? "" : `<span class="cut" style="left:${cut * 100}%"></span>`}</div>
-      ${cut == null ? "" : `<p class="small-note">${fill(t("cut_note"), {cut: dec(cut, 2)})}</p>`}
+      ${cut == null ? "" : `<p class="small-note">${fill(t(second ? "second_note" : "cut_note"), {cut: dec(cut, 2)})}</p>`}
+      ${x.decision === "SECOND_LOOK" ? `<p class="small-note">${t("note_waiting")}</p>` : ""}
       ${x.decision === "ALLOW" ? `<p class="small-note">${t("note_allowed")}</p>` : whyBlock(x.why)}
     </div>
     <div class="part">
@@ -756,7 +764,7 @@ function renderQueue() {
   $("#q-count").textContent = fmtInt(lastCases.total);
   $("#queue-more").innerHTML = moreBar("queue", cs.length, lastCases.total);
   $("#queue").innerHTML = cs.length ? cs.map(c => `<li data-case="${esc(c.id)}" class="${selected && selected.id === c.id ? "sel" : ""}">` +
-    `<div><div class="amt">${fmtInt(c.amount)} ${t("sum")}</div><div class="kind">${esc(c.type ? kindName(c.type) : t("type_none"))} · ${t("risk")} ${dec(c.score, 2)} · ${fill(t("held"), {t: fmtDur(c.held_s)})}</div></div>` +
+    `<div><div class="amt">${fmtInt(c.amount)} ${t("sum")}</div><div class="kind">${esc(c.type ? kindName(c.type) : t("type_none"))} · ${t("risk")} ${dec(c.score, 2)}${c.second ? " · " + t("second_mark") : ""} · ${fill(t("held"), {t: fmtDur(c.held_s)})}</div></div>` +
     `<div class="acts"><button type="button" class="primary" data-res="CONFIRMED_FRAUD">${t("confirm")}</button>` +
     `<button type="button" data-res="FALSE_POSITIVE">${t("fp")}</button></div></li>`).join("")
     : `<p class="empty">${t(filterCount("queue") ? "empty_filtered" : "empty_cases")}</p>`;

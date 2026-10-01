@@ -945,7 +945,12 @@ switch ($Target.ToLower()) {
         # The model's REVIEW cutoff: an unweighted committee's scale belongs to
         # it, and config._model_review_threshold reads it from here.
         Copy-Item "ml/models/thresholds.json" "stream-processor/" -Force
-        Write-Host "model + cutoff copied to stream-processor/"
+        # The second look's band (ml/second_look.py): the job sends a transfer just
+        # under the cut-off to TabPFN, and only while this file was chosen under it.
+        if (Test-Path "ml/models/second_look.json") {
+            Copy-Item "ml/models/second_look.json" "stream-processor/" -Force
+        }
+        Write-Host "model + cutoff (+ the second look's band) copied to stream-processor/"
     }
 
     # The latency knobs go to the client as -D too (read during job-graph

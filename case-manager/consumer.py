@@ -52,11 +52,11 @@ def main():
         for msg in consumer:
             received = True
             alert = msg.value
-            # Defensive: an ALLOW reaching the queue would be an analyst asked to
-            # investigate a transfer the system approved.
-            if alert.get("decision") == "ALLOW":
-                log.warning("ALLOW on the alert topic (transaction %s) - "
-                            "skipped; check the alerts-sink filter",
+            # Defensive: anything but a REVIEW reaching the queue would be an analyst
+            # asked to investigate a transfer nobody held.
+            if alert.get("decision") != "REVIEW":
+                log.warning("%s on the alert topic (transaction %s) - skipped; check "
+                            "the alerts-sink filter", alert.get("decision"),
                             alert.get("transaction_id"))
                 continue
             store.add(alert)

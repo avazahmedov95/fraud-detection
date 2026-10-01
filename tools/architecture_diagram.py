@@ -187,7 +187,7 @@ step(72.2, 56, "Receiver's\npayers", "Redis")
 step(81.9, 56, "Features")
 step(93.1, 65, "Hard rules", "Python", w=10.4)
 step(93.1, 47, "Model", "LightGBM,\nONNX Runtime", w=10.4, fill="#e6eefb")
-step(103.8, 56, "Decision", "ALLOW or\nHOLD", w=7.6)
+step(103.8, 56, "Decision", "allow, hold,\nsecond look", w=7.6)
 for a, b in ((57.0, 58.3), (66.7, 68.0), (76.4, 77.7)):
     arrow((a, 56), (b, 56))
 elbow([(86.1, 56), (87.0, 56), (87.0, 65), (87.9, 65)])
@@ -199,6 +199,12 @@ arrow((40.6, 56), (48.6, 56))
 database(72.2, 33, 5.5, 4, COLOUR["redis"])
 arrow((72.2, 52), (72.2, 36.2), both=True)
 text(66.5, 35.6, "Redis", "who recently paid\neach receiving account", ha="right")
+
+# The second look: a score just under the cut-off waits while TabPFN decides it.
+gear(103.8, 35.5, 2.4, "#7b4bb7")
+text(103.8, 32.4, "Second look", "TabPFN, Python")
+arrow((103.8, 52), (103.8, 38.4))
+arrow((106.4, 36.5), (114.6, 46.4), label="its decision", at=(110.5, 41.4))
 
 # ---------------------------------------------------------------- delivery
 text(121, 74, "Apache Kafka")

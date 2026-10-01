@@ -298,6 +298,32 @@ services:
     networks: [fraudnet]
     restart: unless-stopped
 
+  # The second look (second-look/README.md): TabPFN decides the transfers just under
+  # the review cut-off. Its context and cut-offs come from ml/models
+  # (ml/second_look.py); its weights are a gated download fetched by hand, named by
+  # TABPFN_CHECKPOINT in .env. Without them it says so and stops.
+  second-look:
+    build:
+      context: .
+      dockerfile: infra/second-look/Dockerfile
+    image: fraud-second-look:latest
+    container_name: second-look
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      # Two threads that sleep while they wait. With torch's default - a thread per
+      # core, spinning - an answer took 0.3 s on an idle machine and 6 to 20 s beside
+      # the running stream, whose processes the spinning threads fought for the cores.
+      OMP_NUM_THREADS: "2"
+      OMP_WAIT_POLICY: PASSIVE
+    volumes:
+      - ./ml/models:/models:ro
+      - ${TABPFN_CHECKPOINT:-./second-look}:/tabpfn/checkpoint.safetensors:ro
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [fraudnet]
+    restart: unless-stopped
+
   # The demo page (demo/README.md). It shows only a status screen until Kafka,
   # ClickHouse, the Flink job and the generated dataset are all there.
   demo:

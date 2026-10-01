@@ -63,6 +63,11 @@ ALTER TABLE fraud.cases
 ALTER TABLE fraud.cases
     ADD COLUMN IF NOT EXISTS explanation_status LowCardinality(String) DEFAULT '';
 
+-- Which model held the transfer: the served model's version, or the second look's
+-- for a transfer just under the cut-off that TabPFN held (second-look/README.md).
+ALTER TABLE fraud.cases
+    ADD COLUMN IF NOT EXISTS model_version LowCardinality(String) DEFAULT '';
+
 -- NOTE ON GRANULARITY. One case per alert. A mule receiving from twelve
 -- senders therefore produces up to twelve cases, where an investigator wants
 -- one. Grouping alerts into an investigation (by payee, within a window) is the

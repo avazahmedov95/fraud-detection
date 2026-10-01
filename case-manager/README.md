@@ -22,6 +22,11 @@ the released transfers - honest customers - waited, and how much the blocked one
 kept. A production switch would ask for the decision and wait for it before moving
 the money; the job takes 0.22 s at the 99th percentile (`docs/irp-framing.md` 7.1c).
 
+Some holds come from the second look (`second-look/README.md`): a transfer just
+under the cut-off that TabPFN called fraud. Its case carries the second look's
+`model_version`, its `final_score` is TabPFN's, and its explanation is still the
+served model's, checked against the `ml_score` the job recorded.
+
 ## Why the disposition matters more than the queue
 
 `CONFIRMED_FRAUD` / `FALSE_POSITIVE` is the **only real label this system can
@@ -45,7 +50,7 @@ the resolved set is biased towards high scores.
 | `consumer.py` | the service: `fraud.alerts` → `fraud.cases` |
 | `queue_cli.py` | the analyst surface: `list` / `show` / `resolve` / `stats` |
 | `config.py` | connections and batch settings, all from the environment |
-| `tests/test_case.py` | 15 tests, incl. the replay-cannot-revert-a-verdict property |
+| `tests/test_case.py` | 16 tests, incl. the replay-cannot-revert-a-verdict property |
 | `tests/test_store.py` | 14 tests against a fake ClickHouse: schema, FINAL, round trip, holds |
 | `tests/test_explain.py` | 14 tests, mostly about refusing to give a wrong reason |
 

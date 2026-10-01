@@ -16,6 +16,8 @@ def _fixed_model_cutoffs(monkeypatch):
     last copied beside the job: the model's cutoffs are pinned to the fixed ones.
     The two tests at the end read the shipped file through its loader instead."""
     monkeypatch.setattr(C, "MODEL_REVIEW_THRESHOLD", C.FINAL_REVIEW_THRESHOLD)
+    # The second look's band, likewise: off unless a test sets it.
+    monkeypatch.setattr(C, "SECOND_LOOK_FROM", None)
 
 
 def test_final_score_is_model_with_cep_fallback():
@@ -220,3 +222,20 @@ def test_the_model_cutoffs_come_from_the_file_shipped_with_it(tmp_path):
 def test_without_that_file_the_fixed_cutoffs_stand(tmp_path):
     assert C._model_review_threshold(str(tmp_path / "absent.json")) == \
         C.FINAL_REVIEW_THRESHOLD
+
+
+def test_a_score_just_under_the_cutoff_waits_for_a_second_look(monkeypatch):
+    monkeypatch.setattr(C, "SECOND_LOOK_FROM", 0.30)
+    assert decide(0.35, []) == "SECOND_LOOK"
+    assert decide(0.25, []) == "ALLOW"
+    assert decide(0.45, []) == "REVIEW"                  # past the cut-off: held outright
+    assert decide(0.35, ["STRUCTURING"]) == "REVIEW"     # a mandatory rule holds it outright
+    assert decide(0.35, [], cep_only=True) == "ALLOW"    # the band is the model's
+
+
+def test_the_band_belongs_to_the_cutoff_it_was_chosen_under(tmp_path):
+    spec = tmp_path / "second_look.json"
+    spec.write_text('{"from": 0.04, "review": 0.1}')
+    assert C._second_look_from(str(spec), 0.1) == 0.04
+    assert C._second_look_from(str(spec), 0.2) is None          # another model's cut-off
+    assert C._second_look_from(str(tmp_path / "absent.json"), 0.1) is None

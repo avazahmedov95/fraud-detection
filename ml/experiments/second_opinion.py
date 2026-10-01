@@ -85,12 +85,18 @@ def cost(Xfit, yfit, X, tabpfn_model):
               f"after {fitted:.0f} s to take the context")
 
 
+def band_of(served, cut):
+    """The BAND highest-scored rows under the cut-off, highest first. ml/second_look.py
+    exports the band this chooses on the cutoff rows."""
+    below = np.flatnonzero(served < cut)
+    return below[np.argsort(-served[below])][:BAND]
+
+
 def held_out(Xfit, yfit, Xva, yva, Xte, yte, served_va, served_te, cut, tabpfn_model):
     """The first band, read where nothing was chosen. The band's floor and TabPFN's
     threshold in it are fixed on the cutoff rows first; the held-out slice only
     answers whether TabPFN still finds more there than a lowered cut-off would."""
-    below = np.flatnonzero(served_va < cut)
-    band_va = below[np.argsort(-served_va[below])][:BAND]
+    band_va = band_of(served_va, cut)
     floor = served_va[band_va[-1]]
     band_te = np.flatnonzero((served_te >= floor) & (served_te < cut))
     band_te = band_te[np.argsort(-served_te[band_te])]

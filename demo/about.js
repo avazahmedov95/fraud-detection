@@ -42,7 +42,8 @@ const COMPONENTS = [
   {id: "gen", group: "in"}, {id: "raw", group: "in"},
   {id: "decode", group: "engine"}, {id: "state", group: "engine"}, {id: "redis", group: "engine", store: true},
   {id: "rules", group: "engine"}, {id: "model", group: "engine", ml: true}, {id: "decide", group: "engine"},
-  {id: "out", group: "out"}, {id: "sink", group: "out"}, {id: "ch", group: "out", store: true},
+  {id: "out", group: "out"}, {id: "second", group: "out", ml: true},
+  {id: "sink", group: "out"}, {id: "ch", group: "out", store: true},
   {id: "neo", group: "out", store: true}, {id: "cases", group: "out"}, {id: "dash", group: "out"}
 ];
 // The path one transfer takes: the component it is at, and the stage of the
@@ -95,6 +96,9 @@ ru: {
     out: ["Kafka: решения и тревоги", "Apache Kafka", "transactions.scored, fraud.alerts", [
       "Каждое решение уходит в одну очередь, тревоги — ещё и в отдельную.",
       "Так запись в базу и работа аналитика не мешают друг другу."]],
+    second: ["Вторая проверка", "Python · TabPFN", "second-look", [
+      "Переводы с риском чуть ниже уровня тревоги ждут около секунды, пока их проверит вторая модель — TabPFN.",
+      "Видит мошенничество — перевод задерживается и попадает к аналитику, иначе уходит. На отложенных данных так нашлось больше половины мошенничеств, которые основная модель пропускала."]],
     sink: ["Запись в базу", "Python", "sink-writer", [
       "Читает решения из Kafka и пачками записывает их в ClickHouse, а тревоги — в граф Neo4j.",
       "Если база недоступна, продолжает работать и считает, сколько записей потеряно."]],
@@ -231,6 +235,9 @@ en: {
     out: ["Kafka: decisions and alerts", "Apache Kafka", "transactions.scored, fraud.alerts", [
       "Every decision goes to one topic, and alerts to a second one as well.",
       "So writing to the database and the analyst's work do not hold each other up."]],
+    second: ["Second look", "Python · TabPFN", "second-look", [
+      "Transfers with a risk just under the alert level wait about a second while a second model, TabPFN, looks at them.",
+      "If it sees fraud, the transfer is held for the analyst; otherwise it goes. On held-out data this found more than half of the frauds the main model missed."]],
     sink: ["Sink writer", "Python", "sink-writer", [
       "Reads the decisions from Kafka and writes them to ClickHouse in batches, and the alerts to the Neo4j graph.",
       "When a database is down it keeps running and counts how many records were lost."]],

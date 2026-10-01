@@ -137,7 +137,9 @@ def audit_signed_values(core: list) -> list:
 
 
 def is_alert(e: dict) -> bool:
-    return e.get("decision") not in (None, "ALLOW")
+    """A held transfer. A SECOND_LOOK is not one yet: it waits for the second look's
+    own record, which arrives on this topic as REVIEW or ALLOW."""
+    return e.get("decision") == "REVIEW"
 
 
 def alert_params(e: dict) -> dict:

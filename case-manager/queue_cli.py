@@ -54,6 +54,8 @@ def cmd_list(args):
             else:
                 reasons = f"(unexplained: {r.get('explanation_status') or 'none'})"
                 unexplained += 1
+        if (r.get("model_version") or "").startswith("second-look"):
+            reasons = "held by the second look; " + reasons
         print(f"{r['case_id']:<{_ID_W}}{_duration(held_seconds(r, now)):>9}"
               f"{r['final_score']:>7.3f}{r['amount_uzs']:>16,}"
               f"  {r['predicted_type'] or '-':<12}{reasons}")

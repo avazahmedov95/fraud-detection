@@ -40,7 +40,7 @@ CASE_COLUMNS = [
     "sender_card", "receiver_card", "amount_uzs", "final_score",
     "decision", "predicted_type", "rule_hits",
     "disposition", "resolved_by", "resolved_at", "version",
-    "explanation", "explanation_status",
+    "explanation", "explanation_status", "model_version",
 ]
 
 
@@ -67,6 +67,7 @@ def case_row(alert: dict, explanation=None, explanation_status="") -> list:
         OPEN_VERSION_EXPLAINED if explanation else OPEN_VERSION,
         list(explanation or []),
         explanation_status or "",
+        alert.get("model_version") or "",           # the second look's, when it held it
     ]
 
 

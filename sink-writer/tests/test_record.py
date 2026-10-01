@@ -46,6 +46,8 @@ def test_audit_payload_is_full_json():
 def test_is_alert():
     assert R.is_alert(SCORED) is True
     assert R.is_alert(ALLOW) is False
+    # Waiting for the second look is not yet a hold: no node in the alert graph.
+    assert R.is_alert(dict(SCORED, decision="SECOND_LOOK")) is False
 
 
 def test_alert_params_links_by_card():

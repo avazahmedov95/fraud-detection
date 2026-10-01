@@ -715,6 +715,7 @@ python experiments/models.py --cache models_matrix.npz --chunks       --tabpfn-m
 python experiments/models.py --cache models_matrix.npz --chunks --paired --tabpfn-model <checkpoint>                              # the same, five paired fits
 python experiments/second_opinion.py --cache models_matrix.npz --tabpfn-model <checkpoint>                                        # TabPFN after the served model
 python experiments/second_opinion.py --cache models_matrix.npz --tabpfn-model <checkpoint> --test                                 # its band, on the held-out slice
+python second_look.py --cache models_matrix.npz --tabpfn-model <checkpoint>                                                       # the second look's band and context
 ```
 
 The first run builds the cache from `train.py`'s own matrix; the rest read it.
@@ -915,9 +916,19 @@ raise as many alerts. On the 100,000 held-out rows the band holds 118 transfers
 the band's floor would catch all 18 at 100 false alarms. Recall on the slice goes
 from 67.0% to **73.3%**, alerts from 186 to 213.
 
-One held-out read, and small numbers: 11 against 4 out of 18. Building it would
-change the scoring job, which attaches the feature vector to alerts only. Nothing
-is adopted.
+One held-out read, and small numbers: 11 against 4 out of 18.
+
+**Served as the second look** (2026-10-01; `second-look/README.md`). `second_look.py`
+writes the band and TabPFN's context beside the model, chosen on the cutoff rows as
+above, with two changes the service needed. *Two pieces, not five:* in the service
+each piece keeps its own copy of TabPFN's weights, a gigabyte apiece, so a rule
+written before the run took the fewest pieces that hold as much of the cutoff band's
+fraud as five with no more alerts - two held 9 of its 11 at 22 alerts, five 9 at 23,
+one 8. *A cut-off 1e-4 under the F1 peak:* the peak sits on one fraud row's score,
+and the service's cached TabPFN answers within 1e-5 of the uncached one, enough to
+drop that row under its own cut-off. Served that way (cut-off 0.8834), the second
+look holds 23 of the held-out band's 118 transfers, 11 of them fraud, where a cut-off
+lowered to raise 23 alerts catches 3; an answer takes about 0.3 s.
 
 ## Capability ablation
 

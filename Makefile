@@ -56,8 +56,9 @@ produce-stream-docker: ## paced replay from INSIDE the network - required for la
 load-graph: ## load the account population into Neo4j
 	$(COMPOSE) exec -T neo4j cypher-shell -u neo4j -p $${NEO4J_PASSWORD} < infra/neo4j/import.cypher
 
-serve-prep: ## copy the trained ONNX model and its cutoff next to the Flink job
+serve-prep: ## copy the trained ONNX model, its cutoff and the second look's band next to the Flink job
 	cp ml/models/model.onnx ml/models/thresholds.json stream-processor/
+	if [ -f ml/models/second_look.json ]; then cp ml/models/second_look.json stream-processor/; fi
 
 # Every module fraud_job.py imports, transitively - boundary_audit.py checks both
 # submitters against it (--pyFiles, not the mount, is what reaches sys.path).

@@ -7,7 +7,8 @@ transactions.raw --(key by sender)--> CEP rules (pure, stateful; payee windows i
                                     --> ONNX model on the feature vector
                                     --> final_score + decision
                  --> transactions.scored   (every event)
-                 --> fraud.alerts          (decision != ALLOW)
+                 --> fraud.alerts          (REVIEW: the transfer is held for the analyst)
+                 --> fraud.second_look     (SECOND_LOOK: just under the cut-off, for TabPFN)
 ```
 
 ## Files
@@ -79,7 +80,11 @@ layer**, not by averaging:
   — there for the regulation, not the score: on the current held-out month they
   add one alert, a false one, to the model's 186 (`ml/experiments/layers.py`) —
   plus per-alert **reason codes** (`rule_hits`) and a `predicted_type` tag
-  explaining each alert.
+  explaining each alert;
+- a model score in the band just under the cut-off, from `second_look.json`'s `from`
+  (0.0419 today), is decided **SECOND_LOOK**: the transfer waits while TabPFN
+  decides it (`second-look/README.md`). serve-prep copies the band beside the model,
+  and the job reads it only while it was chosen under the cut-off it serves.
 
 A blend is not the only way the rules could reach the decision, and the other way
 is measured too. Letting the CEP verdict act as a **floor** — it can only raise a

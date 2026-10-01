@@ -32,6 +32,7 @@ def kafka_security_properties():
 TOPIC_RAW = os.getenv("TOPIC_RAW", "transactions.raw")
 TOPIC_SCORED = os.getenv("TOPIC_SCORED", "transactions.scored")
 TOPIC_ALERTS = os.getenv("TOPIC_ALERTS", "fraud.alerts")
+TOPIC_SECOND_LOOK = os.getenv("TOPIC_SECOND_LOOK", "fraud.second_look")
 CONSUMER_GROUP = os.getenv("CONSUMER_GROUP", "fraud-cep")
 
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
@@ -175,6 +176,23 @@ def _model_review_threshold(path):
 
 
 MODEL_REVIEW_THRESHOLD = _model_review_threshold(THRESHOLDS_PATH)
+
+SECOND_LOOK_PATH = _resolve_artefact("SECOND_LOOK_PATH", "second_look.json")
+
+
+def _second_look_from(path, review):
+    """Where the band the second look reads begins (ml/second_look.py), or None to
+    send it nothing: without the file, or when the band was chosen under another
+    review cut-off - a band chosen for one model means nothing under another."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            spec = json.load(fh)
+        return float(spec["from"]) if float(spec["review"]) == review else None
+    except (OSError, KeyError, TypeError, ValueError):
+        return None
+
+
+SECOND_LOOK_FROM = _second_look_from(SECOND_LOOK_PATH, MODEL_REVIEW_THRESHOLD)
 
 # Force at least REVIEW regardless of the model score (AML / Regulation 3759).
 MANDATORY_REVIEW_RULES = ("STRUCTURING", "DAILY_LIMIT_BREACH")

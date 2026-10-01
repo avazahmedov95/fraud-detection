@@ -32,6 +32,7 @@ venv/
 ml/models/*.joblib
 ml/models/*.onnx
 ml/models/*.txt
+ml/models/*.npz
 # manifest.json is the PROVENANCE record and IS tracked - it is what says the
 # untracked artefacts above belonged together.
 !ml/models/manifest.json
@@ -45,6 +46,7 @@ ml/models/*.png
 # deployed model artifacts (copied from ml/models at deploy)
 stream-processor/model.onnx
 stream-processor/thresholds.json
+stream-processor/second_look.json
 
 # TLS material for the mutual-TLS arm (regenerate with `run.ps1 make-certs`).
 # The CA private key lives here alongside the certificates it signs, which is

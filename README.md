@@ -34,10 +34,11 @@ fraud-detection/
 ├── stream-processor/       PyFlink: CEP + ONNX + fusion
 ├── ml/                     LightGBM committee -> ONNX, tree contributions
 ├── sink-writer/            transactions.scored -> ClickHouse + Neo4j
-├── case-manager/           fraud.alerts -> the analyst work queue
+├── case-manager/           fraud.alerts -> the held transfers, the analyst's queue
 │   ├── case.py  store.py   an alert becomes a case; a verdict becomes a label
 │   ├── explain.py          exact tree contributions, for alerts no rule explains
 │   └── queue_cli.py        list / show / resolve / stats
+├── second-look/            TabPFN decides the transfers just under the cut-off
 ├── validation/             the deployed rules run on FOREIGN datasets
 │   ├── paysim_adapter.py   PaySim, and what transfers from it
 │   ├── ibm_aml_adapter.py  IBM AML, for information: the collection stage
@@ -78,17 +79,18 @@ Each package keeps its tests in its own `tests/` directory, and the packages are
 run **one at a time**:
 
 ```bash
-python -m pytest stream-processor -q     # 190
+python -m pytest stream-processor -q     # 192
 python -m pytest data-generator   -q     #  26
 python -m pytest sink-writer      -q     #  27
 python -m pytest validation       -q     #  25
-python -m pytest case-manager     -q     #  43
+python -m pytest case-manager     -q     #  44
 python -m pytest ml               -q     #  9
-python -m pytest demo             -q     #  26
+python -m pytest demo             -q     #  27
+python -m pytest second-look      -q     #   6
 ```
 
-Not all seven in one invocation: five module names recur across packages
-(`config.py` in four of them, `consumer.py`, `explain.py`, `integrity.py`,
+Not all eight in one invocation: five module names recur across packages
+(`config.py` in five of them, `consumer.py`, `explain.py`, `integrity.py`,
 `payload_crypto.py`), because the packages deploy as separate units, and pytest
 cannot import two modules of the same name.
 
@@ -98,7 +100,7 @@ scored 1 on 100% of live events, `test_payload_crypto.py` after the risk of two
 copies of one module drifting. They are regression evidence, not coverage.
 
 ```bash
-python tools/boundary_audit.py           # 24 joins between components
+python tools/boundary_audit.py           # 26 joins between components
 ```
 
 checks what the tests cannot: that what one component *produces* is what the
@@ -157,7 +159,8 @@ From inside the Docker network use service names: `kafka:9092`, `redis:6379`,
 |---|---|
 | `transactions.raw` | events from the switch (keyed by sender) |
 | `transactions.scored` | every transaction, scored and decided |
-| `fraud.alerts` | REVIEW decisions, for the analyst queue |
+| `fraud.alerts` | REVIEW decisions: each holds its transfer for the analyst |
+| `fraud.second_look` | transfers just under the cut-off, waiting for TabPFN |
 
 ## Status
 

@@ -193,6 +193,20 @@ def _review_cut():
         return None
 
 
+def _second_cut():
+    """The second look's own cut-off on TabPFN's scale (ml/second_look.py), if any."""
+    try:
+        with open(os.path.join(MODELS, "second_look.json"), encoding="utf-8") as fh:
+            return float(json.load(fh)["cut"])
+    except (OSError, KeyError, TypeError, ValueError):
+        return None
+
+
+def _second(rec):
+    """Whether the second look, not the job, took this decision."""
+    return (rec.get("model_version") or "").startswith("second-look")
+
+
 def decision_ms(rec):
     """Arrival to decision: the producer's ingested_at to the job's scored_at_job,
     both stamped on the containers' clock."""
@@ -400,16 +414,22 @@ class Decisions:
     def add(self, rec):
         with self.lock:
             self.recent.append(rec)
+            # A transfer sent for a second look is decided twice: it counts once, as
+            # its latest decision, and its time to decision is the job's.
+            prev = self.by_id.get(rec.get("transaction_id"))
+            if prev is not None:
+                self.counts[prev.get("decision") or "?"] -= 1
             if rec.get("transaction_id"):
                 self.by_id[rec["transaction_id"]] = rec
                 while len(self.by_id) > 50_000:
                     self.by_id.popitem(last=False)
             self.counts[rec.get("decision") or "?"] += 1
-            ms = decision_ms(rec)
+            ms = decision_ms(rec) if prev is None else None
             if ms is not None:
                 self.ms.append(ms)
             self.last_at = time.time()
-            self.model = rec.get("model_version") or self.model
+            if not _second(rec):                           # the chip names the served model
+                self.model = rec.get("model_version") or self.model
 
     def run(self):
         from kafka import KafkaConsumer
@@ -481,14 +501,14 @@ def view(rec):
             "to": mask(rec.get("receiver_card")), "decision": rec.get("decision"),
             "score": rec.get("final_score"), "type": rec.get("predicted_type"),
             "rules": rec.get("rule_hits") or [], "ms": decision_ms(rec),
-            "stages": rec.get("stage_ms") or {}}
+            "stages": rec.get("stage_ms") or {}, "second": _second(rec)}
 
 
 class App:
     def __init__(self, csv_path=CSV_PATH):
         self.decisions, self.background, self.sender = Decisions(), Background(), Sender()
         self.runs, self.started = OrderedDict(), time.time()
-        self.grafana, self.cut = _dashboard_url(), _review_cut()
+        self.grafana, self.cut, self.second_cut = _dashboard_url(), _review_cut(), _second_cut()
         self._store, self._warehouse, self._explainer = None, None, None
         try:
             self.library, self.library_error = Episodes(csv_path), ""
@@ -519,6 +539,7 @@ class App:
                 "background": {"on": self.background.running()},
                 "counts": counts, "median_ms": _quantile(ms, 0.5), "p99_ms": _quantile(ms, 0.99),
                 "last_decision": d.last_at, "model": d.model, "cut": self.cut,
+                "second_cut": self.second_cut,
                 "grafana": self.grafana}
 
     def stream(self, flt=None, limit=PAGE):
@@ -663,7 +684,7 @@ class App:
                            "from": mask(c["sender_card"]), "to": mask(c["receiver_card"]),
                            "decision": c["decision"], "type": c["predicted_type"],
                            "score": c["final_score"], "rules": list(c["rule_hits"] or []),
-                           "held_s": round(CASE.held_seconds(c, now)),
+                           "held_s": round(CASE.held_seconds(c, now)), "second": _second(c),
                            "why": {"status": c.get("explanation_status") or "",
                                    "items": split_phrases(c.get("explanation") or [])}}
                           for c in items],
