@@ -134,14 +134,19 @@ def section_second_look(Xfit, yfit, Xva, yva, Xte, yte, pva, pte, cut, tabpfn_mo
                         width=70):
     """The second look carried over from this project's own data unchanged
     (ml/experiments/second_opinion.py as_served): only TabPFN's cut-off is chosen
-    here, on the cutoff rows. TabPFN lives in its own environment, .venv-models."""
+    here, on the cutoff rows. Read twice: as served, and with no more fraud in a
+    piece of TabPFN's context than the served context holds - a foreign training
+    slice can fill half a piece with fraud. TabPFN lives in .venv-models."""
     experiments = os.path.join(os.path.dirname(_SP), "ml", "experiments")
     if experiments not in sys.path:
         sys.path.insert(0, experiments)
     import second_opinion as SO
-    print()
-    _head("THE SECOND LOOK, AS SERVED, READ ONCE ON THE HELD-OUT ROWS", width)
-    SO.as_served(Xfit, yfit, Xva, yva, Xte, yte, pva, pte, cut, tabpfn_model)
+    for capped, title in ((False, "THE SECOND LOOK, AS SERVED, READ ONCE ON THE HELD-OUT ROWS"),
+                          (True, "THE SAME, NO MORE FRAUD IN A PIECE THAN THE SERVED CONTEXT")):
+        print()
+        _head(title, width)
+        SO.as_served(Xfit, yfit, Xva, yva, Xte, yte, pva, pte, cut, tabpfn_model,
+                     capped=capped)
 
 
 def capability_profile(*off, payee_identity="pinfl"):

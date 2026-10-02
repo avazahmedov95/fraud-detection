@@ -188,14 +188,21 @@ def small(cache, tabpfn_model=None, fit_rows=TABPFN_ROWS, eval_legit=3000):
            Xfit, yfit, Xva, yva, Xte, yte, spw)
 
 
-def _pieces(yfit, rows=TABPFN_ROWS, seed=42):
+def _pieces(yfit, rows=TABPFN_ROWS, seed=42, fraud_rows=None):
     """The training slice in pieces TabPFN can read: every fraud row in each piece
     and the ordinary rows dealt out between them, so that together they hold the
-    whole slice and none holds more rows than TabPFN takes on a CPU."""
+    whole slice and none holds more rows than TabPFN takes on a CPU. With
+    `fraud_rows`, a piece holds at most that many fraud rows, a draw of its own,
+    and more of the ordinary ones."""
+    rng = np.random.default_rng(seed)
     fraud = np.flatnonzero(yfit == 1)
-    legit = np.random.default_rng(seed).permutation(np.flatnonzero(yfit == 0))
-    count = -(-len(legit) // (rows - len(fraud)))
-    return [np.concatenate([fraud, part]) for part in np.array_split(legit, count)]
+    legit = rng.permutation(np.flatnonzero(yfit == 0))
+    per = len(fraud) if fraud_rows is None else min(fraud_rows, len(fraud))
+    count = -(-len(legit) // (rows - per))
+    drawn = rng.permutation(fraud)
+    return [np.concatenate([fraud if per == len(fraud)
+                            else drawn[np.arange(k * per, (k + 1) * per) % len(fraud)], part])
+            for k, part in enumerate(np.array_split(legit, count))]
 
 
 def _in_pieces(Xfit, yfit, X, pieces, tabpfn_model, seed=0):

@@ -936,7 +936,9 @@ Read again on 2026-10-02 with `--test --served`, the reading the public datasets
 fraud and 12 false, and **recall 67.0% -> 73.3% for alerts 186 -> 209**. On PaySim it
 gains less than a point - 27.4% to 28.2%, 7 fraud in 8 holds - and on IBM AML it
 gains eight, 44.3% to 52.2%, but at 737 more alerts and little better than a lowered
-cut-off: 130 laundering against 121.
+cut-off: 130 laundering against 121. Their pieces are 39% and 50% fraud, against
+11.5% here; capped at this share, TabPFN still finds on IBM what a lowered cut-off
+finds (150 against 147), so the context was not why.
 
 ## Capability ablation
 

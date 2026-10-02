@@ -94,7 +94,7 @@ def band_of(served, cut, n=BAND):
 
 
 def held_out(Xfit, yfit, Xva, yva, Xte, yte, served_va, served_te, cut, tabpfn_model,
-             band=BAND, pieces=PIECES, tie=0.0):
+             band=BAND, pieces=PIECES, tie=0.0, fraud_rows=None):
     """The first band, read where nothing was chosen. The band's floor and TabPFN's
     threshold in it are fixed on the cutoff rows first; the held-out slice only
     answers whether TabPFN still finds more there than a lowered cut-off would."""
@@ -102,11 +102,16 @@ def held_out(Xfit, yfit, Xva, yva, Xte, yte, served_va, served_te, cut, tabpfn_m
     floor = served_va[band_va[-1]]
     band_te = np.flatnonzero((served_te >= floor) & (served_te < cut))
     band_te = band_te[np.argsort(-served_te[band_te])]
+    context = M._pieces(yfit, fraud_rows=fraud_rows)[:pieces]
     *_, (_, tab, _) = M._in_pieces(Xfit, yfit, np.concatenate([Xva[band_va], Xte[band_te]]),
-                                   M._pieces(yfit)[:pieces], tabpfn_model)
+                                   context, tabpfn_model)
     t = M._cut(yva[band_va], tab[:len(band_va)]) - tie
+    yb, fb = yva[band_va], tab[:len(band_va)] >= t
     print(f"fixed on the cutoff rows: the band of {len(band_va)} rows from {floor:.4f} to "
-          f"the cut-off {cut:.4f}, TabPFN on {pieces} pieces alerting at {t:.4f}\n")
+          f"the cut-off {cut:.4f}, TabPFN on {pieces} pieces of {yfit[context[0]].mean():.1%} "
+          f"fraud alerting at {t:.4f}; there it finds {int(yb[fb].sum())} of "
+          f"{int(yb.sum())} fraud at {int(fb.sum())} alerts, a cut-off lowered as far "
+          f"{int(yb[:int(fb.sum())].sum())}\n")
     y, flag = yte[band_te], tab[len(band_va):] >= t
     m, hit = int(flag.sum()), int(y[flag].sum())
     raised, caught, total = int((served_te >= cut).sum()), int(yte[served_te >= cut].sum()), int(yte.sum())
@@ -120,16 +125,24 @@ def held_out(Xfit, yfit, Xva, yva, Xte, yte, served_va, served_te, cut, tabpfn_m
           f"alerts {raised} -> {raised + m}")
 
 
-def as_served(Xfit, yfit, Xva, yva, Xte, yte, served_va, served_te, cut, tabpfn_model):
+def as_served(Xfit, yfit, Xva, yva, Xte, yte, served_va, served_te, cut, tabpfn_model,
+              capped=False):
     """held_out with the second look as the service runs it (ml/second_look.py): its
     pieces and its tie, and a band holding the share of the cutoff rows it holds on
-    this project's own data - so another dataset is read the same way, untuned."""
+    this project's own data - so another dataset is read the same way, untuned.
+    `capped`: a piece holds no larger a share of fraud than the served context does
+    (second_look.npz), where a foreign training slice has more fraud than one piece
+    can hold at that share; on this project's own data nothing changes."""
     import second_look as SL
     with open(os.path.join(M._PKG, "models", "second_look.json"), encoding="utf-8") as fh:
         chosen = json.load(fh)["chosen_on"]
     band = max(1, round(len(yva) * chosen["band"] / chosen["rows"]))
+    fraud_rows = None
+    if capped:
+        with np.load(os.path.join(M._PKG, "models", "second_look.npz")) as z:
+            fraud_rows = round(float(z["y"][z["piece"] == 0].mean()) * M.TABPFN_ROWS)
     held_out(Xfit, yfit, Xva, yva, Xte, yte, served_va, served_te, cut, tabpfn_model,
-             band=band, pieces=SL.PIECES, tie=SL.TIE)
+             band=band, pieces=SL.PIECES, tie=SL.TIE, fraud_rows=fraud_rows)
 
 
 def main():

@@ -189,6 +189,13 @@ than lowering the cut-off, and small: most of the fraud the model misses here sc
 far below the band. Each piece holds all 1,955 fraud rows of the training slice and
 3,045 ordinary ones - 39% fraud, against 11% on this project's data.
 
+**With the context capped** at the served context's share of fraud, 11.6% - each
+piece its own draw of the training slice's fraud (`as_served(capped=True)`, printed
+second): TabPFN holds 19, **10 fraud, 9 false**, where a lowered cut-off would catch
+6. More fraud for more false alarms, by about the same margin over the lowered
+cut-off; on the cutoff band it found 10 of 15 at 44 alerts, the served context 5 at
+11.
+
 ---
 
 ## Tests
@@ -613,8 +620,14 @@ The band holds 959 held-out rows (0.11%), 152 of them laundering. TabPFN holds 7
 **130 laundering, 607 false** - and a cut-off lowered to raise 737 alerts would catch
 121. Recall rises eight points, but nearly all of it is what lowering the cut-off
 buys: TabPFN barely sorts this band, and the alerts almost double. Its pieces are
-half laundering, 2,519 rows beside 2,481 ordinary ones, so it sees few of the
-ordinary transfers that score like laundering - a likely reason, not tested here.
+half laundering, 2,519 rows beside 2,481 ordinary ones.
+
+**Nor is that the reason.** Capped at the served context's 11.5% laundering, as for
+PaySim in section 1, TabPFN holds 929 of the 959 - **150 laundering, 779 false** -
+and a lowered cut-off would catch 147; on the cutoff band it alerted on 1,095 of
+1,122 rows. Whatever its context holds, TabPFN finds in this band what lowering the
+cut-off finds: with these 18 features neither model tells the laundering there from
+the ordinary transfers around it.
 
 ### Re-run 2026-09-21 (`--budgets`): recall at a fixed alert budget
 
