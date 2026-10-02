@@ -125,6 +125,14 @@ def held_out(Xfit, yfit, Xva, yva, Xte, yte, served_va, served_te, cut, tabpfn_m
           f"alerts {raised} -> {raised + m}")
 
 
+def served_band(rows):
+    """The band the service reads, as a count of `rows` cutoff rows: the share of
+    them it holds on this project's own data."""
+    with open(os.path.join(M._PKG, "models", "second_look.json"), encoding="utf-8") as fh:
+        chosen = json.load(fh)["chosen_on"]
+    return max(1, round(rows * chosen["band"] / chosen["rows"]))
+
+
 def as_served(Xfit, yfit, Xva, yva, Xte, yte, served_va, served_te, cut, tabpfn_model,
               capped=False):
     """held_out with the second look as the service runs it (ml/second_look.py): its
@@ -134,15 +142,12 @@ def as_served(Xfit, yfit, Xva, yva, Xte, yte, served_va, served_te, cut, tabpfn_
     (second_look.npz), where a foreign training slice has more fraud than one piece
     can hold at that share; on this project's own data nothing changes."""
     import second_look as SL
-    with open(os.path.join(M._PKG, "models", "second_look.json"), encoding="utf-8") as fh:
-        chosen = json.load(fh)["chosen_on"]
-    band = max(1, round(len(yva) * chosen["band"] / chosen["rows"]))
     fraud_rows = None
     if capped:
         with np.load(os.path.join(M._PKG, "models", "second_look.npz")) as z:
             fraud_rows = round(float(z["y"][z["piece"] == 0].mean()) * M.TABPFN_ROWS)
     held_out(Xfit, yfit, Xva, yva, Xte, yte, served_va, served_te, cut, tabpfn_model,
-             band=band, pieces=SL.PIECES, tie=SL.TIE, fraud_rows=fraud_rows)
+             band=served_band(len(yva)), pieces=SL.PIECES, tie=SL.TIE, fraud_rows=fraud_rows)
 
 
 def main():

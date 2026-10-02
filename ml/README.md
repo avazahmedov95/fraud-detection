@@ -13,6 +13,7 @@ committee.py      five fits averaged into the one booster the job serves
 export_onnx.py    LightGBM -> ONNX + parity check vs the native model
 manifest.py       provenance: what the untracked artefacts were built from
 explain.py        global importance (beeswarm + bar) and per-alert reason codes
+second_look.py    the second look's band and TabPFN context, beside the model
 
 experiments/      harnesses - each produces a NUMBER, not an artefact the
                   system uses, and none is imported by the pipeline above
@@ -24,6 +25,10 @@ experiments/      harnesses - each produces a NUMBER, not an artefact the
   layers.py       the rules alone, the model alone and the deployed decision
   recall.py       per-type recall across seeds (budgeted; resumes)
   models.py       the served recipe against five other model families
+  second_opinion.py  TabPFN after the served model: the queue, the band under the
+                  cut-off; --test --served reads it on the held-out slice
+  second_look_seeds.py  the model alone, with a lowered cut-off and with the
+                  second look, on twenty generator seeds (resumes)
                   One-off experiments are deleted once their decision is
                   written below: git log --diff-filter=D -- ml/experiments
 
@@ -939,6 +944,33 @@ gains eight, 44.3% to 52.2%, but at 737 more alerts and little better than a low
 cut-off: 130 laundering against 121. Their pieces are 39% and 50% fraud, against
 11.5% here; capped at this share, TabPFN still finds on IBM what a lowered cut-off
 finds (150 against 147), so the context was not why.
+
+**Twenty datasets, 2026-10-02** (`experiments/second_look_seeds.py`). The read above
+rests on 18 frauds in one band. Here the realistic profile runs under the twenty
+generator seeds of `recall.py` - other people, other fraud: 3,497 held-out frauds,
+530 of them in the bands - and each seed is read as the system decides on its own
+data: the served recipe fitted, its cut-off and band chosen on the cutoff rows,
+TabPFN's context and cut-off as `second_look.py` chooses them, the held-out rows read
+once. Seed 42 is the dataset of record, reproduced to the transfer. Means over the
+seeds, with the 95% interval of the mean:
+
+| system | PR-AUC | recall | precision | F1 | alerts | caught |
+|---|---|---|---|---|---|---|
+| the model alone | 0.618 | 54.4% ± 3.7 | 70.5% ± 4.7 | 60.8% ± 3.0 | 2,713 | 1,903 |
+| a cut-off lowered to as many alerts | 0.618 | 61.0% ± 3.5 | 60.8% ± 4.7 | 60.1% ± 2.8 | 3,563 | 2,136 |
+| **the second look** | 0.618 | **62.9% ± 3.8** | 62.6% ± 4.7 | **62.0% ± 2.9** | 3,563 | **2,203** |
+
+Paired by seed, against the model alone: recall **+8.5 points [+6.5, +10.5], higher
+on 20 of 20**, precision -7.9 [-10.4, -5.3], F1 +1.2 [+0.1, +2.4], higher on 14.
+Against a cut-off lowered to the same workload: **F1 +1.9 [+1.2, +2.5], better on 18
+of 20**, with recall and precision both up about two points - 300 extra frauds
+against 233. The one-dataset read had the right sign and about the right size. PR-AUC
+is the model's ranking, which the second look does not change.
+
+**And the model reads lower than on the dataset of record**: PR-AUC 0.618 across the
+seeds (0.481 to 0.769) and recall 54.4% at its own cut-off, where seed 42 gives 0.673
+and 67.0%. The served figures are true of the dataset of record, which is one of the
+kinder draws; the twenty-seed means are the recipe's.
 
 ## Capability ablation
 

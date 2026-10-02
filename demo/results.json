@@ -3,11 +3,14 @@
   "own": {
     "key": "own",
     "second": {
-      "ru": "Вторая проверка TabPFN: полнота 67,0% → 73,3%, тревог 186 → 209",
-      "en": "TabPFN's second look: recall 67.0% → 73.3%, alerts 186 → 209"
+      "ru": "Вторая проверка TabPFN: полнота 67,0% → 73,3%, тревог 186 → 209. На 20 наборах данных в среднем: полнота 54,4% → 62,9%, точность 70,5% → 62,6%, F1 60,8% → 62,0%; лучше простого снижения порога на 18 наборах из 20",
+      "en": "TabPFN's second look: recall 67.0% → 73.3%, alerts 186 → 209. Over 20 datasets on average: recall 54.4% → 62.9%, precision 70.5% → 62.6%, F1 60.8% → 62.0%; better than simply lowering the cut-off on 18 datasets of 20"
     },
     "quotes": [
-      {"file": "ml/README.md", "text": "**recall 67.0% -> 73.3% for alerts 186 -> 209**"}
+      {"file": "ml/README.md", "text": "**recall 67.0% -> 73.3% for alerts 186 -> 209**"},
+      {"file": "ml/README.md", "text": "| the model alone | 0.618 | 54.4% ± 3.7 | 70.5% ± 4.7 | 60.8% ± 3.0 | 2,713 | 1,903 |"},
+      {"file": "ml/README.md", "text": "| **the second look** | 0.618 | **62.9% ± 3.8** | 62.6% ± 4.7 | **62.0% ± 2.9** | 3,563 | **2,203** |"},
+      {"file": "ml/README.md", "text": "of 20**, with recall and precision both up about two points"}
     ]
   },
   "datasets": [
