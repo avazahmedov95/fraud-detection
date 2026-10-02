@@ -41,9 +41,10 @@ class Look:
         return self.value
 
 
-def _published(look, event=EVENT):
+def _published(look, event=EVENT, waited=0.0):
     sent = []
-    consumer.handle(event, look, lambda topic, out: sent.append((topic, out["decision"])))
+    consumer.handle(event, look, lambda topic, out: sent.append((topic, out["decision"])),
+                    now=event["scored_at_job"] + waited)
     return sent
 
 
@@ -58,3 +59,11 @@ def test_a_release_goes_to_the_warehouse_only():
 def test_a_failure_or_a_missing_vector_holds_rather_than_releases():
     assert _published(Look(fail=True))[-1] == (C.TOPIC_ALERTS, "REVIEW")
     assert _published(Look(0.10), dict(EVENT, features=None))[-1] == (C.TOPIC_ALERTS, "REVIEW")
+
+
+def test_past_the_deadline_the_transfer_is_held_without_asking_tabpfn():
+    """TabPFN would let this one go - after the transfers queued behind it had
+    waited for the answer too."""
+    assert _published(Look(0.10), waited=C.DEADLINE_S - 0.1) == [(C.TOPIC_SCORED, "ALLOW")]
+    assert _published(Look(0.10), waited=C.DEADLINE_S) == [(C.TOPIC_SCORED, "REVIEW"),
+                                                           (C.TOPIC_ALERTS, "REVIEW")]

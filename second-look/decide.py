@@ -3,6 +3,14 @@ TabPFN or Kafka."""
 
 #: The model_version a second-look record carries, beside the served model's.
 VERSION = "second-look"
+#: Appended to it on a hold TabPFN did not score; the job writes VERSION + UNSCORED
+#: itself when the second look is not answering (stream-processor/fraud_job.py).
+UNSCORED = ":unscored"
+
+
+def waited(event, now):
+    """Seconds since the job decided to send the transfer here."""
+    return now - float(event.get("scored_at_job") or now)
 
 
 def verdict(event, score, cut, checkpoint):
@@ -19,7 +27,7 @@ def verdict(event, score, cut, checkpoint):
     out["model_version"] = f"{VERSION}:{checkpoint}"
     if score is None:
         out["decision"] = "REVIEW"
-        out["model_version"] += ":unscored"
+        out["model_version"] += UNSCORED
     else:
         out["decision"] = "REVIEW" if score >= cut else "ALLOW"
         out["final_score"] = round(score, 4)

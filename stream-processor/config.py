@@ -193,6 +193,11 @@ def _second_look_from(path, review):
 
 
 SECOND_LOOK_FROM = _second_look_from(SECOND_LOOK_PATH, MODEL_REVIEW_THRESHOLD)
+# The second look renews this key in Redis while it answers (second-look/config.py).
+# Without it a band transfer is held here, as the second look's own unscored hold,
+# rather than sent to wait in its topic for as long as the service is down.
+SECOND_LOOK_ALIVE_KEY = "second-look:alive"
+SECOND_LOOK_UNSCORED = "second-look:unscored"
 
 # Force at least REVIEW regardless of the model score (AML / Regulation 3759).
 MANDATORY_REVIEW_RULES = ("STRUCTURING", "DAILY_LIMIT_BREACH")

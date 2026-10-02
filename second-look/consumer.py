@@ -9,7 +9,7 @@ import sys
 import time
 
 import config as C
-from decide import verdict
+from decide import verdict, waited
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -23,21 +23,39 @@ def _stop(*_):
     _running = False
 
 
-def handle(event, look, send):
+def handle(event, look, send, now=None):
     """Score one waiting transfer and publish its decision: every decision to the
     scored topic, which the warehouse and the audit chain read, and a REVIEW to the
-    alert topic as well, which opens the case that holds it."""
-    try:
-        score = look.score(event["features"]) if event.get("features") else None
-    except Exception as exc:                           # noqa: BLE001 - held, and said so
-        log.error("TabPFN failed on %s, holding it unscored: %s",
-                  event.get("transaction_id"), exc)
-        score = None
+    alert topic as well, which opens the case that holds it. A transfer that has
+    waited past the deadline is held unscored at once: asking TabPFN would only make
+    it, and every transfer queued behind it, wait longer."""
+    age = waited(event, time.time() if now is None else now)
+    score = None
+    if age >= C.DEADLINE_S:
+        log.warning("%s waited %.1f s, past the %.0f s deadline: held unscored",
+                    event.get("transaction_id"), age, C.DEADLINE_S)
+    else:
+        try:
+            score = look.score(event["features"]) if event.get("features") else None
+        except Exception as exc:                       # noqa: BLE001 - held, and said so
+            log.error("TabPFN failed on %s, holding it unscored: %s",
+                      event.get("transaction_id"), exc)
     out = verdict(event, score, look.spec["cut"], look.spec["checkpoint"])
     send(C.TOPIC_SCORED, out)
     if out["decision"] == "REVIEW":
         send(C.TOPIC_ALERTS, out)
     return out
+
+
+def _renew(alive):
+    """Tell the job the service is answering: the key lapses DEADLINE_S after the
+    last renewal, and the job then holds band transfers itself. Renewed between
+    transfers and once a second while idle, so a stuck answer lets it lapse too."""
+    try:
+        alive.set(C.ALIVE_KEY, int(time.time()), px=int(C.DEADLINE_S * 1000))
+    except Exception as exc:                           # noqa: BLE001 - the job holds instead
+        log.warning("cannot renew %s in Redis, the job will hold band transfers: %s",
+                    C.ALIVE_KEY, exc)
 
 
 def main():
@@ -49,6 +67,7 @@ def main():
     signal.signal(signal.SIGINT, _stop)
     signal.signal(signal.SIGTERM, _stop)
 
+    import redis
     from kafka import KafkaConsumer, KafkaProducer
     from look import SecondLook
 
@@ -70,10 +89,12 @@ def main():
         value_deserializer=lambda v: json.loads(v.decode("utf-8")),
         consumer_timeout_ms=1000,
     )
-    log.info("second-look started: %s -> %s, %s", C.TOPIC_SECOND_LOOK, C.TOPIC_SCORED,
-             C.TOPIC_ALERTS)
+    alive = redis.Redis(host=C.REDIS_HOST, port=C.REDIS_PORT, socket_timeout=1)
+    log.info("second-look started: %s -> %s, %s; deadline %.0f s", C.TOPIC_SECOND_LOOK,
+             C.TOPIC_SCORED, C.TOPIC_ALERTS, C.DEADLINE_S)
     total = 0
     while _running:
+        _renew(alive)
         for msg in consumer:
             began = time.time()
             out = handle(msg.value, look, producer.send)
@@ -82,6 +103,7 @@ def main():
             total += 1
             log.info("%s %s at %s in %.0f ms", out.get("transaction_id"), out["decision"],
                      out.get("final_score"), 1000 * (time.time() - began))
+            _renew(alive)
             if not _running:
                 break
     consumer.close()

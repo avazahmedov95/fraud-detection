@@ -42,12 +42,22 @@ held it, and the demo shows the served model's risk beside TabPFN's.
 
 ## When it cannot answer
 
-- **No feature vector, or TabPFN fails:** the transfer is held, `:unscored`. The
-  band is suspicious by construction; letting it go unread would be the silent
-  failure.
-- **No checkpoint:** the service says so and stops, and band transfers wait in
-  `fraud.second_look` until it runs. Without `second_look.json` beside the job the
-  band is off, and they are allowed as before.
+No transfer waits longer than five seconds (`SECOND_LOOK_DEADLINE_S`) for an answer
+that is not coming; it is held for the analyst instead, unscored. The band is
+suspicious by construction: letting it go unread would be the silent failure.
+
+- **No feature vector, or TabPFN fails:** the transfer is held, `:unscored`.
+- **It waited past the deadline** - a backlog after a restart, a slow answer: held
+  at once, `:unscored`, without asking TabPFN, so the queue drains instead of
+  growing.
+- **The service is down, starting or stuck:** it renews `second-look:alive` in Redis
+  between transfers and once a second while idle, and the key lapses five seconds
+  after the last renewal. Without it the job does not send the transfer here: it
+  holds it itself, as `second-look:unscored` (`fraud_job.py`). Only transfers already
+  in `fraud.second_look` when the service stopped wait for it to return - and are
+  then held at once, as late. Without the checkpoint the service says so and stops;
+  without `second_look.json` beside the job the band is off, and band transfers are
+  allowed as before.
 
 ## What it costs
 
@@ -78,9 +88,8 @@ throughput sweep (`docs/irp-framing.md` 7.6) the service sat at 0.5% CPU.
 
 One instance decides one transfer at a time, so it keeps up while band transfers
 arrive slower than about one in 0.6 s: at 0.12% of the traffic that is some 1,400
-transfers a second, at the 1.4% after a restart about 120. Past that they queue. And
-while the service is down they wait in `fraud.second_look` with no deadline - a
-deployment would want one, holding for the analyst what was not decided in time.
+transfers a second, at the 1.4% after a restart about 120. Past that they queue, and
+the deadline above holds the ones that have waited too long.
 
 TabPFN reads the model's version from the checkpoint's file **name** - "v3.5" in it -
 and without one silently takes the oldest version, with another configuration and
@@ -99,7 +108,7 @@ research. A deployment would need its terms checked.
 | `decide.py` | the decision on one transfer. No I/O |
 | `look.py` | TabPFN over its pieces, as `ml/experiments/models.py` reads them |
 | `config.py` | topics and mounts, from the environment |
-| `tests/test_decide.py` | 6 tests: the decision, where it goes, holding what it cannot score |
+| `tests/test_decide.py` | 7 tests: the decision, where it goes, holding what it cannot score or what waited past the deadline |
 
 ## Use
 

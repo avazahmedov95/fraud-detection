@@ -12,6 +12,15 @@ TOPIC_ALERTS = os.getenv("TOPIC_ALERTS", "fraud.alerts")
 # would stand in for the other's work.
 CONSUMER_GROUP = "fraud-second-look"
 
+# How long a transfer may wait for its second look, from the job's decision. Past
+# it the transfer is held for the analyst unscored; and the service renews ALIVE_KEY
+# in Redis while it answers, lapsing after the same time, so that the job holds band
+# transfers itself while the service is down or stuck rather than send them to wait.
+DEADLINE_S = float(os.getenv("SECOND_LOOK_DEADLINE_S", "5"))
+REDIS_HOST = os.getenv("REDIS_HOST", "redis")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+ALIVE_KEY = "second-look:alive"
+
 # second_look.json and .npz, written by ml/second_look.py; mounted read-only.
 MODELS_DIR = os.getenv("MODELS_DIR", "/models")
 # TabPFN's weights are a gated download, fetched by hand: TABPFN_CHECKPOINT in .env.

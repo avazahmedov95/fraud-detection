@@ -100,6 +100,7 @@ ru: {
     second: ["Вторая проверка", "Python · TabPFN", "second-look", [
       "Переводы с риском чуть ниже уровня тревоги ждут около секунды, пока их проверит вторая модель — TabPFN.",
       "Видит мошенничество — перевод задерживается и попадает к аналитику, иначе уходит.",
+      "Не ответила за 5 секунд или недоступна — перевод не ждёт дальше: он задерживается для аналитика.",
       "На отложенных данных в этой полосе было 18 мошенничеств, которые основная модель пропускала. Вторая проверка нашла 11 из них, и доля пойманного мошенничества выросла с 67% до 73%."]],
     sink: ["Запись в базу", "Python", "sink-writer", [
       "Читает решения из Kafka и пачками записывает их в ClickHouse, а тревоги — в граф Neo4j.",
@@ -242,6 +243,7 @@ en: {
     second: ["Second look", "Python · TabPFN", "second-look", [
       "Transfers with a risk just under the alert level wait about a second while a second model, TabPFN, looks at them.",
       "If it sees fraud, the transfer is held for the analyst; otherwise it goes.",
+      "If it has not answered within 5 seconds, or is down, the transfer waits no longer: it is held for the analyst.",
       "On held-out data this band held 18 frauds the main model missed. The second look found 11 of them, and the share of fraud caught rose from 67% to 73%."]],
     sink: ["Sink writer", "Python", "sink-writer", [
       "Reads the decisions from Kafka and writes them to ClickHouse in batches, and the alerts to the Neo4j graph.",

@@ -735,9 +735,11 @@ conjure labels, but operating it produces them.
   so the hold is the case's state; a switch would wait for the decision, whose
   latency is the time measured here.
 - A transfer just under the cut-off **waits for a second look** (since 2026-10-01,
-  `second-look/README.md`): TabPFN decides it in under a second beside the stream
-  and holds what it calls fraud. On the held-out slice that took recall from 67.0% to
-  73.3% for 23 more holds - one read, small numbers (`ml/README.md`).
+  `second-look/README.md`): TabPFN decides it about a second later at the median,
+  3.4 s at the longest (2026-10-02), and holds what it calls fraud; what it has not
+  decided within five seconds is held for the analyst. On the held-out slice that
+  took recall from 67.0% to 73.3% for 23 more holds - one read, small numbers
+  (`ml/README.md`).
 - The system never blocks on its own (since 2026-09-19): a person blocks. A false
   alert therefore costs analyst time and an honest customer's wait - measured from
   the case's decision and verdict stamps (`case-manager/README.md`) - not a declined

@@ -100,6 +100,10 @@ class FraudDetector(KeyedProcessFunction):
         self._population = PopulationStore(C.REDIS_HOST, C.REDIS_PORT)
         self._receivers.open()
         self._population.open()
+        import redis
+        self._lease = redis.Redis(host=C.REDIS_HOST, port=C.REDIS_PORT,
+                                  socket_timeout=0.2, socket_connect_timeout=0.2)
+        self._answering = True
 
         # Absent is legitimate (the plaintext arm); present-and-unusable is not,
         # so it fails here rather than as undecodable records later.
@@ -132,6 +136,19 @@ class FraudDetector(KeyedProcessFunction):
         print(f"[fraud_job] second look from {C.SECOND_LOOK_FROM:.4f} to the cut-off"
               if C.SECOND_LOOK_FROM is not None else
               f"[fraud_job] second look off: no {C.SECOND_LOOK_PATH} chosen under this cut-off")
+
+    def _second_look_answering(self):
+        """Whether the second look renewed its key within its deadline, as it does
+        while it answers. No Redis reads as no: the transfer is held, not sent."""
+        try:
+            answering = bool(self._lease.exists(C.SECOND_LOOK_ALIVE_KEY))
+        except Exception:                              # noqa: BLE001
+            answering = False
+        if answering != self._answering:
+            self._answering = answering
+            print("[fraud_job] second look answering again" if answering else
+                  "[fraud_job] second look NOT answering: its band is held here")
+        return answering
 
     def _ml_score(self, feature_vector):
         if self._sess is None:
@@ -187,6 +204,11 @@ class FraudDetector(KeyedProcessFunction):
         # One call: score_and_decide knows whether the score is a probability.
         final, decision = fusion.score_and_decide(
             cep_score, ml_score, result["rule_hits"])
+        # From what ran, not from configuration: a rules-only run must not be stored
+        # as a fused one.
+        model_version = C.MODEL_VERSION if self._sess is not None else C.MODEL_VERSION_CEP_ONLY
+        if decision == "SECOND_LOOK" and not self._second_look_answering():   # config.py
+            decision, model_version = "REVIEW", C.SECOND_LOOK_UNSCORED
         predicted_type = fusion.classify_type(result["rule_hits"]) if decision != "ALLOW" else None
 
         out = {
@@ -210,10 +232,7 @@ class FraudDetector(KeyedProcessFunction):
             "secs_login_z": result["secs_login_z"],
             # Raw, from the event: the job does not recompute what the app sent.
             "secs_login_to_confirm": event.get("secs_login_to_confirm"),
-            # From what ran, not from configuration: a rules-only run must not be
-            # stored as a fused one.
-            "model_version": (C.MODEL_VERSION if self._sess is not None
-                              else C.MODEL_VERSION_CEP_ONLY),
+            "model_version": model_version,
             # Latency instrumentation (wall clock, never a feature). t0 from the
             # producer, t1 here, t2 at the sink - so a breach points at a stage.
             "ingested_at": event.get("ingested_at"),
@@ -243,6 +262,7 @@ class FraudDetector(KeyedProcessFunction):
         if hasattr(self, "_receivers"):
             self._receivers.close()
             self._population.close()
+            self._lease.close()
 
 
 def _apply_security(builder):

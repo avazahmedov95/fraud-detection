@@ -209,10 +209,17 @@ def b_case_manager_reads_only_emitted_keys():
 
 def b_second_look_is_what_the_job_sends():
     """The job sends a waiting transfer to the topic the second look reads, with the
-    keys it reads, and that topic is created."""
+    keys it reads, and that topic is created. While the second look does not answer
+    the job holds the transfer itself: both name the same Redis key, and the job's
+    hold carries the second look's own unscored mark."""
     J, L = pkg("stream-processor", "config"), pkg("second-look", "config")
+    D = pkg("second-look", "decide")
     if J.TOPIC_SECOND_LOOK != L.TOPIC_SECOND_LOOK:
         return f"the job writes {J.TOPIC_SECOND_LOOK}, the second look reads {L.TOPIC_SECOND_LOOK}"
+    if J.SECOND_LOOK_ALIVE_KEY != L.ALIVE_KEY:
+        return f"the job asks Redis for {J.SECOND_LOOK_ALIVE_KEY}, the second look renews {L.ALIVE_KEY}"
+    if J.SECOND_LOOK_UNSCORED != D.VERSION + D.UNSCORED:
+        return f"the job marks its holds {J.SECOND_LOOK_UNSCORED}, not {D.VERSION + D.UNSCORED}"
     if f"create {L.TOPIC_SECOND_LOOK} " not in _read("infra", "kafka", "create-topics.sh"):
         return f"{L.TOPIC_SECOND_LOOK} is never created"
     src = _read("second-look", "consumer.py") + _read("second-look", "decide.py")
