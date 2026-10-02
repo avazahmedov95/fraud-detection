@@ -67,6 +67,21 @@ sent for a second look in 15 minutes, every one decided - 95 let go, 27 held, ea
 with its case. That was 1.4% of the traffic, not 0.12%, because the job had just
 restarted with empty sender state and every payee looked new.
 
+**The wait it adds, end to end** (2026-10-02, on mains power, the demo's stream for
+8 minutes at 37 transfers a second): 60 of 17,845 transfers (0.34%) went for a
+second look, every one was decided, 8 held. From the job's decision to the second
+look's, read off Kafka's own timestamps: **median 1.13 s, p90 2.0 s, longest 3.4 s**.
+TabPFN took 0.58 s of it at the median and 0.88 s at the longest (the service's
+log); the rest is the hops, out of the job to `fraud.second_look` and back. No other
+transfer waits for it, and it does not slow the job: through the 100/s arm of the
+throughput sweep (`docs/irp-framing.md` 7.6) the service sat at 0.5% CPU.
+
+One instance decides one transfer at a time, so it keeps up while band transfers
+arrive slower than about one in 0.6 s: at 0.12% of the traffic that is some 1,400
+transfers a second, at the 1.4% after a restart about 120. Past that they queue. And
+while the service is down they wait in `fraud.second_look` with no deadline - a
+deployment would want one, holding for the analyst what was not decided in time.
+
 TabPFN reads the model's version from the checkpoint's file **name** - "v3.5" in it -
 and without one silently takes the oldest version, with another configuration and
 other answers. The container mounts the file under a name of its own, so `look.py`

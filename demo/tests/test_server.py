@@ -316,19 +316,50 @@ def test_the_page_marks_the_same_rules_mandatory_as_the_job():
     page = open(os.path.join(root, "demo", "index.html"), encoding="utf-8").read()
     job = re.search(r"MANDATORY_REVIEW_RULES = \(([^)]*)\)", config).group(1)
     shown = re.search(r"const MUST = new Set\(\[([^\]]*)\]\)", page).group(1)
-    assert re.findall(r'"(\w+)"', job) == re.findall(r'"(\w+)"', shown)
+    assert re.findall(r'"(\w+)"', job) == re.findall(r'"(\w+)"', shown) == list(S.MANDATORY)
+
+
+def test_the_queue_filter_finds_what_held_each_transfer():
+    import case as CASE
+    blank = dict.fromkeys(CASE.CASE_COLUMNS, "")
+    rows = [{**blank, "case_id": f"c{i}", "opened_at": T0, "rule_hits": [], "explanation": [],
+             "disposition": "NEW", **kw} for i, kw in enumerate([
+                 {"ml_score": 0.5},                                         # the model
+                 {"ml_score": 0.02, "rule_hits": ["STRUCTURING"]},          # a hard rule
+                 {"ml_score": 0.5, "rule_hits": ["DAILY_LIMIT_BREACH"]},    # both
+                 {"ml_score": 0.07, "final_score": 0.95, "model_version": "second-look:t"},
+                 {"ml_score": None, "rule_hits": ["VELOCITY"]}])]           # no model: the rules
+
+    class Store:
+        def _ensure(self):
+            return True
+
+        def open_cases(self, limit):
+            return rows
+
+        def stats(self):
+            return {}
+
+        def holds(self):
+            return {}
+
+    app = SimpleNamespace(started=0, store=Store, cut=0.1)
+    held = {by: [c["id"] for c in S.App.cases(app, flt={"held": by})["cases"]]
+            for by in ("MODEL", "RULE", "SECOND_LOOK")}
+    assert held == {"MODEL": ["c0", "c2"], "RULE": ["c1", "c2", "c4"], "SECOND_LOOK": ["c3"]}
 
 
 def test_the_results_file_says_everything_in_both_languages():
     import json
     import os
     with open(os.path.join(os.path.dirname(S.__file__), "results.json"), encoding="utf-8") as fh:
-        datasets = json.load(fh)["datasets"]
-    for ds in datasets:
+        quoted = json.load(fh)
+    for ds in quoted["datasets"]:
         assert ds["quotes"], ds["key"]
         assert ds["link"]["url"].startswith("https://"), ds["key"]
-        for field in ("name", "what", "ours", "published"):
+        for field in ("name", "what", "ours", "second", "published"):
             assert set(ds[field]) == {"ru", "en"}, (ds["key"], field)
+    assert quoted["own"]["quotes"] and set(quoted["own"]["second"]) == {"ru", "en"}
 
 
 def test_a_transfer_decided_twice_keeps_its_row_and_counts_once():

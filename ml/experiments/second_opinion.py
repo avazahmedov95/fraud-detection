@@ -7,9 +7,10 @@ cutoff rows; the test slice stays for the decision itself.
    TabPFN worth asking - better than simply lowering the cut-off?
 3. What one answer costs on this machine.
 
-With --test, the band the cutoff rows chose is read once on the held-out slice.
-Read-only like models.py: it fits its own models and writes nothing the system
-serves.
+With --test, the band the cutoff rows chose is read once on the held-out slice;
+with --served as well, as the second-look service runs it - the same reading the
+public datasets get (validation/README.md). Read-only like models.py: it fits its
+own models and writes nothing the system serves.
 
     cd ml
     python experiments/second_opinion.py --cache models_matrix.npz --tabpfn-model <checkpoint>
@@ -85,27 +86,28 @@ def cost(Xfit, yfit, X, tabpfn_model):
               f"after {fitted:.0f} s to take the context")
 
 
-def band_of(served, cut):
-    """The BAND highest-scored rows under the cut-off, highest first. ml/second_look.py
+def band_of(served, cut, n=BAND):
+    """The n highest-scored rows under the cut-off, highest first. ml/second_look.py
     exports the band this chooses on the cutoff rows."""
     below = np.flatnonzero(served < cut)
-    return below[np.argsort(-served[below])][:BAND]
+    return below[np.argsort(-served[below])][:n]
 
 
-def held_out(Xfit, yfit, Xva, yva, Xte, yte, served_va, served_te, cut, tabpfn_model):
+def held_out(Xfit, yfit, Xva, yva, Xte, yte, served_va, served_te, cut, tabpfn_model,
+             band=BAND, pieces=PIECES, tie=0.0):
     """The first band, read where nothing was chosen. The band's floor and TabPFN's
     threshold in it are fixed on the cutoff rows first; the held-out slice only
     answers whether TabPFN still finds more there than a lowered cut-off would."""
-    band_va = band_of(served_va, cut)
+    band_va = band_of(served_va, cut, band)
     floor = served_va[band_va[-1]]
     band_te = np.flatnonzero((served_te >= floor) & (served_te < cut))
     band_te = band_te[np.argsort(-served_te[band_te])]
     *_, (_, tab, _) = M._in_pieces(Xfit, yfit, np.concatenate([Xva[band_va], Xte[band_te]]),
-                                   M._pieces(yfit)[:PIECES], tabpfn_model)
-    t = M._cut(yva[band_va], tab[:BAND])
-    print(f"fixed on the cutoff rows: the band from {floor:.4f} to the cut-off {cut:.4f}, "
-          f"TabPFN alerting at {t:.4f}\n")
-    y, flag = yte[band_te], tab[BAND:] >= t
+                                   M._pieces(yfit)[:pieces], tabpfn_model)
+    t = M._cut(yva[band_va], tab[:len(band_va)]) - tie
+    print(f"fixed on the cutoff rows: the band of {len(band_va)} rows from {floor:.4f} to "
+          f"the cut-off {cut:.4f}, TabPFN on {pieces} pieces alerting at {t:.4f}\n")
+    y, flag = yte[band_te], tab[len(band_va):] >= t
     m, hit = int(flag.sum()), int(y[flag].sum())
     raised, caught, total = int((served_te >= cut).sum()), int(yte[served_te >= cut].sum()), int(yte.sum())
     print(f"held-out slice: {len(yte):,} rows, {total} fraud; the served model raises "
@@ -118,6 +120,18 @@ def held_out(Xfit, yfit, Xva, yva, Xte, yte, served_va, served_te, cut, tabpfn_m
           f"alerts {raised} -> {raised + m}")
 
 
+def as_served(Xfit, yfit, Xva, yva, Xte, yte, served_va, served_te, cut, tabpfn_model):
+    """held_out with the second look as the service runs it (ml/second_look.py): its
+    pieces and its tie, and a band holding the share of the cutoff rows it holds on
+    this project's own data - so another dataset is read the same way, untuned."""
+    import second_look as SL
+    with open(os.path.join(M._PKG, "models", "second_look.json"), encoding="utf-8") as fh:
+        chosen = json.load(fh)["chosen_on"]
+    band = max(1, round(len(yva) * chosen["band"] / chosen["rows"]))
+    held_out(Xfit, yfit, Xva, yva, Xte, yte, served_va, served_te, cut, tabpfn_model,
+             band=band, pieces=SL.PIECES, tie=SL.TIE)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--cache", help="npz of the deployed matrix (X, y, names)")
@@ -125,6 +139,8 @@ def main():
                     help="the TabPFN checkpoint, as for models.py")
     ap.add_argument("--test", action="store_true",
                     help="read the band the cutoff rows chose on the held-out slice")
+    ap.add_argument("--served", action="store_true",
+                    help="with --test: as the second-look service runs it (as_served)")
     args = ap.parse_args()
 
     Xfit, yfit, Xva, yva, Xte, yte = M._slices(args.cache)
@@ -134,8 +150,9 @@ def main():
     with open(os.path.join(M._PKG, "models", "thresholds.json"), encoding="utf-8") as fh:
         cut = json.load(fh)["review"]
     if args.test:
-        return held_out(Xfit, yfit, Xva, yva, Xte, yte, served,
-                        M._committee_score(members, Xte), cut, args.tabpfn_model)
+        return (as_served if args.served else held_out)(
+            Xfit, yfit, Xva, yva, Xte, yte, served, M._committee_score(members, Xte), cut,
+            args.tabpfn_model)
     alert = np.flatnonzero(served >= cut)
     below = np.flatnonzero(served < cut)
     near = below[np.argsort(-served[below])][:max(BANDS)]

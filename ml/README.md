@@ -715,6 +715,7 @@ python experiments/models.py --cache models_matrix.npz --chunks       --tabpfn-m
 python experiments/models.py --cache models_matrix.npz --chunks --paired --tabpfn-model <checkpoint>                              # the same, five paired fits
 python experiments/second_opinion.py --cache models_matrix.npz --tabpfn-model <checkpoint>                                        # TabPFN after the served model
 python experiments/second_opinion.py --cache models_matrix.npz --tabpfn-model <checkpoint> --test                                 # its band, on the held-out slice
+python experiments/second_opinion.py --cache models_matrix.npz --tabpfn-model <checkpoint> --test --served                        # the same, as the service runs it
 python second_look.py --cache models_matrix.npz --tabpfn-model <checkpoint>                                                       # the second look's band and context
 ```
 
@@ -929,6 +930,13 @@ and the service's cached TabPFN answers within 1e-5 of the uncached one, enough 
 drop that row under its own cut-off. Served that way (cut-off 0.8834), the second
 look holds 23 of the held-out band's 118 transfers, 11 of them fraud, where a cut-off
 lowered to raise 23 alerts catches 3; an answer takes about 0.3 s.
+
+Read again on 2026-10-02 with `--test --served`, the reading the public datasets get
+(`validation/README.md`, the second look in sections 1 and 2): the same 23 held, 11
+fraud and 12 false, and **recall 67.0% -> 73.3% for alerts 186 -> 209**. On PaySim it
+gains less than a point - 27.4% to 28.2%, 7 fraud in 8 holds - and on IBM AML it
+gains eight, 44.3% to 52.2%, but at 737 more alerts and little better than a lowered
+cut-off: 130 laundering against 121.
 
 ## Capability ablation
 

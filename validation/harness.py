@@ -130,6 +130,20 @@ def section_layers(y, rules, mandatory, proba, cut, positive="fraud", width=70):
     return counted
 
 
+def section_second_look(Xfit, yfit, Xva, yva, Xte, yte, pva, pte, cut, tabpfn_model,
+                        width=70):
+    """The second look carried over from this project's own data unchanged
+    (ml/experiments/second_opinion.py as_served): only TabPFN's cut-off is chosen
+    here, on the cutoff rows. TabPFN lives in its own environment, .venv-models."""
+    experiments = os.path.join(os.path.dirname(_SP), "ml", "experiments")
+    if experiments not in sys.path:
+        sys.path.insert(0, experiments)
+    import second_opinion as SO
+    print()
+    _head("THE SECOND LOOK, AS SERVED, READ ONCE ON THE HELD-OUT ROWS", width)
+    SO.as_served(Xfit, yfit, Xva, yva, Xte, yte, pva, pte, cut, tabpfn_model)
+
+
 def capability_profile(*off, payee_identity="pinfl"):
     """The profile a foreign dataset gets: what it cannot supply switched OFF - an
     absent field would reach the extractor as a zero - and the payee keyed by

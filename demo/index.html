@@ -314,6 +314,7 @@ ru: {
   f_sender: "Карта отправителя", f_receiver: "Карта получателя", f_card_hint: "первые 6 или последние 4 цифры",
   f_min: "Сумма от, сум", f_max: "Сумма до, сум", f_since: "Время с", f_until: "Время по",
   f_decision: "Решение", f_type: "Тип тревоги", f_all: "все", f_apply: "Применить", f_reset: "Сбросить",
+  f_held: "Кем задержан", held_by: {MODEL: "основной моделью", RULE: "жёстким правилом", SECOND_LOOK: "второй проверкой, TabPFN"},
   close: "Закрыть", empty_filtered: "Под фильтр ничего не подходит.",
   h_time: "Время", h_amount: "Сумма, сум", h_route: "Откуда → куда", h_risk: "Риск", h_decision: "Решение",
   empty_live: "Пока нет решений. Запустите поток или покажите случай мошенничества.",
@@ -421,6 +422,7 @@ en: {
   f_sender: "Sender's card", f_receiver: "Payee's card", f_card_hint: "the first 6 or the last 4 digits",
   f_min: "Amount from, UZS", f_max: "Amount to, UZS", f_since: "Time from", f_until: "Time to",
   f_decision: "Decision", f_type: "Alert type", f_all: "all", f_apply: "Apply", f_reset: "Clear",
+  f_held: "Held by", held_by: {MODEL: "the model", RULE: "a hard rule", SECOND_LOOK: "the second look, TabPFN"},
   close: "Close", empty_filtered: "Nothing matches the filter.",
   h_time: "Time", h_amount: "Amount, UZS", h_route: "From → to", h_risk: "Risk", h_decision: "Decision",
   empty_live: "No decisions yet. Start the stream or show a fraud case.",
@@ -556,7 +558,7 @@ const filterQuery = which => Object.entries(filters[which])
 
 function filterCount(which) {
   const f = filters[which], set = k => f[k] !== "" && f[k] != null;
-  return ["sender", "receiver", "decision", "type"].filter(set).length
+  return ["sender", "receiver", "decision", "type", "held"].filter(set).length
     + (set("min") || set("max") ? 1 : 0) + (set("since") || set("until") ? 1 : 0);
 }
 
@@ -570,11 +572,12 @@ function renderFilterButtons() {
 
 function openFilter(which) {
   const f = filters[which];
+  const select = (id, label, values, name) => `<label>${label}<select id="${id}"><option value="">${t("f_all")}</option>` +
+    values.map(v => `<option value="${v}">${esc(name(v))}</option>`).join("") + `</select></label>`;
   const choice = which === "stream"
-    ? `<label>${t("f_decision")}<select id="f-choice"><option value="">${t("f_all")}</option>` +
-      ["ALLOW", "REVIEW", "SECOND_LOOK"].map(d => `<option value="${d}">${esc(t("dec")[d])}</option>`).join("") + `</select></label>`
-    : `<label>${t("f_type")}<select id="f-choice"><option value="">${t("f_all")}</option>` +
-      [...FRAUD_KINDS, "NONE"].map(k => `<option value="${k}">${esc(k === "NONE" ? t("type_none") : kindName(k))}</option>`).join("") + `</select></label>`;
+    ? select("f-choice", t("f_decision"), ["ALLOW", "REVIEW", "SECOND_LOOK"], d => t("dec")[d])
+    : select("f-choice", t("f_type"), [...FRAUD_KINDS, "NONE"], k => k === "NONE" ? t("type_none") : kindName(k)) +
+      select("f-held", t("f_held"), ["MODEL", "RULE", "SECOND_LOOK"], k => t("held_by")[k]);
   openModal(`<h3>${t(which === "stream" ? "f_title_stream" : "f_title_queue")}</h3>
     <form class="filter" id="filter-form" data-which="${which}">
       <label>${t("f_sender")}<input id="f-sender" inputmode="numeric" placeholder="${t("f_card_hint")}" value="${esc(f.sender || "")}"></label>
@@ -588,6 +591,7 @@ function openFilter(which) {
         <button type="button" data-filter-reset="${which}">${t("f_reset")}</button></div>
     </form>`);
   $("#f-choice").value = (which === "stream" ? f.decision : f.type) || "";
+  if (which === "queue") $("#f-held").value = f.held || "";
 }
 
 // "HH:MM" today, as epoch seconds; the end of a range takes the whole minute.
@@ -826,6 +830,9 @@ function renderLive() {
       `${sub ? `<small>${esc(sub)}</small>` : ""}</div>`).join("");
 }
 
+// What the second look adds on the same data, as results.json quotes it.
+const secondLine = d => d.second ? `<br><small>${esc(d.second[lang])}</small>` : "";
+
 function renderResults() {
   renderLive();
   if (!results) return;
@@ -835,10 +842,10 @@ function renderResults() {
   const own = o.error ? `<tr><td>${t("own_name")}</td><td colspan="3">${esc(o.error)}</td></tr>`
     : `<tr><td>${t("own_name")}</td>` +
       `<td>${fill(t("own_what"), {rows: fmtInt(o.rows), share: dec(o.fraud_share * 100, 2) + "%", types: o.types, test: fmtInt(o.test), tf: fmtInt(o.test_fraud)})}</td>` +
-      `<td class="ours">${fill(t("own_ours"), {rec: pct(o.recall), prec: pct(o.precision), prauc: dec(o.pr_auc, 3)})}</td>` +
+      `<td class="ours">${fill(t("own_ours"), {rec: pct(o.recall), prec: pct(o.precision), prauc: dec(o.pr_auc, 3)})}${secondLine(o)}</td>` +
       `<td>${t("own_published")}</td></tr>`;
   $("#cmp").innerHTML = own + (results.public || []).map(d => `<tr><td>${esc(d.name[lang])}</td>` +
-    `<td>${esc(d.what[lang])}</td><td class="ours">${esc(d.ours[lang])}</td>` +
+    `<td>${esc(d.what[lang])}</td><td class="ours">${esc(d.ours[lang])}${secondLine(d)}</td>` +
     `<td>${esc(d.published[lang])}<br><a href="${esc(d.link.url)}" target="_blank" rel="noopener">${esc(d.link.label)}</a></td></tr>`).join("");
 }
 
@@ -888,7 +895,7 @@ document.addEventListener("submit", e => {
   const which = e.target.dataset.which, v = id => $(id).value.trim();
   applyFilter(which, {sender: v("#f-sender"), receiver: v("#f-receiver"), min: v("#f-min"), max: v("#f-max"),
     since: todayAt(v("#f-since")), until: todayAt(v("#f-until"), true), sinceText: v("#f-since"), untilText: v("#f-until"),
-    [which === "stream" ? "decision" : "type"]: v("#f-choice")});
+    [which === "stream" ? "decision" : "type"]: v("#f-choice"), ...(which === "queue" ? {held: v("#f-held")} : {})});
 });
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
 

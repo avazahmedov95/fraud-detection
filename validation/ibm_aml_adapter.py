@@ -306,10 +306,11 @@ def our_model(cache, seeds=3):
     return results
 
 
-def layers(path, cache, store, formats=None, limit=None, seed=0):
-    """Rules alone, model alone and the deployed decision, on the same test rows.
-    The replay costs hours and the fit minutes, so the per-row verdict is cached
-    beside the feature matrix and checked against it row for row."""
+def layers(path, cache, store, formats=None, limit=None, seed=0, tabpfn_model=None):
+    """Rules alone, model alone and the deployed decision, on the same test rows,
+    and with a TabPFN checkpoint the second look after the model as well. The replay
+    costs hours and the fit minutes, so the per-row verdict is cached beside the
+    feature matrix and checked against it row for row."""
     import numpy as np
     z = _open_cache(cache)
     X, y = z["X"], z["y"].astype("int8")
@@ -337,6 +338,9 @@ def layers(path, cache, store, formats=None, limit=None, seed=0):
           f"{a:,} rows, cut chosen on {b - a:,}\n")
     RP.section_layers(y[b:], rules[b:], mand[b:], p, t,
                       positive="laundering", width=72)
+    if tabpfn_model:
+        RP.section_second_look(X[:a], y[:a], X[a:b], y[a:b], X[b:], y[b:],
+                               m.predict_proba(X[a:b])[:, 1], p, t, tabpfn_model, width=72)
 
 
 def typology_recall(path, patterns, cache, seeds=3):
@@ -676,6 +680,9 @@ def main():
     ap.add_argument("--layers-cache", dest="layers_cache",
                     default="ibm_layers.npz",
                     help="where the replay's per-row verdict is kept")
+    ap.add_argument("--tabpfn-model", dest="tabpfn_model", default=None,
+                    help="with --layers: a TabPFN checkpoint, to read the second look "
+                         "too; run in .venv-models, where TabPFN is installed")
     args = ap.parse_args()
 
     if not os.path.exists(args.file):
@@ -705,7 +712,8 @@ def main():
             raise SystemExit(f"{args.cache} not found - run --extract-only first")
         formats = ([f.strip() for f in args.formats.split(",")]
                    if args.formats else None)
-        return layers(args.file, args.cache, args.layers_cache, formats, args.limit)
+        return layers(args.file, args.cache, args.layers_cache, formats, args.limit,
+                      tabpfn_model=args.tabpfn_model)
     if args.typology_recall:
         if not os.path.exists(args.cache):
             raise SystemExit(f"{args.cache} not found - run --extract-only first")

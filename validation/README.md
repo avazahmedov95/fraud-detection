@@ -165,6 +165,30 @@ returned "" and every payee shared one receiver state, fabricating fan-in.
 `features.py` now warns, and the harness refuses such a stream
 (`harness._require_a_payee_key`).
 
+### The second look on the same slice, 2026-10-02 (`--layers --tabpfn-model`)
+
+```bash
+python paysim_adapter.py --file PS_20174392719_1491204439457_log.csv --layers --tabpfn-model <checkpoint>
+```
+
+The second look as the system serves it on its own data, carried over untuned
+(`ml/experiments/second_opinion.py` `as_served`; run in `.venv-models`, where TabPFN
+is): a band holding the same share of the cutoff rows, 0.125% - here the 129
+highest-scored under the cut-off, from 0.2138 - TabPFN on two pieces of the training
+slice, its cut-off at its F1 peak in that band less 1e-4, and the held-out rows read
+once.
+
+| | alerts | caught | recall |
+|---|---|---|---|
+| the model at 0.2578 | 394 | 252 | 27.4% |
+| with the second look | **402** | **259** | **28.2%** |
+
+The band holds 53 held-out rows (0.34%), 17 of them fraud. TabPFN holds 8 - **7
+fraud, 1 false** - where a cut-off lowered to raise 8 alerts would catch 2. Better
+than lowering the cut-off, and small: most of the fraud the model misses here scores
+far below the band. Each piece holds all 1,955 fraud rows of the training slice and
+3,045 ordinary ones - 39% fraud, against 11% on this project's data.
+
 ---
 
 ## Tests
@@ -570,6 +594,27 @@ the same thing from the other side: the rules flag 22.18% of legitimate traffic
 
 That is the strongest argument this project has for setting rule limits per
 customer type rather than per system, which is where the mentor's step 3 points.
+
+### The second look on the same slice, 2026-10-02 (`--layers --tabpfn-model`)
+
+```bash
+python ibm_aml_adapter.py --file HI-Small_Trans.csv --cache ibm_features21.npz --layers --tabpfn-model <checkpoint>
+```
+
+Read as PaySim's is in section 1: the band is the 1,122 highest-scored cutoff rows
+under the cut-off, from 0.0350, and TabPFN's cut-off in it 0.9517.
+
+| | alerts | caught | precision | recall |
+|---|---|---|---|---|
+| the model at 0.0894 | 926 | 733 | 79.2% | 44.3% |
+| with the second look | 1,663 | 863 | 51.9% | **52.2%** |
+
+The band holds 959 held-out rows (0.11%), 152 of them laundering. TabPFN holds 737 -
+**130 laundering, 607 false** - and a cut-off lowered to raise 737 alerts would catch
+121. Recall rises eight points, but nearly all of it is what lowering the cut-off
+buys: TabPFN barely sorts this band, and the alerts almost double. Its pieces are
+half laundering, 2,519 rows beside 2,481 ordinary ones, so it sees few of the
+ordinary transfers that score like laundering - a likely reason, not tested here.
 
 ### Re-run 2026-09-21 (`--budgets`): recall at a fixed alert budget
 

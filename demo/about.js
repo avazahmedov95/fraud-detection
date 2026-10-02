@@ -58,7 +58,7 @@ const WALK = [
 
 const ABOUT = {
 ru: {
-  intro: "Система проверяет каждый P2P-перевод по картам в реальном времени: жёсткие правила и модель машинного обучения оценивают его за доли секунды, а подозрительные переводы задерживаются до решения аналитика. Окончательно блокирует или отпускает перевод человек.",
+  intro: "Система проверяет каждый P2P-перевод по картам в реальном времени: жёсткие правила и модель машинного обучения оценивают его за доли секунды. Если риск чуть ниже уровня тревоги, перевод за секунду-две перепроверяет вторая модель, TabPFN. Подозрительные переводы задерживаются до решения аналитика: окончательно блокирует или отпускает перевод человек.",
   flow_title: "Из чего состоит система",
   legend: "Нажмите на карточку, чтобы прочитать о компоненте. Серые карточки — хранилища данных; синяя рамка — модель машинного обучения.",
   group: {in: "Приём перевода", engine: "Flink: решение за миллисекунды", out: "После решения"},
@@ -89,16 +89,18 @@ ru: {
       "Пять моделей градиентного бустинга на деревьях решений, их ответы усредняются.",
       "Работает внутри Flink как файл ONNX, без обращения к внешнему сервису.",
       "Подробно — в блоке «Модель» ниже."]],
-    decide: ["Решение", "Flink", "пропустить или задержать", [
+    decide: ["Решение", "Flink", "пропустить, задержать или перепроверить", [
       "Перевод задерживается, если риск модели выше уровня тревоги или сработало обязательное правило регулятора.",
+      "Если риск чуть ниже уровня тревоги, перевод уходит на вторую проверку.",
       "Система сама ничего не блокирует: подозрительный перевод решает человек.",
       "Правила дают тревоге название — например, «мошенник по телефону»."]],
-    out: ["Kafka: решения и тревоги", "Apache Kafka", "transactions.scored, fraud.alerts", [
-      "Каждое решение уходит в одну очередь, тревоги — ещё и в отдельную.",
+    out: ["Kafka: решения и тревоги", "Apache Kafka", "transactions.scored, fraud.alerts, fraud.second_look", [
+      "Каждое решение уходит в одну очередь, тревоги — ещё и в отдельную, а переводы для второй проверки — в третью.",
       "Так запись в базу и работа аналитика не мешают друг другу."]],
     second: ["Вторая проверка", "Python · TabPFN", "second-look", [
       "Переводы с риском чуть ниже уровня тревоги ждут около секунды, пока их проверит вторая модель — TabPFN.",
-      "Видит мошенничество — перевод задерживается и попадает к аналитику, иначе уходит. На отложенных данных так нашлось больше половины мошенничеств, которые основная модель пропускала."]],
+      "Видит мошенничество — перевод задерживается и попадает к аналитику, иначе уходит.",
+      "На отложенных данных в этой полосе было 18 мошенничеств, которые основная модель пропускала. Вторая проверка нашла 11 из них, и доля пойманного мошенничества выросла с 67% до 73%."]],
     sink: ["Запись в базу", "Python", "sink-writer", [
       "Читает решения из Kafka и пачками записывает их в ClickHouse, а тревоги — в граф Neo4j.",
       "Если база недоступна, продолжает работать и считает, сколько записей потеряно."]],
@@ -111,7 +113,8 @@ ru: {
       "Кольцо дроп-счетов видно как много стрелок, сходящихся к одному счёту."]],
     cases: ["Разбор тревог", "Python", "case-manager", [
       "На каждую тревогу открывает дело с причинами словами — из вклада признаков в оценку модели.",
-      "Аналитик решает: заблокировать перевод (мошенничество) или отпустить (ложная тревога). Эти решения — единственные настоящие метки в системе, на них банк переобучал бы модель."]],
+      "Аналитик решает: заблокировать перевод (мошенничество) или отпустить (ложная тревога). Эти решения — единственные настоящие метки в системе, на них банк переобучал бы модель.",
+      "Дела можно отобрать по тому, кто задержал перевод: основная модель, жёсткое правило или вторая проверка."]],
     dash: ["Мониторинг", "Grafana · демо", "что видит банк", [
       "Grafana показывает число переводов и тревог, типы, распределение риска, регионы.",
       "Это демо показывает те же решения вживую."]]
@@ -197,7 +200,7 @@ ru: {
   }
 },
 en: {
-  intro: "The system checks every P2P card transfer in real time: hard rules and a machine-learning model judge it in a fraction of a second, and suspicious transfers are held until an analyst decides. A person blocks or releases them.",
+  intro: "The system checks every P2P card transfer in real time: hard rules and a machine-learning model judge it in a fraction of a second. When the risk is just under the alert level, a second model, TabPFN, takes another look within a second or two. Suspicious transfers are held until an analyst decides: a person blocks or releases them.",
   flow_title: "What the system is made of",
   legend: "Click a card to read about the component. Grey cards hold data; the blue frame is the machine-learning model.",
   group: {in: "Taking the transfer in", engine: "Flink: the decision, in milliseconds", out: "After the decision"},
@@ -228,16 +231,18 @@ en: {
       "Five gradient-boosted decision-tree models, their answers averaged.",
       "It runs inside Flink as an ONNX file, with no call to an outside service.",
       "In full in the Model panel below."]],
-    decide: ["The decision", "Flink", "allow, or hold", [
+    decide: ["The decision", "Flink", "allow, hold or look again", [
       "A transfer is held when the model's risk is past the alert level or a rule the regulator requires fired.",
+      "When the risk is just under the alert level, the transfer goes to the second look.",
       "The system blocks nothing by itself: a person decides on a suspicious transfer.",
       "The rules give the alert its name — for example, 'phone scam'."]],
-    out: ["Kafka: decisions and alerts", "Apache Kafka", "transactions.scored, fraud.alerts", [
-      "Every decision goes to one topic, and alerts to a second one as well.",
+    out: ["Kafka: decisions and alerts", "Apache Kafka", "transactions.scored, fraud.alerts, fraud.second_look", [
+      "Every decision goes to one topic, alerts to a second one as well, and transfers for the second look to a third.",
       "So writing to the database and the analyst's work do not hold each other up."]],
     second: ["Second look", "Python · TabPFN", "second-look", [
       "Transfers with a risk just under the alert level wait about a second while a second model, TabPFN, looks at them.",
-      "If it sees fraud, the transfer is held for the analyst; otherwise it goes. On held-out data this found more than half of the frauds the main model missed."]],
+      "If it sees fraud, the transfer is held for the analyst; otherwise it goes.",
+      "On held-out data this band held 18 frauds the main model missed. The second look found 11 of them, and the share of fraud caught rose from 67% to 73%."]],
     sink: ["Sink writer", "Python", "sink-writer", [
       "Reads the decisions from Kafka and writes them to ClickHouse in batches, and the alerts to the Neo4j graph.",
       "When a database is down it keeps running and counts how many records were lost."]],
@@ -250,7 +255,8 @@ en: {
       "A mule ring shows as many arrows converging on one account."]],
     cases: ["Case manager", "Python", "case-manager", [
       "Opens a case for every alert, with its reasons in words — from each feature's share of the model's score.",
-      "The analyst blocks the transfer (fraud) or releases it (false alarm). Those verdicts are the only real labels the system gets; a bank would retrain the model on them."]],
+      "The analyst blocks the transfer (fraud) or releases it (false alarm). Those verdicts are the only real labels the system gets; a bank would retrain the model on them.",
+      "Cases can be filtered by what held the transfer: the model, a hard rule or the second look."]],
     dash: ["Monitoring", "Grafana · demo", "what the bank watches", [
       "Grafana shows transfer and alert counts, types, the risk distribution, regions.",
       "This demo shows the same decisions live."]]

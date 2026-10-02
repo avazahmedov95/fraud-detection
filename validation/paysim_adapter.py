@@ -43,10 +43,11 @@ def run(path, txn_types, limit):
     return RP.replay(to_events(df, scale), total=len(df))
 
 
-def layers(path, txn_types, limit, store, seed=42):
-    """Rules alone, model alone and the deployed decision, on the same rows. One
-    pass gives both the rule verdict and the model's vector; the published split
-    trains the model, and the last fifth of the training days picks its cut."""
+def layers(path, txn_types, limit, store, seed=42, tabpfn_model=None):
+    """Rules alone, model alone and the deployed decision, on the same rows, and with
+    a TabPFN checkpoint the second look after the model as well. One pass gives both
+    the rule verdict and the model's vector; the published split trains the model,
+    and the last fifth of the training days picks its cut."""
     import numpy as np
     if os.path.exists(store):
         with np.load(store, allow_pickle=False) as s:
@@ -82,6 +83,10 @@ def layers(path, txn_types, limit, store, seed=42):
           f"{int(tr.sum()) - fit:,} after them\n")
     RP.section_layers(y[~tr], rules[~tr], mand[~tr], p, t,
                       positive="fraud", width=70)
+    if tabpfn_model:
+        Xtr, ytr = X[tr], y[tr]
+        RP.section_second_look(Xtr[:fit], ytr[:fit], Xtr[fit:], ytr[fit:], X[~tr], y[~tr],
+                               m.predict_proba(Xtr[fit:])[:, 1], p, t, tabpfn_model)
 
 
 def report(res, hits):
@@ -275,6 +280,9 @@ def main():
     ap.add_argument("--layers-cache", dest="layers_cache",
                     default="paysim_layers.npz",
                     help="where the pass over the file is kept")
+    ap.add_argument("--tabpfn-model", dest="tabpfn_model", default=None,
+                    help="with --layers: a TabPFN checkpoint, to read the second look "
+                         "too; run in .venv-models, where TabPFN is installed")
     ap.add_argument("--baseline", action="store_true",
                     help="retrain the published PaySim baseline instead of "
                          "replaying the rules - verifies the AUPRC 0.380 that "
@@ -292,7 +300,7 @@ def main():
     if args.layers:
         RP.capability_profile("myid_kinship", "geo_telemetry", "session_telemetry")
         return layers(args.file, [t.strip() for t in args.types.split(",") if t.strip()],
-                      args.limit, args.layers_cache)
+                      args.limit, args.layers_cache, tabpfn_model=args.tabpfn_model)
     if args.baseline:
         return baseline(args.file)
 

@@ -139,7 +139,7 @@ def parse_filter(query):
             f[key] = float(query[key][0])
         except (KeyError, IndexError, ValueError):
             pass
-    for key in ("decision", "type"):
+    for key in ("decision", "type", "held"):
         if query.get(key, [""])[0]:
             f[key] = query[key][0]
     return f
@@ -153,9 +153,10 @@ def _card_matches(card, digits):
             or (len(digits) <= 4 and card.endswith(digits)))
 
 
-def passes(f, sender, receiver, amount, at, decisions, kind):
+def passes(f, sender, receiver, amount, at, decisions, kind, held=()):
     """Whether one decision or case passes the filter `parse_filter` read. A record
-    can match more than one decision (`_decisions`)."""
+    can match more than one decision (`_decisions`), and a case more than one cause
+    of its hold (`_held_by`)."""
     amount = float(amount or 0)
     return not (
         ("sender" in f and not _card_matches(sender, f["sender"]))
@@ -164,7 +165,8 @@ def passes(f, sender, receiver, amount, at, decisions, kind):
         or ("since" in f and (at is None or at < f["since"]))
         or ("until" in f and (at is None or at > f["until"]))
         or ("decision" in f and f["decision"] not in decisions)
-        or ("type" in f and (kind or "NONE") != f["type"]))
+        or ("type" in f and (kind or "NONE") != f["type"])
+        or ("held" in f and f["held"] not in held))
 
 
 def mask(card):
@@ -222,6 +224,23 @@ def _decisions(rec):
     """What the decision filter matches a record by: its decision, and the second
     look too once that has decided - the transfer's row has left SECOND_LOOK by then."""
     return (rec.get("decision"), "SECOND_LOOK") if _second(rec) else (rec.get("decision"),)
+
+
+#: The job's MANDATORY_REVIEW_RULES (stream-processor/config.py): these hold a
+#: transfer by themselves.
+MANDATORY = ("STRUCTURING", "DAILY_LIMIT_BREACH")
+
+
+def _held_by(case, cut):
+    """What held the transfer, as fusion.decide and the second look decide: the second
+    look, or the model's risk at or past its cut-off and a hard rule - both can hold
+    one. A case with no model score was held by the rules' own score."""
+    if _second(case):
+        return ("SECOND_LOOK",)
+    ml = case.get("ml_score")
+    model = ml is not None and cut is not None and ml >= cut
+    rule = ml is None or any(r in MANDATORY for r in case.get("rule_hits") or [])
+    return tuple(k for k, on in (("MODEL", model), ("RULE", rule)) if on)
 
 
 def decision_ms(rec):
@@ -640,7 +659,9 @@ class App:
                    fraud_share=float(lib.is_fraud.mean()),
                    test_fraud=int(lib.is_fraud[lib.cut:].sum()))
         with open(os.path.join(HERE, "results.json"), encoding="utf-8") as fh:
-            return {"own": own, "public": json.load(fh)["datasets"]}
+            quoted = json.load(fh)
+        own["second"] = quoted["own"]["second"]
+        return {"own": own, "public": quoted["datasets"]}
 
     def store(self):
         if self._store is None:
@@ -697,7 +718,8 @@ class App:
         if flt:
             items = [c for c in items if passes(
                 flt, c["sender_card"], c["receiver_card"], c["amount_uzs"],
-                _as_epoch(c["opened_at"]), _decisions(c), c["predicted_type"])]
+                _as_epoch(c["opened_at"]), _decisions(c), c["predicted_type"],
+                _held_by(c, self.cut))]
         total, items = len(items), items[:limit]
         return {"total": total,
                 "cases": [{"id": c["case_id"], "at": c["opened_at"], "amount": c["amount_uzs"],

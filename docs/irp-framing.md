@@ -471,6 +471,17 @@ one at a time per slot (the Neo4j one was removed on 2026-09-19). Flink async I/
 fix and is not implemented. This is a per-slot figure on one machine, and the
 sweep ends where the producer saturates.
 
+**Re-measured 2026-10-02** (`.\run.ps1 measure-throughput 3000 -Rates 25,50,100`),
+with the second look running and the counterparty features of 2026-09-20 in the job:
+p50 / p95 / p99 of 128 / 237 / 330 ms at 25/s, 162 / 375 / 485 at 50/s, and
+**3,102 / 4,520 / 4,746 at 100/s - saturated**, where the table above held 240 ms at
+the median. The second look is not the load: through the 100/s arm its service sat
+at 0.5% CPU, the taskmanager at 515-690%. One cause found and not yet fixed:
+`fraud_job.py` opens its ONNX session with default options, whose threads spin after
+every single-row call. On this machine 100 calls a second cost 650% of a core that
+way, against 4% with one thread and spinning off - the same model, measured on the
+host. The fix is a few lines and a job restart.
+
 ### 7.7 Dependency matrix: what each outage silently removes
 
 `experiments/outage.py` stops one service per arm while 1,000 transactions are

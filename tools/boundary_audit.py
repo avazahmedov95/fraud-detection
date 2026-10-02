@@ -670,9 +670,9 @@ def b_demo_results_quote_their_sources():
     if not os.path.exists(path):
         return "SKIP demo/results.json absent"
     with open(path, encoding="utf-8") as fh:
-        datasets = json.load(fh)["datasets"]
+        quoted = json.load(fh)
     problems = []
-    for ds in datasets:
+    for ds in quoted["datasets"] + [quoted["own"]]:
         if not ds.get("quotes"):
             problems.append(f"{ds['key']} quotes nothing")
         for q in ds.get("quotes", []):
