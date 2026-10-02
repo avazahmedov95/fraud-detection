@@ -37,7 +37,8 @@ fields change: `final_score` becomes TabPFN's - the score the decision was taken
 served model's, so case-manager still checks an explanation against the model it
 explains, and the job's `stage_ms` stays behind. The warehouse therefore holds two
 rows for such a transfer, `SECOND_LOOK` and then the final one, and a case the
-second look opens carries its `model_version`: the queue says who held it.
+second look opens carries its `model_version` and both scores: the queue says who
+held it, and the demo shows the served model's risk beside TabPFN's.
 
 ## When it cannot answer
 

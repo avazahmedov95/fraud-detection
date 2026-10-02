@@ -68,6 +68,12 @@ ALTER TABLE fraud.cases
 ALTER TABLE fraud.cases
     ADD COLUMN IF NOT EXISTS model_version LowCardinality(String) DEFAULT '';
 
+-- The served model's score. For a transfer the second look held, final_score is
+-- TabPFN's, on a scale of its own, and this is the score that sent it there. NULL
+-- when no model scored at all.
+ALTER TABLE fraud.cases
+    ADD COLUMN IF NOT EXISTS ml_score Nullable(Float32);
+
 -- NOTE ON GRANULARITY. One case per alert. A mule receiving from twelve
 -- senders therefore produces up to twelve cases, where an investigator wants
 -- one. Grouping alerts into an investigation (by payee, within a window) is the

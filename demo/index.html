@@ -65,7 +65,7 @@ td.num,th.num{text-align:right}
 .tag.fraud{color:var(--alert);border-color:var(--alert-bar)}
 .dec{display:inline-block;font-size:.7rem;font-weight:600;letter-spacing:.03em;border-radius:5px;padding:2px 7px}
 .dec.ALLOW{background:var(--ok-soft);color:var(--ok)}.dec.REVIEW{background:var(--alert-soft);color:var(--alert)}
-.dec.SECOND_LOOK{background:#fdf1d8;color:#8a5a00}
+.dec.SECOND_LOOK{background:#fdf1d8;color:#8a5a00}.dec-sub{display:block;font-size:.68rem;color:#8a5a00;margin-top:2px}
 .rbar{display:inline-block;vertical-align:middle;width:64px;height:5px;border-radius:3px;background:var(--panel-2);position:relative;margin-right:7px}
 .rbar i{position:absolute;inset:0 auto 0 0;border-radius:3px;background:var(--accent)}.rbar.hot i{background:var(--alert-bar)}
 .scen{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 14px 14px}
@@ -372,6 +372,8 @@ ru: {
   part_second: "Вторая проверка — TabPFN", second_mark: "вторая проверка",
   second_note: "Черта — порог TabPFN, {cut}: у неё своя шкала. Правее черты перевод задерживается до решения аналитика.",
   note_waiting: "Риск чуть ниже уровня тревоги: перевод ждёт около секунды, пока его проверит вторая модель, TabPFN.",
+  note_sent: "Риск чуть ниже уровня тревоги, поэтому перевод проверила вторая модель, TabPFN. Её ответ — ниже.",
+  note_unscored: "TabPFN не смог оценить перевод, поэтому он задержан: без второй проверки его не пропускают.",
   kind: {NORMAL: "Обычный перевод", APP: "Мошенник по телефону", ATO: "Захват аккаунта", MULE: "Дроп-счёт", STRUCTURING: "Дробление сумм"},
   kind_desc: {
     NORMAL: "Контрольный случай: привычный перевод знакомому получателю. Должен пройти.",
@@ -477,6 +479,8 @@ en: {
   part_second: "Second look — TabPFN", second_mark: "second look",
   second_note: "The line is TabPFN's own cut-off, {cut}: its scale is its own. Past it, the transfer is held for the analyst.",
   note_waiting: "The risk is just under the alert level: the transfer waits about a second while a second model, TabPFN, looks at it.",
+  note_sent: "The risk is just under the alert level, so a second model, TabPFN, looked at the transfer. Its answer is below.",
+  note_unscored: "TabPFN could not score the transfer, so it is held: it does not go without its second look.",
   kind: {NORMAL: "Ordinary transfer", APP: "Phone scam", ATO: "Account takeover", MULE: "Money mule", STRUCTURING: "Structuring"},
   kind_desc: {
     NORMAL: "The control case: a usual transfer to a known payee, which should pass.",
@@ -666,7 +670,7 @@ function renderStream() {
       `<td class="mono">${esc(fmtTime(r.at))}</td><td class="num mono">${fmtInt(r.amount)}</td>` +
       `<td class="route"><span class="mono" title="${esc(r.from)} → ${esc(r.to)}">${esc(last4(r.from))} → ${esc(last4(r.to))}</span>${tagFor(r)}</td>` +
       `<td><span class="rbar ${hot ? "hot" : ""}"><i style="width:${Math.max(3, Math.min(1, r.score || 0) * 100)}%"></i></span><span class="mono">${dec(r.score, 2)}</span></td>` +
-      `<td>${badge(r.decision)}</td></tr>`;
+      `<td>${badge(r.decision)}${r.second ? `<small class="dec-sub">${t("second_mark")}</small>` : ""}</td></tr>`;
   }).join("") : `<tr><td colspan="5" class="muted">${t(filterCount("stream") ? "empty_filtered" : "empty_live")}</td></tr>`;
   $("#stream-more").innerHTML = moreBar("stream", streamRows.length, streamTotal);
 }
@@ -700,7 +704,7 @@ async function refreshRun() {
   const run = await api("/api/episode/" + runId);
   if (!run.rows) return;
   const fraud = run.rows.filter(r => r.truth !== "NONE"), normal = run.rows.filter(r => r.truth === "NONE");
-  const flagged = r => r.decision && r.decision !== "ALLOW";
+  const flagged = r => r.decision === "REVIEW";
   const parts = [];
   if (fraud.length) parts.push(fill(t("caught"), {a: fraud.filter(flagged).length, b: fraud.length}));
   if (normal.length) parts.push(fill(t("false_alarms"), {a: normal.filter(flagged).length, b: normal.length}));
@@ -708,7 +712,7 @@ async function refreshRun() {
   // The run's last alert on a fraudulent row opens by itself, once.
   const hit = [...fraud].reverse().find(flagged);
   if (hit && runPicked !== hit.id) { runPicked = hit.id; selected = {src: "stream", id: hit.id}; renderStream(); renderDetail(); }
-  if (run.rows.every(r => r.decision)) runId = null;
+  if (run.rows.every(r => r.decision && r.decision !== "SECOND_LOOK")) runId = null;
 }
 
 function whyBlock(why) {
@@ -727,6 +731,13 @@ function whyBlock(why) {
   }).join("");
 }
 
+// One model's risk against its own line.
+function riskPart(title, score, cut, note) {
+  return `<div class="part-h"><span>${title}</span><b>${t("risk")} ${dec(score, 2)}</b></div>
+      <div class="track"><i style="width:${Math.max(2, Math.min(1, score || 0) * 100)}%"></i>${cut == null ? "" : `<span class="cut" style="left:${cut * 100}%"></span>`}</div>
+      ${cut == null ? "" : `<p class="small-note">${fill(note, {cut: dec(cut, 2)})}</p>`}`;
+}
+
 function renderDetail() {
   if (!status || !status.ready) return;
   const pool = selected && selected.src === "case" ? ((lastCases && lastCases.cases) || []) : streamRows;
@@ -735,21 +746,25 @@ function renderDetail() {
   if (fresh) selected.row = fresh;
   const x = selected && selected.row;
   if (!x) { $("#detail").innerHTML = `<p class="empty">${t("pick")}</p>`; return; }
-  const rules = x.rules || [], second = !!x.second, cut = second ? status.second_cut : status.cut;
+  const rules = x.rules || [];
   let rnote = "";
   if (rules.some(r => MUST.has(r))) rnote = t("note_must");
   else if (rules.length) rnote = x.type ? fill(t("note_named"), {type: kindName(x.type).toLowerCase()}) : t("note_reasons");
   else if (x.decision === "REVIEW") rnote = t("note_model_only");
+  // Just under the alert level, the model sends the transfer to the second look.
+  const sent = x.decision === "SECOND_LOOK" ? t("note_waiting") : x.second ? t("note_sent") : "";
   $("#detail").innerHTML = `<div class="case">
     <div class="case-top"><span class="amount">${fmtInt(x.amount)} <small>${t("sum")}</small></span>${badge(x.decision)}</div>
     <div class="route">${esc(x.from)} → ${esc(x.to)}</div>
     <div class="part">
-      <div class="part-h"><span>${t(second ? "part_second" : "part_model")}</span><b>${t("risk")} ${dec(x.score, 2)}</b></div>
-      <div class="track"><i style="width:${Math.max(2, Math.min(1, x.score || 0) * 100)}%"></i>${cut == null ? "" : `<span class="cut" style="left:${cut * 100}%"></span>`}</div>
-      ${cut == null ? "" : `<p class="small-note">${fill(t(second ? "second_note" : "cut_note"), {cut: dec(cut, 2)})}</p>`}
-      ${x.decision === "SECOND_LOOK" ? `<p class="small-note">${t("note_waiting")}</p>` : ""}
-      ${x.decision === "ALLOW" ? `<p class="small-note">${t("note_allowed")}</p>` : whyBlock(x.why)}
+      ${riskPart(t("part_model"), x.score, status.cut, t("cut_note"))}
+      ${sent ? `<p class="small-note">${sent}</p>` : ""}
+      ${x.decision === "ALLOW" && !x.second ? `<p class="small-note">${t("note_allowed")}</p>` : whyBlock(x.why)}
     </div>
+    ${x.second ? `<div class="part">
+      ${riskPart(t("part_second"), x.second_score, status.second_cut, t("second_note"))}
+      ${x.second_score == null ? `<p class="small-note">${t("note_unscored")}</p>` : ""}
+    </div>` : ""}
     <div class="part">
       <div class="part-h"><span>${t("part_rules")}</span><b>${fill(t("rules_fired"), {n: rules.length})}</b></div>
       ${rules.length ? `<div class="rules">${rules.map(r => `<span class="rule ${MUST.has(r) ? "must" : ""}" title="${esc(r)}">${esc(t("rules")[r] || r)}</span>`).join("")}</div>` : ""}

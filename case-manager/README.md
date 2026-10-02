@@ -24,8 +24,9 @@ the money; the job takes 0.22 s at the 99th percentile (`docs/irp-framing.md` 7.
 
 Some holds come from the second look (`second-look/README.md`): a transfer just
 under the cut-off that TabPFN called fraud. Its case carries the second look's
-`model_version`, its `final_score` is TabPFN's, and its explanation is still the
-served model's, checked against the `ml_score` the job recorded.
+`model_version`, its `final_score` is TabPFN's, and it keeps the served model's
+`ml_score` - the score that sent it there - beside it. Its explanation is still the
+served model's, checked against that `ml_score`.
 
 ## Why the disposition matters more than the queue
 

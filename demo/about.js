@@ -350,11 +350,15 @@ async function renderAbout() {
   drawAbout();
 }
 
+// The walk follows the job's own decision: a transfer the second look decided took
+// another path, and its stage times stayed with the job's record.
+const byJob = r => r && !r.second && r.decision !== "SECOND_LOOK";
+
 function candidates() {
   return {
-    alert: walk.pool.find(r => r.decision === "REVIEW"),
-    allow: walk.pool.find(r => r.decision === "ALLOW"),
-    selected: selected && selected.src === "stream" ? selected.row : null
+    alert: walk.pool.find(r => r.decision === "REVIEW" && byJob(r)),
+    allow: walk.pool.find(r => r.decision === "ALLOW" && byJob(r)),
+    selected: selected && selected.src === "stream" && byJob(selected.row) ? selected.row : null
   };
 }
 

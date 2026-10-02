@@ -153,8 +153,9 @@ def _card_matches(card, digits):
             or (len(digits) <= 4 and card.endswith(digits)))
 
 
-def passes(f, sender, receiver, amount, at, decision, kind):
-    """Whether one decision or case passes the filter `parse_filter` read."""
+def passes(f, sender, receiver, amount, at, decisions, kind):
+    """Whether one decision or case passes the filter `parse_filter` read. A record
+    can match more than one decision (`_decisions`)."""
     amount = float(amount or 0)
     return not (
         ("sender" in f and not _card_matches(sender, f["sender"]))
@@ -162,7 +163,7 @@ def passes(f, sender, receiver, amount, at, decision, kind):
         or ("min" in f and amount < f["min"]) or ("max" in f and amount > f["max"])
         or ("since" in f and (at is None or at < f["since"]))
         or ("until" in f and (at is None or at > f["until"]))
-        or ("decision" in f and decision != f["decision"])
+        or ("decision" in f and f["decision"] not in decisions)
         or ("type" in f and (kind or "NONE") != f["type"]))
 
 
@@ -205,6 +206,22 @@ def _second_cut():
 def _second(rec):
     """Whether the second look, not the job, took this decision."""
     return (rec.get("model_version") or "").startswith("second-look")
+
+
+def _scores(rec):
+    """The served model's risk, which every list on the page shows, and - when the
+    second look took the decision - its own score, on TabPFN's scale."""
+    if not _second(rec):
+        return {"score": rec.get("final_score"), "second_score": None}
+    unscored = rec["model_version"].endswith(":unscored")
+    return {"score": rec.get("ml_score"),
+            "second_score": None if unscored else rec.get("final_score")}
+
+
+def _decisions(rec):
+    """What the decision filter matches a record by: its decision, and the second
+    look too once that has decided - the transfer's row has left SECOND_LOOK by then."""
+    return (rec.get("decision"), "SECOND_LOOK") if _second(rec) else (rec.get("decision"),)
 
 
 def decision_ms(rec):
@@ -413,12 +430,15 @@ class Decisions:
 
     def add(self, rec):
         with self.lock:
-            self.recent.append(rec)
-            # A transfer sent for a second look is decided twice: it counts once, as
-            # its latest decision, and its time to decision is the job's.
+            # A transfer sent for a second look is decided twice. It keeps its row and
+            # counts once, as its latest decision; its time to decision is the job's.
             prev = self.by_id.get(rec.get("transaction_id"))
             if prev is not None:
                 self.counts[prev.get("decision") or "?"] -= 1
+            if prev is not None and prev in self.recent:
+                self.recent[self.recent.index(prev)] = rec
+            else:
+                self.recent.append(rec)
             if rec.get("transaction_id"):
                 self.by_id[rec["transaction_id"]] = rec
                 while len(self.by_id) > 50_000:
@@ -499,7 +519,7 @@ def view(rec):
     return {"id": rec.get("transaction_id"), "at": rec.get("scored_at_job"),
             "amount": rec.get("amount_uzs"), "from": mask(rec.get("sender_card")),
             "to": mask(rec.get("receiver_card")), "decision": rec.get("decision"),
-            "score": rec.get("final_score"), "type": rec.get("predicted_type"),
+            **_scores(rec), "type": rec.get("predicted_type"),
             "rules": rec.get("rule_hits") or [], "ms": decision_ms(rec),
             "stages": rec.get("stage_ms") or {}, "second": _second(rec)}
 
@@ -551,7 +571,7 @@ class App:
         if flt:
             recs = [r for r in recs if passes(
                 flt, r.get("sender_card"), r.get("receiver_card"), r.get("amount_uzs"),
-                _finite(r.get("scored_at_job")), r.get("decision"), r.get("predicted_type"))]
+                _finite(r.get("scored_at_job")), _decisions(r), r.get("predicted_type"))]
         roles = {row["id"]: row for run in list(self.runs.values()) for row in run["rows"]}
         out = []
         for rec in reversed(recs[-limit:]):
@@ -677,13 +697,13 @@ class App:
         if flt:
             items = [c for c in items if passes(
                 flt, c["sender_card"], c["receiver_card"], c["amount_uzs"],
-                _as_epoch(c["opened_at"]), c["decision"], c["predicted_type"])]
+                _as_epoch(c["opened_at"]), _decisions(c), c["predicted_type"])]
         total, items = len(items), items[:limit]
         return {"total": total,
                 "cases": [{"id": c["case_id"], "at": c["opened_at"], "amount": c["amount_uzs"],
                            "from": mask(c["sender_card"]), "to": mask(c["receiver_card"]),
                            "decision": c["decision"], "type": c["predicted_type"],
-                           "score": c["final_score"], "rules": list(c["rule_hits"] or []),
+                           **_scores(c), "rules": list(c["rule_hits"] or []),
                            "held_s": round(CASE.held_seconds(c, now)), "second": _second(c),
                            "why": {"status": c.get("explanation_status") or "",
                                    "items": split_phrases(c.get("explanation") or [])}}

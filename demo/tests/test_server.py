@@ -284,7 +284,7 @@ def test_the_filter_reads_what_the_page_shows_of_a_card():
 
 
 def test_the_filter_checks_every_condition():
-    row = ("8600031234562655", "9860449876543210", 9_600_000, 1000.0, "REVIEW", "STRUCTURING")
+    row = ("8600031234562655", "9860449876543210", 9_600_000, 1000.0, ("REVIEW",), "STRUCTURING")
     assert S.passes({}, *row)
     assert S.passes({"min": 9e6, "max": 1e7, "since": 999.0, "until": 1001.0,
                      "decision": "REVIEW", "type": "STRUCTURING"}, *row)
@@ -331,13 +331,24 @@ def test_the_results_file_says_everything_in_both_languages():
             assert set(ds[field]) == {"ru", "en"}, (ds["key"], field)
 
 
-def test_a_transfer_decided_twice_counts_once_as_its_latest_decision():
+def test_a_transfer_decided_twice_keeps_its_row_and_counts_once():
     """A transfer just under the cut-off is decided by the job, then by the second look."""
     d = S.Decisions()
     first = {"transaction_id": "t1", "decision": "SECOND_LOOK", "ingested_at": 1.0,
-             "scored_at_job": 1.1}
+             "scored_at_job": 1.1, "ml_score": 0.07, "final_score": 0.07}
     d.add(first)
-    d.add(dict(first, decision="REVIEW", model_version="second-look:tabpfn"))
+    d.add({"transaction_id": "t2", "decision": "ALLOW"})
+    held = dict(first, decision="REVIEW", final_score=0.94, model_version="second-look:tabpfn")
+    d.add(held)
+    assert [r["transaction_id"] for r in d.recent] == ["t1", "t2"]
     assert d.counts["REVIEW"] == 1 and d.counts["SECOND_LOOK"] == 0
     assert len(d.ms) == 1                       # its time to decision is the job's, once
-    assert S.view(d.by_id["t1"])["second"] is True
+    # Every row's risk is the served model's; TabPFN's, on its own scale, comes beside it.
+    v = S.view(d.by_id["t1"])
+    assert v["second"] and (v["score"], v["second_score"]) == (0.07, 0.94)
+    unscored = dict(held, final_score=0.07, model_version="second-look:tabpfn:unscored")
+    assert S._scores(unscored) == {"score": 0.07, "second_score": None}
+    # Its row has left SECOND_LOOK, and the filter still finds it there and as held.
+    app = SimpleNamespace(decisions=d, runs={}, _why=lambda rec: None)
+    for asked in ("SECOND_LOOK", "REVIEW"):
+        assert [r["id"] for r in S.App.stream(app, flt={"decision": asked})["rows"]] == ["t1"]

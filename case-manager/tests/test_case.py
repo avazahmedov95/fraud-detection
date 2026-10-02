@@ -154,6 +154,8 @@ def test_the_summary_separates_what_holding_costs_from_what_it_keeps():
     assert s["NEW"]["max_s"] == pytest.approx(600)
 
 
-def test_the_case_says_which_model_held_it():
-    row = _as_dict(CASE.case_row(dict(ALERT, model_version="second-look:tabpfn")))
+def test_the_case_says_which_model_held_it_and_what_the_served_model_said():
+    row = _as_dict(CASE.case_row(dict(ALERT, model_version="second-look:tabpfn",
+                                      final_score=0.94, ml_score=0.07)))
     assert row["model_version"] == "second-look:tabpfn"
+    assert (row["final_score"], row["ml_score"]) == (0.94, 0.07)
