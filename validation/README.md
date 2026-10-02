@@ -629,6 +629,29 @@ and a lowered cut-off would catch 147; on the cutoff band it alerted on 1,095 of
 cut-off finds: with these 18 features neither model tells the laundering there from
 the ordinary transfers around it.
 
+### What a graph store could add, 2026-10-02 (`--graph`)
+
+```bash
+python ibm_aml_adapter.py --file HI-Small_Trans.csv --cache ibm_features21.npz --graph --seeds 3
+```
+
+The four columns of `ml/experiments/graph_features.py`, from this file's transfers
+before each one, each account keeping its latest 20 contacts and payers (hubs deal
+with thousands): a laundering transfer marks its payee a day after it. The recipe
+fitted unweighted, three seeds, on the published split:
+
+| columns added to the 18 | F1 % | PR-AUC |
+|---|---|---|
+| none | 57.0 | 0.546 |
+| **confirmed cases spread along the graph** | **62.0** | **0.620** |
+| the graph's shape alone | 57.0 | 0.543 |
+| all four | 62.5 | 0.622 |
+
+The cases add **+5.1 F1 [+3.3, +6.8]**, the shape +0.1 [-1.9, +2.1]. Read the 62.0
+against our own 57.0, not against the published table: those methods use no labels,
+and these columns spread the file's own laundering labels. And the mark is noisy
+here - held-out transfers to a flagged payee were 421 laundering and 7,479 not.
+
 ### Re-run 2026-09-21 (`--budgets`): recall at a fixed alert budget
 
 The owner's target for this file was to catch more than half of its laundering. A

@@ -29,6 +29,8 @@ experiments/      harnesses - each produces a NUMBER, not an artefact the
                   cut-off; --test --served reads it on the held-out slice
   second_look_seeds.py  the model alone, with a lowered cut-off and with the
                   second look, on twenty generator seeds (resumes)
+  graph_features.py  four columns a graph store could serve, with and without,
+                  on twenty generator seeds (resumes)
                   One-off experiments are deleted once their decision is
                   written below: git log --diff-filter=D -- ml/experiments
 
@@ -971,6 +973,52 @@ is the model's ranking, which the second look does not change.
 seeds (0.481 to 0.769) and recall 54.4% at its own cut-off, where seed 42 gives 0.673
 and 67.0%. The served figures are true of the dataset of record, which is one of the
 kinder draws; the twenty-seed means are the recipe's.
+
+### What a graph store could add, measured 2026-10-02
+
+Neo4j holds the analysts' alert graph and no decision reads it. Would it help the
+model? `experiments/graph_features.py` computes four columns a graph store could
+serve, from the transfers before each one only - asking needs no Neo4j - and fits
+the served recipe with and without them on the twenty seeds above. Three spread
+confirmed cases along the graph (the payee, the sender, and the payee's contacts
+over the week, each against the accounts that received a confirmed fraud); a fraud
+counts as confirmed a day after it, every one of them. The fourth needs no label:
+the most of the payee's payers in the last day that one account had funded. The
+rule, committed before the run (2151cfd): the four must raise validation PR-AUC
+clear of zero and not lower test F1.
+
+| columns added to the served 21 | PR-AUC | recall | precision | F1 |
+|---|---|---|---|---|
+| none - the model as served | 0.618 | 54.4% | 70.5% | 60.8% |
+| **confirmed cases spread along the graph** | **0.666** | **61.0%** | **73.0%** | **66.0%** |
+| the graph's shape alone | 0.618 | 54.5% | 69.6% | 60.4% |
+| all four | 0.665 | 60.4% | 72.8% | 65.4% |
+
+Paired by seed, the confirmed cases raise validation PR-AUC by **+0.046 [+0.035,
++0.058] and test F1 by +5.2 points [+4.0, +6.4], on 20 of 20 seeds** - more than the
+second look's +1.2. The shape adds nothing (validation PR-AUC -0.003 [-0.005,
+-0.001]). The rule passes, on the cases alone. On IBM AML (`validation/README.md`
+section 2), three seeds of the unweighted recipe agree: F1 57.0 -> 62.0 with the
+cases, 57.0 with the shape.
+
+What it does and does not say:
+
+1. **It is the cases, not the graph, that pay.** The gain is a memory of the accounts
+   in confirmed frauds, read for the payee, the sender and the payee's contacts:
+   a set of accounts and the counterparties Redis already keeps for the counters
+   (`stream-processor/receiver_store.py`). Nothing measured here needs a graph
+   database; the one column that only a graph gives was worth nothing.
+2. **The confirmation is generous.** Every fraud is taken as confirmed a day after
+   it; a bank confirms the alerts its analysts work and the frauds its customers
+   report, later and not all. The figure is the ceiling of this memory, and the
+   gain shrinks as the cases thin out.
+3. **The cases are the generator's.** Its 2,000 fraud accounts take fraud from
+   several victims a month, and recruited mules are people with ordinary traffic:
+   held-out transfers to a flagged payee were 725 fraud and 1,470 legitimate here,
+   421 and 7,479 on IBM. How much a bank's mules repeat decides the real value.
+4. **One shape was tried.** Richer structure - cycles, scatter-gather counts, the
+   features the published IBM graph methods build - is untried; this column is not
+   evidence against them.
 
 ## Capability ablation
 

@@ -65,12 +65,14 @@ def _common_funder(payers, payee, t):
     return max(funded.values(), default=0)
 
 
-def graph_features(senders, receivers, times, labels):
-    """FEATURES for each transfer, from the transfers strictly before it."""
+def graph_features(senders, receivers, times, labels, cap=None):
+    """FEATURES for each transfer, from the transfers strictly before it. `cap` keeps
+    only an account's latest so many contacts and payers, for files whose hub
+    accounts deal with thousands a week; this project's people never reach it."""
     out = np.zeros((len(times), len(FEATURES)), "float32")
     flagged, pending = set(), deque()        # pending: (when it is known, account)
-    contacts = defaultdict(deque)            # account -> (t, the other side), a week
-    payers = defaultdict(deque)              # account -> (t, who paid it), a day
+    contacts = defaultdict(lambda: deque(maxlen=cap))   # account -> (t, the other side)
+    payers = defaultdict(lambda: deque(maxlen=cap))     # account -> (t, who paid it)
     for i, (s, r, t) in enumerate(zip(senders, receivers, times)):
         while pending and pending[0][0] <= t:
             flagged.add(pending.popleft()[1])
