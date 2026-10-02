@@ -115,8 +115,14 @@ class FraudDetector(KeyedProcessFunction):
         try:
             import onnxruntime as ort
             if os.path.exists(C.MODEL_ONNX_PATH):
+                # One thread: a single-row call gains a quarter of a millisecond from
+                # more, and onnxruntime's extra threads spin after every call - five
+                # to six cores at 100 calls a second, against 4% of one
+                # (docs/irp-framing.md 7.6).
+                opts = ort.SessionOptions()
+                opts.intra_op_num_threads = 1
                 self._sess = ort.InferenceSession(
-                    C.MODEL_ONNX_PATH, providers=["CPUExecutionProvider"])
+                    C.MODEL_ONNX_PATH, sess_options=opts, providers=["CPUExecutionProvider"])
                 self._in_name = self._sess.get_inputs()[0].name
                 print(f"[fraud_job] ONNX model loaded from {C.MODEL_ONNX_PATH}")
             else:

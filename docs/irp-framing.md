@@ -471,16 +471,26 @@ one at a time per slot (the Neo4j one was removed on 2026-09-19). Flink async I/
 fix and is not implemented. This is a per-slot figure on one machine, and the
 sweep ends where the producer saturates.
 
-**Re-measured 2026-10-02** (`.\run.ps1 measure-throughput 3000 -Rates 25,50,100`),
-with the second look running and the counterparty features of 2026-09-20 in the job:
-p50 / p95 / p99 of 128 / 237 / 330 ms at 25/s, 162 / 375 / 485 at 50/s, and
-**3,102 / 4,520 / 4,746 at 100/s - saturated**, where the table above held 240 ms at
-the median. The second look is not the load: through the 100/s arm its service sat
-at 0.5% CPU, the taskmanager at 515-690%. One cause found and not yet fixed:
-`fraud_job.py` opens its ONNX session with default options, whose threads spin after
-every single-row call. On this machine 100 calls a second cost 650% of a core that
-way, against 4% with one thread and spinning off - the same model, measured on the
-host. The fix is a few lines and a job restart.
+**Re-measured 2026-10-02** (`.\run.ps1 measure-throughput 3000 -Rates 25,50,100,250`),
+with the second look running and the counterparty features of 2026-09-20 in the job.
+The first sweep saturated at 100/s, with the second look's service at 0.5% CPU and
+the taskmanager at 515-690%: `fraud_job.py` opened its ONNX session with default
+options, whose threads spin after every single-row call - on this machine 100 calls
+a second cost five to six cores that way, against 4% of one with a single thread,
+the same model measured on the host. The session now runs on one thread (the call
+takes 0.51 ms instead of 0.25), and the job was resumed from its checkpoint:
+
+| offered/s | p50 | p95 | p99 | over 300 ms, before | p50 | p95 | p99 | over 300 ms, after |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 25 | 128 | 237 | 330 | 58 | **102** | **151** | **182** | **0** |
+| 50 | 162 | 375 | 485 | 307 | **116** | **186** | **229** | **3** |
+| 100 | 3,102 | 4,520 | 4,746 | 2,988 | **146** | **264** | **425** | **111** |
+| 250 | - | - | - | - | 2,849 | 5,699 | 6,329 | 2,813 |
+
+**With one thread the target holds through 50 events/s**, and the queue saturates
+between 100 and 250 rather than at 100; at 100/s the taskmanager uses 44-76% of a
+core instead of five to seven. The synchronous Redis lookup above is still the
+next limit.
 
 ### 7.7 Dependency matrix: what each outage silently removes
 
