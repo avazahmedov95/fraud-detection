@@ -1008,10 +1008,17 @@ What it does and does not say:
    a set of accounts and the counterparties Redis already keeps for the counters
    (`stream-processor/receiver_store.py`). Nothing measured here needs a graph
    database; the one column that only a graph gives was worth nothing.
-2. **The confirmation is generous.** Every fraud is taken as confirmed a day after
-   it; a bank confirms the alerts its analysts work and the frauds its customers
-   report, later and not all. The figure is the ceiling of this memory, and the
-   gain shrinks as the cases thin out.
+2. **The confirmation was generous, and it barely matters** (`--confirmation`, rule
+   committed first, 119cd8c). The months before the held-out slice stay labelled -
+   the history any model trains on - and a held-out fraud becomes known only as a
+   bank learns it: held by the served model and confirmed by the analyst a day
+   later, or missed and reported by its victim, half of them, a week later. Of 3,497
+   held-out frauds that makes 2,728 known (1,903 by analysts alone, against all
+   3,497 above), and the cases still raise **F1 +4.8 points [+3.6, +5.9] and PR-AUC
+   +0.043, on 20 of 20 seeds** - 65.5% against 66.0% when every fraud is known. The
+   memory is mostly the history: the accounts that took fraud before. The reports
+   changed nothing, because a week outlasts the six-day held-out slice; analysts'
+   verdicts alone give the same figures.
 3. **The cases are the generator's.** Its 2,000 fraud accounts take fraud from
    several victims a month, and recruited mules are people with ordinary traffic:
    held-out transfers to a flagged payee were 725 fraud and 1,470 legitimate here,
