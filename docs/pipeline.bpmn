@@ -24,9 +24,12 @@
         <bpmn:flowNodeRef>AlertOut</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Band</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>AllowOut</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Answering</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>SecondOut</bpmn:flowNodeRef>
       </bpmn:lane>
       <bpmn:lane id="Lane_second" name="Second look">
+        <bpmn:flowNodeRef>Late</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>HeldLateOut</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Look</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>TabCut</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>HeldOut</bpmn:flowNodeRef>
@@ -122,6 +125,7 @@
     </bpmn:exclusiveGateway>
     <bpmn:sendTask id="AlertOut" name="Hold the transfer, publish the alert&#10;[Kafka: transactions.scored, fraud.alerts]">
       <bpmn:incoming>F_alert</bpmn:incoming>
+      <bpmn:incoming>F_answer_no</bpmn:incoming>
       <bpmn:outgoing>F_alert_out</bpmn:outgoing>
     </bpmn:sendTask>
     <bpmn:exclusiveGateway id="Band" name="Just under the cut-off?" default="F_allow">
@@ -133,12 +137,26 @@
       <bpmn:incoming>F_allow</bpmn:incoming>
       <bpmn:outgoing>F_allow_out</bpmn:outgoing>
     </bpmn:sendTask>
-    <bpmn:sendTask id="SecondOut" name="Hold it for a second look&#10;[Kafka: fraud.second_look]">
+    <bpmn:exclusiveGateway id="Answering" name="Second look answering?&#10;[flag in Redis]" default="F_answer_no">
       <bpmn:incoming>F_second</bpmn:incoming>
+      <bpmn:outgoing>F_answer_yes</bpmn:outgoing>
+      <bpmn:outgoing>F_answer_no</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sendTask id="SecondOut" name="Hold it for a second look&#10;[Kafka: fraud.second_look]">
+      <bpmn:incoming>F_answer_yes</bpmn:incoming>
       <bpmn:outgoing>F_second_out</bpmn:outgoing>
     </bpmn:sendTask>
-    <bpmn:serviceTask id="Look" name="Score it with TabPFN, publish the decision&#10;[Python, TabPFN]">
+    <bpmn:exclusiveGateway id="Late" name="Waited 5 s or more?" default="F_late_no">
       <bpmn:incoming>F_second_out</bpmn:incoming>
+      <bpmn:outgoing>F_late_yes</bpmn:outgoing>
+      <bpmn:outgoing>F_late_no</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:intermediateThrowEvent id="HeldLateOut" name="Held unscored: waited too long">
+      <bpmn:incoming>F_late_yes</bpmn:incoming>
+      <bpmn:linkEventDefinition id="Link_HeldLateOut" name="Held by the second look" />
+    </bpmn:intermediateThrowEvent>
+    <bpmn:serviceTask id="Look" name="Score it with TabPFN, publish the decision&#10;[Python, TabPFN; answering flag in Redis]">
+      <bpmn:incoming>F_late_no</bpmn:incoming>
       <bpmn:outgoing>F_look</bpmn:outgoing>
     </bpmn:serviceTask>
     <bpmn:exclusiveGateway id="TabCut" name="TabPFN at or above its cut-off?" default="F_letgo">
@@ -256,8 +274,12 @@
     <bpmn:sequenceFlow id="F_alert" name="Yes" sourceRef="Decide" targetRef="AlertOut" />
     <bpmn:sequenceFlow id="F_not_held" name="No" sourceRef="Decide" targetRef="Band" />
     <bpmn:sequenceFlow id="F_allow" name="No" sourceRef="Band" targetRef="AllowOut" />
-    <bpmn:sequenceFlow id="F_second" name="Yes" sourceRef="Band" targetRef="SecondOut" />
-    <bpmn:sequenceFlow id="F_second_out" sourceRef="SecondOut" targetRef="Look" />
+    <bpmn:sequenceFlow id="F_second" name="Yes" sourceRef="Band" targetRef="Answering" />
+    <bpmn:sequenceFlow id="F_answer_yes" name="Yes" sourceRef="Answering" targetRef="SecondOut" />
+    <bpmn:sequenceFlow id="F_answer_no" name="No" sourceRef="Answering" targetRef="AlertOut" />
+    <bpmn:sequenceFlow id="F_second_out" sourceRef="SecondOut" targetRef="Late" />
+    <bpmn:sequenceFlow id="F_late_yes" name="Yes" sourceRef="Late" targetRef="HeldLateOut" />
+    <bpmn:sequenceFlow id="F_late_no" name="No" sourceRef="Late" targetRef="Look" />
     <bpmn:sequenceFlow id="F_look" sourceRef="Look" targetRef="TabCut" />
     <bpmn:sequenceFlow id="F_held" name="Yes" sourceRef="TabCut" targetRef="HeldOut" />
     <bpmn:sequenceFlow id="F_letgo" name="No" sourceRef="TabCut" targetRef="LetGoOut" />
@@ -280,35 +302,35 @@
     <bpmn:sequenceFlow id="F_block" name="Yes" sourceRef="Fraud" targetRef="Blocked" />
     <bpmn:sequenceFlow id="F_release" name="No" sourceRef="Fraud" targetRef="Released" />
     <bpmn:textAnnotation id="Note_decision">
-      <bpmn:text>Hold (REVIEW) when the model score is at or above the alert cut-off, or a mandatory rule fired; otherwise allow</bpmn:text>
+      <bpmn:text>Hold (REVIEW) at or above the alert cut-off, or when a mandatory rule fired; just under it, ask the second look; otherwise allow</bpmn:text>
     </bpmn:textAnnotation>
     <bpmn:association id="Note_decision_link" sourceRef="Decision" targetRef="Note_decision" />
   </bpmn:process>
   <bpmndi:BPMNDiagram id="Diagram_1">
     <bpmndi:BPMNPlane id="Plane_1" bpmnElement="Collaboration_1">
       <bpmndi:BPMNShape id="Participant_1_di" bpmnElement="Participant_1" isHorizontal="true">
-        <dc:Bounds x="160" y="60" width="3260" height="1400" />
+        <dc:Bounds x="160" y="60" width="3460" height="1400" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Lane_channel_di" bpmnElement="Lane_channel" isHorizontal="true">
-        <dc:Bounds x="190" y="60" width="3230" height="160" />
+        <dc:Bounds x="190" y="60" width="3430" height="160" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Lane_flink_di" bpmnElement="Lane_flink" isHorizontal="true">
-        <dc:Bounds x="190" y="220" width="3230" height="360" />
+        <dc:Bounds x="190" y="220" width="3430" height="360" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Lane_second_di" bpmnElement="Lane_second" isHorizontal="true">
-        <dc:Bounds x="190" y="580" width="3230" height="180" />
+        <dc:Bounds x="190" y="580" width="3430" height="180" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Lane_sink_di" bpmnElement="Lane_sink" isHorizontal="true">
-        <dc:Bounds x="190" y="760" width="3230" height="260" />
+        <dc:Bounds x="190" y="760" width="3430" height="260" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Lane_data_di" bpmnElement="Lane_data" isHorizontal="true">
-        <dc:Bounds x="190" y="1020" width="3230" height="140" />
+        <dc:Bounds x="190" y="1020" width="3430" height="140" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Lane_case_di" bpmnElement="Lane_case" isHorizontal="true">
-        <dc:Bounds x="190" y="1160" width="3230" height="150" />
+        <dc:Bounds x="190" y="1160" width="3430" height="150" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Lane_analyst_di" bpmnElement="Lane_analyst" isHorizontal="true">
-        <dc:Bounds x="190" y="1310" width="3230" height="150" />
+        <dc:Bounds x="190" y="1310" width="3430" height="150" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Start_di" bpmnElement="Start">
         <dc:Bounds x="232" y="122" width="36" height="36" />
@@ -359,25 +381,37 @@
         <bpmndi:BPMNLabel><dc:Bounds x="2100" y="430" width="110" height="28" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="AllowOut_di" bpmnElement="AllowOut">
-        <dc:Bounds x="2230" y="235" width="180" height="100" />
+        <dc:Bounds x="2230" y="228" width="180" height="100" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Answering_di" bpmnElement="Answering" isMarkerVisible="true">
+        <dc:Bounds x="2225" y="375" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="2185" y="330" width="130" height="44" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="SecondOut_di" bpmnElement="SecondOut">
-        <dc:Bounds x="2230" y="350" width="180" height="100" />
+        <dc:Bounds x="2320" y="350" width="180" height="100" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Late_di" bpmnElement="Late" isMarkerVisible="true">
+        <dc:Bounds x="2385" y="645" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="2270" y="598" width="110" height="28" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="HeldLateOut_di" bpmnElement="HeldLateOut">
+        <dc:Bounds x="2302" y="652" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="2262" y="692" width="116" height="28" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Look_di" bpmnElement="Look">
-        <dc:Bounds x="2260" y="620" width="180" height="100" />
+        <dc:Bounds x="2475" y="620" width="180" height="100" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="TabCut_di" bpmnElement="TabCut" isMarkerVisible="true">
-        <dc:Bounds x="2480" y="645" width="50" height="50" />
-        <bpmndi:BPMNLabel><dc:Bounds x="2450" y="610" width="110" height="28" /></bpmndi:BPMNLabel>
+        <dc:Bounds x="2695" y="645" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="2665" y="608" width="110" height="28" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="HeldOut_di" bpmnElement="HeldOut">
-        <dc:Bounds x="2580" y="652" width="36" height="36" />
-        <bpmndi:BPMNLabel><dc:Bounds x="2622" y="656" width="100" height="28" /></bpmndi:BPMNLabel>
+        <dc:Bounds x="2795" y="652" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="2837" y="656" width="100" height="28" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="LetGoOut_di" bpmnElement="LetGoOut">
-        <dc:Bounds x="2580" y="712" width="36" height="36" />
-        <bpmndi:BPMNLabel><dc:Bounds x="2622" y="716" width="100" height="28" /></bpmndi:BPMNLabel>
+        <dc:Bounds x="2795" y="712" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="2837" y="716" width="100" height="28" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="HeldIn_di" bpmnElement="HeldIn">
         <dc:Bounds x="2130" y="822" width="36" height="36" />
@@ -390,29 +424,29 @@
         <dc:Bounds x="2285" y="815" width="50" height="50" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Merge_di" bpmnElement="Merge" isMarkerVisible="true">
-        <dc:Bounds x="2725" y="815" width="50" height="50" />
+        <dc:Bounds x="2925" y="815" width="50" height="50" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="LetGoIn_di" bpmnElement="LetGoIn">
-        <dc:Bounds x="2732" y="932" width="36" height="36" />
-        <bpmndi:BPMNLabel><dc:Bounds x="2774" y="941" width="110" height="28" /></bpmndi:BPMNLabel>
+        <dc:Bounds x="2932" y="932" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="2974" y="941" width="110" height="28" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Store_di" bpmnElement="Store">
-        <dc:Bounds x="2815" y="790" width="180" height="100" />
+        <dc:Bounds x="3015" y="790" width="180" height="100" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="IsReview_di" bpmnElement="IsReview" isMarkerVisible="true">
-        <dc:Bounds x="3035" y="815" width="50" height="50" />
-        <bpmndi:BPMNLabel><dc:Bounds x="2995" y="778" width="130" height="28" /></bpmndi:BPMNLabel>
+        <dc:Bounds x="3235" y="815" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="3195" y="778" width="130" height="28" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Allowed_di" bpmnElement="Allowed">
-        <dc:Bounds x="3135" y="822" width="36" height="36" />
-        <bpmndi:BPMNLabel><dc:Bounds x="3179" y="826" width="130" height="28" /></bpmndi:BPMNLabel>
+        <dc:Bounds x="3335" y="822" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="3379" y="826" width="130" height="28" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Graph_di" bpmnElement="Graph">
-        <dc:Bounds x="3115" y="900" width="180" height="100" />
+        <dc:Bounds x="3315" y="900" width="180" height="100" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="AlertDone_di" bpmnElement="AlertDone">
-        <dc:Bounds x="3335" y="932" width="36" height="36" />
-        <bpmndi:BPMNLabel><dc:Bounds x="3308" y="972" width="90" height="20" /></bpmndi:BPMNLabel>
+        <dc:Bounds x="3535" y="932" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="3508" y="972" width="90" height="20" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Case_di" bpmnElement="Case">
         <dc:Bounds x="2220" y="1185" width="180" height="100" />
@@ -448,15 +482,15 @@
         <bpmndi:BPMNLabel><dc:Bounds x="2406" y="1066" width="120" height="28" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Warehouse_di" bpmnElement="Warehouse">
-        <dc:Bounds x="2880" y="1055" width="50" height="50" />
-        <bpmndi:BPMNLabel><dc:Bounds x="2845" y="1110" width="120" height="28" /></bpmndi:BPMNLabel>
+        <dc:Bounds x="3080" y="1055" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="3045" y="1110" width="120" height="28" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="GraphDb_di" bpmnElement="GraphDb">
-        <dc:Bounds x="3180" y="1055" width="50" height="50" />
-        <bpmndi:BPMNLabel><dc:Bounds x="3150" y="1110" width="110" height="20" /></bpmndi:BPMNLabel>
+        <dc:Bounds x="3380" y="1055" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="3350" y="1110" width="110" height="20" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Note_decision_di" bpmnElement="Note_decision">
-        <dc:Bounds x="1785" y="232" width="230" height="58" />
+        <dc:Bounds x="1785" y="224" width="230" height="70" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="F_start_di" bpmnElement="F_start">
         <di:waypoint x="268" y="140" />
@@ -533,27 +567,47 @@
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_second_di" bpmnElement="F_second">
         <di:waypoint x="2180" y="400" />
-        <di:waypoint x="2230" y="400" />
+        <di:waypoint x="2225" y="400" />
         <bpmndi:BPMNLabel><dc:Bounds x="2186" y="381" width="20" height="14" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F_answer_yes_di" bpmnElement="F_answer_yes">
+        <di:waypoint x="2275" y="400" />
+        <di:waypoint x="2320" y="400" />
+        <bpmndi:BPMNLabel><dc:Bounds x="2280" y="381" width="20" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F_answer_no_di" bpmnElement="F_answer_no">
+        <di:waypoint x="2250" y="425" />
+        <di:waypoint x="2250" y="465" />
+        <bpmndi:BPMNLabel><dc:Bounds x="2257" y="432" width="18" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_second_out_di" bpmnElement="F_second_out">
-        <di:waypoint x="2320" y="450" />
-        <di:waypoint x="2320" y="620" />
+        <di:waypoint x="2410" y="450" />
+        <di:waypoint x="2410" y="645" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F_late_yes_di" bpmnElement="F_late_yes">
+        <di:waypoint x="2385" y="670" />
+        <di:waypoint x="2338" y="670" />
+        <bpmndi:BPMNLabel><dc:Bounds x="2343" y="651" width="20" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F_late_no_di" bpmnElement="F_late_no">
+        <di:waypoint x="2435" y="670" />
+        <di:waypoint x="2475" y="670" />
+        <bpmndi:BPMNLabel><dc:Bounds x="2440" y="651" width="18" height="14" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_look_di" bpmnElement="F_look">
-        <di:waypoint x="2440" y="670" />
-        <di:waypoint x="2480" y="670" />
+        <di:waypoint x="2655" y="670" />
+        <di:waypoint x="2695" y="670" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_held_di" bpmnElement="F_held">
-        <di:waypoint x="2530" y="670" />
-        <di:waypoint x="2580" y="670" />
-        <bpmndi:BPMNLabel><dc:Bounds x="2536" y="651" width="20" height="14" /></bpmndi:BPMNLabel>
+        <di:waypoint x="2745" y="670" />
+        <di:waypoint x="2795" y="670" />
+        <bpmndi:BPMNLabel><dc:Bounds x="2751" y="651" width="20" height="14" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_letgo_di" bpmnElement="F_letgo">
-        <di:waypoint x="2505" y="695" />
-        <di:waypoint x="2505" y="730" />
-        <di:waypoint x="2580" y="730" />
-        <bpmndi:BPMNLabel><dc:Bounds x="2512" y="702" width="18" height="14" /></bpmndi:BPMNLabel>
+        <di:waypoint x="2720" y="695" />
+        <di:waypoint x="2720" y="730" />
+        <di:waypoint x="2795" y="730" />
+        <bpmndi:BPMNLabel><dc:Bounds x="2727" y="702" width="18" height="14" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_alert_out_di" bpmnElement="F_alert_out">
         <di:waypoint x="2220" y="565" />
@@ -569,7 +623,7 @@
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_to_merge_di" bpmnElement="F_to_merge">
         <di:waypoint x="2335" y="840" />
-        <di:waypoint x="2725" y="840" />
+        <di:waypoint x="2925" y="840" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_to_case_di" bpmnElement="F_to_case">
         <di:waypoint x="2310" y="865" />
@@ -577,35 +631,35 @@
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_allow_out_di" bpmnElement="F_allow_out">
         <di:waypoint x="2410" y="285" />
-        <di:waypoint x="2750" y="285" />
-        <di:waypoint x="2750" y="815" />
+        <di:waypoint x="2950" y="285" />
+        <di:waypoint x="2950" y="815" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_letgo_in_di" bpmnElement="F_letgo_in">
-        <di:waypoint x="2750" y="932" />
-        <di:waypoint x="2750" y="865" />
+        <di:waypoint x="2950" y="932" />
+        <di:waypoint x="2950" y="865" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_merge_di" bpmnElement="F_merge">
-        <di:waypoint x="2775" y="840" />
-        <di:waypoint x="2815" y="840" />
+        <di:waypoint x="2975" y="840" />
+        <di:waypoint x="3015" y="840" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_store_di" bpmnElement="F_store">
-        <di:waypoint x="2995" y="840" />
-        <di:waypoint x="3035" y="840" />
+        <di:waypoint x="3195" y="840" />
+        <di:waypoint x="3235" y="840" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_allowed_di" bpmnElement="F_allowed">
-        <di:waypoint x="3085" y="840" />
-        <di:waypoint x="3135" y="840" />
-        <bpmndi:BPMNLabel><dc:Bounds x="3091" y="821" width="18" height="14" /></bpmndi:BPMNLabel>
+        <di:waypoint x="3285" y="840" />
+        <di:waypoint x="3335" y="840" />
+        <bpmndi:BPMNLabel><dc:Bounds x="3291" y="821" width="18" height="14" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_to_graph_di" bpmnElement="F_to_graph">
-        <di:waypoint x="3060" y="865" />
-        <di:waypoint x="3060" y="950" />
-        <di:waypoint x="3115" y="950" />
-        <bpmndi:BPMNLabel><dc:Bounds x="3067" y="892" width="20" height="14" /></bpmndi:BPMNLabel>
+        <di:waypoint x="3260" y="865" />
+        <di:waypoint x="3260" y="950" />
+        <di:waypoint x="3315" y="950" />
+        <bpmndi:BPMNLabel><dc:Bounds x="3267" y="892" width="20" height="14" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_graph_di" bpmnElement="F_graph">
-        <di:waypoint x="3295" y="950" />
-        <di:waypoint x="3335" y="950" />
+        <di:waypoint x="3495" y="950" />
+        <di:waypoint x="3535" y="950" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_case_di" bpmnElement="F_case">
         <di:waypoint x="2400" y="1235" />
@@ -645,12 +699,12 @@
         <di:waypoint x="1070" y="1055" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="D_store_di" bpmnElement="D_store">
-        <di:waypoint x="2905" y="890" />
-        <di:waypoint x="2905" y="1055" />
+        <di:waypoint x="3105" y="890" />
+        <di:waypoint x="3105" y="1055" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="D_graph_di" bpmnElement="D_graph">
-        <di:waypoint x="3205" y="1000" />
-        <di:waypoint x="3205" y="1055" />
+        <di:waypoint x="3405" y="1000" />
+        <di:waypoint x="3405" y="1055" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="D_case_di" bpmnElement="D_case">
         <di:waypoint x="2375" y="1185" />
@@ -662,7 +716,7 @@
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Note_decision_link_di" bpmnElement="Note_decision_link">
         <di:waypoint x="1900" y="350" />
-        <di:waypoint x="1900" y="290" />
+        <di:waypoint x="1900" y="294" />
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>

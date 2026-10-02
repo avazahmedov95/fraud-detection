@@ -10,7 +10,7 @@ OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
 # Every task names what runs it, in brackets; the databases have a lane of their
 # own, read and written along dotted arrows. No counts: they change.
 
-POOL = dict(x=160, y=60, w=3260)
+POOL = dict(x=160, y=60, w=3460)
 LANES = [("Lane_channel", "Payment channel", 160),
          ("Lane_flink", "Apache Flink job", 360),
          ("Lane_second", "Second look", 180),
@@ -52,33 +52,40 @@ NODES = [
     ("Band", "exclusiveGateway", "Just under the cut-off?",
      1, (2130, 375, 50, 50), (2100, 430, 110, 28)),
     ("AllowOut", "sendTask", "Publish the decision ALLOW\n[Kafka: transactions.scored]",
-     1, (2230, 235, 180, 100), None),
+     1, (2230, 228, 180, 100), None),
+    ("Answering", "exclusiveGateway", "Second look answering?\n[flag in Redis]",
+     1, (2225, 375, 50, 50), (2185, 330, 130, 44)),
     ("SecondOut", "sendTask", "Hold it for a second look\n[Kafka: fraud.second_look]",
-     1, (2230, 350, 180, 100), None),
-    ("Look", "serviceTask", "Score it with TabPFN, publish the decision\n[Python, TabPFN]",
-     2, (2260, 620, 180, 100), None),
+     1, (2320, 350, 180, 100), None),
+    ("Late", "exclusiveGateway", "Waited 5 s or more?",
+     2, (2385, 645, 50, 50), (2270, 598, 110, 28)),
+    ("HeldLateOut", "intermediateThrowEvent", "Held unscored: waited too long",
+     2, (2302, 652, 36, 36), (2262, 692, 116, 28)),
+    ("Look", "serviceTask",
+     "Score it with TabPFN, publish the decision\n[Python, TabPFN; answering flag in Redis]",
+     2, (2475, 620, 180, 100), None),
     ("TabCut", "exclusiveGateway", "TabPFN at or above its cut-off?",
-     2, (2480, 645, 50, 50), (2450, 610, 110, 28)),
+     2, (2695, 645, 50, 50), (2665, 608, 110, 28)),
     ("HeldOut", "intermediateThrowEvent", "Held by the second look",
-     2, (2580, 652, 36, 36), (2622, 656, 100, 28)),
+     2, (2795, 652, 36, 36), (2837, 656, 100, 28)),
     ("LetGoOut", "intermediateThrowEvent", "Let go by the second look",
-     2, (2580, 712, 36, 36), (2622, 716, 100, 28)),
+     2, (2795, 712, 36, 36), (2837, 716, 100, 28)),
     ("HeldIn", "intermediateCatchEvent", "Held by the second look",
      3, (2130, 822, 36, 36), (2100, 862, 100, 28)),
     ("HoldMerge", "exclusiveGateway", "", 3, (2195, 815, 50, 50), None),
     ("Fork", "parallelGateway", "", 3, (2285, 815, 50, 50), None),
-    ("Merge", "exclusiveGateway", "", 3, (2725, 815, 50, 50), None),
+    ("Merge", "exclusiveGateway", "", 3, (2925, 815, 50, 50), None),
     ("LetGoIn", "intermediateCatchEvent", "Let go by the second look",
-     3, (2732, 932, 36, 36), (2774, 941, 110, 28)),
+     3, (2932, 932, 36, 36), (2974, 941, 110, 28)),
     ("Store", "serviceTask", "Store the decision and its audit record\n[Python → ClickHouse]",
-     3, (2815, 790, 180, 100), None),
+     3, (3015, 790, 180, 100), None),
     ("IsReview", "exclusiveGateway", "Is the transfer held?",
-     3, (3035, 815, 50, 50), (2995, 778, 130, 28)),
+     3, (3235, 815, 50, 50), (3195, 778, 130, 28)),
     ("Allowed", "endEvent", "Transfer allowed and recorded",
-     3, (3135, 822, 36, 36), (3179, 826, 130, 28)),
+     3, (3335, 822, 36, 36), (3379, 826, 130, 28)),
     ("Graph", "serviceTask", "Add the alert to the graph\n[Python → Neo4j]",
-     3, (3115, 900, 180, 100), None),
-    ("AlertDone", "endEvent", "Alert recorded", 3, (3335, 932, 36, 36), (3308, 972, 90, 20)),
+     3, (3315, 900, 180, 100), None),
+    ("AlertDone", "endEvent", "Alert recorded", 3, (3535, 932, 36, 36), (3508, 972, 90, 20)),
     ("Case", "serviceTask", "Open a case with its reasons\n[Python service]",
      5, (2220, 1185, 180, 100), None),
     ("Opened", "intermediateThrowEvent", "Case opened",
@@ -113,25 +120,32 @@ FLOWS = [
     ("F_not_held", "Decide", "Band", "No", [(2080, 400), (2130, 400)], (2086, 381, 18, 14)),
     ("F_allow", "Band", "AllowOut", "No", [(2155, 375), (2155, 285), (2230, 285)],
      (2162, 345, 18, 14)),
-    ("F_second", "Band", "SecondOut", "Yes", [(2180, 400), (2230, 400)], (2186, 381, 20, 14)),
-    ("F_second_out", "SecondOut", "Look", "", [(2320, 450), (2320, 620)], None),
-    ("F_look", "Look", "TabCut", "", [(2440, 670), (2480, 670)], None),
-    ("F_held", "TabCut", "HeldOut", "Yes", [(2530, 670), (2580, 670)], (2536, 651, 20, 14)),
-    ("F_letgo", "TabCut", "LetGoOut", "No", [(2505, 695), (2505, 730), (2580, 730)],
-     (2512, 702, 18, 14)),
+    ("F_second", "Band", "Answering", "Yes", [(2180, 400), (2225, 400)], (2186, 381, 20, 14)),
+    ("F_answer_yes", "Answering", "SecondOut", "Yes", [(2275, 400), (2320, 400)],
+     (2280, 381, 20, 14)),
+    ("F_answer_no", "Answering", "AlertOut", "No", [(2250, 425), (2250, 465)],
+     (2257, 432, 18, 14)),
+    ("F_second_out", "SecondOut", "Late", "", [(2410, 450), (2410, 645)], None),
+    ("F_late_yes", "Late", "HeldLateOut", "Yes", [(2385, 670), (2338, 670)],
+     (2343, 651, 20, 14)),
+    ("F_late_no", "Late", "Look", "No", [(2435, 670), (2475, 670)], (2440, 651, 18, 14)),
+    ("F_look", "Look", "TabCut", "", [(2655, 670), (2695, 670)], None),
+    ("F_held", "TabCut", "HeldOut", "Yes", [(2745, 670), (2795, 670)], (2751, 651, 20, 14)),
+    ("F_letgo", "TabCut", "LetGoOut", "No", [(2720, 695), (2720, 730), (2795, 730)],
+     (2727, 702, 18, 14)),
     ("F_alert_out", "AlertOut", "HoldMerge", "", [(2220, 565), (2220, 815)], None),
     ("F_held_in", "HeldIn", "HoldMerge", "", [(2166, 840), (2195, 840)], None),
     ("F_to_fork", "HoldMerge", "Fork", "", [(2245, 840), (2285, 840)], None),
-    ("F_to_merge", "Fork", "Merge", "", [(2335, 840), (2725, 840)], None),
+    ("F_to_merge", "Fork", "Merge", "", [(2335, 840), (2925, 840)], None),
     ("F_to_case", "Fork", "Case", "", [(2310, 865), (2310, 1185)], None),
-    ("F_allow_out", "AllowOut", "Merge", "", [(2410, 285), (2750, 285), (2750, 815)], None),
-    ("F_letgo_in", "LetGoIn", "Merge", "", [(2750, 932), (2750, 865)], None),
-    ("F_merge", "Merge", "Store", "", [(2775, 840), (2815, 840)], None),
-    ("F_store", "Store", "IsReview", "", [(2995, 840), (3035, 840)], None),
-    ("F_allowed", "IsReview", "Allowed", "No", [(3085, 840), (3135, 840)], (3091, 821, 18, 14)),
-    ("F_to_graph", "IsReview", "Graph", "Yes", [(3060, 865), (3060, 950), (3115, 950)],
-     (3067, 892, 20, 14)),
-    ("F_graph", "Graph", "AlertDone", "", [(3295, 950), (3335, 950)], None),
+    ("F_allow_out", "AllowOut", "Merge", "", [(2410, 285), (2950, 285), (2950, 815)], None),
+    ("F_letgo_in", "LetGoIn", "Merge", "", [(2950, 932), (2950, 865)], None),
+    ("F_merge", "Merge", "Store", "", [(2975, 840), (3015, 840)], None),
+    ("F_store", "Store", "IsReview", "", [(3195, 840), (3235, 840)], None),
+    ("F_allowed", "IsReview", "Allowed", "No", [(3285, 840), (3335, 840)], (3291, 821, 18, 14)),
+    ("F_to_graph", "IsReview", "Graph", "Yes", [(3260, 865), (3260, 950), (3315, 950)],
+     (3267, 892, 20, 14)),
+    ("F_graph", "Graph", "AlertDone", "", [(3495, 950), (3535, 950)], None),
     ("F_case", "Case", "Opened", "", [(2400, 1235), (2440, 1235)], None),
     ("F_opened", "Opened", "Review", "", [(2476, 1235), (2560, 1235), (2560, 1335)], None),
     ("F_review", "Review", "Verdict", "", [(2650, 1385), (2690, 1385)], None),
@@ -142,37 +156,40 @@ FLOWS = [
      (2943, 1423, 18, 14)),
 ]
 #: The "No" of each question is its default flow.
-DEFAULTS = {"Decide": "F_not_held", "Band": "F_allow", "TabCut": "F_letgo",
-            "IsReview": "F_allowed", "Fraud": "F_release"}
-#: Link events: the second look's lane hands its two outcomes to the sink writer's
-#: without two long flows across the diagram - each pair shares one name.
-LINKS = {"HeldOut": "Held by the second look", "HeldIn": "Held by the second look",
+DEFAULTS = {"Decide": "F_not_held", "Band": "F_allow", "Answering": "F_answer_no",
+            "Late": "F_late_no", "TabCut": "F_letgo", "IsReview": "F_allowed",
+            "Fraud": "F_release"}
+#: Link events: the second look's lane hands its outcomes to the sink writer's
+#: without long flows across the diagram - the events of one name meet.
+LINKS = {"HeldOut": "Held by the second look", "HeldLateOut": "Held by the second look",
+         "HeldIn": "Held by the second look",
          "LetGoOut": "Let go by the second look", "LetGoIn": "Let go by the second look"}
 
 STORES = [
     # id, name, (x, y, w, h), label's box
     ("Redis", "Redis: receivers' recent payers", (1035, 1055, 50, 50), (985, 1110, 150, 28)),
     ("Cases", "ClickHouse: cases and verdicts", (2350, 1055, 50, 50), (2406, 1066, 120, 28)),
-    ("Warehouse", "ClickHouse: decisions, audit log", (2880, 1055, 50, 50),
-     (2845, 1110, 120, 28)),
-    ("GraphDb", "Neo4j: alert graph", (3180, 1055, 50, 50), (3150, 1110, 110, 20)),
+    ("Warehouse", "ClickHouse: decisions, audit log", (3080, 1055, 50, 50),
+     (3045, 1110, 120, 28)),
+    ("GraphDb", "Neo4j: alert graph", (3380, 1055, 50, 50), (3350, 1110, 110, 20)),
 ]
 
 DATA = [
     # id, task, store, "in" (the task reads) or "out" (the task writes), waypoints
     ("D_redis_read", "Receiver", "Redis", "in", [(1050, 1055), (1050, 450)]),
     ("D_redis_write", "Receiver", "Redis", "out", [(1070, 450), (1070, 1055)]),
-    ("D_store", "Store", "Warehouse", "out", [(2905, 890), (2905, 1055)]),
-    ("D_graph", "Graph", "GraphDb", "out", [(3205, 1000), (3205, 1055)]),
+    ("D_store", "Store", "Warehouse", "out", [(3105, 890), (3105, 1055)]),
+    ("D_graph", "Graph", "GraphDb", "out", [(3405, 1000), (3405, 1055)]),
     ("D_case", "Case", "Cases", "out", [(2375, 1185), (2375, 1105)]),
     ("D_verdict", "Verdict", "Cases", "out", [(2780, 1335), (2390, 1105)]),
 ]
 
 NOTES = [
     # id, text, (x, y, w, h), the task it explains, waypoints
-    ("Note_decision", "Hold (REVIEW) when the model score is at or above the alert "
-                      "cut-off, or a mandatory rule fired; otherwise allow",
-     (1785, 232, 230, 58), "Decision", [(1900, 350), (1900, 290)]),
+    ("Note_decision", "Hold (REVIEW) at or above the alert cut-off, or when a "
+                      "mandatory rule fired; just under it, ask the second look; "
+                      "otherwise allow",
+     (1785, 224, 230, 70), "Decision", [(1900, 350), (1900, 294)]),
 ]
 
 BOX = ({n[0]: n[4] for n in NODES} | {s[0]: s[2] for s in STORES}
