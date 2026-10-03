@@ -171,7 +171,7 @@ services:
     # Brings the TaskManager back after it dies on its own. It has died that
     # way: Metaspace exhausted after eight job submissions on one process, and
     # with no restart policy the cluster sat with zero TaskManagers while every
-    # other container read Up (irp-framing.md 8, twenty-first). unless-stopped,
+    # other container read Up. unless-stopped,
     # not always: an operator who runs docker compose stop is left alone, and so
     # is docker compose kill - checked.
     restart: unless-stopped

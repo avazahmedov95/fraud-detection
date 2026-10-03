@@ -2,8 +2,7 @@
 #
 # fraud_job.py runs INSIDE the cluster: its PyFlink, ONNX Runtime and redis
 # versions come from infra/flink/Dockerfile, not from this file. On the host the
-# tests need pytest and cryptography (the payload format), and
-# experiments/replay.py needs pandas.
+# tests need pytest and cryptography (the payload format).
 #
 # apache-flink is listed only so fraud_job.py can be imported locally, and it
 # MUST match the cluster's 1.19.1: a host copy of another major version would
@@ -12,5 +11,4 @@
 # Install with:  pip install -r requirements.txt
 apache-flink==1.19.1
 cryptography==48.0.0
-pandas==2.2.3
 pytest==9.0.2

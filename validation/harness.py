@@ -1,305 +1,61 @@
-"""What every external-dataset run does identically: the unit conversion, the
-replay over the DEPLOYED rule engine, and the report sections. Each adapter owns
-only its dataset's shape - file, columns, identifiers, and which capabilities the
-data can support - so the results stay one measurement.
-
-Not `replay.py`: stream-processor/experiments/replay.py does this for the
-project's own CSV, and pytest imports modules by bare name.
-"""
+"""What both public-dataset adapters share: the unit conversion, the profile a
+foreign dataset gets, the deployed feature extractor over its rows, and one fit of
+train.py's recipe scored on the held-out rows."""
 
 import os
 import sys
 import time
-from collections import Counter, defaultdict
+import warnings
+from collections import defaultdict
 from typing import NamedTuple
 
-import pandas as pd
+import numpy as np
 
-_SP = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                   "..", "stream-processor")
-if _SP not in sys.path:
-    sys.path.insert(0, _SP)
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+for _path in (os.path.join(_ROOT, "stream-processor"), os.path.join(_ROOT, "ml")):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
 
 import capabilities as CAP                                     # noqa: E402
-import config as C                                             # noqa: E402
-import rules as _R                                             # noqa: E402
 import features as F                                            # noqa: E402
-from rules import ReceiverState, SenderState, evaluate          # noqa: E402
+import train as T                                               # noqa: E402
+from rules import ReceiverState, SenderState                    # noqa: E402
+
+# LightGBM's sklearn wrapper names the columns it was fitted on, then warns on
+# every prediction from the same unnamed array.
+warnings.filterwarnings("ignore", message="X does not have valid feature names")
 
 
 #: Median legitimate amount on this project's own data, in UZS: foreign amounts are
-#: rescaled onto it so rules with absolute thresholds can fire at all.
+#: rescaled onto it, a unit conversion rather than a tuning.
 OUR_MEDIAN_UZS = 138_740.0
 
 
 def scale_factor(amounts, our_median_uzs=OUR_MEDIAN_UZS):
-    """One multiplier for the whole dataset, from the medians - a unit conversion,
-    not a per-rule tuning."""
+    """One multiplier for the whole dataset, from the medians."""
     med = float(amounts.median())
     return our_median_uzs / med if med > 0 else 1.0
 
 
 class Event(NamedTuple):
-    """One foreign row, translated: `ev` carries only fields the dataset has, and
-    `typology` is an optional per-row pattern label for `section_by_group`."""
+    """One foreign row, translated: `ev` carries only the fields the dataset has."""
     ev: dict
     ts: int
     label: int
-    typology: str = ""
-
-
-def replay(events, total=None, vectors=False):
-    """Run the deployed rule engine over translated events, in stream order.
-    Receiver state is keyed by `receiver_pinfl`, the identifier these datasets
-    carry. `total` prints progress on stderr, keeping a redirected report clean.
-    `vectors` returns the model's feature matrix as well, so comparing the layers
-    costs one pass over the file rather than two."""
-    senders, receivers = defaultdict(SenderState), defaultdict(ReceiverState)
-    rows, hits_by_class = [], defaultdict(Counter)
-    checked, started = False, time.time()
-    X = None
-    if vectors:
-        import numpy as np
-        if not total:
-            raise ValueError("vectors needs `total`: the matrix is allocated once")
-        X = np.zeros((total, len(F.FEATURE_NAMES)), dtype="float32")
-
-    for n, e in enumerate(events, 1):
-        if not checked:
-            _require_a_payee_key(e.ev)
-            checked = True
-        # The sender's own inbound history, filed under their own identity.
-        paid_sender = receivers.get(e.ev["sender_pinfl"])
-        res = evaluate(e.ev, senders[e.ev["sender_pinfl"]],
-                       e.ts, receivers[e.ev["receiver_pinfl"]],
-                       sender_inbound_ts=(paid_sender.last_inbound_ts
-                                          if paid_sender else None))
-        rows.append((e.label, res["cep_score"], res["decision"],
-                     any(r in C.MANDATORY_REVIEW_RULES for r in res["rule_hits"]),
-                     e.typology))
-        if vectors:
-            X[n - 1] = res["features"]
-        for hit in res["rule_hits"]:
-            hits_by_class["fraud" if e.label else "legit"][hit] += 1
-        if n % PROGRESS_EVERY == 0:
-            _progress(n, total, started)
-    if total:
-        _progress(n, total, started, final=True)
-
-    frame = pd.DataFrame(rows, columns=["label", "cep_score", "decision",
-                                        "mandatory", "typology"])
-    return (frame, hits_by_class, X[:n]) if vectors else (frame, hits_by_class)
-
-
-def fit_and_cut(Xtr, ytr, Xva, yva, weighted=False, seed=0):
-    """One fit of train.py's recipe, with the cut that maximises F1 on validation.
-    The recipe lives here once, for every adapter mode that fits a model."""
-    import numpy as np
-    import lightgbm as lgb
-    from sklearn.metrics import precision_recall_curve
-    spw = ((ytr == 0).sum() / max(int(ytr.sum()), 1)) if weighted else 1.0
-    m = lgb.LGBMClassifier(n_estimators=400, learning_rate=0.05, num_leaves=31,
-                           colsample_bytree=0.8, min_child_samples=30,
-                           reg_lambda=10.0, scale_pos_weight=spw,
-                           random_state=seed, n_jobs=-1, verbose=-1)
-    m.fit(Xtr, ytr)
-    pva = m.predict_proba(Xva)[:, 1]
-    prec, rec, thr = precision_recall_curve(yva, pva)
-    f1s = 2 * prec[:-1] * rec[:-1] / np.maximum(prec[:-1] + rec[:-1], 1e-12)
-    return m, (float(thr[int(np.argmax(f1s))]) if len(thr) else 0.5)
-
-
-def section_layers(y, rules, mandatory, proba, cut, positive="fraud", width=70):
-    """The rules alone, the model alone and the deployed decision - one set of rows,
-    so the three are comparable. The deployed decision is the model's, raised to
-    REVIEW by a mandatory rule (fusion.decide)."""
-    import numpy as np
-    y = np.asarray(y).astype("int8")
-    model = np.asarray(proba) >= cut
-    _head(f"THE THREE LAYERS, ON THE SAME {len(y):,} ROWS", width)
-    print(f"  {'layer':<24}{'alerts':>11}{'caught':>9}{'precision':>11}{'recall':>9}")
-    pos, counted = max(int(y.sum()), 1), []
-    for name, flag in (("CEP rules only", np.asarray(rules, dtype=bool)),
-                       (f"model at {cut:.4f}", model),
-                       ("deployed decision",
-                        model | np.asarray(mandatory, dtype=bool))):
-        n, tp = int(flag.sum()), int((flag & (y == 1)).sum())
-        counted.append((name, n, tp))
-        print(f"  {name:<24}{n:>11,}{tp:>9,}{tp / max(n, 1):>10.1%}{tp / pos:>9.1%}")
-    print(f"\n  {pos:,} {positive} rows in this slice.")
-    return counted
-
-
-def section_second_look(Xfit, yfit, Xva, yva, Xte, yte, pva, pte, cut, tabpfn_model,
-                        width=70):
-    """The second look carried over from this project's own data unchanged
-    (ml/experiments/second_opinion.py as_served): only TabPFN's cut-off is chosen
-    here, on the cutoff rows. Read twice: as served, and with no more fraud in a
-    piece of TabPFN's context than the served context holds - a foreign training
-    slice can fill half a piece with fraud. TabPFN lives in .venv-models."""
-    experiments = os.path.join(os.path.dirname(_SP), "ml", "experiments")
-    if experiments not in sys.path:
-        sys.path.insert(0, experiments)
-    import second_opinion as SO
-    for capped, title in ((False, "THE SECOND LOOK, AS SERVED, READ ONCE ON THE HELD-OUT ROWS"),
-                          (True, "THE SAME, NO MORE FRAUD IN A PIECE THAN THE SERVED CONTEXT")):
-        print()
-        _head(title, width)
-        SO.as_served(Xfit, yfit, Xva, yva, Xte, yte, pva, pte, cut, tabpfn_model,
-                     capped=capped)
 
 
 def capability_profile(*off, payee_identity="pinfl"):
-    """The profile a foreign dataset gets: what it cannot supply switched OFF - an
-    absent field would reach the extractor as a zero - and the payee keyed by
-    account ("pinfl"), since these datasets name accounts and issue no PANs. No
-    analyst confirmed their frauds either, so confirmed_cases is off on every one."""
+    """What the dataset cannot supply switched OFF - an absent field would reach the
+    extractor as a zero - and the payee keyed by account, since these datasets name
+    accounts and issue no PANs. No analyst confirmed their frauds either, so
+    confirmed_cases is off on every one."""
     for key in off + ("confirmed_cases",):
         CAP.MODES[key] = "off"
     CAP.MODES["payee_identity"] = payee_identity
-    print("capability profile for this run:")
-    print(CAP.describe())
-    print()
-
-
-def _require_a_payee_key(ev):
-    """Refuse to replay a stream whose payee key resolves empty: every payee would
-    share one key, so is_new_payee, DISTINCT_PAYEE_BURST and NEW_PAYEE_HIGH_AMOUNT
-    would all measure the adapter. Raises rather than warns."""
-    if not F.payee_key(ev):
-        raise SystemExit(
-            "the payee key resolves empty on this stream. features.payee_key falls "
-            "back to receiver_card and this dataset issues no PANs, so every sender "
-            "would have exactly one payee forever. Build the profile with "
-            "harness.capability_profile(...), which sets payee_identity=pinfl.")
-
-
-#: Rows between progress lines. Large enough that the print costs nothing, small
-#: enough that a stalled run is obvious within seconds.
-PROGRESS_EVERY = 100_000
-
-
-def _progress(n, total, started, final=False):
-    if not total:
-        return
-    secs = time.time() - started
-    rate = n / secs if secs > 0 else 0.0
-    left = (total - n) / rate if rate > 0 else 0.0
-    print(f"\r  replayed {n:,} / {total:,} ({n/total:.0%})  "
-          f"{rate:,.0f} rows/s  {left/60:.0f} min left    ",
-          end="\n" if final else "", file=sys.stderr, flush=True)
-
-
-def _head(title, width):
-    print("=" * width)
-    print(title)
-    print("=" * width)
-
-
-def section_lift(res, hits, positive="fraud", width=70):
-    """A. Per-rule lift: threshold-free, so it answers whether a rule carries signal
-    on foreign data whatever the decision layer does."""
-    n_pos = int((res.label == 1).sum())
-    n_neg = int((res.label == 0).sum())
-
-    _head("A. PER-RULE LIFT - does each rule carry signal on foreign data?", width)
-    print(f"{'rule':<26}{'on ' + positive:>12}{'on legit':>12}{'lift':>9}")
-    lifts = []
-    for rule in sorted(set(hits["fraud"]) | set(hits["legit"])):
-        f = hits["fraud"][rule] / max(n_pos, 1)
-        l = hits["legit"][rule] / max(n_neg, 1)
-        lifts.append((rule, f, l, (f / l) if l > 0 else float("inf")))
-    for rule, f, l, lift in sorted(lifts, key=lambda x: -x[3]):
-        shown = "inf" if lift == float("inf") else f"{lift:.1f}x"
-        print(f"{rule:<26}{f:>11.2%}{l:>12.2%}{shown:>9}")
-    return lifts
-
-
-def section_by_group(res, title, notes, width=70):
-    """B. Recall by the dataset's own typology labels, when it has them - which
-    pattern the system misses."""
-    _head(title, width)
-    for line in notes:
-        print(line)
-    print()
-    labelled = res[(res.label == 1) & (res.typology != "")]
-    if labelled.empty:
-        print("  No typology labels available; this section is empty.")
-        return
-    print(f"{'typology':<20}{'n':>8}{'flagged':>10}{'recall':>10}")
-    for name, g in labelled.groupby("typology"):
-        flagged = g.decision == "REVIEW"
-        print(f"{name:<20}{len(g):>8,}{int(flagged.sum()):>10,}"
-              f"{flagged.mean():>10.1%}")
-
-
-def section_decision(res, hits, positive="fraud", width=70):
-    """C. What the deployed decision layer did. Last on purpose: the threshold is
-    calibrated for this project's profile and base rate, the least transferable part."""
-    n_pos = int((res.label == 1).sum())
-    n_neg = int((res.label == 0).sum())
-    flagged = res.decision == "REVIEW"
-    pos_rate = flagged[res.label == 1].mean() if n_pos else 0.0
-    neg_rate = flagged[res.label == 0].mean() if n_neg else 0.0
-
-    _head("C. DECISION LAYER - does the deployed threshold still work?", width)
-    print(f"  {positive + ' flagged':<17}: {int(flagged[res.label==1].sum()):>7,}"
-          f" / {n_pos:<9,} ({pos_rate:.1%})")
-    print(f"  {'legit flagged':<17}: {int(flagged[res.label==0].sum()):>7,}"
-          f" / {n_neg:<9,} ({neg_rate:.2%})")
-
-    scores = res.cep_score
-    if n_pos:
-        print(f"\n  cep_score, {positive:<12}: max {scores[res.label==1].max():.2f}"
-              f"   mean {scores[res.label==1].mean():.3f}")
-    if n_neg:
-        print(f"  cep_score, {'legit':<12}: max {scores[res.label==0].max():.2f}"
-              f"   mean {scores[res.label==0].mean():.3f}")
-
-    # The threshold actually applied - under capability scaling this is not the
-    # configured constant, and printing the constant hid the mechanism.
-    review_at = _R._review_threshold()
-    if abs(review_at - C.REVIEW_THRESHOLD) > 1e-9:
-        print(f"\n  REVIEW threshold : {review_at:.2f}  "
-              f"(scaled from {C.REVIEW_THRESHOLD:.2f} for this profile)")
-    else:
-        print(f"\n  REVIEW threshold : {review_at:.2f}")
-
-    if pos_rate > 0 and neg_rate > 0:
-        print(f"\n  decision-layer lift: {pos_rate/neg_rate:.1f}x")
-
-    top = scores[res.label == 1].max() if n_pos else 0.0
-    n_rules = len(set(hits["fraud"]) | set(hits["legit"]))
-    if n_pos and pos_rate == 0.0 and top > 0:
-        print(f"\n  Nothing crossed the threshold: the highest score any "
-              f"{positive} reached")
-        print(f"  was {top:.2f}, against a REVIEW cutoff of {review_at:.2f}.")
-        print("  The CEP score is ADDITIVE, so crossing it normally takes two")
-        print("  rules firing together. With this capability profile only")
-        print(f"  {n_rules} rule(s) can fire at all, and they rarely co-occur.")
-        print("\n  This is a finding about threshold calibration, not about the")
-        print("  features: see the lift table above, where the rules do separate")
-        print("  the classes. A deployment with fewer integrations does not get a")
-        print("  slightly worse rule layer - it gets a silent one.")
-
-    if n_pos and n_neg:
-        best = None
-        for t in sorted(set(round(v, 2) for v in scores if v > 0)):
-            f_at = (scores[res.label == 1] >= t).mean()
-            l_at = (scores[res.label == 0] >= t).mean()
-            if f_at > 0 and l_at > 0 and f_at / l_at > (best[3] if best else 0):
-                best = (t, f_at, l_at, f_at / l_at)
-        if best:
-            t, f_at, l_at, lift = best
-            print(f"\n  Best cutoff on this data: {t:.2f} -> flags {f_at:.1%} of "
-                  f"{positive}, {l_at:.2%} of legit ({lift:.1f}x lift).")
-            print("  Reported to size the gap, NOT adopted - tuning a threshold on")
-            print("  the validation set is what this exercise exists to avoid.")
 
 
 def available_features():
-    """(indices, names) of the contract columns the active profile can supply;
-    FEATURE_NAMES is fixed at import, so switched-off columns are dropped here."""
+    """(indices, names) of the columns the active profile can supply."""
     off = {f for cap in CAP.REGISTRY if CAP.MODES.get(cap.key) == "off"
            for f in cap.features}
     idx = [i for i, n in enumerate(F.FEATURE_NAMES) if n not in off]
@@ -307,30 +63,68 @@ def available_features():
 
 
 def extract_features(events, total):
-    """This project's model inputs over translated events, computed by the deployed
-    extractor as fraud_job computes them. Returns (X, y, ts), one column per
-    `features.FEATURE_NAMES`; `available_features()` says which to keep."""
-    import numpy as np
+    """The deployed extractor over translated events, as fraud_job runs it.
+    Returns (X, y, ts), one column per `features.FEATURE_NAMES`."""
     X = np.zeros((total, len(F.FEATURE_NAMES)), dtype="float32")
     y = np.zeros(total, dtype="int8")
     ts = np.zeros(total, dtype="int64")
     senders, receivers = defaultdict(SenderState), defaultdict(ReceiverState)
     started, n = time.time(), 0
     for n, e in enumerate(events, 1):
-        if n == 1:
-            _require_a_payee_key(e.ev)
+        if n == 1 and not F.payee_key(e.ev):
+            # Every payee would share one key: build the profile with
+            # capability_profile(...), which keys the payee by account.
+            raise SystemExit("the payee key resolves empty on this stream")
         key = F.payee_key(e.ev)
         sender = senders[e.ev["sender_pinfl"]]
         paid_sender = receivers.get(e.ev["sender_pinfl"])
         X[n - 1] = F.to_vector(F.extract(
             e.ev, sender, e.ts, receivers[key],
-            sender_inbound_ts=(paid_sender.last_inbound_ts
-                               if paid_sender else None)))
+            sender_inbound_ts=(paid_sender.last_inbound_ts if paid_sender else None)))
         F.update_state(sender, e.ev, e.ts)
         F.update_receiver_state(receivers[key], e.ev, e.ts)
         y[n - 1], ts[n - 1] = e.label, e.ts
-        if n % PROGRESS_EVERY == 0:
-            _progress(n, total, started)
-    _progress(n, total, started, final=True)
+        if n % 200_000 == 0 or n == total:
+            rate = n / max(time.time() - started, 1e-9)
+            print(f"\r  {n:,} / {total:,} rows, {rate:,.0f}/s", end="", file=sys.stderr,
+                  flush=True)
+    print(file=sys.stderr)
     return X[:n], y[:n], ts[:n]
 
+
+def cached_matrix(cache, build):
+    """The feature matrix, from `cache` when it holds the columns the active profile
+    computes; otherwise built by `build()` (hours on these files) and cached."""
+    idx, names = available_features()
+    if os.path.exists(cache):
+        with np.load(cache, allow_pickle=False) as z:
+            if [str(n) for n in z["names"]] == names:
+                return z["X"], z["y"].astype("int8")
+        raise SystemExit(f"{cache} was built from other columns - delete it and re-run")
+    X, y = build()
+    np.savez_compressed(cache, X=X[:, idx], y=y, names=np.array(names))
+    return X[:, idx], y
+
+
+def fit_and_score(X, y, fit, cut, seed=0):
+    """train.py's recipe fitted on rows [:fit], its cut-off - the F1 peak - chosen on
+    [fit:cut], and the rows from `cut` on scored at it. Weighted only above 0.5%
+    fraud, as train.py fits."""
+    model = T.make_model(T.class_weight(int(y[:fit].sum()), int((y[:fit] == 0).sum())),
+                         random_state=seed)
+    model.fit(X[:fit], y[:fit])
+    threshold = T.choose_review_cutoff(y[fit:cut], model.predict_proba(X[fit:cut])[:, 1])
+    alert = model.predict_proba(X[cut:])[:, 1] >= threshold
+    yte = y[cut:]
+    caught, alerts, frauds = int(yte[alert].sum()), int(alert.sum()), int(yte.sum())
+    recall, precision = caught / max(frauds, 1), caught / max(alerts, 1)
+    return {"frauds": frauds, "alerts": alerts, "caught": caught, "recall": recall,
+            "precision": precision,
+            "f1": 2 * precision * recall / max(precision + recall, 1e-12)}
+
+
+def print_scores(s):
+    print(f"\nthis project's model on the held-out rows ({s['frauds']:,} fraud):")
+    print(f"  recall     {s['recall']:.1%}   ({s['caught']:,} caught)")
+    print(f"  precision  {s['precision']:.1%}   ({s['alerts']:,} alerts)")
+    print(f"  F1         {s['f1']:.1%}")

@@ -250,10 +250,6 @@ class FraudDetector(KeyedProcessFunction):
             out["features"] = [None if v != v else round(float(v), 6)
                                for v in result["features"]]
 
-        if "label_is_fraud" in event:
-            out["label_is_fraud"] = event["label_is_fraud"]
-            out["label_fraud_type"] = event.get("label_fraud_type")
-
         _lap(stages, "decide", mark)
         _before_operator(stages, event.get("ingested_at"), ctx.timestamp(), scoring_started)
         out["stage_ms"] = stages

@@ -21,18 +21,18 @@ _ROW = {
 
 
 def test_booleans_leave_as_booleans():
-    msg = P._row_to_message(dict(_ROW), include_labels=False)
+    msg = P._row_to_message(dict(_ROW))
     assert msg["active_call"] is False
     assert isinstance(msg["active_call"], bool)
 
 
 def test_true_survives_too():
-    msg = P._row_to_message(dict(_ROW, active_call="True"), include_labels=False)
+    msg = P._row_to_message(dict(_ROW, active_call="True"))
     assert msg["active_call"] is True
 
 
 def test_numbers_leave_as_numbers():
-    msg = P._row_to_message(dict(_ROW), include_labels=False)
+    msg = P._row_to_message(dict(_ROW))
     assert msg["amount_uzs"] == 4_800_000 and isinstance(msg["amount_uzs"], int)
     assert msg["sender_balance_before"] == 9_000_000
     assert msg["secs_login_to_confirm"] == pytest.approx(41.2)
@@ -40,14 +40,13 @@ def test_numbers_leave_as_numbers():
 
 def test_a_malformed_latency_does_not_stop_the_stream():
     """One unparseable cell must not take down a replay of 50,000 rows."""
-    msg = P._row_to_message(dict(_ROW, secs_login_to_confirm="n/a"),
-                            include_labels=False)
+    msg = P._row_to_message(dict(_ROW, secs_login_to_confirm="n/a"))
     assert msg["secs_login_to_confirm"] == 0.0
 
 
 def test_no_field_leaves_as_a_stringified_bool():
     """The general form: a field holding the text of a Python bool was never cast."""
-    msg = P._row_to_message(dict(_ROW), include_labels=False)
+    msg = P._row_to_message(dict(_ROW))
     offenders = [k for k, v in msg.items()
                  if isinstance(v, str) and v.strip() in ("True", "False")]
     assert not offenders, f"still travelling as text: {offenders}"
@@ -56,7 +55,7 @@ def test_no_field_leaves_as_a_stringified_bool():
 def test_the_payee_identity_is_not_on_the_wire():
     """receiver_pinfl must not travel: the sending bank sees a destination PAN, and
     the person behind it only for its own clients. sender_pinfl stays."""
-    msg = P._row_to_message(dict(_ROW), include_labels=False)
+    msg = P._row_to_message(dict(_ROW))
     assert "receiver_pinfl" not in msg
     assert msg["sender_pinfl"] == "S1"
     assert msg["receiver_card"] == "8600030000000002"
@@ -65,7 +64,7 @@ def test_the_payee_identity_is_not_on_the_wire():
 def test_the_ingress_hash_covers_only_fields_that_travel():
     """A hash over a field the message omits binds "", weakening it silently."""
     import integrity
-    msg = P._row_to_message(dict(_ROW), include_labels=False)
+    msg = P._row_to_message(dict(_ROW))
     missing = [f for f in integrity.INGRESS_FIELDS
                if f not in msg and f not in ("event_time",)]
     assert not missing, f"hashed but never sent: {missing}"
@@ -74,7 +73,7 @@ def test_the_ingress_hash_covers_only_fields_that_travel():
 def test_the_issuer_is_not_on_the_wire():
     """The issuer is derived from the PAN's BIN, never carried by the message."""
     msg = P._row_to_message(dict(_ROW, sender_bank_name="X",
-                                 receiver_bank_name="Y"), include_labels=False)
+                                 receiver_bank_name="Y"))
     assert "sender_bank_name" not in msg and "receiver_bank_name" not in msg
 
 
@@ -86,6 +85,6 @@ def test_every_generated_row_survives_the_conversion():
         pytest.skip("dataset not generated")
     with open(csv_path, newline="", encoding="utf-8") as fh:
         for i, row in enumerate(csv.DictReader(fh)):
-            msg = P._row_to_message(row, include_labels=False)
+            msg = P._row_to_message(row)
             assert isinstance(msg["active_call"], bool), i
             assert isinstance(msg["amount_uzs"], int), i

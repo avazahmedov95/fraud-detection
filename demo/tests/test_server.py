@@ -356,8 +356,7 @@ def test_the_results_file_says_everything_in_both_languages():
         quoted = json.load(fh)
     for ds in quoted["datasets"]:
         assert ds["quotes"], ds["key"]
-        assert ds["link"]["url"].startswith("https://"), ds["key"]
-        for field in ("name", "what", "ours", "second", "published"):
+        for field in ("name", "what", "ours"):
             assert set(ds[field]) == {"ru", "en"}, (ds["key"], field)
     assert quoted["own"]["quotes"] and set(quoted["own"]["second"]) == {"ru", "en"}
 

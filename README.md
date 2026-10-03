@@ -1,175 +1,87 @@
-# Real-Time Fraud Detection for Instant P2P Payments
+# Real-time fraud detection for instant P2P payments
 
-Streaming architecture that scores instant P2P transfers **before settlement**,
-combining Kafka, Flink + CEP, a gradient-boosting model with SHAP explainability,
-a memory of confirmed fraud accounts and a TabPFN second look — grounded in
-Uzbekistan's regulatory framework
-and the UzCard / HUMO networks.
+Scores every instant P2P card transfer **before it settles**: Kafka, a PyFlink job
+with hard rules and a gradient-boosting model, a memory of confirmed fraud accounts
+and a TabPFN second look, calibrated to Uzbekistan's UzCard and HUMO networks. A
+suspicious transfer is held until an analyst blocks or releases it.
 
-> Research prototype. Any detection metrics are **design targets**, not measured
-> findings, until validated against real integration data.
+> Research prototype on synthetic data: the figures are design targets, not
+> findings from production.
 
-## Project layout
+## Components
 
 ```
-fraud-detection/
-├── docker-compose.yml      full local stack
-├── .env.example            image versions, ports; copy to .env and set the passwords
-├── Makefile                make up / generate / produce / seed-confirmed ...
-├── run.ps1                 the experiment driver: every measured run starts here
-│
-├── infra/                  infrastructure configuration
-│   ├── kafka/              topic creation
-│   ├── redis/              feature-store config
-│   ├── clickhouse/init/    warehouse + WORM audit schema
-│   ├── flink/              PyFlink-ready Flink image
-│   ├── grafana/            datasource + dashboard provisioning
-│   └── case-manager/  sink-writer/    service images
-│
-├── data-generator/         synthetic population + transactions
-│   ├── config.py  events.py  persons.py  travel.py  fraud_patterns.py
-│   ├── generator.py  kafka_producer.py  verify_spec.py
-│   └── out/                generated CSVs (gitignored)
-│
-├── stream-processor/       PyFlink: CEP + ONNX + fusion
-├── ml/                     LightGBM committee -> ONNX, tree contributions
-├── sink-writer/            transactions.scored -> ClickHouse
-├── case-manager/           fraud.alerts -> the held transfers, the analyst's queue
-│   ├── case.py  store.py   an alert becomes a case; a verdict becomes a label
-│   ├── explain.py          exact tree contributions, for alerts no rule explains
-│   └── queue_cli.py        list / show / resolve / stats
-├── second-look/            TabPFN decides the transfers just under the cut-off
-├── validation/             the deployed rules run on FOREIGN datasets
-│   ├── paysim_adapter.py   PaySim, and what transfers from it
-│   ├── ibm_aml_adapter.py  IBM AML, for information: the collection stage
-│   └── harness.py          the replay loop and report both adapters use
-├── tools/
-│   └── boundary_audit.py   what one component produces vs what the next expects
-├── demo/                   one page over the running stack: stream, fraud cases, queue, stage times
-└── docs/                   the evidence base — read irp-framing.md first
-    ├── architecture.png       what runs where, stage by stage, and the offline
-    │                          training path (tools/architecture_diagram.py)
-    ├── pipeline_diagram.png   every component and the measured cost of each
-    │                          stage (tools/pipeline_diagram.py redraws it)
-    └── pipeline.bpmn  pipeline_sequence.mmd   the same flow as BPMN and as a
-                               sequence (tools/pipeline_bpmn_sequence.py)
+data-generator/    synthetic transfers, and the producer into Kafka
+stream-processor/  the PyFlink job: features, rules, model, decision
+ml/                trains the model, exports ONNX, prepares the second look
+second-look/       TabPFN for the transfers just under the cut-off
+sink-writer/       every decision into ClickHouse, with the audit chain
+case-manager/      every hold as a case for the analyst
+demo/              one page over the running system
+validation/        the model on the public datasets PaySim and IBM AML
+infra/             Docker images, Kafka, ClickHouse schema, Redis, Grafana
+tools/             boundary_audit.py and the diagram generators
+docs/              the diagrams
+thesis/            material for the thesis only - not used by the system
 ```
 
-## Where the results live
+```
+bank app -> Kafka transactions.raw -> Flink job (Redis: payee side, confirmed accounts)
+         -> transactions.scored -> sink-writer -> ClickHouse -> Grafana, demo
+         -> fraud.alerts -> case-manager -> analyst (block: payee into Redis)
+         -> fraud.second_look -> second-look (TabPFN) -> transactions.scored, fraud.alerts
+```
 
-The code runs; the argument lives in `docs/`. In rough order of importance to a
-reader:
+## Run
 
-| document | what it holds |
+Needs Docker Desktop and Python 3.11 (`.venv311`). On Windows use `run.ps1`; the
+Makefile carries the same targets.
+
+```powershell
+copy .env.example .env               # then set the passwords in it
+.\run.ps1 make-certs                 # Kafka's TLS listener needs them before the first up
+.\run.ps1 up                         # build and start the stack
+.\run.ps1 generate                   # the dataset of record
+cd ml; python train.py; python export_onnx.py; cd ..
+.\run.ps1 seed-confirmed             # the history's confirmed fraud accounts into Redis
+.\run.ps1 submit-job                 # the Flink job
+```
+
+Then the demo at http://localhost:8090. `.\run.ps1 help` lists every target;
+`.\run.ps1 status` checks the whole path.
+
+| Service | Address |
 |---|---|
-| `docs/irp-framing.md` | the research question, every measurement with its interval, a line-by-line answer to the seven review points, twenty-two silent failure modes, and what a real work queue exposed that no metric did |
-| `docs/threat-model.md` | three adversaries, what each control assumes, and what evading it costs — one of those costs is now measured rather than argued |
-| `docs/generator-spec.md` | the generator as a specification, the dataset of record with its hashes, and why the data is generated at all |
-| `validation/README.md` | the foreign datasets and what each could and could not test |
-| `docs/related-work.md` | the sources, each with what it does **not** support — and §9, which maps every source to the file it actually reaches |
-| `ml/README.md` | model, SHAP, and the capability ablation |
-| `case-manager/README.md` | the alert consumer: the analyst queue, the disposition as the only real label this system can produce, and why the model's reasons are computed off the scoring path |
-| `docs/audit-anchors.md` | the head hash of each audit chain, pinned to a commit — the one gap a self-verifying chain cannot close on its own |
+| Kafka, from the host | `localhost:29092` |
+| Flink UI | http://localhost:8081 |
+| ClickHouse HTTP | http://localhost:8123 (`.env` user and password) |
+| Grafana | http://localhost:3000 (`admin` / `.env` password) |
+| Demo | http://localhost:8090 |
 
-Numbers quoted anywhere else in this repository are subordinate to those files.
+| Topic | What it carries |
+|---|---|
+| `transactions.raw` | transfers from the switch, keyed by sender |
+| `transactions.scored` | every decision |
+| `fraud.alerts` | holds, each a case for the analyst |
+| `fraud.second_look` | transfers just under the cut-off, waiting for TabPFN |
+
+## Results
+
+The model's figures are in `ml/README.md` (and `ml/models/metrics.json`), the
+public datasets in `validation/README.md`.
 
 ## Tests
 
-Each package keeps its tests in its own `tests/` directory, and the packages are
-run **one at a time**:
+Each package is tested on its own (module names repeat across packages):
 
 ```bash
-python -m pytest stream-processor -q     # 194
-python -m pytest data-generator   -q     #  26
-python -m pytest sink-writer      -q     #  24
-python -m pytest validation       -q     #  25
-python -m pytest case-manager     -q     #  47
-python -m pytest ml               -q     # 10
-python -m pytest demo             -q     #  28
-python -m pytest second-look      -q     #   7
+python -m pytest stream-processor -q
+python -m pytest data-generator   -q
+python -m pytest sink-writer      -q
+python -m pytest case-manager     -q
+python -m pytest second-look      -q
+python -m pytest demo             -q
+python -m pytest ml               -q
+python -m pytest validation       -q
+python tools/boundary_audit.py       # what each component hands the next
 ```
-
-Not all eight in one invocation: five module names recur across packages
-(`config.py` in five of them, `consumer.py`, `explain.py`, `integrity.py`,
-`payload_crypto.py`), because the packages deploy as separate units, and pytest
-cannot import two modules of the same name.
-
-Eight of those files were written after a defect that had already happened —
-`test_wire_types.py` after a boolean that travelled as the string `"False"` and
-scored 1 on 100% of live events, `test_payload_crypto.py` after the risk of two
-copies of one module drifting. They are regression evidence, not coverage.
-
-```bash
-python tools/boundary_audit.py           # 26 joins between components
-```
-
-checks what the tests cannot: that what one component *produces* is what the
-next one *expects*. It found three warehouse columns that were constant zero.
-
-## Prerequisites
-
-- Docker + Docker Compose v2
-- Python 3.10+ on the host (to run the generator / producer)
-
-## Quickstart
-
-```bash
-# 0. local settings: copy the template, then set your own passwords in .env
-cp .env.example .env
-
-# 1. bring the stack up (first run builds the Flink image — a few minutes)
-make up
-make ps
-
-# 2. generate the dataset and stream the events
-make generate
-make produce            # or: make produce-stream  (paced live stream)
-
-# 3. train the model, then submit the scoring job (CEP + ML fusion)
-#    (the sink-writer service comes up with `make up` and persists results)
-cd ml && python train.py && python export_onnx.py && cd ..
-make seed-confirmed     # the history's confirmed fraud accounts, into Redis
-make submit-job         # serves model.onnx inside Flink and starts scoring
-
-# 4. watch it: Flink UI (8081), Grafana dashboard (3000), or:
-make query-scored       # decision counts in ClickHouse
-
-# 5. show it: one page over the running stack, Russian or English. It comes up
-#    with the stack and opens once the job is running - demo/README.md
-#    http://localhost:8090
-```
-
-## Service endpoints
-
-| Service | URL / port | Credentials |
-|---|---|---|
-| Kafka (host clients) | `localhost:29092` | — |
-| Flink UI | http://localhost:8081 | — |
-| ClickHouse HTTP | http://localhost:8123 | `.env` user / password |
-| Grafana | http://localhost:3000 | `admin` / `.env` password |
-| Demo page | http://localhost:8090 (this machine only) | — |
-
-From inside the Docker network use service names: `kafka:9092`, `redis:6379`,
-`clickhouse:9000`.
-
-## Topics
-
-| Topic | Purpose |
-|---|---|
-| `transactions.raw` | events from the switch (keyed by sender) |
-| `transactions.scored` | every transaction, scored and decided |
-| `fraud.alerts` | REVIEW decisions: each holds its transfer for the analyst |
-| `fraud.second_look` | transfers just under the cut-off, waiting for TabPFN |
-
-## Status
-
-Every component above is implemented and runs. Pipeline logic is validated
-offline (unit tests, CEP replay, ML/fusion evaluation, dashboard-query checks
-against the schema); the Flink runtime and full stack run via Docker. All
-metrics are design targets on synthetic data, not validated production findings.
-
-## Notes on image tags
-
-All image versions are pinned in `.env.example`, which `.env` is copied from. If
-a tag is unavailable in your registry, bump it in both — nothing else needs to
-change.

@@ -50,12 +50,6 @@ def test_a_missing_flag_is_absence_not_presence():
     assert f["active_call"] == 0
 
 
-def test_the_same_hazard_on_the_kinship_flag():
-    """is_family_transfer travels the same way when myid_kinship is on."""
-    f = F.extract(_ev(is_family_transfer="False"), R.SenderState(), now=1000)
-    assert f["is_family"] == 0
-
-
 # --- the property, stated once ----------------------------------------------
 
 def test_a_wire_shaped_event_extracts_like_a_typed_one():

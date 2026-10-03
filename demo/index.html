@@ -280,7 +280,7 @@ button.on-filter{border-color:var(--accent);background:var(--accent-soft)}
       <h2 class="part-title" id="trained-title"></h2>
       <p class="hint" data-t="trained_hint"></p>
       <div class="cmp-wrap"><table class="cmp">
-        <thead><tr><th data-t="c_data"></th><th data-t="c_what"></th><th data-t="c_ours"></th><th data-t="c_published"></th></tr></thead>
+        <thead><tr><th data-t="c_data"></th><th data-t="c_what"></th><th data-t="c_ours"></th></tr></thead>
         <tbody id="cmp"></tbody>
       </table></div>
     </section>
@@ -363,11 +363,10 @@ ru: {
   v_fp_sub: "ждали: в среднем {median}, дольше всех {max}", sec: "с", min: "мин", hour: "ч",
   trained_title: "Измерено при обучении модели, {date}",
   trained_hint: "Эти цифры не живые: их посчитали один раз, при обучении, на данных, которых модель не видела. Меняются только при переобучении.",
-  c_data: "Данные", c_what: "Из чего состоят", c_ours: "Наш результат", c_published: "Опубликованный результат",
+  c_data: "Данные", c_what: "Из чего состоят", c_ours: "Наш результат",
   own_name: "Наш генератор",
   own_what: "{rows} переводов под Узбекистан, мошенничества {share}, типов мошенничества: {types}. Проверка на последних {test} переводах, среди них {tf} мошеннических; эту часть модель не видела.",
-  own_ours: "поймано {rec} мошенничества, {prec} тревог настоящие (PR-AUC {prauc})",
-  own_published: "нет: данные наши",
+  own_ours: "полнота {rec}, точность {prec}, F1 {f1}",
   sum: "сум", ms: "мс",
   dec: {ALLOW: "Пропущен", REVIEW: "Задержан", SECOND_LOOK: "Вторая проверка"},
   part_second: "Вторая проверка — TabPFN", second_mark: "вторая проверка",
@@ -474,11 +473,10 @@ en: {
   v_fp_sub: "waited {median} at the median, {max} at the longest", sec: "s", min: "min", hour: "h",
   trained_title: "Measured when the model was trained, {date}",
   trained_hint: "These figures are not live: they were computed once, at training, on data the model never saw. They change only when the model is retrained.",
-  c_data: "Data", c_what: "What it holds", c_ours: "Our result", c_published: "Published result",
+  c_data: "Data", c_what: "What it holds", c_ours: "Our result",
   own_name: "Our generator",
   own_what: "{rows} transfers calibrated to Uzbekistan, {share} of them fraud, of {types} types. Tested on the last {test}, {tf} of them fraud, which the model never saw.",
-  own_ours: "caught {rec} of the fraud, {prec} of alerts real (PR-AUC {prauc})",
-  own_published: "none: the data is ours",
+  own_ours: "recall {rec}, precision {prec}, F1 {f1}",
   sum: "UZS", ms: "ms",
   dec: {ALLOW: "ALLOW", REVIEW: "HELD", SECOND_LOOK: "SECOND LOOK"},
   part_second: "Second look — TabPFN", second_mark: "second look",
@@ -833,7 +831,7 @@ function renderLive() {
       `${sub ? `<small>${esc(sub)}</small>` : ""}</div>`).join("");
 }
 
-// What the second look adds on the same data, as results.json quotes it.
+// What the second look adds on our own data, as results.json quotes it.
 const secondLine = d => d.second ? `<br><small>${esc(d.second[lang])}</small>` : "";
 
 function renderResults() {
@@ -842,14 +840,12 @@ function renderResults() {
   const o = results.own || {};
   const date = o.trained_at ? new Date(o.trained_at).toLocaleDateString(locale(), {day: "numeric", month: "long", year: "numeric"}) : "—";
   $("#trained-title").textContent = fill(t("trained_title"), {date});
-  const own = o.error ? `<tr><td>${t("own_name")}</td><td colspan="3">${esc(o.error)}</td></tr>`
+  const own = o.error ? `<tr><td>${t("own_name")}</td><td colspan="2">${esc(o.error)}</td></tr>`
     : `<tr><td>${t("own_name")}</td>` +
       `<td>${fill(t("own_what"), {rows: fmtInt(o.rows), share: dec(o.fraud_share * 100, 2) + "%", types: o.types, test: fmtInt(o.test), tf: fmtInt(o.test_fraud)})}</td>` +
-      `<td class="ours">${fill(t("own_ours"), {rec: pct(o.recall), prec: pct(o.precision), prauc: dec(o.pr_auc, 3)})}${secondLine(o)}</td>` +
-      `<td>${t("own_published")}</td></tr>`;
+      `<td class="ours">${fill(t("own_ours"), {rec: pct(o.recall), prec: pct(o.precision), f1: pct(o.f1)})}${secondLine(o)}</td></tr>`;
   $("#cmp").innerHTML = own + (results.public || []).map(d => `<tr><td>${esc(d.name[lang])}</td>` +
-    `<td>${esc(d.what[lang])}</td><td class="ours">${esc(d.ours[lang])}${secondLine(d)}</td>` +
-    `<td>${esc(d.published[lang])}<br><a href="${esc(d.link.url)}" target="_blank" rel="noopener">${esc(d.link.label)}</a></td></tr>`).join("");
+    `<td>${esc(d.what[lang])}</td><td class="ours">${esc(d.ours[lang])}</td></tr>`).join("");
 }
 
 async function openTab(name) {

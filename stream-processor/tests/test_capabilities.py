@@ -106,15 +106,6 @@ def test_undeclared_rule_fails_open():
     assert CAP.rule_enabled("SOME_NEW_RULE_NOT_IN_REGISTRY")
 
 
-def test_myid_kinship_is_off_by_default(set_mode):
-    """Most banks have no MyID integration; the default must not assume one."""
-    assert CAP.BY_KEY["myid_kinship"].default == "off"
-    set_mode(myid_kinship="off")
-    assert "is_family" not in CAP.feature_names()
-    set_mode(myid_kinship="on")
-    assert "is_family" in CAP.feature_names()
-
-
 def test_feature_order_is_stable_across_calls():
     assert CAP.feature_names() == CAP.feature_names()
 

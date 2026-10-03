@@ -78,7 +78,6 @@ def event_from(row: dict) -> dict:
         # The cards: the payee is keyed by card, as the job keys it.
         "sender_card": row.get("sender_card", ""),
         "receiver_card": row.get("receiver_card", ""),
-        "is_family_transfer": truthy(row.get("is_family_transfer")),
     }
 
 
@@ -235,8 +234,6 @@ def extract(event: dict, state, now: float, receiver_state=None,
         "payee_flagged": int(payee in confirmed),
         "sender_flagged": int(sender_key(event) in confirmed),
         "payee_flagged_contacts": flagged_contacts,
-        # MyID kinship; in the vector only when the myid_kinship capability is on.
-        "is_family": truthy(event.get("is_family_transfer")),
         "vel_10m": win_count(C.VELOCITY_WINDOW_S),
         "vel_1h": win_count(C.STRUCTURING_WINDOW_S),
         "distinct_payees_10m": len(distinct),

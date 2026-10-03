@@ -43,15 +43,6 @@ REGISTRY = (
                   "would model nothing except declining to look at it.",
     ),
     Capability(
-        key="myid_kinship",
-        requires="MyID integration exposing verified family relationships",
-        modes=("off", "on"),            # default off: not every bank has it
-        features=("is_family",),
-        rules=(),
-        rationale="Only banks integrated with MyID can tell whether the payee is "
-                  "a verified relative of the sender.",
-    ),
-    Capability(
         key="receiver_velocity",
         requires="a receiver-keyed counter shared across the cluster (Redis)",
         features=("rcv_distinct_senders_1h", "rcv_inflow_1h"),

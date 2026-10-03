@@ -209,43 +209,11 @@ def _summary(df):
     print(f"fraudulent        : {n_fraud:,}  ({n_fraud / n:.2%})")
     print("\nby fraud type:")
     print(df.loc[df.label_is_fraud == 1, "label_fraud_type"].value_counts().to_string())
-    _signal_check(df)
-
-
-def _signal_check(df):
-    """Report `is_new_payee` as the pipeline computes it (stream-derived) beside the
-    column's own value; the two disagree on many rows."""
-    seen, computed = {}, []
-    for card, rcv in zip(df["sender_card"], df["receiver_pinfl"]):
-        s = seen.setdefault(card, set())
-        computed.append(0 if rcv in s else 1)
-        s.add(rcv)
-    df = df.assign(_computed=computed)
-    f = df.label_is_fraud == 1
-    print("\nsignal check  is_new_payee")
-    print(f"  as computed from the stream (what the model and rules see):"
-          f"  fraud={df.loc[f, '_computed'].mean():.2%}"
-          f"  legit={df.loc[~f, '_computed'].mean():.2%}")
-    print(f"  as recorded in the column (outside the assigned payee set):"
-          f"     fraud={df.loc[f, 'is_new_payee'].mean():.2%}"
-          f"  legit={df.loc[~f, 'is_new_payee'].mean():.2%}")
-    disagree = (df["is_new_payee"].astype(int) != df["_computed"]).sum()
-    print(f"  the two senses disagree on {disagree:,} of {len(df):,} rows"
-          f" ({disagree / len(df):.1%}) - see the note beside `is_new` above")
-    if df.loc[f, "_computed"].mean() > 0.98:
-        print("  !! fraud is essentially ALWAYS to a stream-new payee. The"
-              " threat model (docs/threat-model.md 4) rates that control"
-              " 'low cost to evade - a prior small transfer establishes the"
-              " payee', and this dataset does not include that evasion"
-              " (SEEDED_PAYEE_SHARE=0), so the feature's measured value is an"
-              " upper bound.")
 
 
 def parse_args():
     ap = argparse.ArgumentParser(description="Uzbekistan P2P synthetic data generator")
-    ap.add_argument("--profile", choices=("baseline", "realistic"), default="baseline",
-                    help="realistic: docs/generator-spec.md 10")
-    # No defaults here: an unset size comes from the profile, not from baseline.
+    # No defaults here: an unset value comes from GeneratorConfig.
     ap.add_argument("--persons", type=int)
     ap.add_argument("--transactions", type=int)
     ap.add_argument("--fraud-rate", type=float)
@@ -261,8 +229,7 @@ def main():
                                ("n_transactions", args.transactions),
                                ("fraud_rate", args.fraud_rate), ("days", args.days),
                                ("seed", args.seed)) if v is not None}
-    config = (C.realistic(**given) if args.profile == "realistic"
-              else GeneratorConfig(**given))
+    config = GeneratorConfig(**given)
 
     df, persons_df = build_dataset(config)
 

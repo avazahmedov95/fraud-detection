@@ -1,9 +1,4 @@
-# Convenience commands for the local stack and data pipeline.
-# Usage: make <target>
-#
-# A SUBSET of run.ps1: the measurements (measure-*, latency-setup, pipeline,
-# kill-worker, make-certs and the TLS / encrypted producer arms) are sequenced
-# protocols and live only there. Reproducing a figure in docs/ goes through run.ps1.
+# The everyday targets of run.ps1, for make users: make <target>.
 
 COMPOSE = docker compose
 GEN_DIR = data-generator
@@ -12,7 +7,7 @@ GEN_DIR = data-generator
 -include .env
 export
 
-.PHONY: help up down clean ps logs topics generate produce produce-stream no-active-job fresh-taskmanager produce-stream-docker seed-confirmed serve-prep submit-job resume-job sink-logs latency query-scored
+.PHONY: help up down clean ps logs topics generate produce produce-stream no-active-job fresh-taskmanager seed-confirmed serve-prep submit-job resume-job sink-logs verify-audit query-scored
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -36,22 +31,13 @@ topics: ## list Kafka topics
 	$(COMPOSE) exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list
 
 generate: ## generate the synthetic dataset into data-generator/out
-	cd $(GEN_DIR) && python generator.py --profile realistic --out ./out
+	cd $(GEN_DIR) && python generator.py --out ./out
 
 produce: ## replay the dataset into Kafka (batch)
 	cd $(GEN_DIR) && python kafka_producer.py --file out/transactions.csv --bootstrap localhost:29092 --topic transactions.raw
 
-produce-stream: ## paced replay (200x) FROM THE HOST - convenience only, never for latency
+produce-stream: ## paced replay (200x)
 	cd $(GEN_DIR) && python kafka_producer.py --file out/transactions.csv --realtime --speed 200 --bootstrap localhost:29092 --topic transactions.raw
-
-# Use this, not produce-stream, for any latency figure: inside the Docker network
-# the producer, Flink and ClickHouse share one clock.
-# Optional length:  make produce-stream-docker COUNT=7000
-produce-stream-docker: ## paced replay from INSIDE the network - required for latency work
-	docker run --rm -i --network fraud-detection_fraudnet \
-	  -v "$(CURDIR)/$(GEN_DIR):/gen" -w /gen fraud-sink-writer:latest \
-	  python kafka_producer.py --file out/transactions.csv --realtime --speed 200 \
-	    --bootstrap kafka:9092 --topic transactions.raw $(if $(COUNT),--limit $(COUNT),)
 
 seed-confirmed: ## load the history's confirmed fraud accounts into Redis
 	cd ml && python seed_confirmed.py --port $${REDIS_HOST_PORT}
@@ -75,7 +61,7 @@ no-active-job:
 	fi
 
 # A fresh TaskManager JVM before every submission: cancelled jobs do not return
-# Metaspace (docs/irp-framing.md 8, twenty-first). run.ps1's Restart-TaskManager, in sh.
+# Metaspace. run.ps1's Restart-TaskManager, in sh.
 fresh-taskmanager: no-active-job
 	@OLD=$$(curl -s --max-time 10 http://localhost:8081/taskmanagers | \
 	  grep -o '"id":"[^"]*"' | tr '\n' ' '); \
@@ -110,9 +96,6 @@ resume-job: serve-prep fresh-taskmanager ## submit, restoring keyed state from t
 
 sink-logs: ## tail the sink-writer (ClickHouse persistence) logs
 	$(COMPOSE) logs -f sink-writer
-
-latency: ## end-to-end latency percentiles vs the <300ms design target
-	cd stream-processor/experiments && python latency.py
 
 verify-audit: ## recompute the audit hash chain and report any tampering
 	cd sink-writer && python verify_audit.py

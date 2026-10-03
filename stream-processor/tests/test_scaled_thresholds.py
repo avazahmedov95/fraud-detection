@@ -80,7 +80,7 @@ def _ev(amount, payee):
 
 def test_single_rule_can_flag_when_it_is_all_that_is_available(profile):
     """The PaySim case: one rule at 0.35 is below the 0.40 cutoff but must act."""
-    profile(myid_kinship="off", geo_telemetry="off", session_telemetry="off")
+    profile(geo_telemetry="off", session_telemetry="off")
 
     st = R.SenderState()
     for i in range(6):
@@ -96,7 +96,7 @@ def test_single_rule_can_flag_when_it_is_all_that_is_available(profile):
 def test_scaling_can_be_switched_off(profile, monkeypatch):
     """The previous fixed-threshold behaviour stays available for comparison."""
     monkeypatch.setattr(C, "SCALE_THRESHOLDS_BY_CAPABILITY", False)
-    profile(myid_kinship="off", geo_telemetry="off", session_telemetry="off")
+    profile(geo_telemetry="off", session_telemetry="off")
     assert R._review_threshold() == C.REVIEW_THRESHOLD
 
 

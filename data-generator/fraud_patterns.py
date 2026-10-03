@@ -5,7 +5,7 @@ import numpy as np
 from datetime import datetime, timedelta
 
 from config import (AMOUNT_MIN, AMOUNT_MAX, STRUCTURING_THRESHOLD,
-                    REGIONS, FAMILY_FRAUD_SHARE, SEEDED_PAYEE_SHARE)
+                    REGIONS, FAMILY_FRAUD_SHARE)
 from events import make_event, round_like_a_person
 from persons import households, relatives_of
 from travel import hijack_origin
@@ -52,29 +52,6 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
     def pick(pool):
         return pool[int(rng.integers(len(pool)))]
 
-    # Seed transfers live in their own list: `produced[kind]` counts everything appended
-    # to `events` in a pattern block, so a non-fraud event there would eat the fraud budget.
-    seeds = []
-
-    def maybe_seed_payee(victim, payee, fraud_ts, balance):
-        """Establish the payee days before the fraud with a small transfer, the cheap
-        evasion threat-model.md 4 describes. Labelled is_fraud=0: nothing is lost
-        on it."""
-        if SEEDED_PAYEE_SHARE <= 0 or rng.random() >= SEEDED_PAYEE_SHARE:
-            return
-        seed_ts = fraud_ts - timedelta(days=float(rng.uniform(1.0, 21.0)))
-        if seed_ts < start_dt:
-            # Outside the window: the payee would still be stream-new, so emit nothing.
-            return
-        # Small enough to trip neither NEW_PAYEE_HIGH_AMOUNT's floor nor the personal
-        # AMOUNT_DEVIATION baseline: an evasion that raises its own alert is not one.
-        amount = float(np.clip(np.exp(rng.normal(10.8, 0.4)), AMOUNT_MIN, AMOUNT_MAX))
-        seeds.append(make_event(
-            victim, payee, amount, seed_ts,
-            device_id=f"dev-{victim.pinfl[-8:]}",
-            is_new_payee=True, balance_before=balance,
-            is_fraud=0, fraud_type="NONE", rng=rng))
-
     while sum(produced.values()) < n_fraud:
         remaining = [k for k in FRAUD_MIX if produced[k] < budget[k]]
         if not remaining:
@@ -94,7 +71,6 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
                 amount = float(np.clip(balance * rng.uniform(0.5, 0.95), AMOUNT_MIN, AMOUNT_MAX))
             amount = maybe_round(amount, config, rng, down=True)   # "send me five million"
             ts = rand_time()
-            maybe_seed_payee(victim, fraudster, ts, balance)
             events.append(make_event(
                 victim, fraudster, amount, ts,
                 device_id=f"dev-{victim.pinfl[-8:]}",
@@ -205,4 +181,4 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
                 ev["label_is_fraud"], ev["label_fraud_type"] = 0, "NONE"
         produced[kind] += len(events) - before
 
-    return events + seeds
+    return events

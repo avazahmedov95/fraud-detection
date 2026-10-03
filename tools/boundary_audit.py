@@ -77,7 +77,7 @@ def b_producer_types():
     row = _sample_row()
     if row is None:
         return "SKIP: dataset not generated"
-    msg = P._row_to_message(row, include_labels=False)
+    msg = P._row_to_message(row)
     bad = {k: v for k, v in msg.items()
            if isinstance(v, str) and v.strip() in ("True", "False")}
     if bad:
@@ -93,7 +93,7 @@ def b_wire_extracts_like_typed():
     row = _sample_row()
     if row is None:
         return "SKIP: dataset not generated"
-    wire = P._row_to_message(row, include_labels=False)
+    wire = P._row_to_message(row)
     typed = dict(wire)
     for k, v in list(typed.items()):                      # re-type as a caller would
         if isinstance(v, str) and v.lower() in ("true", "false"):
@@ -166,7 +166,7 @@ def b_routing_key_survives_the_wire():
     row = _sample_row()
     if row is None:
         return "SKIP: dataset not generated"
-    msg = P._row_to_message(row, include_labels=False)
+    msg = P._row_to_message(row)
     plain = json.dumps(msg)
     got = PC.routing_key(plain)
     if got != msg["sender_card"]:
@@ -433,31 +433,6 @@ def b_receiver_store_round_trips():
     return None
 
 
-def b_latency_query_matches_its_parser():
-    """The SELECT list and the row parser must agree on the column count, and every
-    index the report reads must exist - otherwise rows drop silently or columns swap."""
-    L = pkg(os.path.join("stream-processor", "experiments"), "latency")
-    body = L.QUERY.split("SELECT", 1)[1].split("FROM", 1)[0]
-    depth, cols = 0, 1
-    for ch in body:
-        if ch == "(":
-            depth += 1
-        elif ch == ")":
-            depth -= 1
-        elif ch == "," and depth == 0:
-            cols += 1
-    src = _read("stream-processor", "experiments", "latency.py")
-    want = int(re.search(r"len\(parts\) == (\d+)", src).group(1))
-    if cols != want:
-        return (f"the query selects {cols} columns and the parser accepts rows "
-                f"of {want} - every row would be discarded and the report would "
-                f"claim there is no instrumented data")
-    used = {int(m) for m in re.findall(r"r\[(\d)\]", src)}
-    if used and max(used) >= cols:
-        return f"the report reads r[{max(used)}] but the query selects {cols} columns"
-    return None
-
-
 def b_event_mapping_matches_the_csv():
     """`features.event_from` must be satisfiable by a real generated row - exercised
     on one, rather than checked against a list of names."""
@@ -500,7 +475,7 @@ def b_every_module_is_documented():
         if not os.path.isdir(d) or not os.path.exists(readme):
             continue
         text = _read(pkg, "README.md")
-        # One level down as well, so experiments/ stays covered.
+        # One level down as well.
         names = [fn for fn in os.listdir(d) if fn.endswith(".py")]
         for sub in sorted(os.listdir(d)):
             subdir = os.path.join(d, sub)
@@ -545,121 +520,48 @@ def b_no_new_constant_columns():
     return "; ".join(problems) or None
 
 
-#: Every figure a DOCUMENT quotes from a GENERATED artefact: (document, pattern with
-#: ONE capture group, source, how the raw value renders). `source` is ("metrics",
-#: *keys) into metrics.json, or ("seeds", "mean"|"sd"). A pattern that stops
+#: Every figure ml/README.md quotes from metrics.json: (pattern with ONE capture
+#: group, keys into metrics.json, how the value renders). A pattern that stops
 #: matching fails as loudly as a wrong number.
 _f3 = lambda v: f"{v:.3f}"
 _pct1 = lambda v: f"{v*100:.1f}"
 
 _TRACKED_FIGURES = [
-    # --- ml/README.md: the metrics table and the calibration block -----------
-    ("ml/README.md", r"^\| ROC-AUC\s+\|\s+([\d.]+)", ("metrics", "roc_auc"), _f3),
-    ("ml/README.md", r"^\| PR-AUC\s+\|\s+([\d.]+)", ("metrics", "pr_auc"), _f3),
-    ("ml/README.md", r"^\| precision at REVIEW\s+\|\s+([\d.]+)", ("metrics", "at_review", "precision"), _f3),
-    ("ml/README.md", r"^\| precision at REVIEW\s+\|\s+[\d.]+\s+\|\s+([\d.]+)", ("metrics", "cep_only", "precision"), _f3),
-    ("ml/README.md", r"^\| recall at REVIEW\s+\|\s+([\d.]+)", ("metrics", "at_review", "recall"), _f3),
-    ("ml/README.md", r"^\| recall at REVIEW\s+\|\s+[\d.]+\s+\|\s+([\d.]+)", ("metrics", "cep_only", "recall"), _f3),
-    ("ml/README.md", r"STRUCTURING ([\d.]+)%", ("metrics", "by_fraud_type", "STRUCTURING", "recall"), _pct1),
-    ("ml/README.md", r"fraud type \(ML at REVIEW\):.*?APP ([\d.]+)%", ("metrics", "by_fraud_type", "APP", "recall"), _pct1),
-    ("ml/README.md", r"fraud type \(ML at REVIEW\):.*?ATO ([\d.]+)%", ("metrics", "by_fraud_type", "ATO", "recall"), _pct1),
-    ("ml/README.md", r"fraud type \(ML at REVIEW\):.*?MULE ([\d.]+)%", ("metrics", "by_fraud_type", "MULE", "recall"), _pct1),
-    ("ml/README.md", r"cut at REVIEW = ([\d.]+)", ("metrics", "thresholds", "review"), lambda v: f"{v:.4f}"),
-    ("ml/README.md", r"^brier\s+([\d.]+)", ("metrics", "calibration", "brier"), lambda v: f"{v:.5f}"),
-    ("ml/README.md", r"^n_alerts\s+(\d+)", ("metrics", "calibration", "n_alerts"), str),
-    ("ml/README.md", r"^saturated_share\s+([\d.]+)%", ("metrics", "calibration", "saturated_share"), _pct1),
-    ("ml/README.md", r"^distinct_scores\s+(\d+)", ("metrics", "calibration", "distinct_scores"), str),
-    ("ml/README.md", r"^median_alert_score\s+([\d.]+)", ("metrics", "calibration", "median_alert_score"), lambda v: f"{v:.6f}"),
-    ("ml/README.md", r"baseline PR-AUC \*\*([\d.]+) ±", ("seeds", "mean"), _f3),
-    ("ml/README.md", r"baseline PR-AUC \*\*[\d.]+ ± ([\d.]+)\*\*", ("seeds", "sd"), _f3),
-    ("ml/README.md", r"5 seeds, baseline ([\d.]+) ±", ("seeds", "mean"), _f3),
-    # --- the same numbers, in the documents written for other readers --------
-    ("docs/generator-spec.md", r"\(([\d.]+) ± [\d.]+ across seeds\)", ("seeds", "mean"), _f3),
-    ("docs/generator-spec.md", r"\([\d.]+ ± ([\d.]+) across seeds\)", ("seeds", "sd"), _f3),
-    ("docs/irp-framing.md", r"Baseline ([\d.]+) ±", ("seeds", "mean"), _f3),
-    ("docs/irp-framing.md", r"Baseline [\d.]+ ± ([\d.]+)\.", ("seeds", "sd"), _f3),
-    ("docs/related-work.md", r"\| PR-AUC \| [\d.]+ \(([\d.]+) ±", ("seeds", "mean"), _f3),
-    ("docs/related-work.md", r"\| PR-AUC \| [\d.]+ \([\d.]+ ± ([\d.]+) across", ("seeds", "sd"), _f3),
-    # Only the realistic profile's figures are current here; baseline rows are history.
-    ("docs/related-work.md", r"the committee scores ([\d.]+) PR-AUC", ("metrics", "pr_auc"), _f3),
-    ("validation/README.md", r"On the realistic profile the full system scores PR-AUC ([\d.]+)", ("metrics", "pr_auc"), _f3),
+    (r"^\| ROC-AUC\s+\|\s+([\d.]+)", ("roc_auc",), _f3),
+    (r"^\| PR-AUC\s+\|\s+([\d.]+)", ("pr_auc",), _f3),
+    (r"^\| precision at REVIEW\s+\|\s+([\d.]+)", ("at_review", "precision"), _f3),
+    (r"^\| precision at REVIEW\s+\|\s+[\d.]+\s+\|\s+([\d.]+)", ("cep_only", "precision"), _f3),
+    (r"^\| recall at REVIEW\s+\|\s+([\d.]+)", ("at_review", "recall"), _f3),
+    (r"^\| recall at REVIEW\s+\|\s+[\d.]+\s+\|\s+([\d.]+)", ("cep_only", "recall"), _f3),
+    (r"^\| F1 at REVIEW\s+\|\s+([\d.]+)", ("at_review", "f1"), _f3),
+    (r"STRUCTURING ([\d.]+)%", ("by_fraud_type", "STRUCTURING", "recall"), _pct1),
+    (r"fraud type \(at REVIEW\):.*?APP ([\d.]+)%", ("by_fraud_type", "APP", "recall"), _pct1),
+    (r"fraud type \(at REVIEW\):.*?ATO ([\d.]+)%", ("by_fraud_type", "ATO", "recall"), _pct1),
+    (r"fraud type \(at REVIEW\):.*?MULE ([\d.]+)%", ("by_fraud_type", "MULE", "recall"), _pct1),
+    (r"cut at REVIEW = (\d+\.\d+)", ("thresholds", "review"), lambda v: f"{v:.4f}"),
 ]
 
 
 def b_documents_match_the_generated_figures():
-    """Every figure a document quotes must still be the one that was measured - not
-    that the numbers are good, but that the text describes the system that exists."""
+    """Every figure ml/README.md quotes must still be the one that was measured - not
+    that the numbers are good, but that the text describes the model that is served."""
     mpath = os.path.join(ROOT, "ml", "models", "metrics.json")
-    spath = os.path.join(ROOT, "ml", "models", "ablation", "seeds.json")
     if not os.path.exists(mpath):
         return "SKIP: metrics.json not present"
     with open(mpath, encoding="utf-8") as fh:
         metrics = json.load(fh)
-
-    seeds = None
-    if os.path.exists(spath):
-        import statistics
-        with open(spath, encoding="utf-8") as fh:
-            data = json.load(fh)
-        vals = [v["baseline"]["pr_auc"] for k, v in data.items()
-                if k != "_contract" and "baseline" in v]
-        if len(vals) > 1:
-            seeds = {"mean": statistics.mean(vals), "sd": statistics.stdev(vals)}
-
-    cache, problems = {}, []
-    for doc, pattern, source, render in _TRACKED_FIGURES:
-        if source[0] == "seeds":
-            if seeds is None:
-                continue                      # no ablation recorded; nothing to compare
-            value = seeds[source[1]]
-        else:
-            value = metrics
-            for k in source[1:]:
-                value = value[k]
-        if doc not in cache:
-            cache[doc] = _read(*doc.split("/"))
-        m = re.search(pattern, cache[doc], re.M | re.S)
-        label = f"{doc}:{'.'.join(source[1:])}"
+    text, problems = _read("ml", "README.md"), []
+    for pattern, keys, render in _TRACKED_FIGURES:
+        value = metrics
+        for k in keys:
+            value = value[k]
+        m = re.search(pattern, text, re.M | re.S)
+        label = ".".join(keys)
         if not m:
             problems.append(f"{label}: no longer stated where this check looks")
-            continue
-        expected = render(value)
-        if m.group(1) != expected:
-            problems.append(f"{label}: document says {m.group(1)}, "
-                            f"the artefact gives {expected}")
-    return "; ".join(problems) or None
-
-
-def b_external_baseline_matches_the_docs():
-    """related-work.md 6 and paysim_adapter.BASELINE quote the same published PaySim
-    baseline; only the REPORTED column is pinned (the reproduced one moves with
-    library versions)."""
-    sys.path.insert(0, os.path.join(ROOT, "validation"))
-    try:
-        import paysim_adapter as PA
-    except Exception as exc:                       # pragma: no cover
-        return f"SKIP: cannot import paysim_adapter ({exc})"
-    text = _read("docs", "related-work.md")
-
-    problems = []
-    for label, key, pattern in (
-            ("PR-AUC", "pr_auc", r"\| AUPRC \(= PR-AUC\) \| \*\*([\d.]+)\*\*"),
-            ("ROC-AUC", "roc_auc", r"\| AUC-ROC \| ([\d.]+) \|"),
-            ("recall @2%", "recall_at_2pct", r"\| recall \| ([\d.]+)% \(916 of"),
-            ("top-decile lift", "lift_at_decile", r"\| top-decile lift \| ([\d.]+)"),
-            ("PR-AUC with leakage", "pr_auc_with_leakage",
-             r"before\* removing balance leakage \| ([\d.]+) \|")):
-        m = re.search(pattern, text)
-        if not m:
-            problems.append(f"{label}: related-work.md 6 no longer states it "
-                            f"where this check looks")
-            continue
-        want = PA.BASELINE[key]
-        if key == "recall_at_2pct":
-            want *= 100
-        if abs(float(m.group(1)) - want) > 1e-9:
-            problems.append(f"{label}: doc says {m.group(1)}, "
-                            f"paysim_adapter.BASELINE says {want}")
+        elif m.group(1) != render(value):
+            problems.append(f"{label}: ml/README.md says {m.group(1)}, "
+                            f"metrics.json gives {render(value)}")
     return "; ".join(problems) or None
 
 
@@ -702,12 +604,10 @@ CHECKS = [
     ("ReceiverStore write -> read (Redis member)", b_receiver_store_round_trips),
     ("features.event_from -> generated CSV columns", b_event_mapping_matches_the_csv),
     ("model manifest -> deployed artefacts", b_manifest_matches_the_deployment),
-    ("latency query -> its row parser", b_latency_query_matches_its_parser),
     ("docker-compose env -> case-manager config", b_compose_env_names_are_read),
     ("modules -> their package README", b_every_module_is_documented),
     ("generated CSV -> no new constant columns", b_no_new_constant_columns),
-    ("generated artefacts -> every document that quotes them", b_documents_match_the_generated_figures),
-    ("paysim_adapter.BASELINE -> related-work 6", b_external_baseline_matches_the_docs),
+    ("metrics.json -> the figures ml/README.md quotes", b_documents_match_the_generated_figures),
     ("demo/results.json -> the documents it quotes", b_demo_results_quote_their_sources),
 ]
 

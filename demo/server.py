@@ -413,7 +413,7 @@ def replay_messages(items, now, rng=random):
         r["event_time"] = _utc_iso(now + offset)
         out.append({"role": role, "offset_s": offset,
                     "kind": row["label_fraud_type"] if _is_fraud(row) else "NONE",
-                    "message": KP._row_to_message(r, include_labels=False)})
+                    "message": KP._row_to_message(r)})
     return out
 
 
@@ -647,8 +647,8 @@ class App:
         try:
             with open(os.path.join(MODELS, "metrics.json"), encoding="utf-8") as fh:
                 m = json.load(fh)
-            own = {"pr_auc": m["pr_auc"], "precision": m["at_review"]["precision"],
-                   "recall": m["at_review"]["recall"], "types": len(m["by_fraud_type"])}
+            own = {"precision": m["at_review"]["precision"], "recall": m["at_review"]["recall"],
+                   "f1": m["at_review"]["f1"], "types": len(m["by_fraud_type"])}
             with open(os.path.join(MODELS, "manifest.json"), encoding="utf-8") as fh:
                 own["trained_at"] = json.load(fh)["exported_at"]
         except (OSError, KeyError, ValueError) as exc:

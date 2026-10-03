@@ -1,5 +1,5 @@
 {
-  "_about": "What the demo's results tab says about the public datasets: what each is made of, our model's result on it and the published one, and - for our own data too - what the second look adds. Every figure is carried in `quotes` with the exact line of the document it came from, and tools/boundary_audit.py fails when a quoted line is gone - so a document that moves a figure cannot leave this page showing the old one.",
+  "_about": "What the demo's results tab says beside the live figures: the second look on our own data and this project's model on two public datasets. Every figure carries the exact line of the document it came from, and tools/boundary_audit.py fails when that line is gone.",
   "own": {
     "key": "own",
     "second": {
@@ -7,74 +7,65 @@
       "en": "TabPFN's second look: recall 70.5% → 78.4%, alerts 172 → 204. Over 20 datasets on average: recall 61.0% → 68.8%, precision 73.0% → 65.1%, F1 66.0% → 66.4%; better than simply lowering the cut-off on 13 datasets of 20"
     },
     "quotes": [
-      {"file": "ml/README.md", "text": "**recall 70.5% -> 78.4% for alerts 172 -> 204**"},
-      {"file": "ml/README.md", "text": "| the model alone, 24 columns | 0.666 | 61.0% ± 3.5 | 73.0% ± 4.3 | 66.0% ± 2.9 | 2,938 | 2,139 |"},
-      {"file": "ml/README.md", "text": "| **the second look, 24 columns** | 0.666 | **68.8% ± 3.0** | 65.1% ± 4.3 | **66.4% ± 2.6** | 3,746 | **2,416** |"},
-      {"file": "ml/README.md", "text": "+1.6], better on 13 of 20**, 38 more frauds where the 21 columns gave 67."}
+      {
+        "file": "ml/README.md",
+        "text": "**recall 70.5% -> 78.4% for alerts 172 -> 204**"
+      },
+      {
+        "file": "ml/README.md",
+        "text": "| the model alone | 61.0% ± 3.5 | 73.0% ± 4.3 | 66.0% ± 2.9 | 2,938 | 2,139 |"
+      },
+      {
+        "file": "ml/README.md",
+        "text": "| **the second look** | **68.8% ± 3.0** | 65.1% ± 4.3 | **66.4% ± 2.6** | 3,746 | **2,416** |"
+      },
+      {
+        "file": "ml/README.md",
+        "text": "The second look beats a lowered cut-off on 13 of 20 datasets"
+      }
     ]
   },
   "datasets": [
     {
       "key": "paysim",
-      "name": {"ru": "PaySim", "en": "PaySim"},
+      "name": {
+        "ru": "PaySim",
+        "en": "PaySim"
+      },
       "what": {
-        "ru": "6,36 млн искусственных переводов мобильных денег по образцу африканского сервиса. Разбивка как в опубликованной работе: 24 дня на обучение, 7 на проверку.",
-        "en": "6.36 million simulated mobile-money transfers modelled on an African service. Split as in the published work: 24 days to train, 7 to test."
+        "ru": "6,36 млн искусственных операций мобильных денег по образцу африканского сервиса, за 31 день; мошеннических 8 213. Проверяются переводы между клиентами (тип TRANSFER): 532 909 строк, из них 4 097 мошеннических; 24 дня на обучение, 7 на проверку.",
+        "en": "6.36 million simulated mobile-money transactions modelled on an African service, over 31 days; 8,213 of them fraud. Scored: the customer-to-customer transfers (type TRANSFER), 532,909 rows with 4,097 fraud; 24 days to train, 7 to test."
       },
       "ours": {
-        "ru": "PR-AUC 0,364 на наших признаках; 0,529 с типом операции из самого PaySim",
-        "en": "PR-AUC 0.364 on our features; 0.529 with PaySim's own transaction type"
+        "ru": "полнота 27,6%, точность 63,8%, F1 38,5%",
+        "en": "recall 27.6%, precision 63.8%, F1 38.5%"
       },
-      "second": {
-        "ru": "Вторая проверка TabPFN: полнота 27,4% → 28,2%, тревог 394 → 402",
-        "en": "TabPFN's second look: recall 27.4% → 28.2%, alerts 394 → 402"
-      },
-      "published": {
-        "ru": "PR-AUC 0,380",
-        "en": "PR-AUC 0.380"
-      },
-      "link": {"label": "ris3abh/aml-p2p-fraud-detection", "url": "https://github.com/ris3abh/aml-p2p-fraud-detection"},
-      "source": "validation/README.md, section 1",
       "quotes": [
-        {"file": "validation/README.md", "text": "| rows | 6.36M |"},
-        {"file": "validation/README.md", "text": "on the published baseline's own split (24 days / 7 days)"},
-        {"file": "validation/README.md", "text": "| this project, all it can compute | 18 | **0.364** |"},
-        {"file": "validation/README.md", "text": "| — plus PaySim's own transaction type | 23 | **0.529** |"},
-        {"file": "validation/README.md", "text": "| published generic baseline (§6 of `related-work.md`) | ~24 | 0.380 |"},
-        {"file": "validation/README.md", "text": "| the model at 0.2578 | 394 | 252 | 27.4% |"},
-        {"file": "validation/README.md", "text": "| with the second look | **402** | **259** | **28.2%** |"}
+        {
+          "file": "validation/README.md",
+          "text": "| PaySim | 6.36M simulated mobile-money transactions over 31 days, 8,213 fraud | its 532,909 TRANSFER rows, 4,097 fraud; 24 days train, 7 test (920 fraud) | 27.6% | 63.8% | 38.5% |"
+        }
       ]
     },
     {
       "key": "ibm_aml",
-      "name": {"ru": "IBM AML, для информации", "en": "IBM AML, for information"},
+      "name": {
+        "ru": "IBM AML, для информации",
+        "en": "IBM AML, for information"
+      },
       "what": {
-        "ru": "Искусственные банковские переводы IBM с отмыванием денег: 4,49 млн строк, из них 5 166 — отмывание. Среди счетов есть банки и компании, поэтому набор только для информации.",
-        "en": "IBM's simulated bank transfers with money laundering: 4.49 million rows, 5,166 of them laundering. Its accounts include banks and companies, so it is for information only."
+        "ru": "Искусственные банковские переводы IBM с отмыванием денег: 4,49 млн переводов за 17 дней, из них 5 166 — отмывание. Среди счетов есть банки и компании, поэтому набор только для информации. Разбивка по времени 60/20/20.",
+        "en": "IBM's simulated bank transfers with money laundering: 4.49 million transfers over 17 days, 5,166 of them laundering. Its accounts include banks and companies, so it is for information only. Split 60/20/20 by time."
       },
       "ours": {
-        "ru": "F1 56,7 на наших признаках; 67,0 с форматом платежа и валютой из самого файла",
-        "en": "F1 56.7 on our features; 67.0 with the file's own payment format and currency"
+        "ru": "полнота 44,3%, точность 79,2%, F1 56,8%",
+        "en": "recall 44.3%, precision 79.2%, F1 56.8%"
       },
-      "second": {
-        "ru": "Вторая проверка TabPFN: полнота 44,3% → 52,2%, но тревог 926 → 1 663",
-        "en": "TabPFN's second look: recall 44.3% → 52.2%, but alerts 926 → 1,663"
-      },
-      "published": {
-        "ru": "F1 21,3 у обычного бустинга (LightGBM); 56,8 у лучшей графовой нейросети (PNA); 62,9–64,8 у бустинга с графовыми признаками",
-        "en": "F1 21.3 for plain gradient boosting (LightGBM); 56.8 for the best graph network (PNA); 62.9-64.8 for boosting with graph features"
-      },
-      "link": {"label": "arXiv:2402.08593", "url": "https://arxiv.org/abs/2402.08593"},
-      "source": "validation/README.md, section 2",
       "quotes": [
-        {"file": "validation/README.md", "text": "### Result (4,487,133 rows, 5,166 laundering, full file)"},
-        {"file": "validation/README.md", "text": "| this project, all it can compute | 18 | **56.7 +/- 0.4** |"},
-        {"file": "validation/README.md", "text": "| - plus the file's payment format and currency | 25 | **67.0 +/- 0.3** |"},
-        {"file": "validation/README.md", "text": "file's own columns 21.3 +/- 0.3 (LightGBM)"},
-        {"file": "validation/README.md", "text": "PNA 56.8 +/- 2.4"},
-        {"file": "validation/README.md", "text": "graph features 62.9 +/- 0.3 and 64.8 +/- 0.5"},
-        {"file": "validation/README.md", "text": "| the model at 0.0894 | 926 | 733 | 79.2% | 44.3% |"},
-        {"file": "validation/README.md", "text": "| with the second look | 1,663 | 863 | 51.9% | **52.2%** |"}
+        {
+          "file": "validation/README.md",
+          "text": "| IBM AML HI-Small | 4.49M transfers between bank accounts over 17 days, 5,166 laundering | 60/20/20 by time; 1,653 laundering in test | 44.3% | 79.2% | 56.8% |"
+        }
       ]
     }
   ]

@@ -11,10 +11,6 @@ import sys
 
 _PKG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _PKG)
-# The harnesses moved to experiments/ and one of them is unit-tested
-# (test_dependency_loss). Added here rather than in that test so a second
-# harness test does not have to rediscover the path.
-sys.path.insert(0, os.path.join(_PKG, "experiments"))
 
 
 def payee_card(payee: str) -> str:
