@@ -549,7 +549,8 @@ every mode and `train.py` withholds it on a tenth of its rows - and on the
 baseline profile an offline replay with every age withheld then raised 14 false
 alarms against 10, where the -1 had raised 95 (`ml/README.md`). Since 2026-09-19
 the job reads nothing from Neo4j - the age is gone - so a graph outage costs only
-the alert graph. Drain was fast
+the alert graph, and since 2026-10-03 there is none: Neo4j was removed, no
+decision having read it (`ml/README.md`, The confirmed cases, built). Drain was fast
 in every arm here because the dependency was already down when the worker opened
 its clients; 7.7a is the other half of the same code path.
 

@@ -251,21 +251,6 @@ def b_a_verdict_reaches_the_job():
     return None
 
 
-def b_neo4j_params_match_the_cypher():
-    R = pkg("sink-writer", "record")
-    src = _read("sink-writer", "neo4j_writer.py")
-    cypher = src.split("_MERGE = \"\"\"", 1)[1].split("\"\"\"", 1)[0]
-    used = set(re.findall(r"row\.([a-z_]+)", cypher))
-    supplied = set(R.alert_params({}))
-    missing = sorted(used - supplied)
-    extra = sorted(supplied - used)
-    if missing:
-        return f"Cypher references row.{{{','.join(missing)}}} which alert_params does not supply"
-    if extra:
-        return f"alert_params supplies unused keys: {extra} (harmless, but a sign of drift)"
-    return None
-
-
 def _ddl_columns(sql, table):
     body = sql.split(f"CREATE TABLE IF NOT EXISTS {table}", 1)[1].split("ENGINE", 1)[0]
     cols = []
@@ -709,7 +694,6 @@ CHECKS = [
     ("job record -> second look (topic, keys)", b_second_look_is_what_the_job_sends),
     ("second-look record -> where the job's goes", b_second_look_record_is_a_job_record),
     ("analyst verdict -> confirmed accounts the job reads", b_a_verdict_reaches_the_job),
-    ("alert_params -> Neo4j Cypher", b_neo4j_params_match_the_cypher),
     ("scored_row -> ClickHouse 01-schema", b_scored_row_matches_the_schema),
     ("case_row -> ClickHouse 02-cases", b_case_row_matches_the_schema),
     ("fraud_job imports -> run.ps1 AND Makefile", b_job_modules_cover_every_import),

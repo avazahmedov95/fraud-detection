@@ -35,7 +35,7 @@ experiments/     harnesses. Nothing here is deployed; each one produces a
                  `throughput` sweeps it against offered load
   outage.py      break one thing and measure what stops (stack up):
                  --service scorer (default)  what is lost, what is duplicated
-                 --service redis|neo4j|clickhouse|kafka  what silently stops
+                 --service redis|clickhouse|kafka  what silently stops
                  --service control           the healthy reference pass
 
 tests/           run with `python -m pytest stream-processor -q`

@@ -1,9 +1,10 @@
 # Pinned exactly, not floored.
 #
-# These were written against `kafka-python>=2.0, clickhouse-connect>=0.7,
-# neo4j>=5.0`. A rebuild on 2026-08-11 resolved all three across a MAJOR version
-# boundary at once - kafka-python 2.x -> 3.0.10, clickhouse-connect 0.x -> 1.6.0,
-# neo4j 5.x -> 6.2.0 - so the image stopped matching the code that had been
+# These were written against `kafka-python>=2.0, clickhouse-connect>=0.7` (and
+# neo4j>=5.0, removed with the alert graph on 2026-10-03). A rebuild on 2026-08-11
+# resolved all three across a MAJOR version boundary at once - kafka-python 2.x ->
+# 3.0.10, clickhouse-connect 0.x -> 1.6.0, neo4j 5.x -> 6.2.0 - so the image
+# stopped matching the code that had been
 # tested against it, with no change to this repository. For a thesis that is not
 # a nuisance but a reproducibility failure: the measured results could not be
 # regenerated from the source that produced them.
@@ -13,7 +14,6 @@
 # measurements afterwards.
 kafka-python==3.0.10
 clickhouse-connect==1.6.0
-neo4j==6.2.0
 
 # Not used by the sink-writer itself. This image is also where the producer runs
 # for every measured run (`run.ps1 produce-stream-docker` mounts data-generator
@@ -28,6 +28,5 @@ certifi==2026.7.22
 urllib3==2.7.0
 backports.zstd==1.6.0
 lz4==4.4.5
-pytz==2026.3.post1
 
 # integrity.py and verify_audit.py use only hashlib + urllib from the stdlib.

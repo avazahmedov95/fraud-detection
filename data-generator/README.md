@@ -2,7 +2,7 @@
 
 Foundation component for the real-time fraud-detection pipeline. Generates a
 labelled, Uzbekistan-calibrated transaction stream that feeds Kafka → Flink (CEP)
-→ ML, plus the account population for Neo4j.
+→ ML, plus the account population.
 
 > The dataset is a design fixture for prototype experimentation. Any detection
 > metrics obtained from it are **design targets**, not measured findings, until
@@ -31,7 +31,7 @@ All values live in `config.py` and are meant to be overridden.
 ## Output files
 
 - **transactions.csv** — event stream, sorted by `event_time`
-- **persons.csv** — accounts → `(:Person)` nodes for Neo4j
+- **persons.csv** — the account population: each person's cards, bank, region and account age
 
 ### Bank assignment
 
@@ -123,11 +123,6 @@ python kafka_producer.py --file out/transactions.csv --realtime --speed 200 \
 29092 is the EXTERNAL listener. `kafka:9092` is INTERNAL and resolves only
 inside the compose network; from the host it fails to connect. This example
 said 9092 for months.
-
-`make load-graph` loads the account population into Neo4j
-(`infra/neo4j/import.cypher`), for the analysts' alert graph. Edges are not
-loaded there: the money-flow relationships are written by the sink-writer from
-scored transactions, not generated up front.
 
 ## Files
 

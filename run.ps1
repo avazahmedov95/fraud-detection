@@ -5,8 +5,7 @@
 
 .DESCRIPTION
     A SUPERSET of the Makefile, not a translation of it. The Makefile carries
-    the everyday targets - up, down, generate, produce, load-graph, seed-confirmed,
-    submit-job.
+    the everyday targets - up, down, generate, produce, seed-confirmed, submit-job.
     This file additionally carries every sequenced experiment: measure-plain /
     measure-tls / measure-crypto, latency-setup, pipeline, kill-worker,
     make-certs, status, and the TLS and encrypted producer arms. Each is an
@@ -27,7 +26,7 @@
 .EXAMPLE
     .\run.ps1 help
     .\run.ps1 up
-    .\run.ps1 pipeline      # clean -> up -> load-graph -> seed-confirmed -> produce -> submit-job
+    .\run.ps1 pipeline      # clean -> up -> seed-confirmed -> produce -> submit-job
 #>
 
 param(
@@ -64,8 +63,8 @@ param(
     [double]$Rate = 0,
     [int[]]$Rates,
 
-    # One dependency for kill-dependency; omit to run all four.
-    [ValidateSet("", "redis", "neo4j", "clickhouse", "kafka")]
+    # One dependency for kill-dependency; omit to run all three.
+    [ValidateSet("", "redis", "clickhouse", "kafka")]
     [string]$Service = ""
 )
 
@@ -93,10 +92,9 @@ if (-not (Test-Path ".env")) {
 }
 $DotEnv = Get-DotEnv
 # The host-side scripts (experiments/, verify_audit.py) read the same credentials.
-foreach ($k in "NEO4J_PASSWORD", "CLICKHOUSE_USER", "CLICKHOUSE_PASSWORD", "CLICKHOUSE_DB") {
+foreach ($k in "CLICKHOUSE_USER", "CLICKHOUSE_PASSWORD", "CLICKHOUSE_DB") {
     if ($DotEnv[$k] -and -not (Test-Path "env:$k")) { Set-Item "env:$k" $DotEnv[$k] }
 }
-$Neo4jPassword = $DotEnv.NEO4J_PASSWORD
 $ChUser = $DotEnv.CLICKHOUSE_USER
 $ChPassword = $DotEnv.CLICKHOUSE_PASSWORD
 
@@ -119,8 +117,8 @@ function Wait-Ready {
     Poll a service until it answers, instead of sleeping a fixed interval.
 
     A blind sleep is wrong in both directions: too short and the next step hits
-    a service that is listening but not serving (cypher-shell then blocks with
-    no output, which looks like a hang), too long and every run pays for the
+    a service that is listening but not serving (a client then blocks with no
+    output, which looks like a hang), too long and every run pays for the
     worst case. Polling also makes a genuine failure visible as a timeout rather
     than as an indefinite wait.
     #>
@@ -377,8 +375,8 @@ function Invoke-DependencyOutage {
         Produce $Count transactions with $Service down. Returns how many the
         producer reported DELIVERING, or -1 if it printed no count.
 
-        Two shapes, because the transport is not like the others. Redis, Neo4j
-        and ClickHouse sit downstream of the topic: stop them first and every
+        Two shapes, because the transport is not like the others. Redis and
+        ClickHouse sit downstream of the topic: stop them first and every
         message is offered to a pipeline that is already degraded. Kafka IS the
         topic - stopping it first means the producer cannot bootstrap, nothing
         is offered, and an arm that offers nothing cannot lose anything. The
@@ -689,7 +687,6 @@ switch ($Target.ToLower()) {
             "measure-tls"           = "full measurement arm: mutual TLS    (needs the job resubmitted with SSL)"
             "measure-crypto"        = "full measurement arm: encrypted payload"
             "measure-throughput"    = "latency vs offered load (.\run.ps1 measure-throughput 3000)"
-            "load-graph"     = "load the account population into Neo4j"
             "seed-confirmed" = "load the history's confirmed fraud accounts into Redis"
             "serve-prep"     = "copy the ONNX model next to the Flink job"
             "submit-job"     = "fresh TaskManager, then the PyFlink job (empty state)"
@@ -701,9 +698,9 @@ switch ($Target.ToLower()) {
             "verify-audit"   = "recompute the audit hash chain, report tampering"
             "status"         = "diagnose the whole path: containers, job, rows, offsets"
             "kill-worker"    = "kill and restart the taskmanager (fault injection)"
-            "kill-dependency" = "stop Redis/Neo4j/ClickHouse/Kafka in turn and report what degrades"
+            "kill-dependency" = "stop Redis/ClickHouse/Kafka in turn and report what degrades"
             "query-scored"   = "decision counts in ClickHouse"
-            "pipeline"       = "clean -> up -> load-graph -> seed-confirmed -> produce -> submit-job"
+            "pipeline"       = "clean -> up -> seed-confirmed -> produce -> submit-job"
             "latency-setup"  = "same as pipeline but no batch dump (for latency runs)"
         }
         foreach ($k in $targets.Keys) {
@@ -813,11 +810,11 @@ switch ($Target.ToLower()) {
     }
 
     # One dependency at a time: take it out, produce the SAME slice through the
-    # outage, bring it back. -Service picks one; with none, all four run. A healthy
+    # outage, bring it back. -Service picks one; with none, all three run. A healthy
     # CONTROL pass runs first: an arm's alert mix means something only against it.
     "kill-dependency" {
         if (-not (Assert-JobRunning)) { break }
-        $svcs = if ($Service) { @($Service) } else { @("redis", "neo4j", "clickhouse", "kafka") }
+        $svcs = if ($Service) { @($Service) } else { @("redis", "clickhouse", "kafka") }
         # Prepended, never skipped: a stale reference from an earlier run is
         # the same error this control exists to remove.
         $svcs = @("control") + $svcs
@@ -912,15 +909,6 @@ switch ($Target.ToLower()) {
             fraud-sink-writer:latest `
             python kafka_producer.py --file out/transactions.csv --realtime --speed 200 `
                 --bootstrap kafka:9092 --topic transactions.raw --encrypt @limit
-    }
-
-    "load-graph" {
-        # Copied into the container and read with -f, never piped: PowerShell 5.1 can
-        # prepend a BOM to a native command's stdin.
-        docker compose cp "infra/neo4j/import.cypher" neo4j:/tmp/import.cypher
-        if ($LASTEXITCODE -eq 0) {
-            docker compose exec -T neo4j cypher-shell -u neo4j -p $Neo4jPassword -f /tmp/import.cypher
-        }
     }
 
     # The accounts in confirmed frauds the job reads (confirmed_cases), from the
@@ -1054,15 +1042,10 @@ switch ($Target.ToLower()) {
         # services that accept connections before they are ready to serve.
         Invoke-Step "removing old containers and volumes" { & $PSCommandPath clean }
         Invoke-Step "starting the stack (first run builds Flink, takes minutes)" { & $PSCommandPath up }
-        Wait-Ready "neo4j" {
-            $r = docker compose exec -T neo4j cypher-shell -u neo4j -p $Neo4jPassword "RETURN 1" 2>&1
-            $LASTEXITCODE -eq 0
-        }
         Wait-Ready "clickhouse" {
             $r = docker compose exec -T clickhouse clickhouse-client -u $ChUser --password $ChPassword -q "SELECT 1" 2>&1
             $LASTEXITCODE -eq 0
         }
-        Invoke-Step "loading the account population into Neo4j" { & $PSCommandPath load-graph }
         Invoke-Step "loading the confirmed fraud accounts into Redis" { & $PSCommandPath seed-confirmed }
         Invoke-Step "replaying transactions into Kafka" { & $PSCommandPath produce }
         Invoke-Step "submitting the Flink job" { & $PSCommandPath submit-job }
@@ -1078,15 +1061,10 @@ switch ($Target.ToLower()) {
         # at a rate the job keeps up with, not a 50k backlog.
         Invoke-Step "removing old containers and volumes" { & $PSCommandPath clean }
         Invoke-Step "starting the stack (first run builds Flink, takes minutes)" { & $PSCommandPath up }
-        Wait-Ready "neo4j" {
-            $r = docker compose exec -T neo4j cypher-shell -u neo4j -p $Neo4jPassword "RETURN 1" 2>&1
-            $LASTEXITCODE -eq 0
-        }
         Wait-Ready "clickhouse" {
             $r = docker compose exec -T clickhouse clickhouse-client -u $ChUser --password $ChPassword -q "SELECT 1" 2>&1
             $LASTEXITCODE -eq 0
         }
-        Invoke-Step "loading the account population into Neo4j" { & $PSCommandPath load-graph }
         Invoke-Step "loading the confirmed fraud accounts into Redis" { & $PSCommandPath seed-confirmed }
         Invoke-Step "submitting the Flink job" { & $PSCommandPath submit-job }
         Write-Host ""

@@ -12,7 +12,7 @@ GEN_DIR = data-generator
 -include .env
 export
 
-.PHONY: help up down clean ps logs topics generate produce produce-stream no-active-job fresh-taskmanager produce-stream-docker load-graph seed-confirmed serve-prep submit-job resume-job sink-logs latency query-scored
+.PHONY: help up down clean ps logs topics generate produce produce-stream no-active-job fresh-taskmanager produce-stream-docker seed-confirmed serve-prep submit-job resume-job sink-logs latency query-scored
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -52,9 +52,6 @@ produce-stream-docker: ## paced replay from INSIDE the network - required for la
 	  -v "$(CURDIR)/$(GEN_DIR):/gen" -w /gen fraud-sink-writer:latest \
 	  python kafka_producer.py --file out/transactions.csv --realtime --speed 200 \
 	    --bootstrap kafka:9092 --topic transactions.raw $(if $(COUNT),--limit $(COUNT),)
-
-load-graph: ## load the account population into Neo4j
-	$(COMPOSE) exec -T neo4j cypher-shell -u neo4j -p $${NEO4J_PASSWORD} < infra/neo4j/import.cypher
 
 seed-confirmed: ## load the history's confirmed fraud accounts into Redis
 	cd ml && python seed_confirmed.py --port $${REDIS_HOST_PORT}
@@ -111,7 +108,7 @@ resume-job: serve-prep fresh-taskmanager ## submit, restoring keyed state from t
 	$(COMPOSE) exec jobmanager flink run -d -s "$$CHK" -py /opt/flink/usrjobs/fraud_job.py \
 	  --pyFiles $(PYFILES)
 
-sink-logs: ## tail the sink-writer (ClickHouse/Neo4j persistence) logs
+sink-logs: ## tail the sink-writer (ClickHouse persistence) logs
 	$(COMPOSE) logs -f sink-writer
 
 latency: ## end-to-end latency percentiles vs the <300ms design target

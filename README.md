@@ -14,13 +14,12 @@ and the UzCard / HUMO networks.
 fraud-detection/
 ├── docker-compose.yml      full local stack
 ├── .env.example            image versions, ports; copy to .env and set the passwords
-├── Makefile                make up / generate / produce / load-graph ...
+├── Makefile                make up / generate / produce / seed-confirmed ...
 ├── run.ps1                 the experiment driver: every measured run starts here
 │
 ├── infra/                  infrastructure configuration
 │   ├── kafka/              topic creation
 │   ├── redis/              feature-store config
-│   ├── neo4j/              graph import Cypher
 │   ├── clickhouse/init/    warehouse + WORM audit schema
 │   ├── flink/              PyFlink-ready Flink image
 │   ├── grafana/            datasource + dashboard provisioning
@@ -33,7 +32,7 @@ fraud-detection/
 │
 ├── stream-processor/       PyFlink: CEP + ONNX + fusion
 ├── ml/                     LightGBM committee -> ONNX, tree contributions
-├── sink-writer/            transactions.scored -> ClickHouse + Neo4j
+├── sink-writer/            transactions.scored -> ClickHouse
 ├── case-manager/           fraud.alerts -> the held transfers, the analyst's queue
 │   ├── case.py  store.py   an alert becomes a case; a verdict becomes a label
 │   ├── explain.py          exact tree contributions, for alerts no rule explains
@@ -81,7 +80,7 @@ run **one at a time**:
 ```bash
 python -m pytest stream-processor -q     # 194
 python -m pytest data-generator   -q     #  26
-python -m pytest sink-writer      -q     #  27
+python -m pytest sink-writer      -q     #  24
 python -m pytest validation       -q     #  25
 python -m pytest case-manager     -q     #  47
 python -m pytest ml               -q     # 11
@@ -121,14 +120,14 @@ cp .env.example .env
 make up
 make ps
 
-# 2. generate the dataset, then load the graph and stream the events
+# 2. generate the dataset and stream the events
 make generate
-make load-graph
 make produce            # or: make produce-stream  (paced live stream)
 
 # 3. train the model, then submit the scoring job (CEP + ML fusion)
 #    (the sink-writer service comes up with `make up` and persists results)
 cd ml && python train.py && python export_onnx.py && cd ..
+make seed-confirmed     # the history's confirmed fraud accounts, into Redis
 make submit-job         # serves model.onnx inside Flink and starts scoring
 
 # 4. watch it: Flink UI (8081), Grafana dashboard (3000), or:
@@ -145,13 +144,12 @@ make query-scored       # decision counts in ClickHouse
 |---|---|---|
 | Kafka (host clients) | `localhost:29092` | — |
 | Flink UI | http://localhost:8081 | — |
-| Neo4j Browser | http://localhost:7474 | `neo4j` / `.env` password |
 | ClickHouse HTTP | http://localhost:8123 | `.env` user / password |
 | Grafana | http://localhost:3000 | `admin` / `.env` password |
 | Demo page | http://localhost:8090 (this machine only) | — |
 
 From inside the Docker network use service names: `kafka:9092`, `redis:6379`,
-`neo4j:7687`, `clickhouse:9000`.
+`clickhouse:9000`.
 
 ## Topics
 
@@ -173,5 +171,4 @@ metrics are design targets on synthetic data, not validated production findings.
 
 All image versions are pinned in `.env.example`, which `.env` is copied from. If
 a tag is unavailable in your registry, bump it in both — nothing else needs to
-change. Neo4j is the Community
-Edition; APOC downloads on first boot, so the first `make up` needs internet.
+change.

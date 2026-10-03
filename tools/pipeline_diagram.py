@@ -95,14 +95,23 @@ red = box(79, 40, 18, 12, "Redis", "recent payers,\nconfirmed fraud accounts", "
           fill=STORE_FILL)
 arrow(top(red), bottom(fea), style="<|-|>", color=MUTED, lw=1.3)
 
-ax.text(104, 47, "The engine's own work is 3.6 ms.\nThe other 93 ms is the transfer waiting "
-                 "between\nKafka and the engine, in batches.",
+ax.text(36, 45, "The engine's own work is 3.6 ms.\nThe other 93 ms is the transfer waiting "
+                "between\nKafka and the engine, in batches.",
         fontsize=9.5, color=MUTED, family=FAMILY, va="center",
         bbox=dict(boxstyle="round,pad=0.6", facecolor="white", edgecolor=LINE))
 
 # --- row 2: out of the engine ----------------------------------------------
 sco = box(136, 24, 24, 12, "Kafka", "transactions.scored\nand fraud.alerts")
 arrow(bottom(dcd), top(sco), rad=-0.15)
+
+# A transfer just under the cut-off waits for TabPFN (second-look/README.md).
+sec = box(110, 40, 24, 12, "Second look", "TabPFN, for transfers\njust under the cut-off",
+          "about 1 s", fill=ACCENT_SOFT, edge=ACCENT)
+arrow((146, 61), (130, 52))
+arrow((131, 40), (139, 36))
+for x, y, label in ((139.5, 53.8, "just under\nthe cut-off"), (128.5, 36.6, "its decision")):
+    ax.text(x, y, label, ha="left" if x > 130 else "right", va="bottom", fontsize=8.5,
+            color=MUTED, family=FAMILY)
 
 snk = box(104, 24, 24, 12, "Sink writer", "batches both writes,\nkeeps running if a\ndatabase is down",
           sub_size=8.5)
@@ -125,9 +134,6 @@ ana = box(104, 4, 24, 12, "Analyst", "blocks or releases the held\ntransfer; the
           fill=ALERT_SOFT, edge=ALERT, sub_size=8.5)
 arrow(left(cas), right(ana), color=ALERT)
 
-neo = box(68, 4, 28, 12, "Neo4j", "alerts as a graph: who paid whom",
-          fill=STORE_FILL, sub_size=8.5)
-arrow((112, 24), (92, 16), dashed=True, color=MUTED, label="alerts only", label_dy=0.4)
 
 ax.text(0, 61.4, "Offline, not in the live path", fontsize=10, fontweight="bold",
         color=INK, family=FAMILY, va="center")
@@ -136,7 +142,7 @@ trn = box(0, 42, 32, 18, "Training (ml/)", "replays the same feature code,\nfits
 arrow(right(trn), (56, 62), dashed=True, color=MUTED, label="model.onnx", label_dy=0.8)
 
 ax.text(0, 1.2, "Times are averages over 1,000 transfers at 10 a second and add up to 97 ms; 99% of decisions "
-                "are inside 0.22 s against a 0.3 s target. An alert holds the transfer until a person blocks or releases it.",
+                "are inside 0.22 s against a 0.3 s target; a transfer just under the cut-off waits about a second for the second look.",
         fontsize=9, color=MUTED, family=FAMILY, va="bottom")
 
 for ext in ("png", "svg"):

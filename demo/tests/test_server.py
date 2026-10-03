@@ -65,7 +65,7 @@ def test_replay_gives_the_sender_a_new_card_and_keeps_everything_else(tmp_path):
     new = msgs[0]["sender_card"]
     assert new != VICTIM and new[:6] == VICTIM[:6] and len(new) == len(VICTIM)
     assert {m["sender_card"] for m in msgs} == {new}
-    assert msgs[-1]["receiver_card"] == SCAMMER                  # Neo4j knows this card
+    assert msgs[-1]["receiver_card"] == SCAMMER   # the confirmed accounts are kept by card
     assert len({m["transaction_id"] for m in msgs}) == len(msgs)
     assert not {m["transaction_id"] for m in msgs} & {row["transaction_id"] for row, _ in items}
     assert msgs[-1]["event_time"] == S._utc_iso(now)

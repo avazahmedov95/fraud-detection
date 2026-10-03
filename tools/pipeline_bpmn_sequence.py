@@ -10,7 +10,7 @@ OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
 # Every task names what runs it, in brackets; the databases have a lane of their
 # own, read and written along dotted arrows. No counts: they change.
 
-POOL = dict(x=160, y=60, w=3460)
+POOL = dict(x=160, y=60, w=3300)
 LANES = [("Lane_channel", "Payment channel", 160),
          ("Lane_flink", "Apache Flink job", 360),
          ("Lane_second", "Second look", 180),
@@ -80,13 +80,8 @@ NODES = [
      3, (2932, 932, 36, 36), (2974, 941, 110, 28)),
     ("Store", "serviceTask", "Store the decision and its audit record\n[Python → ClickHouse]",
      3, (3015, 790, 180, 100), None),
-    ("IsReview", "exclusiveGateway", "Is the transfer held?",
-     3, (3235, 815, 50, 50), (3195, 778, 130, 28)),
-    ("Allowed", "endEvent", "Transfer allowed and recorded",
-     3, (3335, 822, 36, 36), (3379, 826, 130, 28)),
-    ("Graph", "serviceTask", "Add the alert to the graph\n[Python → Neo4j]",
-     3, (3315, 900, 180, 100), None),
-    ("AlertDone", "endEvent", "Alert recorded", 3, (3535, 932, 36, 36), (3508, 972, 90, 20)),
+    ("Recorded", "endEvent", "Decision recorded",
+     3, (3235, 822, 36, 36), (3279, 830, 110, 20)),
     ("Case", "serviceTask", "Open a case with its reasons\n[Python service]",
      5, (2220, 1185, 180, 100), None),
     ("Opened", "intermediateThrowEvent", "Case opened",
@@ -143,11 +138,7 @@ FLOWS = [
     ("F_allow_out", "AllowOut", "Merge", "", [(2410, 285), (2950, 285), (2950, 815)], None),
     ("F_letgo_in", "LetGoIn", "Merge", "", [(2950, 932), (2950, 865)], None),
     ("F_merge", "Merge", "Store", "", [(2975, 840), (3015, 840)], None),
-    ("F_store", "Store", "IsReview", "", [(3195, 840), (3235, 840)], None),
-    ("F_allowed", "IsReview", "Allowed", "No", [(3285, 840), (3335, 840)], (3291, 821, 18, 14)),
-    ("F_to_graph", "IsReview", "Graph", "Yes", [(3260, 865), (3260, 950), (3315, 950)],
-     (3267, 892, 20, 14)),
-    ("F_graph", "Graph", "AlertDone", "", [(3495, 950), (3535, 950)], None),
+    ("F_store", "Store", "Recorded", "", [(3195, 840), (3235, 840)], None),
     ("F_case", "Case", "Opened", "", [(2400, 1235), (2440, 1235)], None),
     ("F_opened", "Opened", "Review", "", [(2476, 1235), (2560, 1235), (2560, 1335)], None),
     ("F_review", "Review", "Verdict", "", [(2650, 1385), (2690, 1385)], None),
@@ -159,8 +150,7 @@ FLOWS = [
 ]
 #: The "No" of each question is its default flow.
 DEFAULTS = {"Decide": "F_not_held", "Band": "F_allow", "Answering": "F_answer_no",
-            "Late": "F_late_no", "TabCut": "F_letgo", "IsReview": "F_allowed",
-            "Fraud": "F_release"}
+            "Late": "F_late_no", "TabCut": "F_letgo", "Fraud": "F_release"}
 #: Link events: the second look's lane hands its outcomes to the sink writer's
 #: without long flows across the diagram - the events of one name meet.
 LINKS = {"HeldOut": "Held by the second look", "HeldLateOut": "Held by the second look",
@@ -174,7 +164,6 @@ STORES = [
     ("Cases", "ClickHouse: cases and verdicts", (2350, 1055, 50, 50), (2406, 1066, 120, 28)),
     ("Warehouse", "ClickHouse: decisions, audit log", (3080, 1055, 50, 50),
      (3045, 1110, 120, 28)),
-    ("GraphDb", "Neo4j: alert graph", (3380, 1055, 50, 50), (3350, 1110, 110, 20)),
 ]
 
 DATA = [
@@ -182,7 +171,6 @@ DATA = [
     ("D_redis_read", "Receiver", "Redis", "in", [(1050, 1055), (1050, 450)]),
     ("D_redis_write", "Receiver", "Redis", "out", [(1070, 450), (1070, 1055)]),
     ("D_store", "Store", "Warehouse", "out", [(3105, 890), (3105, 1055)]),
-    ("D_graph", "Graph", "GraphDb", "out", [(3405, 1000), (3405, 1055)]),
     ("D_case", "Case", "Cases", "out", [(2375, 1185), (2375, 1105)]),
     ("D_verdict", "Verdict", "Cases", "out", [(2780, 1335), (2390, 1105)]),
     ("D_confirmed", "Verdict", "Redis", "out",
@@ -326,8 +314,9 @@ MERMAID = """sequenceDiagram
     participant Kafka as Kafka
     participant Flink as Flink engine
     participant Redis as Redis
+    participant Second as Second look
     participant Sink as Sink writer
-    participant DB as ClickHouse / Neo4j
+    participant DB as ClickHouse
     participant Case as Case manager
     actor Analyst
 
@@ -340,10 +329,12 @@ MERMAID = """sequenceDiagram
     Redis-->>Flink: counts for the hour, day and week, and the confirmed ones (2.07 ms)
     Flink->>Flink: build 24 features, run the 10 hard rules (0.90 ms)
     Flink->>Flink: score with the model (0.46 ms)
-    Flink->>Flink: decide: allow or hold (0.03 ms)
+    Flink->>Flink: decide: allow, hold, or ask the second look (0.03 ms)
     Flink->>Kafka: transactions.scored, and fraud.alerts when it is an alert (97 ms in all)
+    Kafka->>Second: fraud.second_look, a transfer just under the cut-off
+    Second->>Kafka: TabPFN's decision, about a second later
     Kafka->>Sink: every decision
-    Sink->>DB: the decision, its audit record, and alerts into the graph
+    Sink->>DB: the decision and its audit record
     Kafka->>Case: fraud.alerts
     Case->>DB: open a case, with its reason in words
     Case->>Analyst: the held transfer appears in the queue
@@ -364,9 +355,9 @@ INK, MUTED, LINE = "#14202e", "#5b6b7f", "#c7d2e0"
 ACCENT, ALERT = "#1c63c4", "#b34310"
 FAMILY = ["Calibri", "DejaVu Sans"]
 
-ACTORS = ["Bank app", "Kafka", "Flink engine", "Redis", "Sink writer",
-          "ClickHouse\nNeo4j", "Case manager", "Analyst"]
-X = {name: 11 + i * 19.4 for i, name in enumerate(ACTORS)}
+ACTORS = ["Bank app", "Kafka", "Flink engine", "Redis", "Second look", "Sink writer",
+          "ClickHouse", "Case manager", "Analyst"]
+X = {name: 9 + i * 17.7 for i, name in enumerate(ACTORS)}
 
 MESSAGES = [
     ("Bank app", "Kafka", "the transfer, keyed by sender", "1.7 ms", False),
@@ -377,33 +368,35 @@ MESSAGES = [
     ("Redis", "Flink engine", "counts for the hour, day, week; confirmed ones", "2.07 ms", True),
     ("Flink engine", "Flink engine", "build 24 features, run the 10 hard rules", "0.90 ms", False),
     ("Flink engine", "Flink engine", "score with the model", "0.46 ms", False),
-    ("Flink engine", "Flink engine", "decide: allow, or hold for the analyst", "0.03 ms", False),
+    ("Flink engine", "Flink engine", "decide: allow, hold, or ask the second look", "0.03 ms", False),
     ("Flink engine", "Kafka", "scored, and an alert when it is one", "97 ms in all", False),
+    ("Kafka", "Second look", "a transfer just under the cut-off", "", False),
+    ("Second look", "Kafka", "TabPFN's decision", "about 1 s", True),
     ("Kafka", "Sink writer", "every decision", "", False),
-    ("Sink writer", "ClickHouse\nNeo4j", "the decision, its audit record, the graph", "", False),
+    ("Sink writer", "ClickHouse", "the decision and its audit record", "", False),
     ("Kafka", "Case manager", "fraud.alerts", "", False),
-    ("Case manager", "ClickHouse\nNeo4j", "a case, with its reason in words", "", False),
+    ("Case manager", "ClickHouse", "a case, with its reason in words", "", False),
     ("Case manager", "Analyst", "the held transfer appears in the queue", "", False),
-    ("Analyst", "ClickHouse\nNeo4j", "block it, or release it", "", True),
+    ("Analyst", "ClickHouse", "block it, or release it", "", True),
     ("Case manager", "Redis", "a block adds the payee to the confirmed fraud accounts", "", False),
 ]
 
-fig, ax = plt.subplots(figsize=(16, 10))
+fig, ax = plt.subplots(figsize=(16, 11))
 ax.set_xlim(0, 160)
-ax.set_ylim(0, 100)
+ax.set_ylim(0, 110)
 ax.axis("off")
 fig.patch.set_facecolor("white")
 
-ax.text(0, 96, "One transfer through the system, step by step",
+ax.text(0, 106, "One transfer through the system, step by step",
         fontsize=18, fontweight="bold", color=INK, family=FAMILY, va="bottom")
-ax.text(0, 92.8, "The same path as the diagram, read top to bottom. Times are averages over "
+ax.text(0, 102.8, "The same path as the diagram, read top to bottom. Times are averages over "
                  "1,000 transfers at 10 a second, measured on the running stack on 30 September 2026.",
         fontsize=10.5, color=MUTED, family=FAMILY, va="bottom")
 
-top_y, step = 86, 4.6
+top_y, step = 96, 4.6
 for name in ACTORS:
     x = X[name]
-    ax.add_patch(FancyBboxPatch((x - 9, top_y), 18, 5.4,
+    ax.add_patch(FancyBboxPatch((x - 8, top_y), 16, 5.4,
                                 boxstyle="round,pad=0,rounding_size=1.0",
                                 linewidth=1.2, edgecolor=LINE, facecolor="white", zorder=3))
     ax.text(x, top_y + 2.7, name, ha="center", va="center", fontsize=9.5,

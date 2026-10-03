@@ -599,8 +599,9 @@ the scores: with an unknown age encoded as -1 it raised ten times the false alar
 and after the fix of 2026-09-13 - the age withheld on a tenth of the training rows -
 it cost recall instead: on the realistic profile, alerts 145 to 111 and recall
 0.421 to 0.292 (`docs/irp-framing.md` 7.7c). The age is gone (above), so the job
-reads nothing from Neo4j: an outage now costs only the analysts' alert graph,
-which the sink-writer discards with a running count until the graph returns.
+read nothing from Neo4j, and on 2026-10-03 the graph itself was removed: no
+decision read it, and the confirmed cases a graph store was measured for live in
+Redis (The confirmed cases, built, below).
 
 **A disclaimer is not a refresh.** The table the one above replaced was measured
 before the receiver-side aggregation capability and never updated: it showed MULE
@@ -986,7 +987,7 @@ kinder draws; the twenty-seed means are the recipe's.
 
 ### What a graph store could add, measured 2026-10-02
 
-Neo4j holds the analysts' alert graph and no decision reads it. Would it help the
+Neo4j held the analysts' alert graph and no decision read it. Would it help the
 model? `experiments/graph_features.py` computes four columns a graph store could
 serve, from the transfers before each one only - asking needs no Neo4j - and fits
 the served recipe with and without them on the twenty seeds above. Three spread

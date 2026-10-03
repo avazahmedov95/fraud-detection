@@ -45,7 +45,7 @@ const COMPONENTS = [
   {id: "rules", group: "engine"}, {id: "model", group: "engine", ml: true}, {id: "decide", group: "engine"},
   {id: "out", group: "out"}, {id: "second", group: "out", ml: true},
   {id: "sink", group: "out"}, {id: "ch", group: "out", store: true},
-  {id: "neo", group: "out", store: true}, {id: "cases", group: "out"}, {id: "dash", group: "out"}
+  {id: "cases", group: "out"}, {id: "dash", group: "out"}
 ];
 // The path one transfer takes: the component it is at, and the stage of the
 // decision's stage_ms that times it.
@@ -105,15 +105,12 @@ ru: {
       "Не ответила за 5 секунд или недоступна — перевод не ждёт дальше: он задерживается для аналитика.",
       "На отложенных данных в этой полосе было 20 мошенничеств, которые основная модель пропускала. Вторая проверка нашла 14 из них, и доля пойманного мошенничества выросла с 70,5% до 78,4%."]],
     sink: ["Запись в базу", "Python", "sink-writer", [
-      "Читает решения из Kafka и пачками записывает их в ClickHouse, а тревоги — в граф Neo4j.",
+      "Читает решения из Kafka и пачками записывает их в ClickHouse.",
       "Если база недоступна, продолжает работать и считает, сколько записей потеряно."]],
     ch: ["ClickHouse", "ClickHouse", "хранилище", [
       "Каждое решение со временем всех этапов — по ним строится вкладка «Данные и результаты».",
       "Цепочка аудита: каждая запись связана с предыдущей хешем, поэтому незаметно изменить историю нельзя.",
       "Дела аналитика и его отметки."]],
-    neo: ["Граф связей", "Neo4j", "кто кому платил", [
-      "Тревоги в виде графа: счета — точки, переводы — стрелки.",
-      "Кольцо дроп-счетов видно как много стрелок, сходящихся к одному счёту."]],
     cases: ["Разбор тревог", "Python", "case-manager", [
       "На каждую тревогу открывает дело с причинами словами — из вклада признаков в оценку модели.",
       "Аналитик решает: заблокировать перевод (мошенничество) или отпустить (ложная тревога). Эти решения — единственные настоящие метки в системе, на них банк переобучал бы модель.",
@@ -141,7 +138,7 @@ ru: {
     model: ["Модель", "Модель взвесила все 24 признака и оценила риск: {score}."],
     decide: ["Решение", "{decision}. {why}"],
     stored: ["Записан в базу", "Решение ушло в Kafka{alert} и записано в ClickHouse вместе со временем каждого этапа."],
-    analyst: ["У аналитика", "Открыто дело с причинами словами, а тревога стала связью в графе Neo4j. Перевод задержан, пока аналитик его не заблокирует или не отпустит."],
+    analyst: ["У аналитика", "Открыто дело с причинами словами. Перевод задержан, пока аналитик его не заблокирует или не отпустит."],
     analyst_allow: ["Аналитик не нужен", "Тревоги нет, поэтому перевод прошёл, а аналитик его не увидит."]
   },
   fired: "Сработали: {list}.", none_fired: "Ни одно правило не сработало.",
@@ -254,15 +251,12 @@ en: {
       "If it has not answered within 5 seconds, or is down, the transfer waits no longer: it is held for the analyst.",
       "On held-out data this band held 20 frauds the main model missed. The second look found 14 of them, and the share of fraud caught rose from 70.5% to 78.4%."]],
     sink: ["Sink writer", "Python", "sink-writer", [
-      "Reads the decisions from Kafka and writes them to ClickHouse in batches, and the alerts to the Neo4j graph.",
+      "Reads the decisions from Kafka and writes them to ClickHouse in batches.",
       "When a database is down it keeps running and counts how many records were lost."]],
     ch: ["ClickHouse", "ClickHouse", "the warehouse", [
       "Every decision with the time of each stage — the Data & results tab is built from them.",
       "An audit chain: each record is linked to the one before by a hash, so the history cannot be changed unnoticed.",
       "The analyst's cases and verdicts."]],
-    neo: ["Alert graph", "Neo4j", "who paid whom", [
-      "Alerts as a graph: accounts are points, transfers are arrows.",
-      "A mule ring shows as many arrows converging on one account."]],
     cases: ["Case manager", "Python", "case-manager", [
       "Opens a case for every alert, with its reasons in words — from each feature's share of the model's score.",
       "The analyst blocks the transfer (fraud) or releases it (false alarm). Those verdicts are the only real labels the system gets; a bank would retrain the model on them.",
@@ -290,7 +284,7 @@ en: {
     model: ["The model", "The model weighs all 24 features and scores the risk: {score}."],
     decide: ["The decision", "{decision}. {why}"],
     stored: ["Written down", "The decision went to Kafka{alert} and was written to ClickHouse with the time of every stage."],
-    analyst: ["With the analyst", "A case opened with its reasons in words, and the alert became a link in the Neo4j graph. The transfer is held until the analyst blocks or releases it."],
+    analyst: ["With the analyst", "A case opened with its reasons in words. The transfer is held until the analyst blocks or releases it."],
     analyst_allow: ["No analyst needed", "There is no alert, so the transfer went through and no analyst sees it."]
   },
   fired: "Fired: {list}.", none_fired: "No rule fired.",

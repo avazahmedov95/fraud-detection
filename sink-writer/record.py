@@ -141,18 +141,3 @@ def is_alert(e: dict) -> bool:
     own record, which arrives on this topic as REVIEW or ALLOW."""
     return e.get("decision") == "REVIEW"
 
-
-def alert_params(e: dict) -> dict:
-    return {
-        "txid": e.get("transaction_id", "") or "",
-        # Cards, not PINFLs: receiver_pinfl no longer travels, and keying the two
-        # ends of an edge differently would make the graph inconsistent.
-        "sender": e.get("sender_card", "") or "",
-        "receiver": e.get("receiver_card", "") or "",
-        "amount": _i(e.get("amount_uzs")),
-        "event_time": e.get("event_time") or "",
-        "final_score": _f(e.get("final_score")),
-        "decision": e.get("decision", "") or "",
-        "ptype": e.get("predicted_type") or "UNKNOWN",
-        "rule_hits": list(e.get("rule_hits") or []),
-    }

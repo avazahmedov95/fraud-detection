@@ -96,34 +96,6 @@ services:
       - redis_data:/data
     networks: [fraudnet]
 
-  # --- Account + money-flow graph --------------------------------------------
-  neo4j:
-    image: ${NEO4J_IMAGE}
-    container_name: neo4j
-    ports:
-      - "${NEO4J_HTTP_PORT}:7474"         # browser UI
-      - "${NEO4J_BOLT_PORT}:7687"         # bolt driver
-    environment:
-      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
-      NEO4J_PLUGINS: '["apoc"]'
-      NEO4J_dbms_security_procedures_unrestricted: apoc.*
-    volumes:
-      - neo4j_data:/data
-      - ./data-generator/out:/var/lib/neo4j/import   # CSVs for LOAD CSV
-    # Same race as ClickHouse: sink-writer opens the graph sink once at boot and
-    # disabled it for the whole run when Bolt was not accepting connections yet
-    # ("Neo4j unavailable, graph sink disabled"). The password is read back out
-    # of NEO4J_AUTH ("neo4j/<password>") so it is not repeated here.
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - cypher-shell -u neo4j -p "$${NEO4J_AUTH#neo4j/}" "RETURN 1"
-      interval: 5s
-      timeout: 5s
-      retries: 30
-      start_period: 20s
-    networks: [fraudnet]
-
   # --- Analytical warehouse + WORM audit ------------------------------------
   clickhouse:
     image: ${CLICKHOUSE_IMAGE}
@@ -248,7 +220,7 @@ services:
       - clickhouse
     networks: [fraudnet]
 
-  # --- Sink writer: transactions.scored -> ClickHouse + Neo4j ---------------
+  # --- Sink writer: transactions.scored -> ClickHouse ------------------------
   sink-writer:
     build:
       context: .
@@ -262,14 +234,10 @@ services:
       CLICKHOUSE_USER: ${CLICKHOUSE_USER}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
       CLICKHOUSE_DB: ${CLICKHOUSE_DB}
-      NEO4J_URI: bolt://neo4j:7687
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
     depends_on:
       kafka:
         condition: service_healthy
       clickhouse:
-        condition: service_healthy
-      neo4j:
         condition: service_healthy
     networks: [fraudnet]
     restart: unless-stopped
@@ -367,7 +335,6 @@ networks:
 volumes:
   kafka_data:
   redis_data:
-  neo4j_data:
   clickhouse_data:
   grafana_data:
   # Retained Flink checkpoints. Shared by jobmanager and taskmanager, and

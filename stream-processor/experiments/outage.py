@@ -2,7 +2,7 @@
 
   --service scorer   kills the scorer mid-stream: transactions lost and duplicated
                      (docs/irp-framing.md 5, point 6).
-  --service redis | neo4j | clickhouse | kafka
+  --service redis | clickhouse | kafka
                      stops one dependency of the scorer or the sink
                      (docs/irp-framing.md 7.7).
   --service control  breaks nothing: the reference for the other arms.
@@ -48,13 +48,10 @@ EXPECTED = {
         "which answers a different question - what is in this slice - and "
         "answers it identically for every arm."),
     "redis": (
-        "the payee's inbound window and the population baseline live here. "
-        "Expect: no loss, and "
+        "the payee's inbound window, the population baseline and the confirmed "
+        "fraud accounts live here. Expect: no loss, and "
         "MULE_FAN_IN to stop firing entirely - the fan-in features read zero "
-        "when the store is unreachable."),
-    "neo4j": (
-        "the alert graph. Expect: no loss, and graph writes to be DISCARDED "
-        "with a running total in the log."),
+        "when the store is unreachable, and no account reads as confirmed."),
     "clickhouse": (
         "the warehouse and the audit trail. Expect: scoring unaffected and "
         "alerts still published, but rows discarded - and Kafka offsets advance "

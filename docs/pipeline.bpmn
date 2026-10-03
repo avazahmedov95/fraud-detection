@@ -42,10 +42,7 @@
         <bpmn:flowNodeRef>Merge</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>LetGoIn</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Store</bpmn:flowNodeRef>
-        <bpmn:flowNodeRef>IsReview</bpmn:flowNodeRef>
-        <bpmn:flowNodeRef>Allowed</bpmn:flowNodeRef>
-        <bpmn:flowNodeRef>Graph</bpmn:flowNodeRef>
-        <bpmn:flowNodeRef>AlertDone</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Recorded</bpmn:flowNodeRef>
       </bpmn:lane>
       <bpmn:lane id="Lane_data" name="Data stores">
       </bpmn:lane>
@@ -203,23 +200,8 @@
         <bpmn:targetRef>Warehouse</bpmn:targetRef>
       </bpmn:dataOutputAssociation>
     </bpmn:serviceTask>
-    <bpmn:exclusiveGateway id="IsReview" name="Is the transfer held?" default="F_allowed">
+    <bpmn:endEvent id="Recorded" name="Decision recorded">
       <bpmn:incoming>F_store</bpmn:incoming>
-      <bpmn:outgoing>F_allowed</bpmn:outgoing>
-      <bpmn:outgoing>F_to_graph</bpmn:outgoing>
-    </bpmn:exclusiveGateway>
-    <bpmn:endEvent id="Allowed" name="Transfer allowed and recorded">
-      <bpmn:incoming>F_allowed</bpmn:incoming>
-    </bpmn:endEvent>
-    <bpmn:serviceTask id="Graph" name="Add the alert to the graph&#10;[Python → Neo4j]">
-      <bpmn:incoming>F_to_graph</bpmn:incoming>
-      <bpmn:outgoing>F_graph</bpmn:outgoing>
-      <bpmn:dataOutputAssociation id="D_graph">
-        <bpmn:targetRef>GraphDb</bpmn:targetRef>
-      </bpmn:dataOutputAssociation>
-    </bpmn:serviceTask>
-    <bpmn:endEvent id="AlertDone" name="Alert recorded">
-      <bpmn:incoming>F_graph</bpmn:incoming>
     </bpmn:endEvent>
     <bpmn:serviceTask id="Case" name="Open a case with its reasons&#10;[Python service]">
       <bpmn:incoming>F_to_case</bpmn:incoming>
@@ -260,7 +242,6 @@
     <bpmn:dataStoreReference id="Redis" name="Redis: recent payers, confirmed fraud accounts" />
     <bpmn:dataStoreReference id="Cases" name="ClickHouse: cases and verdicts" />
     <bpmn:dataStoreReference id="Warehouse" name="ClickHouse: decisions, audit log" />
-    <bpmn:dataStoreReference id="GraphDb" name="Neo4j: alert graph" />
     <bpmn:sequenceFlow id="F_start" sourceRef="Start" targetRef="Create" />
     <bpmn:sequenceFlow id="F_create" sourceRef="Create" targetRef="Publish" />
     <bpmn:sequenceFlow id="F_publish" sourceRef="Publish" targetRef="Read" />
@@ -294,10 +275,7 @@
     <bpmn:sequenceFlow id="F_allow_out" sourceRef="AllowOut" targetRef="Merge" />
     <bpmn:sequenceFlow id="F_letgo_in" sourceRef="LetGoIn" targetRef="Merge" />
     <bpmn:sequenceFlow id="F_merge" sourceRef="Merge" targetRef="Store" />
-    <bpmn:sequenceFlow id="F_store" sourceRef="Store" targetRef="IsReview" />
-    <bpmn:sequenceFlow id="F_allowed" name="No" sourceRef="IsReview" targetRef="Allowed" />
-    <bpmn:sequenceFlow id="F_to_graph" name="Yes" sourceRef="IsReview" targetRef="Graph" />
-    <bpmn:sequenceFlow id="F_graph" sourceRef="Graph" targetRef="AlertDone" />
+    <bpmn:sequenceFlow id="F_store" sourceRef="Store" targetRef="Recorded" />
     <bpmn:sequenceFlow id="F_case" sourceRef="Case" targetRef="Opened" />
     <bpmn:sequenceFlow id="F_opened" sourceRef="Opened" targetRef="Review" />
     <bpmn:sequenceFlow id="F_review" sourceRef="Review" targetRef="Verdict" />
@@ -312,28 +290,28 @@
   <bpmndi:BPMNDiagram id="Diagram_1">
     <bpmndi:BPMNPlane id="Plane_1" bpmnElement="Collaboration_1">
       <bpmndi:BPMNShape id="Participant_1_di" bpmnElement="Participant_1" isHorizontal="true">
-        <dc:Bounds x="160" y="60" width="3460" height="1400" />
+        <dc:Bounds x="160" y="60" width="3300" height="1400" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Lane_channel_di" bpmnElement="Lane_channel" isHorizontal="true">
-        <dc:Bounds x="190" y="60" width="3430" height="160" />
+        <dc:Bounds x="190" y="60" width="3270" height="160" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Lane_flink_di" bpmnElement="Lane_flink" isHorizontal="true">
-        <dc:Bounds x="190" y="220" width="3430" height="360" />
+        <dc:Bounds x="190" y="220" width="3270" height="360" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Lane_second_di" bpmnElement="Lane_second" isHorizontal="true">
-        <dc:Bounds x="190" y="580" width="3430" height="180" />
+        <dc:Bounds x="190" y="580" width="3270" height="180" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Lane_sink_di" bpmnElement="Lane_sink" isHorizontal="true">
-        <dc:Bounds x="190" y="760" width="3430" height="260" />
+        <dc:Bounds x="190" y="760" width="3270" height="260" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Lane_data_di" bpmnElement="Lane_data" isHorizontal="true">
-        <dc:Bounds x="190" y="1020" width="3430" height="140" />
+        <dc:Bounds x="190" y="1020" width="3270" height="140" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Lane_case_di" bpmnElement="Lane_case" isHorizontal="true">
-        <dc:Bounds x="190" y="1160" width="3430" height="150" />
+        <dc:Bounds x="190" y="1160" width="3270" height="150" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Lane_analyst_di" bpmnElement="Lane_analyst" isHorizontal="true">
-        <dc:Bounds x="190" y="1310" width="3430" height="150" />
+        <dc:Bounds x="190" y="1310" width="3270" height="150" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Start_di" bpmnElement="Start">
         <dc:Bounds x="232" y="122" width="36" height="36" />
@@ -436,20 +414,9 @@
       <bpmndi:BPMNShape id="Store_di" bpmnElement="Store">
         <dc:Bounds x="3015" y="790" width="180" height="100" />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="IsReview_di" bpmnElement="IsReview" isMarkerVisible="true">
-        <dc:Bounds x="3235" y="815" width="50" height="50" />
-        <bpmndi:BPMNLabel><dc:Bounds x="3195" y="778" width="130" height="28" /></bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Allowed_di" bpmnElement="Allowed">
-        <dc:Bounds x="3335" y="822" width="36" height="36" />
-        <bpmndi:BPMNLabel><dc:Bounds x="3379" y="826" width="130" height="28" /></bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Graph_di" bpmnElement="Graph">
-        <dc:Bounds x="3315" y="900" width="180" height="100" />
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="AlertDone_di" bpmnElement="AlertDone">
-        <dc:Bounds x="3535" y="932" width="36" height="36" />
-        <bpmndi:BPMNLabel><dc:Bounds x="3508" y="972" width="90" height="20" /></bpmndi:BPMNLabel>
+      <bpmndi:BPMNShape id="Recorded_di" bpmnElement="Recorded">
+        <dc:Bounds x="3235" y="822" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="3279" y="830" width="110" height="20" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Case_di" bpmnElement="Case">
         <dc:Bounds x="2220" y="1185" width="180" height="100" />
@@ -487,10 +454,6 @@
       <bpmndi:BPMNShape id="Warehouse_di" bpmnElement="Warehouse">
         <dc:Bounds x="3080" y="1055" width="50" height="50" />
         <bpmndi:BPMNLabel><dc:Bounds x="3045" y="1110" width="120" height="28" /></bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="GraphDb_di" bpmnElement="GraphDb">
-        <dc:Bounds x="3380" y="1055" width="50" height="50" />
-        <bpmndi:BPMNLabel><dc:Bounds x="3350" y="1110" width="110" height="20" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Note_decision_di" bpmnElement="Note_decision">
         <dc:Bounds x="1785" y="224" width="230" height="70" />
@@ -649,21 +612,6 @@
         <di:waypoint x="3195" y="840" />
         <di:waypoint x="3235" y="840" />
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="F_allowed_di" bpmnElement="F_allowed">
-        <di:waypoint x="3285" y="840" />
-        <di:waypoint x="3335" y="840" />
-        <bpmndi:BPMNLabel><dc:Bounds x="3291" y="821" width="18" height="14" /></bpmndi:BPMNLabel>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="F_to_graph_di" bpmnElement="F_to_graph">
-        <di:waypoint x="3260" y="865" />
-        <di:waypoint x="3260" y="950" />
-        <di:waypoint x="3315" y="950" />
-        <bpmndi:BPMNLabel><dc:Bounds x="3267" y="892" width="20" height="14" /></bpmndi:BPMNLabel>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="F_graph_di" bpmnElement="F_graph">
-        <di:waypoint x="3495" y="950" />
-        <di:waypoint x="3535" y="950" />
-      </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="F_case_di" bpmnElement="F_case">
         <di:waypoint x="2400" y="1235" />
         <di:waypoint x="2440" y="1235" />
@@ -704,10 +652,6 @@
       <bpmndi:BPMNEdge id="D_store_di" bpmnElement="D_store">
         <di:waypoint x="3105" y="890" />
         <di:waypoint x="3105" y="1055" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="D_graph_di" bpmnElement="D_graph">
-        <di:waypoint x="3405" y="1000" />
-        <di:waypoint x="3405" y="1055" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="D_case_di" bpmnElement="D_case">
         <di:waypoint x="2375" y="1185" />

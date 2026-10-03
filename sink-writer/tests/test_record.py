@@ -4,7 +4,6 @@ import json
 
 import record as R
 from ch_writer import ClickHouseWriter
-from neo4j_writer import Neo4jWriter
 
 SCORED = {
     "transaction_id": "tx-1", "event_time": "2025-01-15T10:30:00",
@@ -46,45 +45,14 @@ def test_audit_payload_is_full_json():
 def test_is_alert():
     assert R.is_alert(SCORED) is True
     assert R.is_alert(ALLOW) is False
-    # Waiting for the second look is not yet a hold: no node in the alert graph.
+    # Waiting for the second look is not yet a hold.
     assert R.is_alert(dict(SCORED, decision="SECOND_LOOK")) is False
 
 
-def test_alert_params_links_by_card():
-    """Both ends of a graph edge are keyed by CARD: receiver_pinfl is no longer on
-    the wire — a sending bank cannot resolve the destination PAN to a person — so
-    the money-flow network is the card-to-card graph the switch sees; keying one
-    end by pinfl and the other by card would make it inconsistent, not partial."""
-    p = R.alert_params(SCORED)
-    assert p["sender"] == SCORED["sender_card"]
-    assert p["receiver"] == SCORED["receiver_card"]
-    assert p["decision"] == "REVIEW" and p["ptype"] == "APP"
-
-
-def test_alert_params_survive_a_record_without_a_payee_identity():
-    """alert_params must not reintroduce a dependency on the absent receiver_pinfl."""
-    without = {k: v for k, v in SCORED.items() if k != "receiver_pinfl"}
-    p = R.alert_params(without)
-    assert p["receiver"] == SCORED["receiver_card"]
-
-
-# --- batching, with injected fake clients (no real ClickHouse/Neo4j) ---
+# --- batching, with an injected fake client (no real ClickHouse) ---
 class _FakeCH:
     def __init__(self): self.inserts = []
     def insert(self, table, rows, column_names=None): self.inserts.append((table, len(rows)))
-    def close(self): pass
-
-
-class _FakeSession:
-    def __init__(self, sink): self._sink = sink
-    def __enter__(self): return self
-    def __exit__(self, *a): return False
-    def run(self, q, rows=None): self._sink.append(len(rows) if rows is not None else 0)
-
-
-class _FakeDriver:
-    def __init__(self): self.runs = []
-    def session(self): return _FakeSession(self.runs)
     def close(self): pass
 
 
@@ -98,17 +66,6 @@ def test_ch_writer_batches_scored_and_audit():
     tables = {t for t, _ in w._client.inserts}
     assert tables == {"fraud.transactions_scored", "fraud.audit_log"}
     assert all(n == 3 for _, n in w._client.inserts)
-    assert w.pending() == 0
-
-
-def test_neo4j_writer_only_buffers_alerts():
-    w = Neo4jWriter("bolt://x", "u", "p")
-    w._driver = _FakeDriver()
-    w.add(SCORED)   # alert
-    w.add(ALLOW)    # not an alert
-    assert w.pending() == 1
-    w.flush()
-    assert w._driver.runs == [1]
     assert w.pending() == 0
 
 

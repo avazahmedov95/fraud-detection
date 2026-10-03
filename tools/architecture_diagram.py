@@ -14,7 +14,7 @@ from matplotlib.patches import (Circle, Ellipse, FancyArrowPatch, FancyBboxPatch
 INK, MUTED, ACCENT, ALERT = "#14202e", "#5b6b7f", "#1c63c4", "#b34310"
 FAMILY = ["Calibri", "DejaVu Sans"]
 COLOUR = dict(source="#6b7a8f", kafka="#2b2b2b", redis="#d82c20", clickhouse="#e0a800",
-              neo4j="#0b7fc7", python="#3776ab", grafana="#f46800")
+              python="#3776ab", grafana="#f46800")
 
 fig, ax = plt.subplots(figsize=(19, 10))
 ax.set_xlim(0, 190)
@@ -93,16 +93,6 @@ def gear(x, y, r, colour):
                                rotation_point="center", color=colour, zorder=3))
     ax.add_patch(Circle((x, y), 0.85 * r, color=colour, zorder=3))
     ax.add_patch(Circle((x, y), 0.35 * r, color="white", zorder=4))
-
-
-def graph(x, y, s, colour):
-    nodes = [(x - 0.5 * s, y + 0.3 * s), (x + 0.45 * s, y + 0.45 * s), (x + 0.05 * s, y),
-             (x - 0.35 * s, y - 0.45 * s), (x + 0.5 * s, y - 0.35 * s)]
-    for a, b in ((0, 2), (1, 2), (2, 3), (2, 4), (0, 3)):
-        ax.plot([nodes[a][0], nodes[b][0]], [nodes[a][1], nodes[b][1]], color=colour,
-                lw=1.6, zorder=3)
-    for p in nodes:
-        ax.add_patch(Circle(p, 0.13 * s, color=colour, zorder=4))
 
 
 def screen(x, y, s, colour):
@@ -198,7 +188,7 @@ arrow((40.6, 56), (48.6, 56))
 
 database(72.2, 33, 5.5, 4, COLOUR["redis"])
 arrow((72.2, 52), (72.2, 36.2), both=True)
-text(66.5, 35.6, "Redis", "who recently paid\neach receiving account", ha="right")
+text(66.5, 35.6, "Redis", "recent payers;\nconfirmed fraud\naccounts", ha="right")
 
 # The second look: a score just under the cut-off waits while TabPFN decides it.
 gear(103.8, 35.5, 2.4, "#7b4bb7")
@@ -220,29 +210,28 @@ gear(138, 66, 2.6, COLOUR["python"])
 text(138, 62.4, "Sink writer", "Python")
 database(153.5, 70, 5.5, 4, COLOUR["clickhouse"])
 text(153.5, 66.2, "ClickHouse", "decisions,\naudit log")
-graph(153.5, 52.5, 5, COLOUR["neo4j"])
-text(153.5, 48.8, "Neo4j", "alert graph")
 gear(138, 40, 2.6, COLOUR["python"])
 text(138, 36.4, "Case manager", "Python")
 database(153.5, 40, 5.5, 4, COLOUR["clickhouse"])
 text(153.5, 36.2, "ClickHouse", "cases,\nverdicts")
 arrow((127.4, 66), (134.6, 66))
 arrow((141.4, 67), (150.4, 69.4))
-arrow((140.8, 64), (150.6, 54.2), dashed=True, label="alerts only", at=(145.7, 59.1))
 arrow((127.4, 47), (135, 41.6), ALERT)
 arrow((141.4, 40), (150.4, 40), ALERT)
 
 # ---------------------------------------------------------------- outcome
 screen(166, 70, 5, COLOUR["grafana"])
 text(170.5, 72.4, "Dashboards", "Grafana, over\nClickHouse", ha="left")
-graph(166, 53.5, 4.4, COLOUR["neo4j"])
-text(170.5, 56, "Who paid whom", "Neo4j Browser,\nfor an investigation", ha="left")
 person(166, 40, 5, ALERT)
 text(170.5, 42.4, "Analyst queue", "demo page or CLI;\nblocks or releases\nthe held transfer",
      ha="left", colour=ALERT)
 arrow((156.6, 70), (162.6, 70))
-arrow((156.6, 52.5), (162.8, 53.5))
 arrow((156.6, 40), (162.8, 40), ALERT, both=True)
+# A block: the payee's card joins the confirmed fraud accounts the job reads.
+elbow([(135.4, 39), (131.5, 39), (131.5, 26.5), (72.2, 26.5), (72.2, 30.4)], ALERT)
+ax.text(120.5, 25.1, "a block adds the payee to the confirmed fraud accounts", ha="center",
+        va="center", fontsize=8.5, color=MUTED, family=FAMILY, zorder=6,
+        bbox=dict(boxstyle="round,pad=0.2", facecolor="white", edgecolor="none"))
 
 # ---------------------------------------------------------------- offline
 ax.add_patch(FancyBboxPatch((0.3, 3), 189.4, 20, boxstyle="round,pad=0,rounding_size=1.5",

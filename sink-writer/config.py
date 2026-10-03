@@ -1,5 +1,5 @@
 """Configuration for the sink-writer service (consumes transactions.scored and
-persists to ClickHouse + Neo4j). Defaults assume the Docker network service names."""
+persists to ClickHouse). Defaults assume the Docker network service names."""
 
 import os
 
@@ -13,9 +13,6 @@ CH_USER = os.getenv("CLICKHOUSE_USER", "fraud")
 CH_PASSWORD = os.getenv("CLICKHOUSE_PASSWORD", "")
 CH_DB = os.getenv("CLICKHOUSE_DB", "fraud")
 
-NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
-NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
 
 BATCH_SIZE = int(os.getenv("SINK_BATCH_SIZE", "500"))
 # The warehouse path has no real-time requirement: the decision already EXISTS
