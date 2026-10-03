@@ -413,7 +413,7 @@ alone cannot tell them apart. The fit is not bit-stable
 (LightGBM's threaded histograms), so each row moves a few tenths of a point
 between runs: one decimal is all these figures carry.
 
-### Re-run 2026-09-21: the current extractor, 18 of its 21 columns
+### Re-run 2026-09-21: the deployed extractor, 18 of its columns
 
 Running the whole file through the deployed extractor took 2 h 05; the fits are
 ten seeds each, on the same 60/20/20 temporal split as above. Three features are
@@ -629,7 +629,7 @@ and a lowered cut-off would catch 147; on the cutoff band it alerted on 1,095 of
 cut-off finds: with these 18 features neither model tells the laundering there from
 the ordinary transfers around it.
 
-### What a graph store could add, 2026-10-02 (`--graph`)
+### What a graph store could add, 2026-10-02 (`--graph`, since deleted - `git show e4732bf:validation/ibm_aml_adapter.py`)
 
 ```bash
 python ibm_aml_adapter.py --file HI-Small_Trans.csv --cache ibm_features21.npz --graph --seeds 3

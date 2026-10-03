@@ -30,8 +30,6 @@ experiments/      harnesses - each produces a NUMBER, not an artefact the
                   cut-off; --test --served reads it on the held-out slice
   second_look_seeds.py  the model alone, with a lowered cut-off and with the
                   second look, on twenty generator seeds (resumes)
-  graph_features.py  four columns a graph store could serve, with and without,
-                  on twenty generator seeds (resumes)
                   One-off experiments are deleted once their decision is
                   written below: git log --diff-filter=D -- ml/experiments
 
@@ -988,8 +986,8 @@ kinder draws; the twenty-seed means are the recipe's.
 ### What a graph store could add, measured 2026-10-02
 
 Neo4j held the analysts' alert graph and no decision read it. Would it help the
-model? `experiments/graph_features.py` computes four columns a graph store could
-serve, from the transfers before each one only - asking needs no Neo4j - and fits
+model? `experiments/graph_features.py` (since deleted - `git show e4732bf:ml/experiments/graph_features.py`) computed four columns a graph store could
+serve, from the transfers before each one only - asking needs no Neo4j - and fitted
 the served recipe with and without them on the twenty seeds above. Three spread
 confirmed cases along the graph (the payee, the sender, and the payee's contacts
 over the week, each against the accounts that received a confirmed fraud); a fraud
@@ -1145,7 +1143,7 @@ baseline PR-AUC **0.960 ± 0.018**:
 **`channel` is gone.** It measured −0.002 [−0.006, +0.002], no rule read its four
 one-hot features, and no public dataset carries the field. It was removed on
 07.09.2026 from the model, the wire, the ingress hash, ClickHouse, Grafana and the
-case view; the contract was 20 columns, and is 21 since 2026-09-20. Dropping four columns of noise also
+case view; the contract was 20 columns, 21 from 2026-09-20 and 24 since 2026-10-02. Dropping four columns of noise also
 tightened every interval, which is how `receiver_age` moved from unresolved back
 to **real**.
 

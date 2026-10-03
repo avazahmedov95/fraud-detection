@@ -7,7 +7,6 @@ remaining window gap. The shared replay is in harness.py.
 
 import argparse
 import os
-import sys
 
 import pandas as pd
 
@@ -305,48 +304,6 @@ def our_model(cache, seeds=3):
                       f"{k:<9}{np.mean(d):+.3f} +/- {h:.3f} "
                       f"(95% CI, n={len(d)}){verdict}")
     return results
-
-
-#: Each account's latest contacts and payers the graph's columns read here: hub
-#: accounts deal with thousands a week, which this project's people never do.
-GRAPH_CAP = 20
-
-
-def graph(path, cache, seeds=3):
-    """The graph's four columns (ml/experiments/graph_features.py), computed from this
-    file's transfers before each one, and the recipe fitted unweighted with and
-    without them on the published split, paired by seed."""
-    import warnings
-    import numpy as np
-    warnings.filterwarnings("ignore", message="X does not have valid feature names")
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                                    "ml", "experiments"))
-    import graph_features as GF
-    z = _open_cache(cache)
-    X, y, ts = z["X"], z["y"].astype("int8"), z["ts"]
-    d, _, _ = load(path)
-    times = d.ts.values.astype("datetime64[s]").astype("int64")
-    if (len(d) != len(y) or int((ts.astype("int64") != times).sum())
-            or int((d.label.values.astype("int8") != y).sum())):
-        raise SystemExit(f"{cache} is not row-aligned with {path} - re-run --extract-only")
-    G = GF.graph_features(d.sender.values, d.receiver.values, times, y, cap=GRAPH_CAP)
-    n = len(y)
-    a, b = int(n * 0.6), int(n * 0.8)
-    print(f"{n:,} transactions, {int(y.sum()):,} laundering, {int(y[b:].sum()):,} in test; "
-          f"test transfers to a flagged payee: {int(((G[b:, 0] > 0) & (y[b:] == 1)).sum())} "
-          f"laundering, {int(((G[b:, 0] > 0) & (y[b:] == 0)).sum())} not\n")
-    runs = {}
-    for variant, cols in GF.VARIANTS.items():
-        Xv = np.hstack([X, G[:, cols]]) if cols else X
-        runs[variant] = [_fit_score(Xv[:a], y[:a], Xv[a:b], y[a:b], Xv[b:], y[b:], False, s)
-                         for s in range(seeds)]
-        print(f"  {variant:<7}F1 {np.mean([r['f1_tuned'] for r in runs[variant]]):6.2f} %"
-              f"   PR-AUC {np.mean([r['pr_auc'] for r in runs[variant]]):.3f}", flush=True)
-    print(f"\n  against the model alone, paired by seed ({seeds}):")
-    for variant in ("cases", "shape", "both"):
-        for k in ("f1_tuned", "pr_auc"):
-            diff = [r[k] - m[k] for r, m in zip(runs[variant], runs["model"])]
-            print(f"    {variant:<6}{k:<9}{np.mean(diff):+.3f} +/- {_ci95(diff):.3f} (95% CI)")
 
 
 def layers(path, cache, store, formats=None, limit=None, seed=0, tabpfn_model=None):
@@ -726,9 +683,6 @@ def main():
     ap.add_argument("--tabpfn-model", dest="tabpfn_model", default=None,
                     help="with --layers: a TabPFN checkpoint, to read the second look "
                          "too; run in .venv-models, where TabPFN is installed")
-    ap.add_argument("--graph", action="store_true",
-                    help="the graph's columns (ml/experiments/graph_features.py) with "
-                         "and without, on the cached matrix, paired over --seeds")
     args = ap.parse_args()
 
     if not os.path.exists(args.file):
@@ -748,10 +702,6 @@ def main():
         if not os.path.exists(args.cache):
             raise SystemExit(f"{args.cache} not found - run --extract-only first")
         return receiver_ablation(args.cache, args.seeds, args.boots)
-    if args.graph:
-        if not os.path.exists(args.cache):
-            raise SystemExit(f"{args.cache} not found - run --extract-only first")
-        return graph(args.file, args.cache, args.seeds)
     if args.budgets:
         if not os.path.exists(args.cache):
             raise SystemExit(f"{args.cache} not found - run --extract-only first")

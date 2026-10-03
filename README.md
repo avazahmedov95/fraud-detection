@@ -2,7 +2,8 @@
 
 Streaming architecture that scores instant P2P transfers **before settlement**,
 combining Kafka, Flink + CEP, a gradient-boosting model with SHAP explainability,
-and a money-flow graph — grounded in Uzbekistan's regulatory framework
+a memory of confirmed fraud accounts and a TabPFN second look — grounded in
+Uzbekistan's regulatory framework
 and the UzCard / HUMO networks.
 
 > Research prototype. Any detection metrics are **design targets**, not measured
@@ -83,7 +84,7 @@ python -m pytest data-generator   -q     #  26
 python -m pytest sink-writer      -q     #  24
 python -m pytest validation       -q     #  25
 python -m pytest case-manager     -q     #  47
-python -m pytest ml               -q     # 11
+python -m pytest ml               -q     # 10
 python -m pytest demo             -q     #  28
 python -m pytest second-look      -q     #   7
 ```
