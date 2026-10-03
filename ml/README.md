@@ -1100,6 +1100,9 @@ a lowered cut-off, by half as much, and what it buys over the model alone is
 recall paid for in precision. The model-alone row is the graph-store table's
 confirmed-cases row to the figure: the system as built reproduces the experiment.
 
+**Decision, 2026-10-03: the owner kept the second look** on these figures - more
+fraud caught, every hold still read by a person.
+
 What the live store does not do:
 
 1. **The contacts start empty.** `cp:card:` keys hold only the transfers the job
