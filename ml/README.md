@@ -1080,8 +1080,25 @@ the cutoff rows it finds 8 of the band's 13 frauds at 25 alerts and a cut-off
 lowered as far finds 4. Read once on the held-out slice as served (`--test
 --served`): the band holds 109 transfers and 20 of the frauds the model misses; the
 second look holds 32 of them, 14 fraud and 18 false, where a cut-off lowered to 32
-alerts catches 9 - **recall 70.5% -> 78.4% for alerts 172 -> 204**. The twenty-seed
-reading of the second look above is the 21-column model's.
+alerts catches 9 - **recall 70.5% -> 78.4% for alerts 172 -> 204**.
+
+**Twenty datasets again, 2026-10-03** (`experiments/second_look_seeds.py`, as above,
+on the 24 columns): 3,497 held-out frauds, 480 of them in the bands.
+
+| system | PR-AUC | recall | precision | F1 | alerts | caught |
+|---|---|---|---|---|---|---|
+| the model alone, 24 columns | 0.666 | 61.0% ± 3.5 | 73.0% ± 4.3 | 66.0% ± 2.9 | 2,938 | 2,139 |
+| a cut-off lowered to as many alerts | 0.666 | 67.8% ± 3.0 | 64.2% ± 4.2 | 65.4% ± 2.5 | 3,746 | 2,378 |
+| **the second look, 24 columns** | 0.666 | **68.8% ± 3.0** | 65.1% ± 4.3 | **66.4% ± 2.6** | 3,746 | **2,416** |
+
+Against the model alone: recall +7.8 points [+5.3, +10.2], higher on 20 of 20,
+precision -7.9 [-10.9, -4.8], and F1 +0.5 [-1.0, +1.9], higher on 12 - no longer
+clear of zero. Against a cut-off lowered to the same workload: **F1 +1.0 [+0.3,
++1.6], better on 13 of 20**, 38 more frauds where the 21 columns gave 67. The
+memory of confirmed cases took much of what the second look found: it still beats
+a lowered cut-off, by half as much, and what it buys over the model alone is
+recall paid for in precision. The model-alone row is the graph-store table's
+confirmed-cases row to the figure: the system as built reproduces the experiment.
 
 What the live store does not do:
 

@@ -3,15 +3,14 @@
   "own": {
     "key": "own",
     "second": {
-      "ru": "Вторая проверка TabPFN: полнота 70,5% → 78,4%, тревог 172 → 204. На 20 наборах данных в среднем, у модели до памяти о подтверждённых мошенниках: полнота 54,4% → 62,9%, точность 70,5% → 62,6%, F1 60,8% → 62,0%; лучше простого снижения порога на 18 наборах из 20",
-      "en": "TabPFN's second look: recall 70.5% → 78.4%, alerts 172 → 204. Over 20 datasets on average, with the model before the confirmed-fraud memory: recall 54.4% → 62.9%, precision 70.5% → 62.6%, F1 60.8% → 62.0%; better than simply lowering the cut-off on 18 datasets of 20"
+      "ru": "Вторая проверка TabPFN: полнота 70,5% → 78,4%, тревог 172 → 204. На 20 наборах данных в среднем: полнота 61,0% → 68,8%, точность 73,0% → 65,1%, F1 66,0% → 66,4%; лучше простого снижения порога на 13 наборах из 20",
+      "en": "TabPFN's second look: recall 70.5% → 78.4%, alerts 172 → 204. Over 20 datasets on average: recall 61.0% → 68.8%, precision 73.0% → 65.1%, F1 66.0% → 66.4%; better than simply lowering the cut-off on 13 datasets of 20"
     },
     "quotes": [
       {"file": "ml/README.md", "text": "**recall 70.5% -> 78.4% for alerts 172 -> 204**"},
-      {"file": "ml/README.md", "text": "reading of the second look above is the 21-column model's."},
-      {"file": "ml/README.md", "text": "| the model alone | 0.618 | 54.4% ± 3.7 | 70.5% ± 4.7 | 60.8% ± 3.0 | 2,713 | 1,903 |"},
-      {"file": "ml/README.md", "text": "| **the second look** | 0.618 | **62.9% ± 3.8** | 62.6% ± 4.7 | **62.0% ± 2.9** | 3,563 | **2,203** |"},
-      {"file": "ml/README.md", "text": "of 20**, with recall and precision both up about two points"}
+      {"file": "ml/README.md", "text": "| the model alone, 24 columns | 0.666 | 61.0% ± 3.5 | 73.0% ± 4.3 | 66.0% ± 2.9 | 2,938 | 2,139 |"},
+      {"file": "ml/README.md", "text": "| **the second look, 24 columns** | 0.666 | **68.8% ± 3.0** | 65.1% ± 4.3 | **66.4% ± 2.6** | 3,746 | **2,416** |"},
+      {"file": "ml/README.md", "text": "+1.6], better on 13 of 20**, 38 more frauds where the 21 columns gave 67."}
     ]
   },
   "datasets": [
