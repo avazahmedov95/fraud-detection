@@ -152,8 +152,9 @@ def section_second_look(Xfit, yfit, Xva, yva, Xte, yte, pva, pte, cut, tabpfn_mo
 def capability_profile(*off, payee_identity="pinfl"):
     """The profile a foreign dataset gets: what it cannot supply switched OFF - an
     absent field would reach the extractor as a zero - and the payee keyed by
-    account ("pinfl"), since these datasets name accounts and issue no PANs."""
-    for key in off:
+    account ("pinfl"), since these datasets name accounts and issue no PANs. No
+    analyst confirmed their frauds either, so confirmed_cases is off on every one."""
+    for key in off + ("confirmed_cases",):
         CAP.MODES[key] = "off"
     CAP.MODES["payee_identity"] = payee_identity
     print("capability profile for this run:")

@@ -116,9 +116,10 @@ the prevalences match, so the comparison is like for like:
 
 Those rows are the baseline profile. On the realistic profile - fraud at 0.18%,
 legitimate look-alikes, a tenth of fraud unreported -
-the committee scores 0.673 PR-AUC - on a held-out month regenerated on 2026-09-20
-with a different fraud mix, and with the L2 penalty adopted on 2026-09-21, so not
-comparable with the 0.480 or the 0.573 before it - and the
+the committee scores 0.714 PR-AUC - on a held-out month regenerated on 2026-09-20
+with a different fraud mix, with the L2 penalty adopted on 2026-09-21 and the
+confirmed cases on 2026-10-02, so not comparable with the 0.480, the 0.573 or the
+0.673 before it - and the
 gap is open again (at a far lower fraud rate, so not directly comparable either): much of the
 old distance was a generator whose classes separated by construction.
 
@@ -305,9 +306,10 @@ this data, or does something newer beat it?
   paired fits) - at 590 ms a row against about 0.2 ms for the served model
   (`ml/README.md`, Other model families). **Does not support** a model for the
   decision before settlement: it ranks a little better and answers three thousand
-  times slower. As a second look at the transfers just under the cut-off it found,
-  on the held-out slice, 11 of the 18 frauds there at 16 false alarms, where a
-  lowered cut-off finds 4 - one read, and not built.
+  times slower. As a second look at the transfers just under the cut-off, built
+  on 2026-10-01 (`second-look/README.md`), it holds on the held-out slice 14 of the
+  20 frauds there at 18 false alarms, where a cut-off lowered to as many alerts
+  finds 9 - one read, on the model served since 2026-10-02.
 - **"A Closer Look at Deep Learning Methods on Tabular Datasets"**
   ([arXiv:2407.00956](https://arxiv.org/abs/2407.00956), reached through a
   LinkedIn post) - a benchmark over 300+ tabular datasets in which boosted trees
@@ -322,7 +324,7 @@ this data, or does something newer beat it?
   thousands of genes per patient, grouped by known biological pathways - and
   tested on cancer and single-cell sets against XGBoost, with no imbalanced or
   fraud data; its code is a research repository, not a library. **Does not
-  support** a claim here: this data has 21 features and 320,000 rows, the opposite
+  support** a claim here: this data has 24 features and 320,000 rows, the opposite
   shape, and the case view's reasons are already exact tree contributions
   (`case-manager/explain.py`).
 - **"A Survey on Tabular Data: From Tree-based Methods to Tabular Deep Learning"**

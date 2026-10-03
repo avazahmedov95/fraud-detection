@@ -65,6 +65,9 @@ _PHRASES = {
     "sender_payees_24h":      ("distinct payees this sender paid in a day", lambda v: f"{int(v)}"),
     "sender_payees_7d":       ("distinct payees this sender paid in a week", lambda v: f"{int(v)}"),
     "secs_since_sender_inbound": ("time since this sender was last paid", lambda v: f"{v/60:.0f} min"),
+    "payee_flagged":          ("payee received money in a confirmed fraud", lambda v: "yes" if v else "no"),
+    "sender_flagged":         ("sender received money in a confirmed fraud", lambda v: "yes" if v else "no"),
+    "payee_flagged_contacts": ("cards from confirmed frauds among the payee's week of contacts", lambda v: f"{int(v)}"),
 }
 
 

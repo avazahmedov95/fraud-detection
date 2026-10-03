@@ -12,6 +12,9 @@ log = logging.getLogger("case_store")
 
 RECONNECT_INTERVAL_S = 10.0
 _TABLE = "cases"
+#: The accounts in confirmed frauds the job reads (stream-processor/config.py): a
+#: CONFIRMED_FRAUD verdict adds the payee's card.
+CONFIRMED_KEY = "confirmed:accounts"
 
 #: The table DDL, shipped beside this module and applied on every connect:
 #: initdb scripts run only on an empty data directory, so a new schema file would
@@ -48,6 +51,7 @@ class CaseStore:
                          password=password, database=database)
         self._db = database
         self._client = None
+        self._redis = None
         self._buf = []
         self._dropped = 0
         self._last_attempt = 0.0
@@ -117,21 +121,24 @@ class CaseStore:
                       len(rows), self._dropped, exc)
             self._client = None
 
-    def open_cases(self, limit=20):
-        """The work queue, most urgent first. FINAL is required: until parts merge, a
-        plain SELECT can return the open row beside its resolution."""
+    def open_cases(self, limit=20, since=None):
+        """The work queue, most urgent first; with `since` (epoch seconds), the cases
+        opened from then on. FINAL is required: until parts merge, a plain SELECT can
+        return the open row beside its resolution."""
         if not self._ensure():
             return []
+        after = "" if since is None else "AND opened_at >= fromUnixTimestamp64Milli(%(since)s) "
         q = (f"SELECT {', '.join(CASE.CASE_COLUMNS)} "
              f"FROM {self._db}.{_TABLE} FINAL "
-             f"WHERE disposition = 'NEW' "
+             f"WHERE disposition = 'NEW' {after}"
              # Exposure first: every case here is past the cutoff, and the amount at
              # stake spans four orders of magnitude; the score breaks ties.
              f"ORDER BY amount_uzs DESC, final_score DESC, "
              f"opened_at ASC "
              f"LIMIT {int(limit)}")
+        params = None if since is None else {"since": int(since * 1000)}
         return [dict(zip(CASE.CASE_COLUMNS, r))
-                for r in self._client.query(q).result_rows]
+                for r in self._client.query(q, parameters=params).result_rows]
 
     def get(self, case_id):
         if not self._ensure():
@@ -150,7 +157,23 @@ class CaseStore:
                                   time.time() if at_epoch is None else at_epoch)
         self._client.insert(_TABLE, [row], column_names=CASE.CASE_COLUMNS,
                             database=self._db)
+        if disposition == "CONFIRMED_FRAUD":
+            self._confirm(current["receiver_card"])
         return True
+
+    def _confirm(self, card):
+        """The confirmed payee joins the accounts the job reads. Redis down costs the
+        mark, said in the log, not the verdict, which is already stored."""
+        try:
+            if self._redis is None:
+                import redis
+                self._redis = redis.Redis(host=os.getenv("REDIS_HOST", "redis"),
+                                          port=int(os.getenv("REDIS_PORT", "6379")),
+                                          socket_timeout=2)
+            self._redis.sadd(CONFIRMED_KEY, card)
+        except Exception as exc:                       # noqa: BLE001
+            log.error("confirmed %s, but could not add it to %s: %s",
+                      card, CONFIRMED_KEY, exc)
 
     def stats(self):
         """Counts per disposition, and the precision they imply - the only place

@@ -110,7 +110,7 @@ def test_the_case_queue_reads_only_what_case_manager_stores():
         def _ensure(self):
             return True
 
-        def open_cases(self, limit):
+        def open_cases(self, limit, since=None):
             return [row]
 
         def stats(self):
@@ -130,7 +130,7 @@ def test_a_store_that_cannot_connect_is_an_error_not_an_empty_queue():
         def _ensure(self):
             return False
 
-        def open_cases(self, limit):
+        def open_cases(self, limit, since=None):
             return []
 
         def stats(self):
@@ -260,7 +260,7 @@ def test_the_queue_sends_a_page_and_says_how_many_are_open():
         def _ensure(self):
             return True
 
-        def open_cases(self, limit):
+        def open_cases(self, limit, since=None):
             return rows
 
         def stats(self):
@@ -334,7 +334,7 @@ def test_the_queue_filter_finds_what_held_each_transfer():
         def _ensure(self):
             return True
 
-        def open_cases(self, limit):
+        def open_cases(self, limit, since=None):
             return rows
 
         def stats(self):

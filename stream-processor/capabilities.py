@@ -122,6 +122,21 @@ REGISTRY = (
                   "Rules on these counts were built and measured three times "
                   "(ml/README.md) and none passed its gate.",
     ),
+    Capability(
+        key="confirmed_cases",
+        requires="the shared store keeping the accounts in confirmed frauds - the "
+                 "analysts' verdicts, seeded with the labelled history - and, per "
+                 "card, the cards it dealt with over a week",
+        modes=("on", "off"),            # on: its gate passed (ml/README.md)
+        features=("payee_flagged", "sender_flagged", "payee_flagged_contacts"),
+        rules=(),
+        rationale="An account that took a confirmed fraud tends to take the next "
+                  "one, and so do the accounts it deals with; a bank learns which "
+                  "from its own analysts' verdicts. Measured before it was built "
+                  "(ml/README.md, What a graph store could add): F1 +4.8 points on "
+                  "20 of 20 seeds with the frauds known only as a bank learns them. "
+                  "Last in the registry, so the vector grows at its end.",
+    ),
 )
 
 BY_KEY = {c.key: c for c in REGISTRY}

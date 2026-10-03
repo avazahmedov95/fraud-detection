@@ -1,13 +1,13 @@
 {
-  "from": 0.041885668090367284,
-  "review": 0.10479194725766766,
-  "cut": 0.8834150301456452,
+  "from": 0.05082298780583748,
+  "review": 0.16897180533196124,
+  "cut": 0.8989021347999573,
   "pieces": 2,
   "checkpoint": "tabpfn-v3.5-20260909_multiclass.safetensors",
   "checkpoint_sha256": "4f1e155b09ae1c9860c75cd0a16f811b7431ddac4cb8022ee5e4498070f44149",
   "chosen_on": {
     "rows": 80000,
     "band": 100,
-    "band_fraud": 11
+    "band_fraud": 13
   }
 }

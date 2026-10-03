@@ -12,7 +12,7 @@ GEN_DIR = data-generator
 -include .env
 export
 
-.PHONY: help up down clean ps logs topics generate produce produce-stream no-active-job fresh-taskmanager produce-stream-docker load-graph serve-prep submit-job resume-job sink-logs latency query-scored
+.PHONY: help up down clean ps logs topics generate produce produce-stream no-active-job fresh-taskmanager produce-stream-docker load-graph seed-confirmed serve-prep submit-job resume-job sink-logs latency query-scored
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -55,6 +55,9 @@ produce-stream-docker: ## paced replay from INSIDE the network - required for la
 
 load-graph: ## load the account population into Neo4j
 	$(COMPOSE) exec -T neo4j cypher-shell -u neo4j -p $${NEO4J_PASSWORD} < infra/neo4j/import.cypher
+
+seed-confirmed: ## load the history's confirmed fraud accounts into Redis
+	cd ml && python seed_confirmed.py --port $${REDIS_HOST_PORT}
 
 serve-prep: ## copy the trained ONNX model, its cutoff and the second look's band next to the Flink job
 	cp ml/models/model.onnx ml/models/thresholds.json stream-processor/

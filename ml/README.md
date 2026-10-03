@@ -14,6 +14,7 @@ export_onnx.py    LightGBM -> ONNX + parity check vs the native model
 manifest.py       provenance: what the untracked artefacts were built from
 explain.py        global importance (beeswarm + bar) and per-alert reason codes
 second_look.py    the second look's band and TabPFN context, beside the model
+seed_confirmed.py the history's confirmed fraud accounts, into the job's Redis
 
 experiments/      harnesses - each produces a NUMBER, not an artefact the
                   system uses, and none is imported by the pipeline above
@@ -62,6 +63,7 @@ pip install -r requirements.txt
 python train.py          # -> model.joblib, thresholds.json, feature_names.json, metrics.json
 python export_onnx.py    # -> model.txt, model.onnx (+ parity check), manifest.json
 python explain.py        # -> shap_summary.png, shap_importance.png (reads model.txt)
+python seed_confirmed.py # -> the history's confirmed accounts, into the running stack's Redis
 ```
 
 `train.py` weights fraud by negatives over positives only above 0.5% fraud; below
@@ -77,21 +79,25 @@ fails if this table disagrees with it.
 
 | metric                | ML model | CEP rules only |
 |-----------------------|----------|----------------|
-| ROC-AUC               | 0.997    | —              |
-| PR-AUC                | 0.673    | —              |
-| precision at REVIEW   | 0.634    | 0.011          |
-| recall at REVIEW      | 0.670    | 0.142          |
+| ROC-AUC               | 0.998    | —              |
+| PR-AUC                | 0.714    | —              |
+| precision at REVIEW   | 0.721    | 0.011          |
+| recall at REVIEW      | 0.705    | 0.142          |
 
-Recall by fraud type (ML at REVIEW): STRUCTURING 82.8%, APP 52.4%, ATO 89.8%, MULE 48.6%.
-The five fits alone scored 0.665-0.678 PR-AUC on the same slice and their committee
-0.673, inside that range: with the L2 penalty (Feature importance, below) single
+Recall by fraud type (ML at REVIEW): STRUCTURING 82.8%, APP 55.6%, ATO 87.8%, MULE 62.9%.
+The five fits alone scored 0.710-0.714 PR-AUC on the same slice and their committee
+0.714, at the top of that range: with the L2 penalty (Feature importance, below) single
 fits barely scatter, where without it they ranged 0.392-0.539 and averaging them
 was what made the committee worth serving.
 
-Read plainly: the committee finds two thirds of the fraud in the held-out month,
-and nearly two alerts in three are fraud, on a dataset regenerated on 2026-09-20
+Read plainly: the committee finds seven in ten of the fraud in the held-out month,
+and nearly three alerts in four are fraud, on a dataset regenerated on 2026-09-20
 (below). The rules alone reach 1.1% precision on data where legitimate traffic
 also collects, splits and changes phones. The weak patterns are APP and MULE.
+Since 2026-10-02 the model reads the confirmed cases (The confirmed cases, built,
+below), and on this slice every fraud counts as confirmed a day after it - about
+half a point of F1 more than a bank would learn. Sections dated earlier describe
+the 21-column model of their day.
 
 ### Since 2026-09-14: the realistic profile, a committee, cutoffs from data
 
@@ -113,7 +119,7 @@ reported. Three changes, each measured before it was adopted:
   probabilities sit near the base rate, so a fixed 0.40 means nothing.
   `train.py` fits on the earliest 64% of rows, puts REVIEW where F1 peaks on the
   next 16%, and writes it to `thresholds.json`, which serve-prep ships beside
-  `model.onnx` and the job reads (`stream-processor/config.py`). This run: cut at REVIEW = 0.1048, and
+  `model.onnx` and the job reads (`stream-processor/config.py`). This run: cut at REVIEW = 0.1690, and
   **there is no BLOCK**: since 2026-09-19 the system never blocks on its own - the
   owner's decision - and every alert goes to a person, who since 2026-10-01 blocks
   or releases the transfer the alert holds. The CEP-only fallback keeps
@@ -623,7 +629,7 @@ public data. See `docs/related-work.md` §6.
 
 ## Feature importance (SHAP)
 
-**Recomputed 2026-09-21 on the served committee**, over the 100,000 held-out
+**Recomputed 2026-10-02 on the served committee**, over the 100,000 held-out
 transfers, with LightGBM's own TreeSHAP (`pred_contrib`) - the algorithm the `shap`
 package implements and the call the case view makes per alert
 (`case-manager/explain.py`); the package itself cannot load on the owner's machine,
@@ -632,18 +638,22 @@ to the log-odds:
 
 | | feature | | | feature | |
 |---|---|---|---|---|---|
-| 1 | `rcv_inflow_1h` | 0.600 | 9 | `daily_sum_ratio` | 0.096 |
-| 2 | `log_amount` | 0.497 | 10 | `amount_z` | 0.095 |
-| 3 | `is_new_payee` | 0.359 | 11 | `secs_login_z` | 0.093 |
-| 4 | `amount_to_mean` | 0.232 | 12 | `sender_payees_7d` | 0.067 |
-| 5 | `payee_payers_7d` | 0.227 | 13 | `payee_payers_24h` | 0.061 |
-| 6 | `hour` | 0.215 | 14 | `active_call` | 0.015 |
-| 7 | `secs_since_last` | 0.212 | 15 | `rcv_distinct_senders_1h` | 0.014 |
-| 8 | `secs_since_sender_inbound` | 0.111 | | | |
+| 1 | `rcv_inflow_1h` | 0.557 | 9 | `amount_z` | 0.104 |
+| 2 | `log_amount` | 0.488 | 10 | `secs_login_z` | 0.098 |
+| 3 | `is_new_payee` | 0.413 | 11 | `daily_sum_ratio` | 0.082 |
+| 4 | `secs_since_last` | 0.239 | 12 | `payee_payers_24h` | 0.057 |
+| 5 | `amount_to_mean` | 0.234 | 13 | `sender_payees_7d` | 0.046 |
+| 6 | `hour` | 0.233 | 14 | `rcv_distinct_senders_1h` | 0.024 |
+| 7 | `payee_payers_7d` | 0.219 | 15 | `active_call` | 0.012 |
+| 8 | `secs_since_sender_inbound` | 0.109 | | | |
 
-The caught fraud `explain.py` prints reads the way a case view should: +5.05 from
-the money that reached the payee within the hour, +1.93 from the amount, +1.10 from
-the payee's other payers this week, +0.82 from the payee being new to the sender.
+The caught fraud `explain.py` prints reads the way a case view should: +5.08 from
+the money that reached the payee within the hour, +3.45 from a payee that took a
+confirmed fraud before, +1.99 from the amount, +1.68 from the hour. The three
+confirmed-case columns are not among the fifteen: one or more is set on 697 of the
+100,000 transfers, and a mean over every transfer ranks a rare reason low. Where
+one is set it is among the largest - the second reason above. Those 697 hold 40 of
+the 176 frauds; `payee_flagged` alone marks 120 transfers, 38 of them fraud.
 
 **Money converging on the payee is the model's first reason** - the fan-in shape
 the receiver-side store exists for (Fan-in, below) - and two counterparty counters
@@ -1027,6 +1037,62 @@ What it does and does not say:
    features the published IBM graph methods build - is untried; this column is not
    evidence against them.
 
+### The confirmed cases, built 2026-10-02
+
+The owner's decision on the result above: build them. `confirmed_cases`
+(`stream-processor/capabilities.py`) appends the three columns, so the vector grows
+to 24 at its end:
+
+- **`payee_flagged`, `sender_flagged`**: the payee's card, or the sender's, is in
+  the Redis set `confirmed:accounts` (`stream-processor/config.py`).
+- **`payee_flagged_contacts`**: how many of the cards the payee dealt with over the
+  week, either way, are in it. The job files each end of a transfer under the
+  other's card (`cp:card:<card>`, beside the counters' keys) and asks Redis about
+  all of them in one round trip (`receiver_store.confirmed_among`).
+
+The set is what the bank knows. `seed_confirmed.py` (`run.ps1 seed-confirmed`)
+loads the labelled history - the payees of the frauds confirmed by the first
+held-out transfer, 506 cards on the dataset of record - and every `CONFIRMED_FRAUD`
+verdict, from the queue or the demo, adds its payee's card at once
+(`case-manager/store.py`). Training replays the same: `dataset.py` adds each
+fraud's payee a day after it, which on the held-out slice means every fraud known
+a day later - the generous reading, half a point of F1 above the bank's (item 2
+above). The parity the gate names first holds: the store path and the in-process
+replay give the same columns (`stream-processor/tests/test_receiver_store.py`),
+and on the dataset of record the three equal the experiment's on all 500,000
+transfers.
+
+The served model, retrained on the 24, on the held-out month (176 fraud):
+
+| | PR-AUC | alerts | caught | real | F1 | APP | ATO | MULE | STRUCT. |
+|---|---|---|---|---|---|---|---|---|---|
+| 21 columns, served until 2026-10-02 | 0.673 | 186 | 67.0% | 63.4% | 65.2% | 33 | 44 | 17 | 24 |
+| **24, with the confirmed cases** | **0.714** | **172** | **70.5%** | **72.1%** | **71.3%** | 35 | 43 | **22** | 24 |
+
+Six more frauds caught for 20 fewer false alarms, and most of the gain is the
+mules (of 63, 49, 35 and 29): the scheme that reuses an account is the one a memory
+of accounts catches.
+
+**The second look, rebuilt on it** by `second_look.py` under the same rules: the
+band from 0.0508 to the new cut-off 0.1690 and TabPFN holding at 0.8989, where on
+the cutoff rows it finds 8 of the band's 13 frauds at 25 alerts and a cut-off
+lowered as far finds 4. Read once on the held-out slice as served (`--test
+--served`): the band holds 109 transfers and 20 of the frauds the model misses; the
+second look holds 32 of them, 14 fraud and 18 false, where a cut-off lowered to 32
+alerts catches 9 - **recall 70.5% -> 78.4% for alerts 172 -> 204**. The twenty-seed
+reading of the second look above is the 21-column model's.
+
+What the live store does not do:
+
+1. **The contacts start empty.** `cp:card:` keys hold only the transfers the job
+   has scored since the capability went live, so `payee_flagged_contacts`
+   undercounts for the first week.
+2. **A verdict reversed later leaves the card in the set.** Nothing takes one out;
+   clearing the set and seeding it again would also drop the analysts' verdicts.
+3. **It survives what Redis survives**: the append-only file keeps it across
+   restarts, and since every transfer reads it, the least-recently-used eviction
+   in `infra/redis/redis.conf` would take it last.
+
 ## Capability ablation
 
 What each integration is worth, measured rather than assumed; the switches are in
@@ -1193,15 +1259,15 @@ confidence interval for the mean.
 
 `metrics.json` carries a `calibration` block beside the AUCs, computed by
 `train.py` on every run. It answers a different question: not *does the model rank
-fraud above legitimate traffic* (ROC-AUC 0.997 / PR-AUC 0.673 on the realistic
+fraud above legitimate traffic* (ROC-AUC 0.998 / PR-AUC 0.714 on the realistic
 profile) but *are its probabilities usable as magnitudes*.
 
 ```
-brier               0.00093
-n_alerts            186          (>= REVIEW on the held-out slice)
+brier               0.00079
+n_alerts            172          (>= REVIEW on the held-out slice)
 saturated_share     0.0%         rounding to 1.000
-distinct_scores     161
-median_alert_score  0.481618
+distinct_scores     148
+median_alert_score  0.746099
 ```
 
 Read `saturated_share` and `distinct_scores` together. On the baseline profile
@@ -1209,8 +1275,9 @@ they read 66.9% and 33: the model separated the classes almost perfectly and
 still could not **order** an alert queue, because the alerts piled up at the top
 of the scale. On the realistic profile the unpenalised committee's 131 alerts
 carried 64 distinct scores and 47.3% rounded to 1.000; with the L2 penalty 186
-alerts carry 161 distinct scores, none rounds to 1.000, and the median alert scores
-0.48 - probabilities that can order a queue. AUC is blind to this by construction - it is a
+alerts carried 161 distinct scores and none rounded to 1.000. Served since
+2026-10-02, with the confirmed cases, 172 alerts carry 148 distinct scores, none at
+1.000, the median 0.75 - probabilities that can still order a queue. AUC is blind to this by construction - it is a
 rank statistic - and the finding surfaced only when a real work queue tried to
 sort by score (`docs/irp-framing.md` §9.1). It was a property of near-separable
 synthetic data met by a recipe with no penalty on leaf values (Feature

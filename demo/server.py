@@ -702,19 +702,19 @@ class App:
         """case-manager's queue, in its own order: the first `limit` cases that pass
         the filter and how many do. `new_only` keeps the cases opened since this
         server started: the warehouse also holds every alert of every earlier
-        measurement run, and the case a scenario just opened drowns in them."""
+        measurement run, and the case a scenario just opened drowns in them - the
+        store is asked for them, since its first 500 by amount can all be older."""
         try:
             s = self.store()
             # A store that cannot connect answers with an empty queue, which the page
             # would show as "no new alerts".
             if not s._ensure():
                 raise RuntimeError("the case store cannot reach ClickHouse; see docker logs demo")
-            items, stats, holds = s.open_cases(limit=500), s.stats(), s.holds()
+            items = s.open_cases(limit=500, since=self.started if new_only else None)
+            stats, holds = s.stats(), s.holds()
         except Exception as exc:                       # noqa: BLE001 - shown on the page
             return {"error": str(exc)[:300], "cases": [], "total": 0, "stats": {}, "holds": {}}
         now = time.time()
-        if new_only:
-            items = [c for c in items if _as_epoch(c["opened_at"]) >= self.started]
         if flt:
             items = [c for c in items if passes(
                 flt, c["sender_card"], c["receiver_card"], c["amount_uzs"],

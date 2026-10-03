@@ -142,9 +142,7 @@ def test_the_shared_profile_sets_the_payee_key(capsys):
 
 def _foreign_profile():
     saved = dict(CAP.MODES)
-    for key in ("myid_kinship", "geo_telemetry", "session_telemetry"):
-        CAP.MODES[key] = "off"
-    CAP.MODES["payee_identity"] = "pinfl"
+    RP.capability_profile("myid_kinship", "geo_telemetry", "session_telemetry")
     return saved
 
 
@@ -154,7 +152,7 @@ def test_available_features_drops_exactly_what_the_profile_switched_off():
     saved = _foreign_profile()
     try:
         idx, names = RP.available_features()
-        for gone in ("geo_is_anomaly", "active_call", "secs_login_z"):
+        for gone in ("geo_is_anomaly", "active_call", "secs_login_z", "payee_flagged"):
             assert gone not in names
         assert "rcv_distinct_senders_1h" in names and "vel_10m" in names
         assert len(idx) == len(names) == 18

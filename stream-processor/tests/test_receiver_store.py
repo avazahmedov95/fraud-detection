@@ -15,9 +15,13 @@ class FakeRedis:
     def __init__(self):
         self.sets = {}
         self.expiries = {}
+        self.members = {}                            # plain sets: the confirmed accounts
 
     def ping(self):
         return True
+
+    def smismember(self, key, members):
+        return [int(m in self.members.get(key, set())) for m in members]
 
     def pipeline(self):
         return FakePipeline(self)
@@ -75,7 +79,7 @@ def _ev(txid, sender="S1", amount=100_000.0, receiver="R1"):
     # (features.payee_key), so naming one would silently exercise a single mode.
     return {"transaction_id": txid, "sender_pinfl": sender,
             "receiver_pinfl": receiver, "receiver_card": payee_card(receiver),
-            "amount_uzs": amount}
+            "sender_card": payee_card(sender), "amount_uzs": amount}
 
 
 def _payee(receiver="R1"):
@@ -189,11 +193,14 @@ def test_nothing_is_written_while_the_capability_is_off(store):
 def test_the_store_path_and_the_in_process_replay_agree(store, counters_on):
     """Parity, the condition the gate in ml/README.md names first: the same events
     through Redis and through plain objects give the same columns. The extractor is
-    shared, so this pins what the store has to reproduce - including the counters."""
+    shared, so this pins what the store has to reproduce - including the counters
+    and the confirmed cases, where Redis answers only for the cards it is asked."""
     import random
     from collections import defaultdict
     from rules import ReceiverState, SenderState
 
+    confirmed = {payee_card("R1"), payee_card("S2")}
+    store._redis.members[C.CONFIRMED_KEY] = set(confirmed)
     senders_a, receivers_a = defaultdict(SenderState), defaultdict(ReceiverState)
     senders_b = defaultdict(SenderState)
     rng, rows_a, rows_b = random.Random(7), [], []
@@ -205,14 +212,19 @@ def test_the_store_path_and_the_in_process_replay_agree(store, counters_on):
         paid = receivers_a.get(sk)                    # .get: never invent a state
         rows_a.append(F.to_vector(F.extract(
             ev, senders_a[ev["sender_pinfl"]], ts, receivers_a[pk],
-            sender_inbound_ts=(paid.last_inbound_ts if paid else None))))
+            sender_inbound_ts=(paid.last_inbound_ts if paid else None),
+            confirmed=confirmed)))
         F.update_state(senders_a[ev["sender_pinfl"]], ev, ts)
         F.update_receiver_state(receivers_a[pk], ev, ts)
+        F.add_contact(receivers_a[sk], pk, ts)
 
+        state = store.load(pk, ts)
         rows_b.append(F.to_vector(F.extract(
-            ev, senders_b[ev["sender_pinfl"]], ts, store.load(pk, ts),
-            sender_inbound_ts=store.last_inbound(sk, ts))))
+            ev, senders_b[ev["sender_pinfl"]], ts, state,
+            sender_inbound_ts=store.last_inbound(sk, ts),
+            confirmed=store.confirmed_among(ev, state, ts))))
         F.update_state(senders_b[ev["sender_pinfl"]], ev, ts)
         store.record(ev, ts)
 
     assert rows_a == rows_b
+    assert any(r[F.FEATURE_NAMES.index("payee_flagged_contacts")] for r in rows_a)

@@ -53,6 +53,14 @@ class ReceiverStore:
                                                 float(score))
             except Exception as exc:                   # noqa: BLE001
                 log.warning("counterparty lookup failed, failing open: %s", exc)
+        if CAP.enabled("confirmed_cases"):
+            # The cards this account dealt with over the week, either way.
+            try:
+                for member, score in self._redis.zrangebyscore(
+                        f"cp:card:{payee}", now - C.LINK_WEEK_S, now, withscores=True):
+                    state.contacts[member] = float(score)
+            except Exception as exc:                   # noqa: BLE001
+                log.warning("contacts lookup failed, failing open: %s", exc)
         for m in members:
             try:
                 # Left three separators only: the last field is the transaction id.
@@ -92,9 +100,34 @@ class ReceiverStore:
                 pipe.zadd(ckey, {event.get("sender_pinfl", ""): now})
                 pipe.zremrangebyscore(ckey, "-inf", now - C.LINK_WEEK_S)
                 pipe.expire(ckey, int(C.LINK_WEEK_S * 2))
+            sender = F.sender_key(event)
+            if CAP.enabled("confirmed_cases") and sender:
+                # Each end files the other's card, as features.add_contact does.
+                for account, card in ((payee, sender), (sender, payee)):
+                    key = f"cp:card:{account}"
+                    pipe.zadd(key, {card: now})
+                    pipe.zremrangebyscore(key, "-inf", now - C.LINK_WEEK_S)
+                    pipe.expire(key, int(C.LINK_WEEK_S * 2))
             pipe.execute()
         except Exception as exc:                       # noqa: BLE001
             log.warning("fan-in write failed, continuing: %s", exc)
+
+    def confirmed_among(self, event, receiver_state, now):
+        """Which of the payee, the sender and the payee's cards of the week are in
+        confirmed frauds, asked in one round trip; nothing when the store is down."""
+        if self._redis is None or not CAP.enabled("confirmed_cases"):
+            return frozenset()
+        cards = {F.payee_key(event), F.sender_key(event)} - {""}
+        if receiver_state is not None:
+            cards |= {c for c, t in receiver_state.contacts.items()
+                      if now - t <= C.LINK_WEEK_S}
+        cards = sorted(cards)
+        try:
+            hits = self._redis.smismember(C.CONFIRMED_KEY, cards) if cards else []
+        except Exception as exc:                       # noqa: BLE001
+            log.warning("confirmed lookup failed, failing open: %s", exc)
+            return frozenset()
+        return frozenset(c for c, hit in zip(cards, hits) if hit)
 
     def last_inbound(self, account, now):
         """When this account was last paid, or None when that is not being

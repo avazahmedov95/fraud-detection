@@ -19,5 +19,8 @@
   "payee_payers_7d",
   "sender_payees_24h",
   "sender_payees_7d",
-  "secs_since_sender_inbound"
+  "secs_since_sender_inbound",
+  "payee_flagged",
+  "sender_flagged",
+  "payee_flagged_contacts"
 ]

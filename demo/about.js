@@ -25,7 +25,7 @@ const NAMED_BY = [["STRUCTURING", ["STRUCTURING"]],
                   ["ATO", ["GEO_ANOMALY", "VELOCITY", "DISTINCT_PAYEE_BURST"]],
                   ["MULE", ["MULE_FAN_IN"]],
                   ["APP", ["NEW_PAYEE_HIGH_AMOUNT", "AMOUNT_DEVIATION"]]];
-// The model's 21 features in ml/models/feature_names.json's order, grouped as
+// The model's 24 features in ml/models/feature_names.json's order, grouped as
 // stream-processor/capabilities.py groups them (demo/tests pins the list).
 const FEATURE_GROUPS = [
   ["sender", ["log_amount", "amount_to_mean", "amount_z", "is_new_payee", "vel_10m", "vel_1h",
@@ -34,7 +34,8 @@ const FEATURE_GROUPS = [
   ["place", ["geo_is_anomaly"]],
   ["session", ["active_call", "secs_login_z"]],
   ["links", ["payee_payers_24h", "payee_payers_7d", "sender_payees_24h", "sender_payees_7d",
-             "secs_since_sender_inbound"]]
+             "secs_since_sender_inbound"]],
+  ["confirmed", ["payee_flagged", "sender_flagged", "payee_flagged_contacts"]]
 ];
 
 const GROUPS = ["in", "engine", "out"];
@@ -81,9 +82,10 @@ ru: {
       "История переживает перезапуск: Flink регулярно сохраняет её на диск."]],
     redis: ["Сторона получателя", "Redis", "кто платит этому счёту", [
       "Redis хранит то, чего не видно из истории одного отправителя: сколько разных людей платили счёту за час, сутки и неделю и сколько денег пришло.",
-      "Так ловится дроп-счёт: много людей платят одному счёту, и деньги сразу уходят дальше."]],
-    rules: ["Признаки и правила", "Flink", "21 признак, 10 правил", [
-      "21 признак: суммы и привычки отправителя, новизна получателя, скорость переводов, приток денег получателю, звонок во время подтверждения и другие.",
+      "Так ловится дроп-счёт: много людей платят одному счёту, и деньги сразу уходят дальше.",
+      "Ещё Redis хранит список карт из подтверждённых мошенничеств. Его начало — прошлые случаи, а пополняет его аналитик, когда блокирует перевод."]],
+    rules: ["Признаки и правила", "Flink", "24 признака, 10 правил", [
+      "24 признака: суммы и привычки отправителя, новизна получателя, скорость переводов, приток денег получателю, звонок во время подтверждения, связь с подтверждёнными мошенниками и другие.",
       "10 жёстких правил — известные схемы мошенничества. Полные списки — по кнопкам в блоках «Модель» и «Правила» ниже."]],
     model: ["Модель", "LightGBM · ONNX", "оценка риска", [
       "Пять моделей градиентного бустинга на деревьях решений, их ответы усредняются.",
@@ -101,7 +103,7 @@ ru: {
       "Переводы с риском чуть ниже уровня тревоги ждут около секунды, пока их проверит вторая модель — TabPFN.",
       "Видит мошенничество — перевод задерживается и попадает к аналитику, иначе уходит.",
       "Не ответила за 5 секунд или недоступна — перевод не ждёт дальше: он задерживается для аналитика.",
-      "На отложенных данных в этой полосе было 18 мошенничеств, которые основная модель пропускала. Вторая проверка нашла 11 из них, и доля пойманного мошенничества выросла с 67% до 73%."]],
+      "На отложенных данных в этой полосе было 20 мошенничеств, которые основная модель пропускала. Вторая проверка нашла 14 из них, и доля пойманного мошенничества выросла с 70,5% до 78,4%."]],
     sink: ["Запись в базу", "Python", "sink-writer", [
       "Читает решения из Kafka и пачками записывает их в ClickHouse, а тревоги — в граф Neo4j.",
       "Если база недоступна, продолжает работать и считает, сколько записей потеряно."]],
@@ -115,6 +117,7 @@ ru: {
     cases: ["Разбор тревог", "Python", "case-manager", [
       "На каждую тревогу открывает дело с причинами словами — из вклада признаков в оценку модели.",
       "Аналитик решает: заблокировать перевод (мошенничество) или отпустить (ложная тревога). Эти решения — единственные настоящие метки в системе, на них банк переобучал бы модель.",
+      "Заблокированный перевод система запоминает сразу: карта получателя попадает в список подтверждённых мошенников, и модель видит это на следующих переводах с этой карты и на неё.",
       "Дела можно отобрать по тому, кто задержал перевод: основная модель, жёсткое правило или вторая проверка."]],
     dash: ["Мониторинг", "Grafana · демо", "что видит банк", [
       "Grafana показывает число переводов и тревог, типы, распределение риска, регионы.",
@@ -133,9 +136,9 @@ ru: {
     handoff: ["Ждёт передачи", "Flink забирает переводы из очереди и передаёт на обработку небольшими пачками. Это ожидание — почти всё время решения."],
     decode: ["Прочитан", "Перевод распакован и проверен."],
     state: ["История отправителя", "Из памяти Flink прочитана история этого отправителя: обычные суммы, получатели, время прошлых переводов."],
-    redis: ["Сторона получателя", "Из Redis прочитано, сколько разных людей платили этому счёту за час, сутки и неделю."],
-    rules: ["Признаки и правила", "Посчитан 21 признак и проверены 10 правил. {rules}"],
-    model: ["Модель", "Модель взвесила все 21 признак и оценила риск: {score}."],
+    redis: ["Сторона получателя", "Из Redis прочитано, сколько разных людей платили этому счёту за час, сутки и неделю, и нет ли карт этого перевода в списке подтверждённых мошенников."],
+    rules: ["Признаки и правила", "Посчитано 24 признака и проверены 10 правил. {rules}"],
+    model: ["Модель", "Модель взвесила все 24 признака и оценила риск: {score}."],
     decide: ["Решение", "{decision}. {why}"],
     stored: ["Записан в базу", "Решение ушло в Kafka{alert} и записано в ClickHouse вместе со временем каждого этапа."],
     analyst: ["У аналитика", "Открыто дело с причинами словами, а тревога стала связью в графе Neo4j. Перевод задержан, пока аналитик его не заблокирует или не отпустит."],
@@ -149,7 +152,7 @@ ru: {
   model_title: "Модель",
   model_lines: [
     "Пять моделей LightGBM — градиентный бустинг на деревьях решений; их ответы усредняются.",
-    "Смотрит на 21 признак перевода — список по кнопке ниже.",
+    "Смотрит на 24 признака перевода — список по кнопке ниже.",
     "Обучена на первых {fit} переводах генератора по времени. Уровень тревоги {cut} подобран на следующих {val}.",
     "Проверена на последних {test} переводах ({tf} мошеннических), которых не видела: поймано {rec} мошенничества, {prec} тревог настоящие.",
     "Работает внутри Flink как файл ONNX: {model_ms} на перевод в среднем по последним решениям.",
@@ -158,7 +161,8 @@ ru: {
   features_title: "Признаки модели",
   features_intro: "Задача Flink считает их для каждого перевода; модель смотрит на все сразу.",
   fgroup: {sender: "Отправитель и сумма", receiver: "Получатель за последний час", place: "Место",
-           session: "Сессия в приложении", links: "Связи за сутки и неделю"},
+           session: "Сессия в приложении", links: "Связи за сутки и неделю",
+           confirmed: "Подтверждённые мошенники"},
   feature: {
     log_amount: "Сумма перевода.",
     amount_to_mean: "Во сколько раз сумма больше обычной суммы этого отправителя.",
@@ -180,7 +184,10 @@ ru: {
     payee_payers_7d: "Сколько разных людей платили получателю за неделю.",
     sender_payees_24h: "Скольким разным получателям платил отправитель за сутки.",
     sender_payees_7d: "Скольким разным получателям платил отправитель за неделю.",
-    secs_since_sender_inbound: "Сколько времени прошло с тех пор, как отправителю самому заплатили: дроп-счёт быстро отправляет полученное дальше."
+    secs_since_sender_inbound: "Сколько времени прошло с тех пор, как отправителю самому заплатили: дроп-счёт быстро отправляет полученное дальше.",
+    payee_flagged: "Получатель уже принимал деньги в подтверждённом мошенничестве.",
+    sender_flagged: "Отправитель сам раньше принимал деньги в подтверждённом мошенничестве: дроп пересылает их дальше.",
+    payee_flagged_contacts: "Сколько карт, с которыми получатель имел дело за неделю, принимали деньги в подтверждённом мошенничестве."
   },
   rules_title: "Правила",
   rules_intro: "Правила — известные схемы мошенничества, записанные заранее. Решение принимает модель; два правила регулятор требует проверять всегда, остальные дают тревоге название или понятную аналитику причину.",
@@ -224,9 +231,10 @@ en: {
       "The history survives a restart: Flink saves it to disk regularly."]],
     redis: ["The receiver's side", "Redis", "who pays this account", [
       "Redis keeps what one sender's history cannot show: how many different people paid an account in the last hour, day and week, and how much money came in.",
-      "That is how a money mule is caught: many people pay one account, and the money moves straight on."]],
-    rules: ["Features and rules", "Flink", "21 features, 10 rules", [
-      "21 features: the sender's amounts and habits, whether the payee is new, how fast transfers come, money flowing into the payee, a call during confirmation and more.",
+      "That is how a money mule is caught: many people pay one account, and the money moves straight on.",
+      "Redis also keeps the list of cards from confirmed frauds. It starts from past cases, and the analyst adds to it on blocking a transfer."]],
+    rules: ["Features and rules", "Flink", "24 features, 10 rules", [
+      "24 features: the sender's amounts and habits, whether the payee is new, how fast transfers come, money flowing into the payee, a call during confirmation, links to confirmed fraudsters and more.",
       "10 hard rules — known fraud patterns. The full lists open from the Model and Rules panels below."]],
     model: ["The model", "LightGBM · ONNX", "the risk score", [
       "Five gradient-boosted decision-tree models, their answers averaged.",
@@ -244,7 +252,7 @@ en: {
       "Transfers with a risk just under the alert level wait about a second while a second model, TabPFN, looks at them.",
       "If it sees fraud, the transfer is held for the analyst; otherwise it goes.",
       "If it has not answered within 5 seconds, or is down, the transfer waits no longer: it is held for the analyst.",
-      "On held-out data this band held 18 frauds the main model missed. The second look found 11 of them, and the share of fraud caught rose from 67% to 73%."]],
+      "On held-out data this band held 20 frauds the main model missed. The second look found 14 of them, and the share of fraud caught rose from 70.5% to 78.4%."]],
     sink: ["Sink writer", "Python", "sink-writer", [
       "Reads the decisions from Kafka and writes them to ClickHouse in batches, and the alerts to the Neo4j graph.",
       "When a database is down it keeps running and counts how many records were lost."]],
@@ -258,6 +266,7 @@ en: {
     cases: ["Case manager", "Python", "case-manager", [
       "Opens a case for every alert, with its reasons in words — from each feature's share of the model's score.",
       "The analyst blocks the transfer (fraud) or releases it (false alarm). Those verdicts are the only real labels the system gets; a bank would retrain the model on them.",
+      "A blocked transfer teaches the system at once: the payee's card joins the list of confirmed fraud accounts, and the model sees it on the next transfers from or to that card.",
       "Cases can be filtered by what held the transfer: the model, a hard rule or the second look."]],
     dash: ["Monitoring", "Grafana · demo", "what the bank watches", [
       "Grafana shows transfer and alert counts, types, the risk distribution, regions.",
@@ -276,9 +285,9 @@ en: {
     handoff: ["Waiting to be handed on", "Flink takes transfers from the queue and passes them on in small batches. This wait is almost all of the decision time."],
     decode: ["Read", "The transfer is unpacked and checked."],
     state: ["The sender's history", "This sender's history is read from Flink's memory: usual amounts, payees, the times of earlier transfers."],
-    redis: ["The receiver's side", "Redis gives how many different people paid this account in the last hour, day and week."],
-    rules: ["Features and rules", "21 features are computed and 10 rules checked. {rules}"],
-    model: ["The model", "The model weighs all 21 features and scores the risk: {score}."],
+    redis: ["The receiver's side", "Redis gives how many different people paid this account in the last hour, day and week, and whether this transfer's cards are on the list of confirmed fraud accounts."],
+    rules: ["Features and rules", "24 features are computed and 10 rules checked. {rules}"],
+    model: ["The model", "The model weighs all 24 features and scores the risk: {score}."],
     decide: ["The decision", "{decision}. {why}"],
     stored: ["Written down", "The decision went to Kafka{alert} and was written to ClickHouse with the time of every stage."],
     analyst: ["With the analyst", "A case opened with its reasons in words, and the alert became a link in the Neo4j graph. The transfer is held until the analyst blocks or releases it."],
@@ -292,7 +301,7 @@ en: {
   model_title: "The model",
   model_lines: [
     "Five LightGBM models — gradient boosting on decision trees; their answers are averaged.",
-    "It reads 21 features of the transfer — the list opens from the button below.",
+    "It reads 24 features of the transfer — the list opens from the button below.",
     "Trained on the generator's first {fit} transfers in time. The alert level {cut} was chosen on the next {val}.",
     "Tested on the last {test} transfers ({tf} of them fraud), which it never saw: it caught {rec} of the fraud, and {prec} of its alerts were real.",
     "It runs inside Flink as an ONNX file: {model_ms} per transfer on average over the latest decisions.",
@@ -301,7 +310,8 @@ en: {
   features_title: "The model's features",
   features_intro: "The Flink job computes them for every transfer; the model reads all of them at once.",
   fgroup: {sender: "The sender and the amount", receiver: "The payee in the last hour", place: "Place",
-           session: "The app session", links: "Links over a day and a week"},
+           session: "The app session", links: "Links over a day and a week",
+           confirmed: "Confirmed fraud accounts"},
   feature: {
     log_amount: "The amount.",
     amount_to_mean: "How many times the sender's usual amount this is.",
@@ -323,7 +333,10 @@ en: {
     payee_payers_7d: "How many different people paid the payee in a week.",
     sender_payees_24h: "How many different payees the sender paid in a day.",
     sender_payees_7d: "How many different payees the sender paid in a week.",
-    secs_since_sender_inbound: "How long since the sender was last paid: a mule forwards what it receives quickly."
+    secs_since_sender_inbound: "How long since the sender was last paid: a mule forwards what it receives quickly.",
+    payee_flagged: "The payee already received money in a confirmed fraud.",
+    sender_flagged: "The sender itself received money in a confirmed fraud before: a mule passing it on.",
+    payee_flagged_contacts: "How many of the cards the payee dealt with over the week received money in a confirmed fraud."
   },
   rules_title: "The rules",
   rules_intro: "The rules are known fraud patterns, written down in advance. The model makes the decision; the regulator requires two rules to be reviewed every time, and the others give the alert a name or the analyst a readable reason.",

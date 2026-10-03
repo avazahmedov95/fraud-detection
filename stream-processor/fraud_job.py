@@ -187,12 +187,13 @@ class FraudDetector(KeyedProcessFunction):
         # The sender's own account, in the same key space: when it was last paid.
         sender_inbound = self._receivers.last_inbound(F.sender_key(event),
                                                       event_epoch)
+        confirmed = self._receivers.confirmed_among(event, receiver_state, event_epoch)
 
         mark = _lap(stages, "redis", mark)
 
         result = evaluate(event, state, event_epoch, receiver_state,
                           sender_inbound_ts=sender_inbound,
-                          population=self._population)
+                          population=self._population, confirmed=confirmed)
         self._state.update(state)
         self._receivers.record(event, event_epoch)
 

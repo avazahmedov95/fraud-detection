@@ -37,8 +37,11 @@ def _f(event, state=None, now=1_000_000.0, receiver_state=None, sender_inbound_t
 
 def test_columns_are_absent_until_the_capability_is_on(on):
     names = CAP.feature_names()
-    assert names[-5:] == ["payee_payers_24h", "payee_payers_7d", "sender_payees_24h",
-                          "sender_payees_7d", "secs_since_sender_inbound"], \
+    block = ["payee_payers_24h", "payee_payers_7d", "sender_payees_24h",
+             "sender_payees_7d", "secs_since_sender_inbound"]
+    later = CAP.REGISTRY[CAP.REGISTRY.index(CAP.BY_KEY["counterparty_history"]) + 1:]
+    assert names[names.index(block[0]):] == block + [
+        f for cap in later if CAP.enabled(cap.key) for f in cap.features], \
         "the capability must append to the vector, not shift trained columns"
     CAP.MODES["counterparty_history"] = "off"
     assert not [n for n in CAP.feature_names() if n.startswith(("payee_payers",

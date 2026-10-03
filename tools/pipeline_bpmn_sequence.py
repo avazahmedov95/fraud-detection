@@ -31,7 +31,8 @@ NODES = [
      1, (530, 350, 180, 100), None),
     ("Sender", "serviceTask", "Load the sender's history\n[Flink keyed state]",
      1, (750, 350, 180, 100), None),
-    ("Receiver", "serviceTask", "Read and update the receiver's recent payers\n[Redis]",
+    ("Receiver", "serviceTask",
+     "Read and update the receiver's recent payers, look up confirmed fraud accounts\n[Redis]",
      1, (970, 350, 180, 100), None),
     ("Features", "serviceTask", "Compute the features\n[Python in Flink]",
      1, (1190, 350, 180, 100), None),
@@ -92,7 +93,8 @@ NODES = [
      5, (2440, 1217, 36, 36), (2415, 1257, 86, 20)),
     ("Review", "userTask", "Review the held transfer\n[analyst queue: demo page or CLI]",
      6, (2470, 1335, 180, 100), None),
-    ("Verdict", "userTask", "Decide: block it or release it\n[saved to ClickHouse]",
+    ("Verdict", "userTask",
+     "Decide: block it or release it\n[saved to ClickHouse; a block adds the payee to Redis]",
      6, (2690, 1335, 180, 100), None),
     ("Fraud", "exclusiveGateway", "Fraud?", 6, (2910, 1360, 50, 50), (2885, 1326, 46, 18)),
     ("Blocked", "endEvent", "Transfer blocked", 6, (3010, 1332, 36, 36), (3054, 1340, 110, 20)),
@@ -167,7 +169,8 @@ LINKS = {"HeldOut": "Held by the second look", "HeldLateOut": "Held by the secon
 
 STORES = [
     # id, name, (x, y, w, h), label's box
-    ("Redis", "Redis: receivers' recent payers", (1035, 1055, 50, 50), (985, 1110, 150, 28)),
+    ("Redis", "Redis: recent payers, confirmed fraud accounts", (1035, 1055, 50, 50),
+     (870, 1062, 150, 36)),
     ("Cases", "ClickHouse: cases and verdicts", (2350, 1055, 50, 50), (2406, 1066, 120, 28)),
     ("Warehouse", "ClickHouse: decisions, audit log", (3080, 1055, 50, 50),
      (3045, 1110, 120, 28)),
@@ -182,6 +185,8 @@ DATA = [
     ("D_graph", "Graph", "GraphDb", "out", [(3405, 1000), (3405, 1055)]),
     ("D_case", "Case", "Cases", "out", [(2375, 1185), (2375, 1105)]),
     ("D_verdict", "Verdict", "Cases", "out", [(2780, 1335), (2390, 1105)]),
+    ("D_confirmed", "Verdict", "Redis", "out",
+     [(2780, 1435), (2780, 1450), (1060, 1450), (1060, 1105)]),
 ]
 
 NOTES = [
@@ -331,9 +336,9 @@ MERMAID = """sequenceDiagram
     Kafka->>Flink: the record, fetched and batched (92 ms)
     Flink->>Flink: decode (0.05 ms)
     Flink->>Flink: read this sender's state (0.12 ms)
-    Flink->>Redis: how many people paid this receiver?
-    Redis-->>Flink: counts for the hour, day and week (2.07 ms)
-    Flink->>Flink: build 21 features, run the 10 hard rules (0.90 ms)
+    Flink->>Redis: how many people paid this receiver? any confirmed fraud accounts?
+    Redis-->>Flink: counts for the hour, day and week, and the confirmed ones (2.07 ms)
+    Flink->>Flink: build 24 features, run the 10 hard rules (0.90 ms)
     Flink->>Flink: score with the model (0.46 ms)
     Flink->>Flink: decide: allow or hold (0.03 ms)
     Flink->>Kafka: transactions.scored, and fraud.alerts when it is an alert (97 ms in all)
@@ -343,6 +348,7 @@ MERMAID = """sequenceDiagram
     Case->>DB: open a case, with its reason in words
     Case->>Analyst: the held transfer appears in the queue
     Analyst->>DB: block it, or release it
+    Case->>Redis: a block adds the payee to the confirmed fraud accounts
 """
 path = os.path.join(OUT, "pipeline_sequence.mmd")
 with open(path, "w", encoding="utf-8", newline="\n") as fh:
@@ -367,9 +373,9 @@ MESSAGES = [
     ("Kafka", "Flink engine", "the record, fetched and batched", "92 ms", False),
     ("Flink engine", "Flink engine", "decode the record", "0.05 ms", False),
     ("Flink engine", "Flink engine", "read the sender's state", "0.12 ms", False),
-    ("Flink engine", "Redis", "how many people paid this receiver?", "", False),
-    ("Redis", "Flink engine", "counts for the hour, day and week", "2.07 ms", True),
-    ("Flink engine", "Flink engine", "build 21 features, run the 10 hard rules", "0.90 ms", False),
+    ("Flink engine", "Redis", "who paid this receiver? confirmed fraud accounts?", "", False),
+    ("Redis", "Flink engine", "counts for the hour, day, week; confirmed ones", "2.07 ms", True),
+    ("Flink engine", "Flink engine", "build 24 features, run the 10 hard rules", "0.90 ms", False),
     ("Flink engine", "Flink engine", "score with the model", "0.46 ms", False),
     ("Flink engine", "Flink engine", "decide: allow, or hold for the analyst", "0.03 ms", False),
     ("Flink engine", "Kafka", "scored, and an alert when it is one", "97 ms in all", False),
@@ -379,6 +385,7 @@ MESSAGES = [
     ("Case manager", "ClickHouse\nNeo4j", "a case, with its reason in words", "", False),
     ("Case manager", "Analyst", "the held transfer appears in the queue", "", False),
     ("Analyst", "ClickHouse\nNeo4j", "block it, or release it", "", True),
+    ("Case manager", "Redis", "a block adds the payee to the confirmed fraud accounts", "", False),
 ]
 
 fig, ax = plt.subplots(figsize=(16, 10))
@@ -401,9 +408,9 @@ for name in ACTORS:
                                 linewidth=1.2, edgecolor=LINE, facecolor="white", zorder=3))
     ax.text(x, top_y + 2.7, name, ha="center", va="center", fontsize=9.5,
             fontweight="bold", color=INK, family=FAMILY, zorder=4)
-    ax.plot([x, x], [6, top_y], color=LINE, linewidth=1.1, linestyle=(0, (4, 4)), zorder=1)
+    ax.plot([x, x], [4, top_y], color=LINE, linewidth=1.1, linestyle=(0, (4, 4)), zorder=1)
 
-y = top_y - 4
+y = top_y - 3
 for src, dst, text, when, dashed in MESSAGES:
     y -= step
     colour = ALERT if dst == "Analyst" or src == "Analyst" else ACCENT

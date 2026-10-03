@@ -51,6 +51,9 @@ class FakeClient:
         if "disposition = 'NEW'" in q:
             rows = [r for r in rows
                     if r[CASE.CASE_COLUMNS.index("disposition")] == "NEW"]
+            if parameters and "since" in parameters:
+                rows = [r for r in rows if r[CASE.CASE_COLUMNS.index("opened_at")]
+                        .timestamp() * 1000 >= parameters["since"]]
             rows.sort(key=lambda r: (-r[CASE.CASE_COLUMNS.index("amount_uzs")],
                                      -r[CASE.CASE_COLUMNS.index("final_score")]))
         elif "case_id = " in q:
@@ -81,6 +84,14 @@ class FakeClient:
         self.closed = True
 
 
+class FakeRedis:
+    def __init__(self):
+        self.sets = {}
+
+    def sadd(self, key, member):
+        self.sets.setdefault(key, set()).add(member)
+
+
 @pytest.fixture
 def store(monkeypatch):
     fake = FakeClient()
@@ -89,6 +100,7 @@ def store(monkeypatch):
         setattr(st, "_client", fake), st._apply_schema()))
     st.open()
     st._fake = fake
+    st._redis = FakeRedis()
     return st
 
 
@@ -159,6 +171,17 @@ def _order_clause(store):
     return store._fake.queries[-1]
 
 
+def test_since_keeps_only_the_cases_opened_from_then_on(store):
+    """Asked of the store, not filtered after it: the queue's first rows by amount
+    can all be older than a case opened a second ago."""
+    t = ALERT["scored_at_job"]
+    store.add(dict(ALERT, transaction_id="old", amount_uzs=9_000_000, scored_at_job=t - 60))
+    store.add(dict(ALERT, transaction_id="new", amount_uzs=100_000, scored_at_job=t))
+    store.flush()
+    assert [r["case_id"] for r in store.open_cases(limit=1, since=t)] == ["new"]
+    assert "opened_at >=" in store._fake.queries[-1]
+
+
 def test_resolved_case_leaves_the_queue(store):
     store.add(ALERT)
     store.flush()
@@ -180,6 +203,29 @@ def test_a_replayed_alert_does_not_reopen_a_resolved_case(store):
 
 def test_resolving_an_unknown_case_reports_it(store):
     assert store.resolve("nope", "CONFIRMED_FRAUD", "analyst.k") is False
+
+
+# --- the verdict the job learns from -----------------------------------------
+
+def test_a_confirmed_fraud_adds_its_payee_to_the_accounts_the_job_reads(store):
+    for i, d in enumerate(["CONFIRMED_FRAUD", "FALSE_POSITIVE"]):
+        store.add(dict(ALERT, transaction_id=f"t_{i}", receiver_card=f"card_{i}"))
+        store.flush()
+        store.resolve(f"t_{i}", d, "analyst.k")
+    assert store._redis.sets == {S.CONFIRMED_KEY: {"card_0"}}
+
+
+def test_redis_down_costs_the_mark_not_the_verdict(store, caplog):
+    class Down:
+        def sadd(self, *a):
+            raise ConnectionError("refused")
+    store._redis = Down()
+    store.add(ALERT)
+    store.flush()
+    with caplog.at_level("ERROR"):
+        assert store.resolve("t_1", "CONFIRMED_FRAUD", "analyst.k") is True
+    assert store.get("t_1")["disposition"] == "CONFIRMED_FRAUD"
+    assert S.CONFIRMED_KEY in caplog.text
 
 
 # --- failure is loud, not silent ---------------------------------------------

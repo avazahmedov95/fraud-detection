@@ -7,7 +7,7 @@ replay over the deployed rule engine, the report sections - is in
 
 ## The constraint that shapes everything here
 
-18 of this project's 21 features are **relational** - computed over the history
+21 of this project's 24 features are **relational** - computed over the history
 of a named sender and a named receiver. Measured cost of losing them (seed 42,
 held-out slice, baseline profile, on the 20-column vector of the time):
 
@@ -17,7 +17,7 @@ held-out slice, baseline profile, on the 20-column vector of the time):
 | no account identifiers | 0.761 | 0.563 | 0.745 |
 | amount + hour only | 0.653 | 0.272 | 0.819 |
 
-On the realistic profile the full system scores PR-AUC 0.673 (`ml/README.md`);
+On the realistic profile the full system scores PR-AUC 0.714 (`ml/README.md`);
 the stripped configurations have not been re-run there. Public transaction
 datasets carry no account identifiers, because those are what cannot be
 published:
@@ -91,8 +91,8 @@ not create signal.
 
 ### Result (`--our-model`): this project's model trained on PaySim
 
-18 of the 21 features compute here - PaySim carries no call state, no region and
-no session timing - on the published baseline's own split (24 days / 7 days).
+18 of the 24 features compute here - PaySim carries no call state, no region and
+no session timing, and no analyst confirmed its frauds - on the published baseline's own split (24 days / 7 days).
 **Re-run 2026-09-21** with the L2 penalty the served recipe adopted that day
 (`ml/README.md`); the figures it replaced are in the paragraph below the table.
 

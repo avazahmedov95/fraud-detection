@@ -37,6 +37,13 @@ be retrained on, so the column exists even in a prototype with no analysts: it
 is the shape of the feedback loop, and the place a real deployment would start
 collecting.
 
+Since 2026-10-02 a verdict also reaches the model at once. `CONFIRMED_FRAUD` adds
+the payee's card to the Redis set the job reads (`store.CONFIRMED_KEY`,
+`confirmed_cases` in `ml/README.md`): the next transfer to or from that card, or to
+a card that dealt with it that week, is scored knowing it. The set starts from the
+labelled history (`ml/seed_confirmed.py`). A verdict reversed later leaves the card
+in it; Redis down costs the mark, said in the log, not the verdict.
+
 `queue_cli.py stats` computes precision from those verdicts — and says, in its
 own output, why that number reads high: analysts work the top of the queue, so
 the resolved set is biased towards high scores.
@@ -46,13 +53,13 @@ the resolved set is biased towards high scores.
 | File | What it does |
 |---|---|
 | `case.py` | pure alert → case row; the resolution rule; how long a transfer was held. No I/O |
-| `store.py` | ClickHouse access: open, read, resolve, count, holds |
+| `store.py` | ClickHouse access: open, read, resolve, count, holds; a confirmed payee into Redis |
 | `explain.py` | exact tree contributions, in words, for alerts no rule explains |
 | `consumer.py` | the service: `fraud.alerts` → `fraud.cases` |
 | `queue_cli.py` | the analyst surface: `list` / `show` / `resolve` / `stats` |
 | `config.py` | connections and batch settings, all from the environment |
 | `tests/test_case.py` | 16 tests, incl. the replay-cannot-revert-a-verdict property |
-| `tests/test_store.py` | 14 tests against a fake ClickHouse: schema, FINAL, round trip, holds |
+| `tests/test_store.py` | 17 tests against a fake ClickHouse: schema, FINAL, round trip, holds, the confirmed payee reaching Redis |
 | `tests/test_explain.py` | 14 tests, mostly about refusing to give a wrong reason |
 
 ## The schema is applied by the service, not by ClickHouse

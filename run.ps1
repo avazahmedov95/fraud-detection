@@ -5,7 +5,8 @@
 
 .DESCRIPTION
     A SUPERSET of the Makefile, not a translation of it. The Makefile carries
-    the everyday targets - up, down, generate, produce, load-graph, submit-job.
+    the everyday targets - up, down, generate, produce, load-graph, seed-confirmed,
+    submit-job.
     This file additionally carries every sequenced experiment: measure-plain /
     measure-tls / measure-crypto, latency-setup, pipeline, kill-worker,
     make-certs, status, and the TLS and encrypted producer arms. Each is an
@@ -26,7 +27,7 @@
 .EXAMPLE
     .\run.ps1 help
     .\run.ps1 up
-    .\run.ps1 pipeline      # clean -> up -> load-graph -> produce -> submit-job
+    .\run.ps1 pipeline      # clean -> up -> load-graph -> seed-confirmed -> produce -> submit-job
 #>
 
 param(
@@ -361,6 +362,9 @@ function Reset-FeatureState {
         docker compose exec -T redis sh -c "redis-cli --scan --pattern '$pattern' | xargs -r redis-cli DEL" | Out-Null
     }
     & $del "rcv:*"
+    # The counterparties each account dealt with, wall-clock state of the same kind.
+    # The confirmed accounts stay: they are verdicts, not a pass's leftovers.
+    & $del "cp:*"
     docker compose exec -T redis sh -c "redis-cli DEL mule:fanin:hist" | Out-Null
 
     # Only now the fresh job, with empty keyed state.
@@ -686,6 +690,7 @@ switch ($Target.ToLower()) {
             "measure-crypto"        = "full measurement arm: encrypted payload"
             "measure-throughput"    = "latency vs offered load (.\run.ps1 measure-throughput 3000)"
             "load-graph"     = "load the account population into Neo4j"
+            "seed-confirmed" = "load the history's confirmed fraud accounts into Redis"
             "serve-prep"     = "copy the ONNX model next to the Flink job"
             "submit-job"     = "fresh TaskManager, then the PyFlink job (empty state)"
             "resume-job"     = "same, restoring keyed state from the newest checkpoint"
@@ -698,7 +703,7 @@ switch ($Target.ToLower()) {
             "kill-worker"    = "kill and restart the taskmanager (fault injection)"
             "kill-dependency" = "stop Redis/Neo4j/ClickHouse/Kafka in turn and report what degrades"
             "query-scored"   = "decision counts in ClickHouse"
-            "pipeline"       = "clean -> up -> load-graph -> produce -> submit-job"
+            "pipeline"       = "clean -> up -> load-graph -> seed-confirmed -> produce -> submit-job"
             "latency-setup"  = "same as pipeline but no batch dump (for latency runs)"
         }
         foreach ($k in $targets.Keys) {
@@ -918,6 +923,13 @@ switch ($Target.ToLower()) {
         }
     }
 
+    # The accounts in confirmed frauds the job reads (confirmed_cases), from the
+    # labelled history; the analysts' verdicts add to them from there.
+    "seed-confirmed" {
+        Push-Location ml
+        try { python seed_confirmed.py --port $DotEnv.REDIS_HOST_PORT } finally { Pop-Location }
+    }
+
     # What one component produces against what the next expects. Run before a
     # walkthrough and after touching any record, schema or wire format.
     "boundaries" { python tools/boundary_audit.py -v }
@@ -1051,6 +1063,7 @@ switch ($Target.ToLower()) {
             $LASTEXITCODE -eq 0
         }
         Invoke-Step "loading the account population into Neo4j" { & $PSCommandPath load-graph }
+        Invoke-Step "loading the confirmed fraud accounts into Redis" { & $PSCommandPath seed-confirmed }
         Invoke-Step "replaying transactions into Kafka" { & $PSCommandPath produce }
         Invoke-Step "submitting the Flink job" { & $PSCommandPath submit-job }
         Write-Host ""
@@ -1074,6 +1087,7 @@ switch ($Target.ToLower()) {
             $LASTEXITCODE -eq 0
         }
         Invoke-Step "loading the account population into Neo4j" { & $PSCommandPath load-graph }
+        Invoke-Step "loading the confirmed fraud accounts into Redis" { & $PSCommandPath seed-confirmed }
         Invoke-Step "submitting the Flink job" { & $PSCommandPath submit-job }
         Write-Host ""
         Write-Host "Empty topic, job running. Now feed it a paced stream:" -ForegroundColor Green

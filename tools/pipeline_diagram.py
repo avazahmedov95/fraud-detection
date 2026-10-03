@@ -81,7 +81,7 @@ ax.text(58, 78.6, "Apache Flink (PyFlink)  |  one keyed operator per sender  |  
 
 dec = box(58, 61, 18, 12, "Decode", "parse, decrypt\nif encrypted", "0.05 ms")
 fea = box(79, 61, 18, 12, "Sender's history", "this sender's state,\nkept in Flink", "0.12 ms")
-rul = box(100, 61, 18, 12, "Features, rules", "21 features,\n10 hard rules", "0.90 ms")
+rul = box(100, 61, 18, 12, "Features, rules", "24 features,\n10 hard rules", "0.90 ms")
 mod = box(121, 61, 18, 12, "Model", "gradient boosting,\nserved as ONNX", "0.46 ms",
           fill=ACCENT_SOFT, edge=ACCENT)
 dcd = box(142, 61, 16, 12, "Decision", "allow, or hold\nfor the analyst", "0.03 ms")
@@ -91,7 +91,7 @@ arrow(right(raw), (58, 67), label="92 ms")
 for a, b in ((dec, fea), (fea, rul), (rul, mod), (mod, dcd)):
     arrow(right(a), left(b))
 
-red = box(79, 40, 18, 12, "Redis", "who recently paid\neach receiving account", "2.07 ms",
+red = box(79, 40, 18, 12, "Redis", "recent payers,\nconfirmed fraud accounts", "2.07 ms",
           fill=STORE_FILL)
 arrow(top(red), bottom(fea), style="<|-|>", color=MUTED, lw=1.3)
 
@@ -121,7 +121,7 @@ arrow(left(chs), right(dash), dashed=True, color=MUTED, label="read only")
 cas = box(136, 4, 24, 12, "Case manager", "opens a case per alert,\nwith its reason in words")
 arrow(bottom(sco), top(cas), color=ALERT, label="fraud.alerts", label_dy=0.4)
 
-ana = box(104, 4, 24, 12, "Analyst", "blocks or releases the\nheld transfer; the verdict\ngoes back into ClickHouse",
+ana = box(104, 4, 24, 12, "Analyst", "blocks or releases the held\ntransfer; the verdict goes to\nClickHouse, a block to Redis",
           fill=ALERT_SOFT, edge=ALERT, sub_size=8.5)
 arrow(left(cas), right(ana), color=ALERT)
 

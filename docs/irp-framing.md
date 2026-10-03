@@ -346,6 +346,14 @@ costs about 3 µs (the JSON and the rounding, measured). Otherwise unattributed,
 like 7.1b's 15 ms. The demo page shows these means live, over the latest 1,000
 decisions (`demo/README.md`).
 
+Re-read at 10/s on 2026-10-02, 1,000 records on mains power, after the redis stage
+also began asking for the confirmed accounts and their contacts (`ml/README.md`,
+The confirmed cases, built): redis 1.10 (1.00), rules 0.51 (0.43), model 0.33
+(0.31), the work 3.6 ms as before - the extra lookups cost nothing measurable.
+Arrival to decision was 54.3 ms (p50 54, p99 60), the handoff 50.1 ms; that drop
+from 91.5 is unattributed, the ONNX thread setting of the same day among the
+candidates.
+
 ### 7.2 The enrichment lookup, removed 2026-09-19
 
 Until 2026-09-19 the payee's age was looked up in Neo4j, cached in Redis for an
@@ -738,7 +746,8 @@ conjure labels, but operating it produces them.
   `second-look/README.md`): TabPFN decides it about a second later at the median,
   3.4 s at the longest (2026-10-02), and holds what it calls fraud; what it has not
   decided within five seconds is held for the analyst. On the held-out slice that
-  took recall from 67.0% to 73.3% for 23 more holds - one read, small numbers
+  took recall from 70.5% to 78.4% for 32 more holds on the model served since
+  2026-10-02 (67.0% to 73.3% before it) - one read, small numbers
   (`ml/README.md`).
 - The system never blocks on its own (since 2026-09-19): a person blocks. A false
   alert therefore costs analyst time and an honest customer's wait - measured from

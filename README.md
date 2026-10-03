@@ -79,11 +79,11 @@ Each package keeps its tests in its own `tests/` directory, and the packages are
 run **one at a time**:
 
 ```bash
-python -m pytest stream-processor -q     # 192
+python -m pytest stream-processor -q     # 194
 python -m pytest data-generator   -q     #  26
 python -m pytest sink-writer      -q     #  27
 python -m pytest validation       -q     #  25
-python -m pytest case-manager     -q     #  44
+python -m pytest case-manager     -q     #  47
 python -m pytest ml               -q     # 11
 python -m pytest demo             -q     #  28
 python -m pytest second-look      -q     #   7

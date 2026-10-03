@@ -110,10 +110,11 @@ def payee_key(event: dict) -> str:
 
 
 def extract(event: dict, state, now: float, receiver_state=None,
-            sender_inbound_ts=None) -> dict:
+            sender_inbound_ts=None, confirmed=frozenset()) -> dict:
     """Read-only feature extraction; does NOT mutate either state. `receiver_state`
     may be None when the shared store is down - inbound features then read as zero,
-    the fail-open behaviour used elsewhere."""
+    the fail-open behaviour used elsewhere. `confirmed`: the accounts in confirmed
+    frauds, or at least those among the payee, the sender and the payee's cards."""
     amount = float(event["amount_uzs"])
     payee = payee_key(event)
     region = event.get("sender_region", "")
@@ -199,6 +200,14 @@ def extract(event: dict, state, now: float, receiver_state=None,
         secs_since_sender_inbound = max(0.0, min(now - float(sender_inbound_ts),
                                                  float(C.LINK_WEEK_S)))
 
+    # Confirmed cases spread one step along the graph: the payee, the sender, and the
+    # cards the payee dealt with over the week, against the accounts in confirmed
+    # frauds (ml/README.md, What a graph store could add).
+    flagged_contacts = 0
+    if receiver_state is not None:
+        flagged_contacts = sum(1 for card, t in receiver_state.contacts.items()
+                               if now - t <= C.LINK_WEEK_S and card in confirmed)
+
     active_call = truthy(event.get("active_call"))
     secs_login = float(event.get("secs_login_to_confirm") or 0.0)
 
@@ -223,6 +232,9 @@ def extract(event: dict, state, now: float, receiver_state=None,
         "sender_payees_24h": sender_payees_24h,
         "sender_payees_7d": sender_payees_7d,
         "secs_since_sender_inbound": secs_since_sender_inbound,
+        "payee_flagged": int(payee in confirmed),
+        "sender_flagged": int(sender_key(event) in confirmed),
+        "payee_flagged_contacts": flagged_contacts,
         # MyID kinship; in the vector only when the myid_kinship capability is on.
         "is_family": truthy(event.get("is_family_transfer")),
         "vel_10m": win_count(C.VELOCITY_WINDOW_S),
@@ -261,6 +273,16 @@ def _prune_links(times: dict, now: float) -> None:
             del times[k]
 
 
+def add_contact(account_state, card: str, now: float) -> None:
+    """File `card` among the cards this account dealt with (call AFTER extract). Both
+    ends of a transfer get the other: the payee in update_receiver_state, the sender
+    by the caller, which holds the sender account's receiver-side state."""
+    if account_state is None or not card:
+        return
+    account_state.contacts[card] = now
+    _prune_links(account_state.contacts, now)
+
+
 def update_receiver_state(receiver_state, event: dict, now: float) -> None:
     """Advance the payee's inbound history (call AFTER extract)."""
     if receiver_state is None:
@@ -270,6 +292,7 @@ def update_receiver_state(receiver_state, event: dict, now: float) -> None:
     receiver_state.payers[event.get("sender_pinfl", "")] = now
     receiver_state.last_inbound_ts = now
     _prune_links(receiver_state.payers, now)
+    add_contact(receiver_state, sender_key(event), now)
     while (receiver_state.inbound
            and now - receiver_state.inbound[0][0] > C.RECEIVER_WINDOW_S):
         receiver_state.inbound.popleft()

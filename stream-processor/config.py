@@ -85,6 +85,12 @@ LINK_WEEK_S = 604800
 #: Pruning is memory, not correctness: extract filters by time anyway.
 LINK_PRUNE_AT = 256
 
+# confirmed_cases: the accounts in confirmed frauds, a Redis set the analysts'
+# CONFIRMED_FRAUD verdicts add to (case-manager) and the labelled history seeds
+# (ml/seed_confirmed.py). Replaying the history offline, a fraud joins it a day after.
+CONFIRMED_KEY = "confirmed:accounts"
+CONFIRMATION_DELAY_S = 86400
+
 AMOUNT_DEVIATION_MIN_HISTORY = 5   # history needed before deviation can fire
 NEW_PAYEE_AMOUNT_FACTOR = 3.0      # amount > factor * sender mean
 NEW_PAYEE_ABS_FLOOR = 2_000_000    # ...and above this absolute floor (UZS)

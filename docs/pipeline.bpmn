@@ -80,7 +80,7 @@
       <bpmn:incoming>F_read</bpmn:incoming>
       <bpmn:outgoing>F_sender</bpmn:outgoing>
     </bpmn:serviceTask>
-    <bpmn:serviceTask id="Receiver" name="Read and update the receiver's recent payers&#10;[Redis]">
+    <bpmn:serviceTask id="Receiver" name="Read and update the receiver's recent payers, look up confirmed fraud accounts&#10;[Redis]">
       <bpmn:incoming>F_sender</bpmn:incoming>
       <bpmn:outgoing>F_receiver</bpmn:outgoing>
       <bpmn:property id="Property_Receiver" name="__targetRef_placeholder" />
@@ -236,11 +236,14 @@
       <bpmn:incoming>F_opened</bpmn:incoming>
       <bpmn:outgoing>F_review</bpmn:outgoing>
     </bpmn:userTask>
-    <bpmn:userTask id="Verdict" name="Decide: block it or release it&#10;[saved to ClickHouse]">
+    <bpmn:userTask id="Verdict" name="Decide: block it or release it&#10;[saved to ClickHouse; a block adds the payee to Redis]">
       <bpmn:incoming>F_review</bpmn:incoming>
       <bpmn:outgoing>F_verdict</bpmn:outgoing>
       <bpmn:dataOutputAssociation id="D_verdict">
         <bpmn:targetRef>Cases</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+      <bpmn:dataOutputAssociation id="D_confirmed">
+        <bpmn:targetRef>Redis</bpmn:targetRef>
       </bpmn:dataOutputAssociation>
     </bpmn:userTask>
     <bpmn:exclusiveGateway id="Fraud" name="Fraud?" default="F_release">
@@ -254,7 +257,7 @@
     <bpmn:endEvent id="Released" name="Transfer released">
       <bpmn:incoming>F_release</bpmn:incoming>
     </bpmn:endEvent>
-    <bpmn:dataStoreReference id="Redis" name="Redis: receivers' recent payers" />
+    <bpmn:dataStoreReference id="Redis" name="Redis: recent payers, confirmed fraud accounts" />
     <bpmn:dataStoreReference id="Cases" name="ClickHouse: cases and verdicts" />
     <bpmn:dataStoreReference id="Warehouse" name="ClickHouse: decisions, audit log" />
     <bpmn:dataStoreReference id="GraphDb" name="Neo4j: alert graph" />
@@ -475,7 +478,7 @@
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Redis_di" bpmnElement="Redis">
         <dc:Bounds x="1035" y="1055" width="50" height="50" />
-        <bpmndi:BPMNLabel><dc:Bounds x="985" y="1110" width="150" height="28" /></bpmndi:BPMNLabel>
+        <bpmndi:BPMNLabel><dc:Bounds x="870" y="1062" width="150" height="36" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Cases_di" bpmnElement="Cases">
         <dc:Bounds x="2350" y="1055" width="50" height="50" />
@@ -713,6 +716,12 @@
       <bpmndi:BPMNEdge id="D_verdict_di" bpmnElement="D_verdict">
         <di:waypoint x="2780" y="1335" />
         <di:waypoint x="2390" y="1105" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="D_confirmed_di" bpmnElement="D_confirmed">
+        <di:waypoint x="2780" y="1435" />
+        <di:waypoint x="2780" y="1450" />
+        <di:waypoint x="1060" y="1450" />
+        <di:waypoint x="1060" y="1105" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Note_decision_link_di" bpmnElement="Note_decision_link">
         <di:waypoint x="1900" y="350" />

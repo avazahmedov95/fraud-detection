@@ -20,6 +20,9 @@ class ReceiverState:
     #: account was last paid at all. Both are the AML counters, not the CEP window.
     payers: dict = field(default_factory=dict)
     last_inbound_ts: float = 0.0
+    #: card -> when this account last dealt with it, paying or paid, over the week:
+    #: the cards confirmed_cases checks against the confirmed accounts.
+    contacts: dict = field(default_factory=dict)
 
 
 #: Below this a "receiver with many senders" is not a claim anyone would make.
@@ -120,10 +123,12 @@ def _review_threshold():
 def evaluate(event: dict, state: SenderState, now: float,
              receiver_state: "ReceiverState | None" = None,
              sender_inbound_ts=None,
-             population: "PopulationBaseline | None" = None) -> dict:
+             population: "PopulationBaseline | None" = None,
+             confirmed=frozenset()) -> dict:
     """Score one event from the shared features. Mutates state (after extraction).
-    `receiver_state` is optional: an unreachable shared store fails open here."""
-    f = F.extract(event, state, now, receiver_state, sender_inbound_ts)
+    `receiver_state` is optional: an unreachable shared store fails open here.
+    `confirmed`: accounts in confirmed frauds, at least those this event touches."""
+    f = F.extract(event, state, now, receiver_state, sender_inbound_ts, confirmed)
 
     hits = []
     score = 0.0

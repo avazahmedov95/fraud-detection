@@ -242,6 +242,15 @@ def b_second_look_record_is_a_job_record():
     return None
 
 
+def b_a_verdict_reaches_the_job():
+    """A CONFIRMED_FRAUD verdict, from the queue or the demo, adds its payee to the
+    Redis set the job reads confirmed_cases from."""
+    J, S = pkg("stream-processor", "config"), pkg("case-manager", "store")
+    if J.CONFIRMED_KEY != S.CONFIRMED_KEY:
+        return f"the job reads {J.CONFIRMED_KEY}, a verdict adds to {S.CONFIRMED_KEY}"
+    return None
+
+
 def b_neo4j_params_match_the_cypher():
     R = pkg("sink-writer", "record")
     src = _read("sink-writer", "neo4j_writer.py")
@@ -699,6 +708,7 @@ CHECKS = [
     ("job record -> case-manager", b_case_manager_reads_only_emitted_keys),
     ("job record -> second look (topic, keys)", b_second_look_is_what_the_job_sends),
     ("second-look record -> where the job's goes", b_second_look_record_is_a_job_record),
+    ("analyst verdict -> confirmed accounts the job reads", b_a_verdict_reaches_the_job),
     ("alert_params -> Neo4j Cypher", b_neo4j_params_match_the_cypher),
     ("scored_row -> ClickHouse 01-schema", b_scored_row_matches_the_schema),
     ("case_row -> ClickHouse 02-cases", b_case_row_matches_the_schema),

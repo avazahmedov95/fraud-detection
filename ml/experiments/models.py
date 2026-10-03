@@ -5,7 +5,7 @@ on, reads the same held-out slice, and writes nothing the system serves. The
 served model, its cutoff and the running job are untouched whatever it prints.
 
 Every model gets the same split (64% fit / 16% cutoff / 20% test, by time), the
-same 21 features and the same rule for its cutoff - the F1 peak on the cutoff
+same 24 features and the same rule for its cutoff - the F1 peak on the cutoff
 rows - so the column that differs is the model. Trees take the features as they
 are; the distance-based models need them scaled and their gaps filled, which is
 part of what they cost.

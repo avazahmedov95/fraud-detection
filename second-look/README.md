@@ -4,7 +4,7 @@ TabPFN's second look at the transfers just under the review cut-off.
 
 The served model decides every transfer inside the Flink job in a fraction of a
 millisecond. A transfer whose score falls in the band just under the cut-off -
-from 0.0419 up to 0.1048 with today's model - is not let go: the job decides
+from 0.0508 up to 0.1690 with today's model - is not let go: the job decides
 `SECOND_LOOK`, and the transfer waits while this service asks TabPFN, which ranks
 such transfers better (`ml/README.md`, TabPFN as a second opinion). At or above
 TabPFN's own cut-off the transfer is held for the analyst like any REVIEW; under it,
@@ -17,10 +17,12 @@ fraud.second_look --> TabPFN, two pieces of context --> transactions.scored  eve
 
 ## Why this band, and these numbers
 
-On the held-out slice the band holds 118 transfers (0.12%) and 18 of the frauds
-the served model misses. The second look holds 23 of them, **11 fraud**, where a
-cut-off lowered far enough to raise 23 alerts catches 3: recall on the slice goes
-from 67.0% to 73.3%.
+On the held-out slice the band holds 109 transfers (0.11%) and 20 of the frauds
+the served model misses. The second look holds 32 of them, **14 fraud**, where a
+cut-off lowered far enough to raise 32 alerts catches 9: recall on the slice goes
+from 70.5% to 78.4%. That is the model served since 2026-10-02, with the confirmed
+cases; under the one before it the band held 18 such frauds and the second look 11,
+67.0% to 73.3%.
 
 Everything was chosen on the cutoff rows first, by `ml/second_look.py`: the band
 (the 100 highest-scored rows under the cut-off), TabPFN's cut-off in it (its F1

@@ -2,6 +2,9 @@
 # note there. These are the versions the service was written and tested against.
 kafka-python==3.0.10
 clickhouse-connect==1.6.0
+# A CONFIRMED_FRAUD verdict adds the payee to the accounts the job reads
+# (store.CONFIRMED_KEY); the version the job's image pins.
+redis==8.0.1
 
 # Explanations: exact tree contributions via Booster.predict(pred_contrib=True).
 #
