@@ -26,7 +26,7 @@ from pyflink.datastream.connectors.kafka import (
 import config as C
 from rules import SenderState, evaluate
 import features as F
-from receiver_store import ReceiverStore, PopulationStore
+from receiver_store import ReceiverStore
 import fusion
 import payload_crypto
 
@@ -96,10 +96,7 @@ class FraudDetector(KeyedProcessFunction):
         # Outside Flink state: keyed by sender, so a payee's inbound transfers
         # are spread across every partition (receiver_store.py).
         self._receivers = ReceiverStore(C.REDIS_HOST, C.REDIS_PORT)
-        # Opened in every mode: inert in "absolute", never missing in "relative".
-        self._population = PopulationStore(C.REDIS_HOST, C.REDIS_PORT)
         self._receivers.open()
-        self._population.open()
         import redis
         self._lease = redis.Redis(host=C.REDIS_HOST, port=C.REDIS_PORT,
                                   socket_timeout=0.2, socket_connect_timeout=0.2)
@@ -121,8 +118,7 @@ class FraudDetector(KeyedProcessFunction):
             if os.path.exists(C.MODEL_ONNX_PATH):
                 # One thread: a single-row call gains a quarter of a millisecond from
                 # more, and onnxruntime's extra threads spin after every call - five
-                # to six cores at 100 calls a second, against 4% of one
-                # (docs/irp-framing.md 7.6).
+                # to six cores at 100 calls a second, against 4% of one.
                 opts = ort.SessionOptions()
                 opts.intra_op_num_threads = 1
                 self._sess = ort.InferenceSession(
@@ -193,7 +189,7 @@ class FraudDetector(KeyedProcessFunction):
 
         result = evaluate(event, state, event_epoch, receiver_state,
                           sender_inbound_ts=sender_inbound,
-                          population=self._population, confirmed=confirmed)
+                          confirmed=confirmed)
         self._state.update(state)
         self._receivers.record(event, event_epoch)
 
@@ -258,7 +254,6 @@ class FraudDetector(KeyedProcessFunction):
     def close(self):
         if hasattr(self, "_receivers"):
             self._receivers.close()
-            self._population.close()
             self._lease.close()
 
 

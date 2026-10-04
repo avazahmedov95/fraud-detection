@@ -201,7 +201,7 @@ def extract(event: dict, state, now: float, receiver_state=None,
 
     # Confirmed cases spread one step along the graph: the payee, the sender, and the
     # cards the payee dealt with over the week, against the accounts in confirmed
-    # frauds (ml/README.md, What a graph store could add).
+    # frauds.
     flagged_contacts = 0
     if receiver_state is not None:
         flagged_contacts = sum(1 for card, t in receiver_state.contacts.items()

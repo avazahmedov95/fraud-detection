@@ -1,6 +1,6 @@
 """The counterparty counters: distinct payers and payees over a day and a week, and
 the interval since the sender's own account was last paid. The windows are what the
-CBU's internal-control rules count over (docs/related-work.md 6e), shortened to what
+CBU's internal-control rules count over, shortened to what
 a 30-day dataset can carry."""
 
 import pytest

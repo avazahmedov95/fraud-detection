@@ -97,13 +97,13 @@ REGISTRY = (
         key="counterparty_history",
         requires="the shared store keeping, per card, who paid it and when, for a "
                  "week rather than an hour, and the sender's own last inbound",
-        modes=("on", "off"),            # on: both gates passed (ml/README.md)
+        modes=("on", "off"),            # on: measured worth it before it was built
         features=("payee_payers_24h", "payee_payers_7d", "sender_payees_24h",
                   "sender_payees_7d", "secs_since_sender_inbound"),
         rules=(),
         rationale="The CBU's internal-control rules define P2P activity subject "
                   "to control as counts of distinct counterparties over up to 30 "
-                  "days (docs/related-work.md 6e); the one-hour fan-in window "
+                  "days; the one-hour fan-in window "
                   "sees a slice of that. A mule collects over days and passes "
                   "the money on, so the interval since the sender's own account "
                   "was last paid is the other half of the shape. A month cannot "
@@ -118,13 +118,13 @@ REGISTRY = (
         requires="the shared store keeping the accounts in confirmed frauds - the "
                  "analysts' verdicts, seeded with the labelled history - and, per "
                  "card, the cards it dealt with over a week",
-        modes=("on", "off"),            # on: its gate passed (ml/README.md)
+        modes=("on", "off"),            # on: measured worth it before it was built
         features=("payee_flagged", "sender_flagged", "payee_flagged_contacts"),
         rules=(),
         rationale="An account that took a confirmed fraud tends to take the next "
                   "one, and so do the accounts it deals with; a bank learns which "
-                  "from its own analysts' verdicts. Measured before it was built "
-                  "(ml/README.md, What a graph store could add): F1 +4.8 points on "
+                  "from its own analysts' verdicts. Measured before it was built: "
+                  "F1 +4.8 points on "
                   "20 of 20 seeds with the frauds known only as a bank learns them. "
                   "Last in the registry, so the vector grows at its end.",
     ),

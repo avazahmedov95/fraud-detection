@@ -7,11 +7,10 @@
 # generator --out can point anywhere: out/, out_check/, ...
 data-generator/out*/
 validation/*.csv
-# The public files the adapters read, and what --extract-only writes beside them:
-# sidecar files and cached feature matrices.
+# The public files the adapters read, and the feature caches they write beside them.
 validation/*_Patterns.txt
 validation/*.npz
-# Matrix caches the experiments write beside themselves.
+# The training-matrix cache second_look.py writes.
 ml/*.npz
 
 # Local settings and passwords: copied from .env.example on each machine.
@@ -25,9 +24,8 @@ venv/
 .pytest_cache/
 
 # ---------------------------------------------------------------------------
-# ML artifacts. Weights and plots are regenerable from train.py; the result
-# JSONs (metrics, ablation, seeds, recall-by-type) are the evidence quoted in
-# the thesis and are tracked.
+# ML artifacts. The weights are regenerable from train.py; the JSON files
+# (metrics, cut-off, feature names, the second look's band) are tracked.
 # ---------------------------------------------------------------------------
 ml/models/*.joblib
 ml/models/*.onnx
@@ -36,7 +34,6 @@ ml/models/*.npz
 # manifest.json is the PROVENANCE record and IS tracked - it is what says the
 # untracked artefacts above belonged together.
 !ml/models/manifest.json
-ml/models/*.png
 
 # OS / editor
 .DS_Store
@@ -48,7 +45,7 @@ stream-processor/model.onnx
 stream-processor/thresholds.json
 stream-processor/second_look.json
 
-# TLS material for the mutual-TLS arm (regenerate with `run.ps1 make-certs`).
+# TLS material for Kafka's mutual-TLS listener (regenerate with `run.ps1 make-certs`).
 # The CA private key lives here alongside the certificates it signs, which is
 # acceptable only because this is a throwaway development CA - and precisely
 # why it must never be committed.
@@ -57,11 +54,6 @@ infra/kafka/certs/
 # Editor and shell scratch.
 *.tmp
 
-# Run state, not source: experiments/outage.py rewrites the baseline snapshot on
-# every round, so tracking it means a dirty tree after every experiment.
-stream-processor/fault_injection_state.json
-stream-processor/throughput_windows.json
-
-# Warehouse export taken before the 2026-09-07 truncation, so the audit anchor
-# in docs/audit-anchors.md stays recomputable. See that file.
+# Warehouse exports taken before the 2026-09-07 and 2026-09-12 truncations: the
+# evidence behind the audit anchors.
 _warehouse_backup_*/

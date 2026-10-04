@@ -71,15 +71,8 @@ MIN_TRAVEL_DISTANCE_KM = 100.0
 RECEIVER_WINDOW_S = 3600
 MULE_FAN_IN_MIN_SENDERS = 6
 
-# "relative": a quantile of the live population instead of the constant 6, which
-# fits only this generator's density (docs/irp-framing.md §6, third RQ3 result).
-MULE_FAN_IN_MODE = os.getenv("MULE_FAN_IN_MODE", "absolute")   # absolute | relative
-MULE_FAN_IN_QUANTILE = float(os.getenv("MULE_FAN_IN_QUANTILE", "0.999"))
-MULE_FAN_IN_MIN_OBS = int(os.getenv("MULE_FAN_IN_MIN_OBS", "5000"))      # else fall back
-MULE_FAN_IN_REFRESH_EVERY = int(os.getenv("MULE_FAN_IN_REFRESH_EVERY", "512"))
-
 # counterparty_history: the CBU counts counterparties over up to 30 days
-# (related-work.md 6e); a week is the longest window 30-day datasets support.
+# days; a week is the longest window 30-day datasets support.
 LINK_DAY_S = 86400
 LINK_WEEK_S = 604800
 #: Pruning is memory, not correctness: extract filters by time anyway.

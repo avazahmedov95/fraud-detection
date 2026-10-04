@@ -1,5 +1,5 @@
 """Builds the dataset: population, normal behaviour, travel, injected fraud.
-Every parameter and the dataset of record: docs/generator-spec.md."""
+Every parameter: config.py."""
 
 import argparse
 import os
@@ -37,16 +37,14 @@ def _assign_payees(persons, rng):
             if q != p.pinfl:
                 chosen.add(q)
         # sorted(), not list(): set order follows the per-process string hash, so the
-        # same seed gave different receivers. (Changes the RNG stream - see the pinned
-        # hashes in docs/generator-spec.md.)
+        # same seed gave different receivers.
         payees[p.pinfl] = sorted(chosen)
     return payees
 
 
 def _lookalikes(config, persons, known, rng, start_dt, trips):
-    """Legitimate transfers with fraud's shapes (generator-spec.md 10): collections
-    and instalments, so MULE_FAN_IN and STRUCTURING can also fire on legitimate
-    traffic. Off in the baseline profile."""
+    """Legitimate transfers with fraud's shapes: collections and instalments, so
+    MULE_FAN_IN and STRUCTURING can also fire on legitimate traffic."""
     events = []
     span = max(1, config.days - 2) * 24 * 3600
 
@@ -88,8 +86,7 @@ def generate_normal(config, persons, by_pinfl, n_normal, rng, start_dt, trips):
     payees = _assign_payees(persons, rng)
     known = {p.pinfl: set(payees[p.pinfl]) for p in persons}  # already-seen payees
     span_seconds = config.days * 24 * 3600
-    # Drawn first and taken out of the same budget; empty, without a draw, in the
-    # baseline profile.
+    # Drawn first and taken out of the same budget.
     events = _lookalikes(config, persons, known, rng, start_dt, trips)
     phone_changed = {}
     if config.phone_change_share > 0:

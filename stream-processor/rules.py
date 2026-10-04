@@ -2,7 +2,6 @@
 the rule decision and the model's feature vector. No Flink or Redis imports, so it
 replays offline unchanged."""
 
-import logging
 from collections import deque, Counter
 from dataclasses import dataclass, field
 
@@ -23,68 +22,6 @@ class ReceiverState:
     #: card -> when this account last dealt with it, paying or paid, over the week:
     #: the cards confirmed_cases checks against the confirmed accounts.
     contacts: dict = field(default_factory=dict)
-
-
-#: Below this a "receiver with many senders" is not a claim anyone would make.
-FAN_IN_FLOOR = 2
-#: Histogram bins for the senders-per-receiver distribution; the last one is open.
-FAN_IN_BINS = 257
-
-
-def quantile_threshold(counts, n, q):
-    """Smallest count k with P(X < k) >= q, floored at FAN_IN_FLOOR so the rule
-    cannot fire on ordinary transfers. Shared by both baselines."""
-    target = q * n
-    cum = 0
-    thr = len(counts) - 1
-    for k, c in enumerate(counts):
-        cum += c
-        if cum >= target:
-            thr = k
-            break
-    return max(thr, FAN_IN_FLOOR)
-
-
-_warned_no_baseline = False
-
-
-def _warn_relative_without_baseline():
-    """Once per process: a per-event line on the 300 ms path would be its own defect."""
-    global _warned_no_baseline
-    if not _warned_no_baseline:
-        _warned_no_baseline = True
-        logging.getLogger("rules").warning(
-            "MULE_FAN_IN_MODE=relative but no baseline was passed to "
-            "evaluate(); the rule is running on the absolute threshold "
-            "(%d senders). Every caller that should reach this mode passes one: "
-            "the Flink job a receiver_store.PopulationStore, the offline "
-            "harnesses (experiments/replay.py and its subcommands) a "
-            "PopulationBaseline. So this line means a CALLER is missing it, not "
-            "that the deployment cannot support it.", C.MULE_FAN_IN_MIN_SENDERS)
-
-
-@dataclass
-class PopulationBaseline:
-    """Live distribution of `rcv_distinct_senders_1h` across all receivers, so
-    MULE_FAN_IN can fire on a quantile; without it the rule uses the constant."""
-    counts: list = field(default_factory=lambda: [0] * FAN_IN_BINS)
-    n: int = 0
-    _cached_thr: int = -1
-    _cached_at: int = -1
-
-    def observe(self, senders: int) -> None:
-        self.counts[min(int(senders), FAN_IN_BINS - 1)] += 1
-        self.n += 1
-
-    def threshold(self, q: float, fallback: int) -> int:
-        if self.n < C.MULE_FAN_IN_MIN_OBS:
-            return fallback
-        if (self._cached_at >= 0
-                and self.n - self._cached_at < C.MULE_FAN_IN_REFRESH_EVERY):
-            return self._cached_thr
-        self._cached_thr = quantile_threshold(self.counts, self.n, q)
-        self._cached_at = self.n
-        return self._cached_thr
 
 
 @dataclass
@@ -123,7 +60,6 @@ def _review_threshold():
 def evaluate(event: dict, state: SenderState, now: float,
              receiver_state: "ReceiverState | None" = None,
              sender_inbound_ts=None,
-             population: "PopulationBaseline | None" = None,
              confirmed=frozenset()) -> dict:
     """Score one event from the shared features. Mutates state (after extraction).
     `receiver_state` is optional: an unreachable shared store fails open here.
@@ -159,19 +95,8 @@ def evaluate(event: dict, state: SenderState, now: float,
     if on("DAILY_LIMIT_BREACH") and f["daily_sum_ratio"] > 1.0:
         hits.append("DAILY_LIMIT_BREACH"); score += C.W_DAILY_LIMIT
     # Fan-IN: the only rule here that looks at the payee's history, not the sender's.
-    if on("MULE_FAN_IN"):
-        # Constant, or a quantile of the live population - see MULE_FAN_IN_MODE.
-        fan_in_thr = C.MULE_FAN_IN_MIN_SENDERS
-        if C.MULE_FAN_IN_MODE == "relative":
-            if population is not None:
-                fan_in_thr = population.threshold(C.MULE_FAN_IN_QUANTILE,
-                                                  C.MULE_FAN_IN_MIN_SENDERS)
-            else:
-                # Relative asked for, no baseline given: a silent fallback leaves the
-                # knob set while the rule runs on the constant it exists to replace.
-                _warn_relative_without_baseline()
-        if f["rcv_distinct_senders_1h"] >= fan_in_thr:
-            hits.append("MULE_FAN_IN"); score += C.W_MULE_FAN_IN
+    if on("MULE_FAN_IN") and f["rcv_distinct_senders_1h"] >= C.MULE_FAN_IN_MIN_SENDERS:
+        hits.append("MULE_FAN_IN"); score += C.W_MULE_FAN_IN
 
     score = min(1.0, score)
 
@@ -181,9 +106,6 @@ def evaluate(event: dict, state: SenderState, now: float,
     vector = F.to_vector(f)
     F.update_state(state, event, now)
     F.update_receiver_state(receiver_state, event, now)
-    if population is not None:
-        # After the decision: an event must not join the baseline it is judged against.
-        population.observe(f["rcv_distinct_senders_1h"])
 
     return {
         "is_new_payee": bool(f["is_new_payee"]),

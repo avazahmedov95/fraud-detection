@@ -1,4 +1,4 @@
-"""TabPFN over its context pieces, read the way ml/experiments/models.py reads them:
+"""TabPFN over its context pieces, read the way ml/second_look.py reads them:
 one member per piece, each with the median imputer and the scaler fitted on its
 piece, the members' probabilities averaged. Each member caches its context once,
 at start, so an answer does not reprocess five thousand rows."""

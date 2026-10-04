@@ -1,6 +1,6 @@
 """Turns a model-only alert into words: the top tree contributions, phrased as
 findings an analyst can read out. Refuses to speak rather than risk a wrong reason.
-Why it runs here and not on the scoring path: docs/irp-framing.md 9.2."""
+It runs here, off the scoring path: a decision never waits for its explanation."""
 
 import logging
 import os

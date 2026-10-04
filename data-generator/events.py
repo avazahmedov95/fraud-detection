@@ -1,5 +1,4 @@
-"""Normal transaction behaviour: salary, rent, transfers to relatives, payments.
-Spec for what each pattern should look like: docs/generator-spec.md 3."""
+"""Normal transaction behaviour: salary, rent, transfers to relatives, payments."""
 
 import uuid
 
@@ -45,7 +44,7 @@ def gen_session_signals(sender, fraud_type, rng):
 
 def round_like_a_person(amount, rng, down=False):
     """People send round sums - to 10,000, 50,000 or 100,000 UZS, the step growing
-    with the amount (generator-spec.md 8, item 6).
+    with the amount.
 
     `down` where the amount has a ceiling it must not cross: a mule cannot pay on
     more than it collected, a structuring transfer must stay under the reporting

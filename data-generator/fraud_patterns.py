@@ -1,5 +1,5 @@
 """The four fraud scenarios injected into the generated traffic; each leaves a
-signature a specific rule is meant to catch. Parameters: docs/generator-spec.md 5."""
+signature a specific rule is meant to catch. Parameters: config.py."""
 
 import numpy as np
 from datetime import datetime, timedelta
@@ -19,8 +19,7 @@ FRAUD_MIX = {"APP": 0.35, "ATO": 0.20, "STRUCTURING": 0.20, "MULE": 0.25}
 def maybe_round(amount, config, rng, down=False):
     """Most people send round sums; a minority send an exact one - the whole
     balance, or what someone asked for to the tiyin. The share is the same for
-    every pattern and for legitimate traffic, so roundness cannot mark the class
-    (generator-spec.md 8, item 6)."""
+    every pattern and for legitimate traffic, so roundness cannot mark the class."""
     if config.round_amount_share > 0 and rng.random() < config.round_amount_share:
         return round_like_a_person(amount, rng, down=down)
     return amount
@@ -99,7 +98,7 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
                         region = where
                 else:
                     region = str(rng.choice(REGIONS))
-            # 2..8 events: A2 cannot slow down (threat-model.md 4), so takeovers can trip
+            # 2..8 events: an attacker in a hurry cannot slow down, so takeovers can trip
             # VELOCITY. STRUCTURING's slow spacing below is left alone - a smurfing run
             # that paces itself is the modelled behaviour.
             for i in range(int(rng.integers(2, 9))):

@@ -1,5 +1,4 @@
-"""Recomputes the audit hash chain and reports where it breaks.
-Anchored heads: docs/audit-anchors.md."""
+"""Recomputes the audit hash chain and reports where it breaks."""
 
 import argparse
 import json

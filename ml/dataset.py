@@ -34,9 +34,6 @@ def build_matrix(csv_path: str, nrows=None) -> pd.DataFrame:
     states = defaultdict(R.SenderState)
     # Keyed by payee, mirroring the shared store the live job reads.
     receiver_states = defaultdict(R.ReceiverState)
-    # cep_score depends on MULE_FAN_IN's population baseline; one in-process baseline
-    # here sees what PopulationStore reads from Redis live, so no train/serve skew.
-    population = R.PopulationBaseline()
     marks, confirmed, j = confirmations(df), set(), 0
     rows = []
     for rec in df.itertuples(index=False):
@@ -54,7 +51,7 @@ def build_matrix(csv_path: str, nrows=None) -> pd.DataFrame:
                          receiver_states[F.payee_key(event)],
                          sender_inbound_ts=(paid_sender.last_inbound_ts
                                             if paid_sender else None),
-                         population=population, confirmed=confirmed)
+                         confirmed=confirmed)
         F.add_contact(receiver_states[F.sender_key(event)], F.payee_key(event), now)
         row = dict(zip(FEATURE_NAMES, res["features"]))
         row["cep_score"] = res["cep_score"]

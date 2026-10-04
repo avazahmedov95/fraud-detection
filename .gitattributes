@@ -10,8 +10,8 @@
 #
 # The working copies happen to be LF today, so this file is not fixing a break;
 # it is preventing one that a FRESH CLONE on Windows would produce. That matters
-# here specifically: reproducibility by a reader is a claim this project makes
-# (docs/generator-spec.md 7), and a reader who clones and runs `run.ps1 up`
+# here specifically: reproducibility by a reader is a claim this project makes,
+# and a reader who clones and runs `run.ps1 up`
 # would meet the failure, not the author.
 #
 # Learned on 2026-08-31, when six cloned shell scripts arrived as CRLF from a
@@ -23,6 +23,6 @@ docker-compose.yml text eol=lf
 # PowerShell is the Windows-side entry point and stays native.
 *.ps1           text eol=crlf
 
-# Data files are compared by SHA-256 in docs/generator-spec.md. Any rewriting of
+# Data files are compared by SHA-256 (ml/models/manifest.json). Any rewriting of
 # line endings would change the hash and silently break the "dataset of record".
 *.csv           -text

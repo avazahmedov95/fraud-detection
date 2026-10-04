@@ -11,7 +11,7 @@ The copies in data-generator/ and sink-writer/ must stay byte-identical.
 import hashlib
 
 # BREAKING to change this list or its order: it invalidates every stored hash
-# (docs/audit-anchors.md records each anchored head with its field list).
+# (each anchored head was recorded with its field list).
 INGRESS_FIELDS = (
     "transaction_id", "event_time",
     "sender_pinfl", "sender_card", "receiver_card",
