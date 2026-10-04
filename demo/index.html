@@ -100,6 +100,7 @@ td.num,th.num{text-align:right}
 .queue li:hover{background:var(--panel-2)}.queue li.sel{background:var(--accent-soft)}
 .queue .amt{font:600 .95rem var(--mono)}.queue .kind{color:var(--muted);font-size:.76rem}
 .queue .acts{display:flex;gap:6px;flex-wrap:wrap}.queue .acts button{padding:5px 9px;font-size:.76rem}
+.queue li[data-done]{cursor:default}
 .count{font-family:var(--mono);color:var(--muted)}
 .more{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 14px;border-top:1px solid var(--line);font-size:.8rem;color:var(--muted)}
 .more:empty{display:none}
@@ -252,6 +253,11 @@ button.on-filter{border-color:var(--accent);background:var(--accent-soft)}
             <ul class="queue" id="queue"></ul>
             <div class="more" id="queue-more"></div>
           </div>
+          <div class="panel">
+            <div class="panel-h"><h2 data-t="done_title"></h2></div>
+            <p class="panel-sub" data-t="done_hint"></p>
+            <ul class="queue" id="done"></ul>
+          </div>
         </div>
       </div>
     </section>
@@ -341,6 +347,11 @@ ru: {
   confirm: "Заблокировать", fp: "Отпустить", held: "задержан {t}", type_none: "тип не назван",
   empty_cases: "Задержанных переводов нет. Покажите случай мошенничества — он появится здесь через несколько секунд.",
   no_store: "Очередь недоступна: ",
+  done_title: "Решения аналитика",
+  done_hint: "Решения с начала показа. Ошибку можно исправить: если снять подтверждение мошенничества, счёт получателя уходит из памяти подтверждённых мошенников, если его не подтверждает другой случай.",
+  done_conf: "заблокирован: мошенничество", done_fp: "отпущен: ложная тревога",
+  to_fp: "Ошибка: отпустить", to_conf: "Ошибка: это мошенничество",
+  empty_done: "Решений пока нет.",
   grafana_hint: "Панель мониторинга Grafana из этого же стека: те же решения, собранные в базе, — число переводов и тревог, типы, распределение риска, регионы, последние тревоги с причинами. Если в рамке появится вход: логин admin, пароль из файла .env.",
   grafana_open: "Открыть Grafana в отдельной вкладке",
   live_tag: "живые данные из базы",
@@ -451,6 +462,11 @@ en: {
   confirm: "Block", fp: "Release", held: "held {t}", type_none: "type not named",
   empty_cases: "Nothing is held. Show a fraud case — it appears here within seconds.",
   no_store: "Queue unavailable: ",
+  done_title: "Analyst verdicts",
+  done_hint: "Verdicts given since this demo started. A mistake can be corrected: withdrawing a fraud confirmation takes the payee's account out of the confirmed fraud accounts, unless another case confirms it.",
+  done_conf: "blocked: fraud", done_fp: "released: false alarm",
+  to_fp: "Mistake: release", to_conf: "Mistake: it was fraud",
+  empty_done: "No verdicts yet.",
   grafana_hint: "The Grafana dashboard from the same stack: the same decisions as stored in the database — transfer and alert counts, types, the risk distribution, regions, the latest alerts with their reasons. If a login appears in the frame: user admin, password from the .env file.",
   grafana_open: "Open Grafana in its own tab",
   live_tag: "live, from the database",
@@ -790,9 +806,17 @@ function renderQueue() {
     : `<p class="empty">${t(filterCount("queue") ? "empty_filtered" : "empty_cases")}</p>`;
 }
 
+function renderDone() {
+  const ds = (lastCases && lastCases.done) || [], conf = c => c.verdict === "CONFIRMED_FRAUD";
+  $("#done").innerHTML = ds.length ? ds.map(c => `<li data-done="${esc(c.id)}">` +
+    `<div><div class="amt">${fmtInt(c.amount)} ${t("sum")}</div><div class="kind">${esc(c.type ? kindName(c.type) : t("type_none"))} · ${t(conf(c) ? "done_conf" : "done_fp")}</div></div>` +
+    `<div class="acts"><button type="button" data-res="${conf(c) ? "FALSE_POSITIVE" : "CONFIRMED_FRAUD"}">${t(conf(c) ? "to_fp" : "to_conf")}</button></div></li>`).join("")
+    : `<p class="empty">${t("empty_done")}</p>`;
+}
+
 async function refreshCases() {
   lastCases = await api(`/api/cases?new=1&limit=${limits.queue}` + filterQuery("queue"));
-  renderQueue(); renderStatus();
+  renderQueue(); renderDone(); renderStatus();
   if (selected && selected.src === "case") renderDetail();
 }
 
@@ -876,10 +900,10 @@ document.addEventListener("click", async e => {
   }
   else if (el.dataset.row) { selected = {src: "stream", id: el.dataset.row}; renderStream(); renderQueue(); renderDetail(); }
   else if (el.dataset.res) {
-    const li = el.closest("[data-case]");
+    const li = el.closest("[data-case],[data-done]"), id = li.dataset.case || li.dataset.done;
     el.disabled = true;
-    await api(`/api/cases/${encodeURIComponent(li.dataset.case)}/resolve`, {disposition: el.dataset.res});
-    if (selected && selected.id === li.dataset.case) selected = null;
+    await api(`/api/cases/${encodeURIComponent(id)}/resolve`, {disposition: el.dataset.res});
+    if (selected && selected.id === id) selected = null;
     refreshCases();
   }
   else if (el.dataset.case) { selected = {src: "case", id: el.dataset.case}; renderStream(); renderQueue(); renderDetail(); }

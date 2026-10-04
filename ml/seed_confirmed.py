@@ -1,7 +1,8 @@
 """Seeds the accounts in confirmed frauds the job reads (config.CONFIRMED_KEY) with
 the labelled history: the payees of the frauds confirmed by the first held-out
 transfer, the set the model's test rows start from. The analysts' verdicts add to
-it from there (case-manager/store.py).
+it from there (case-manager/store.py); config.HISTORY_KEY keeps the history's own
+copy, so withdrawing a verdict cannot take one of these out.
 
     python seed_confirmed.py [--host localhost] [--port 6379]
 """
@@ -27,5 +28,7 @@ if __name__ == "__main__":
     ap.add_argument("--port", type=int, default=6379)
     a = ap.parse_args()
     cards = sorted(history(T.CSV))
-    added = redis.Redis(host=a.host, port=a.port).sadd(D.C.CONFIRMED_KEY, *cards)
+    r = redis.Redis(host=a.host, port=a.port)
+    r.sadd(D.C.HISTORY_KEY, *cards)
+    added = r.sadd(D.C.CONFIRMED_KEY, *cards)
     print(f"{D.C.CONFIRMED_KEY}: {len(cards):,} accounts from the history, {added:,} new")

@@ -244,10 +244,12 @@ def b_second_look_record_is_a_job_record():
 
 def b_a_verdict_reaches_the_job():
     """A CONFIRMED_FRAUD verdict, from the queue or the demo, adds its payee to the
-    Redis set the job reads confirmed_cases from."""
+    Redis set the job reads confirmed_cases from; withdrawing it spares the history's."""
     J, S = pkg("stream-processor", "config"), pkg("case-manager", "store")
     if J.CONFIRMED_KEY != S.CONFIRMED_KEY:
         return f"the job reads {J.CONFIRMED_KEY}, a verdict adds to {S.CONFIRMED_KEY}"
+    if J.HISTORY_KEY != S.HISTORY_KEY:
+        return f"the history is seeded into {J.HISTORY_KEY}, a withdrawal checks {S.HISTORY_KEY}"
     return None
 
 

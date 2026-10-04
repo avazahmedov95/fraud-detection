@@ -711,9 +711,12 @@ class App:
             if not s._ensure():
                 raise RuntimeError("the case store cannot reach ClickHouse; see docker logs demo")
             items = s.open_cases(limit=500, since=self.started if new_only else None)
+            # The verdicts given during this showing, each of which can be changed.
+            done = s.resolved_cases(since=self.started, limit=PAGE) if new_only else []
             stats, holds = s.stats(), s.holds()
         except Exception as exc:                       # noqa: BLE001 - shown on the page
-            return {"error": str(exc)[:300], "cases": [], "total": 0, "stats": {}, "holds": {}}
+            return {"error": str(exc)[:300], "cases": [], "done": [], "total": 0,
+                    "stats": {}, "holds": {}}
         now = time.time()
         if flt:
             items = [c for c in items if passes(
@@ -730,12 +733,17 @@ class App:
                            "why": {"status": c.get("explanation_status") or "",
                                    "items": split_phrases(c.get("explanation") or [])}}
                           for c in items],
+                "done": [{"id": c["case_id"], "amount": c["amount_uzs"],
+                          "to": mask(c["receiver_card"]), "type": c["predicted_type"],
+                          "verdict": c["disposition"], "by": c["resolved_by"]}
+                         for c in done],
                 "stats": {k: v for k, v in stats.items()
                           if k in ("NEW", "CONFIRMED_FRAUD", "FALSE_POSITIVE", "_precision")},
                 "holds": holds}
 
     def resolve(self, case_id, disposition):
-        """Block the held transfer (CONFIRMED_FRAUD) or release it (FALSE_POSITIVE)."""
+        """Block the held transfer (CONFIRMED_FRAUD) or release it (FALSE_POSITIVE);
+        on a resolved case, change the verdict."""
         if disposition not in ("CONFIRMED_FRAUD", "FALSE_POSITIVE"):
             raise ValueError(f"unknown disposition {disposition!r}")
         return {"ok": bool(self.store().resolve(case_id, disposition, "demo"))}

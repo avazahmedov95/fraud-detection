@@ -5,13 +5,15 @@ table `fraud.cases`, each case with its reasons in words. A REVIEW holds the
 transfer until the analyst decides: CONFIRMED_FRAUD blocks it and the money stays
 with the payer, FALSE_POSITIVE releases it. The verdict is the only real label the
 system produces, and a CONFIRMED_FRAUD also adds the payee's card at once to the
-confirmed fraud accounts the job reads (Redis, `confirmed:accounts`).
+confirmed fraud accounts the job reads (Redis, `confirmed:accounts`). A verdict can
+be changed: withdrawing a CONFIRMED_FRAUD takes the card out again, unless another
+confirmed case or the labelled history (`confirmed:history`) still names it.
 
 | File | What it does |
 |---|---|
 | `consumer.py` | the service: `fraud.alerts` -> `fraud.cases` |
 | `case.py` | an alert as a case row, the verdict as a new row, how long a transfer was held; no I/O |
-| `store.py` | ClickHouse access - open, read, resolve, count, holds - and the confirmed payee into Redis |
+| `store.py` | ClickHouse access - open, read, resolve, count, holds - and the confirmed payee into and out of Redis |
 | `explain.py` | each alert's reasons: the model's exact tree contributions, in words |
 | `queue_cli.py` | the analyst's queue on the command line: `list`, `show`, `resolve`, `stats` |
 | `config.py` | connections, from the environment |
@@ -28,4 +30,5 @@ already decided.
 ```
 
 The demo page's "Block" and "Release" buttons write the same verdicts through the
-same `store.py`.
+same `store.py`, and its list of verdicts changes one; on the command line, resolve
+the case again.

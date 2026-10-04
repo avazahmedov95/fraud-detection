@@ -16,8 +16,8 @@ comes from them.
 Tabs:
 
 - **Desk** - a live stream of decisions, real fraud cases from the part of the data
-  the model never saw sent through the system, and the held transfers to block or
-  release.
+  the model never saw sent through the system, the held transfers to block or
+  release, and the verdicts given, each of which can be changed.
 - **About the project** - every component, the path of one real decision with its
   stage times, the 24 features and the 10 rules.
 - **Grafana** - the dashboard (Grafana asks for its login).

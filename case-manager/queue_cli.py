@@ -97,12 +97,15 @@ def cmd_show(args):
 
 def cmd_resolve(args):
     store = _store()
-    ok = store.resolve(args.case_id, args.disposition, args.by)
-    if not ok:
+    before = store.get(args.case_id)
+    if before is None or not store.resolve(args.case_id, args.disposition, args.by):
         raise SystemExit(f"no case {args.case_id!r} - nothing resolved")
     held = _duration(held_seconds(store.get(args.case_id), time.time()))
     print(f"{args.case_id} -> {args.disposition} (by {args.by}): the transfer is "
           f"{ACTION[args.disposition]}, after {held} held")
+    if before["disposition"] == "CONFIRMED_FRAUD" and args.disposition != "CONFIRMED_FRAUD":
+        print("Confirmation withdrawn: the payee leaves the confirmed accounts "
+              "unless another confirmed case or the history names it.")
     print("Recorded as a label. It is attributable and it is revisable: the "
           "row is versioned, so a later verdict supersedes this one.")
 
@@ -157,7 +160,8 @@ def main():
     p.set_defaults(func=cmd_show)
 
     p = sub.add_parser("resolve", help="block (CONFIRMED_FRAUD) or release "
-                                       "(FALSE_POSITIVE) a held transfer")
+                                       "(FALSE_POSITIVE) a held transfer, or "
+                                       "change a verdict")
     p.add_argument("case_id")
     p.add_argument("disposition",
                    choices=[d for d in DISPOSITIONS if d != "NEW"])

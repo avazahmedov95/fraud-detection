@@ -140,6 +140,33 @@ def test_a_store_that_cannot_connect_is_an_error_not_an_empty_queue():
     assert out["error"] and out["cases"] == []
 
 
+def test_the_verdicts_of_this_showing_come_with_the_queue():
+    """Listed so that a mistaken verdict can be changed from the page."""
+    import case as CASE
+    row = dict.fromkeys(CASE.CASE_COLUMNS, "")
+    row.update(case_id="t_1", amount_uzs=5_000_000, receiver_card="8600000000001234",
+               disposition="CONFIRMED_FRAUD", resolved_by="demo")
+
+    class Store:
+        def _ensure(self):
+            return True
+
+        def open_cases(self, limit, since=None):
+            return []
+
+        def resolved_cases(self, since, limit):
+            return [row]
+
+        def stats(self):
+            return {}
+
+        def holds(self):
+            return {}
+
+    out = S.App.cases(SimpleNamespace(started=0, store=Store), new_only=True)
+    assert [(d["id"], d["verdict"]) for d in out["done"]] == [("t_1", "CONFIRMED_FRAUD")]
+
+
 def test_times_with_and_without_a_fraction_both_load(tmp_path):
     # isoformat() drops a zero fraction, so the generated file mixes both forms;
     # the realistic dataset failed to load on exactly this.

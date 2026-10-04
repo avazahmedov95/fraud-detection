@@ -13,8 +13,11 @@ log = logging.getLogger("case_store")
 RECONNECT_INTERVAL_S = 10.0
 _TABLE = "cases"
 #: The accounts in confirmed frauds the job reads (stream-processor/config.py): a
-#: CONFIRMED_FRAUD verdict adds the payee's card.
+#: CONFIRMED_FRAUD verdict adds the payee's card, and withdrawing it takes the card out.
 CONFIRMED_KEY = "confirmed:accounts"
+#: The cards the labelled history confirmed (ml/seed_confirmed.py), which no
+#: withdrawn verdict takes out.
+HISTORY_KEY = "confirmed:history"
 
 #: The table DDL, shipped beside this module and applied on every connect:
 #: initdb scripts run only on an empty data directory, so a new schema file would
@@ -149,7 +152,7 @@ class CaseStore:
         return dict(zip(CASE.CASE_COLUMNS, rows[0])) if rows else None
 
     def resolve(self, case_id, disposition, by, at_epoch=None):
-        """Write a verdict. Returns False when there is no such case."""
+        """Write a verdict, or change one. Returns False when there is no such case."""
         current = self.get(case_id)
         if current is None:
             return False
@@ -159,20 +162,52 @@ class CaseStore:
                             database=self._db)
         if disposition == "CONFIRMED_FRAUD":
             self._confirm(current["receiver_card"])
+        elif current["disposition"] == "CONFIRMED_FRAUD":
+            self._withdraw(current["receiver_card"])
         return True
+
+    def resolved_cases(self, since, limit=20):
+        """The verdicts given from `since` (epoch seconds) on, the latest first."""
+        if not self._ensure():
+            return []
+        q = (f"SELECT {', '.join(CASE.CASE_COLUMNS)} "
+             f"FROM {self._db}.{_TABLE} FINAL "
+             f"WHERE disposition != 'NEW' "
+             f"AND resolved_at >= fromUnixTimestamp64Milli(%(since)s) "
+             f"ORDER BY resolved_at DESC LIMIT {int(limit)}")
+        return [dict(zip(CASE.CASE_COLUMNS, r)) for r in self._client.query(
+            q, parameters={"since": int(since * 1000)}).result_rows]
+
+    def _redis_client(self):
+        if self._redis is None:
+            import redis
+            self._redis = redis.Redis(host=os.getenv("REDIS_HOST", "redis"),
+                                      port=int(os.getenv("REDIS_PORT", "6379")),
+                                      socket_timeout=2)
+        return self._redis
 
     def _confirm(self, card):
         """The confirmed payee joins the accounts the job reads. Redis down costs the
         mark, said in the log, not the verdict, which is already stored."""
         try:
-            if self._redis is None:
-                import redis
-                self._redis = redis.Redis(host=os.getenv("REDIS_HOST", "redis"),
-                                          port=int(os.getenv("REDIS_PORT", "6379")),
-                                          socket_timeout=2)
-            self._redis.sadd(CONFIRMED_KEY, card)
+            self._redis_client().sadd(CONFIRMED_KEY, card)
         except Exception as exc:                       # noqa: BLE001
             log.error("confirmed %s, but could not add it to %s: %s",
+                      card, CONFIRMED_KEY, exc)
+
+    def _withdraw(self, card):
+        """A withdrawn confirmation takes the payee out of the accounts the job reads,
+        unless another confirmed case or the labelled history still names it."""
+        q = (f"SELECT count() FROM {self._db}.{_TABLE} FINAL "
+             f"WHERE receiver_card = %(card)s AND disposition = 'CONFIRMED_FRAUD'")
+        if self._client.query(q, parameters={"card": card}).result_rows[0][0]:
+            return
+        try:
+            r = self._redis_client()
+            if not r.sismember(HISTORY_KEY, card):
+                r.srem(CONFIRMED_KEY, card)
+        except Exception as exc:                       # noqa: BLE001
+            log.error("withdrew %s, but could not take it out of %s: %s",
                       card, CONFIRMED_KEY, exc)
 
     def stats(self):

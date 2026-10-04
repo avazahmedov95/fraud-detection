@@ -87,6 +87,9 @@ LINK_PRUNE_AT = 256
 # CONFIRMED_FRAUD verdicts add to (case-manager) and the labelled history seeds
 # (ml/seed_confirmed.py). Replaying the history offline, a fraud joins it a day after.
 CONFIRMED_KEY = "confirmed:accounts"
+# The history's own copy, which the job does not read: a withdrawn verdict leaves
+# these accounts confirmed (case-manager).
+HISTORY_KEY = "confirmed:history"
 CONFIRMATION_DELAY_S = 86400
 
 AMOUNT_DEVIATION_MIN_HISTORY = 5   # history needed before deviation can fire

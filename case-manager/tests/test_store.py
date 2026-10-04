@@ -56,9 +56,19 @@ class FakeClient:
                         .timestamp() * 1000 >= parameters["since"]]
             rows.sort(key=lambda r: (-r[CASE.CASE_COLUMNS.index("amount_uzs")],
                                      -r[CASE.CASE_COLUMNS.index("final_score")]))
+        elif "disposition != 'NEW'" in q:
+            at = CASE.CASE_COLUMNS.index("resolved_at")
+            rows = [r for r in rows if r[CASE.CASE_COLUMNS.index("disposition")] != "NEW"
+                    and r[at].timestamp() * 1000 >= parameters["since"]]
+            rows.sort(key=lambda r: r[at], reverse=True)
         elif "case_id = " in q:
             cid = (parameters or {}).get("cid")
             rows = [r for r in rows if r[0] == cid]
+        elif "receiver_card = " in q:
+            return FakeResult([[sum(
+                1 for r in rows
+                if r[CASE.CASE_COLUMNS.index("receiver_card")] == parameters["card"]
+                and r[CASE.CASE_COLUMNS.index("disposition")] == "CONFIRMED_FRAUD")]])
         elif "GROUP BY explanation_status" in q:
             counts = {}
             for r in rows:
@@ -90,6 +100,12 @@ class FakeRedis:
 
     def sadd(self, key, member):
         self.sets.setdefault(key, set()).add(member)
+
+    def srem(self, key, member):
+        self.sets.get(key, set()).discard(member)
+
+    def sismember(self, key, member):
+        return member in self.sets.get(key, set())
 
 
 @pytest.fixture
@@ -213,6 +229,39 @@ def test_a_confirmed_fraud_adds_its_payee_to_the_accounts_the_job_reads(store):
         store.flush()
         store.resolve(f"t_{i}", d, "analyst.k")
     assert store._redis.sets == {S.CONFIRMED_KEY: {"card_0"}}
+
+
+def _confirmed(store, case_id, card, at):
+    store.add(dict(ALERT, transaction_id=case_id, receiver_card=card))
+    store.flush()
+    store.resolve(case_id, "CONFIRMED_FRAUD", "analyst.k", at_epoch=at)
+
+
+def test_a_withdrawn_confirmation_takes_the_payee_out(store):
+    _confirmed(store, "t_1", "card_1", 1_000)
+    store.resolve("t_1", "FALSE_POSITIVE", "analyst.m", at_epoch=2_000)
+    assert store._redis.sets[S.CONFIRMED_KEY] == set()
+    assert store.get("t_1")["disposition"] == "FALSE_POSITIVE"
+
+
+def test_another_confirmed_case_keeps_the_payee_in(store):
+    _confirmed(store, "t_1", "card_1", 1_000)
+    _confirmed(store, "t_2", "card_1", 1_000)
+    store.resolve("t_1", "FALSE_POSITIVE", "analyst.m", at_epoch=2_000)
+    assert store._redis.sets[S.CONFIRMED_KEY] == {"card_1"}
+
+
+def test_the_history_keeps_its_accounts(store):
+    store._redis.sadd(S.HISTORY_KEY, "card_1")
+    _confirmed(store, "t_1", "card_1", 1_000)
+    store.resolve("t_1", "FALSE_POSITIVE", "analyst.m", at_epoch=2_000)
+    assert "card_1" in store._redis.sets[S.CONFIRMED_KEY]
+
+
+def test_resolved_cases_are_the_latest_verdicts_first(store):
+    for i, at in enumerate([1_000, 3_000, 2_000]):
+        _confirmed(store, f"t_{i}", f"card_{i}", at)
+    assert [c["case_id"] for c in store.resolved_cases(since=1.5e3)] == ["t_1", "t_2"]
 
 
 def test_redis_down_costs_the_mark_not_the_verdict(store, caplog):
