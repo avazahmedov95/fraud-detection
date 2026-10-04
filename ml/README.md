@@ -19,13 +19,15 @@ trains on exactly what it will be served.
 
 ```bash
 python train.py          # model.joblib, thresholds.json, feature_names.json, metrics.json
-python export_onnx.py    # model.txt, model.onnx, manifest.json
+..\run.ps1 export-model  # export_onnx.py in a container: model.txt, model.onnx, manifest.json
 python second_look.py --cache models_matrix.npz --tabpfn-model <checkpoint>
 python seed_confirmed.py # with the stack up
 ```
 
-`second_look.py` runs in `.venv-models`, where TabPFN is installed. Then
-`run.ps1 resume-job` serves the model, its cut-off and the second look's band.
+`export_onnx.py` runs in a container (`infra/ml/Dockerfile`, the versions this
+file pins): on the owner's Windows, Smart App Control blocks the native library
+onnx loads. `second_look.py` runs in `.venv-models`, where TabPFN is installed.
+Then `run.ps1 resume-job` serves the model, its cut-off and the second look's band.
 
 ## Results on the held-out month
 

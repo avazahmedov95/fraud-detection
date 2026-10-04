@@ -42,7 +42,8 @@ copy .env.example .env               # then set the passwords in it
 .\run.ps1 make-certs                 # Kafka's TLS listener needs them before the first up
 .\run.ps1 up                         # build and start the stack
 .\run.ps1 generate                   # the dataset of record
-cd ml; python train.py; python export_onnx.py; cd ..
+cd ml; python train.py; cd ..
+.\run.ps1 export-model               # the model to ONNX, in a container
 .\run.ps1 seed-confirmed             # the history's confirmed fraud accounts into Redis
 .\run.ps1 submit-job                 # the Flink job
 ```

@@ -198,6 +198,7 @@ switch ($Target.ToLower()) {
             "generate"       = "generate the synthetic dataset"
             "produce"        = "replay the dataset into Kafka (batch)"
             "produce-stream" = "replay paced to the original timing (200x)"
+            "export-model"   = "the trained model to ONNX for the job, in a container"
             "seed-confirmed" = "load the history's confirmed fraud accounts into Redis"
             "serve-prep"     = "copy the model, its cut-off and the second look's band next to the job"
             "submit-job"     = "fresh TaskManager, then the PyFlink job (empty state)"
@@ -262,6 +263,16 @@ switch ($Target.ToLower()) {
         try {
             python kafka_producer.py --file out/transactions.csv --realtime --speed 200 --bootstrap 127.0.0.1:29092 --topic transactions.raw
         } finally { Pop-Location }
+    }
+
+    "export-model" {
+        # In a container: Smart App Control blocks onnx's native library on this
+        # host (infra/ml/Dockerfile). The repository is mounted, so the files land
+        # in ml/models.
+        docker build -q -t fraud-ml-export -f infra/ml/Dockerfile .
+        if ($LASTEXITCODE -eq 0) {
+            docker run --rm -v "$((Get-Location).Path):/repo" fraud-ml-export
+        }
     }
 
     "seed-confirmed" {

@@ -10,6 +10,11 @@ scikit-learn==1.7.2
 onnxruntime==1.23.2
 onnxmltools==1.16.0
 skl2onnx==1.20.0
+# What onnxmltools pulls in, pinned to the versions the served model was exported
+# with, so the export container (infra/ml/Dockerfile) writes the same bytes.
+onnx==1.22.0
+protobuf==7.36.0
+ml_dtypes==0.6.0
 pandas==2.2.3
 numpy==2.1.3
 joblib==1.5.3

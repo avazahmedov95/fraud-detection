@@ -1,9 +1,9 @@
 {
-  "exported_at": "2026-10-02T13:17:57+00:00",
-  "commit": "46b7dbe71efecf8b5df9b2849f5059f6b6f973ef",
+  "exported_at": "2026-10-04T15:13:00+00:00",
+  "commit": "f8dfb15c4de82fd5e589db166434423807aa160e",
   "artefacts": {
-    "model.onnx": "2941fb405798d4a48b69e781f46ee26c4595c3ee167d724073abe173aac8f9c8",
-    "model.txt": "55d9f82b22d518a68bfc2ce0739fd79d5680f3933c4ac7729c02048ba601590e",
+    "model.onnx": "2702743509b732b1157f1dea2103579644d226a7ec4d16a4ca0bf6e2c51a83a3",
+    "model.txt": "e44c46d52fa6ae642e24025cafdf4450d3f5b78439a6ec3f268e1f16cd6fc5eb",
     "model.joblib": "1582d8cf2ec59f75b5834a5f133b5798b23a75034b147e39e4a7b0fbfac34cf9",
     "feature_names.json": "e15d69db32644cf853a17a7131b082b2a93fa69818d1a781726887c085bf3c88",
     "thresholds.json": "823380067fdb4c9b801607721d3178abd6f0b8a259e98d7dab5863ce59264a23"
@@ -48,7 +48,6 @@
     "features_sha256": "a3af25868730201204edb5dc4446ee4e7935895b111ea59e1d4e40ccc78fb9d4",
     "capability_profile": {
       "core_history": "on",
-      "myid_kinship": "off",
       "receiver_velocity": "on",
       "geo_telemetry": "on",
       "session_telemetry": "on",

@@ -7,7 +7,7 @@ GEN_DIR = data-generator
 -include .env
 export
 
-.PHONY: help up down clean ps logs topics generate produce produce-stream no-active-job fresh-taskmanager seed-confirmed serve-prep submit-job resume-job sink-logs verify-audit query-scored
+.PHONY: help up down clean ps logs topics generate produce produce-stream no-active-job fresh-taskmanager export-model seed-confirmed serve-prep submit-job resume-job sink-logs verify-audit query-scored
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -38,6 +38,10 @@ produce: ## replay the dataset into Kafka (batch)
 
 produce-stream: ## paced replay (200x)
 	cd $(GEN_DIR) && python kafka_producer.py --file out/transactions.csv --realtime --speed 200 --bootstrap 127.0.0.1:29092 --topic transactions.raw
+
+export-model: ## the trained model to ONNX for the job, in a container (infra/ml/Dockerfile)
+	docker build -q -t fraud-ml-export -f infra/ml/Dockerfile .
+	docker run --rm -v "$(CURDIR):/repo" fraud-ml-export
 
 seed-confirmed: ## load the history's confirmed fraud accounts into Redis
 	cd ml && python seed_confirmed.py --port $${REDIS_HOST_PORT}
