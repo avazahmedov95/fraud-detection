@@ -34,10 +34,10 @@ generate: ## generate the synthetic dataset into data-generator/out
 	cd $(GEN_DIR) && python generator.py --out ./out
 
 produce: ## replay the dataset into Kafka (batch)
-	cd $(GEN_DIR) && python kafka_producer.py --file out/transactions.csv --bootstrap localhost:29092 --topic transactions.raw
+	cd $(GEN_DIR) && python kafka_producer.py --file out/transactions.csv --bootstrap 127.0.0.1:29092 --topic transactions.raw
 
 produce-stream: ## paced replay (200x)
-	cd $(GEN_DIR) && python kafka_producer.py --file out/transactions.csv --realtime --speed 200 --bootstrap localhost:29092 --topic transactions.raw
+	cd $(GEN_DIR) && python kafka_producer.py --file out/transactions.csv --realtime --speed 200 --bootstrap 127.0.0.1:29092 --topic transactions.raw
 
 seed-confirmed: ## load the history's confirmed fraud accounts into Redis
 	cd ml && python seed_confirmed.py --port $${REDIS_HOST_PORT}

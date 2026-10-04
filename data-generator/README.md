@@ -22,9 +22,9 @@ fraud's shapes, and a tenth of fraud never reported.
 ```bash
 python generator.py --out ./out          # the dataset of record (seed 42)
 python kafka_producer.py --file out/transactions.csv --realtime --speed 200 \
-    --bootstrap localhost:29092 --topic transactions.raw
+    --bootstrap 127.0.0.1:29092 --topic transactions.raw
 ```
 
-`localhost:29092` is Kafka's listener for the host; `kafka:9092` works only inside
+`127.0.0.1:29092` is Kafka's listener for the host (not `localhost`, which Windows tries as IPv6 first); `kafka:9092` works only inside
 the Docker network. The labels (`label_is_fraud`, `label_fraud_type`) stay in the
 file: the producer never sends them.

@@ -52,7 +52,7 @@ Then the demo at http://localhost:8090. `.\run.ps1 help` lists every target;
 
 | Service | Address |
 |---|---|
-| Kafka, from the host | `localhost:29092` |
+| Kafka, from the host | `127.0.0.1:29092` |
 | Flink UI | http://localhost:8081 |
 | ClickHouse HTTP | http://localhost:8123 (`.env` user and password) |
 | Grafana | http://localhost:3000 (`admin` / `.env` password) |

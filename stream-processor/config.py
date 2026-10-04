@@ -37,6 +37,11 @@ CONSUMER_GROUP = os.getenv("CONSUMER_GROUP", "fraud-cep")
 
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+#: A call answers in about a millisecond; an unreachable Redis must cost this much,
+#: not the operating system's two-minute connect timeout on every transfer.
+REDIS_TIMEOUT_S = 0.5
+#: After a failed call the job decides without Redis this long before asking again.
+REDIS_RETRY_AFTER_S = 5.0
 
 # Which features and rules are active: capabilities.py, set by CAP_*.
 

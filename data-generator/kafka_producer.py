@@ -64,7 +64,7 @@ def _row_to_message(row):
 def main():
     ap = argparse.ArgumentParser(description="Replay transactions.csv into Kafka")
     ap.add_argument("--file", required=True)
-    ap.add_argument("--bootstrap", default="localhost:29092")  # compose EXTERNAL listener
+    ap.add_argument("--bootstrap", default="127.0.0.1:29092")  # compose EXTERNAL listener
     ap.add_argument("--topic", default="transactions.raw")
     # Unpaced, the whole file lands in the topic at once.
     ap.add_argument("--realtime", action="store_true",

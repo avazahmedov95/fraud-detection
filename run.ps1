@@ -252,7 +252,7 @@ switch ($Target.ToLower()) {
     "produce" {
         Push-Location data-generator
         try {
-            python kafka_producer.py --file out/transactions.csv --bootstrap localhost:29092 --topic transactions.raw
+            python kafka_producer.py --file out/transactions.csv --bootstrap 127.0.0.1:29092 --topic transactions.raw
         } finally { Pop-Location }
     }
 
@@ -260,7 +260,7 @@ switch ($Target.ToLower()) {
         if (-not (Assert-JobRunning)) { break }
         Push-Location data-generator
         try {
-            python kafka_producer.py --file out/transactions.csv --realtime --speed 200 --bootstrap localhost:29092 --topic transactions.raw
+            python kafka_producer.py --file out/transactions.csv --realtime --speed 200 --bootstrap 127.0.0.1:29092 --topic transactions.raw
         } finally { Pop-Location }
     }
 

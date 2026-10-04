@@ -10,14 +10,14 @@ services:
     image: ${KAFKA_IMAGE}
     container_name: kafka
     ports:
-      - "${KAFKA_HOST_PORT}:29092"        # host clients -> localhost:29092
+      - "127.0.0.1:${KAFKA_HOST_PORT}:29092"        # host clients -> 127.0.0.1:29092
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,SSL:SSL
       # INTERNAL  -> other containers reach the broker at kafka:9092
-      # EXTERNAL  -> your host reaches it at localhost:29092
+      # EXTERNAL  -> your host reaches it at 127.0.0.1:29092
       # SSL       -> the same topics over mutual TLS at kafka:9094
       #
       # The plaintext and TLS listeners run SIDE BY SIDE on purpose. Both serve
@@ -25,7 +25,7 @@ services:
       # differ only in which port the clients dial - no redeploy of the broker,
       # no separate data set, nothing else varying between the measurements.
       KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:29092,SSL://0.0.0.0:9094
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:29092,SSL://kafka:9094
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://127.0.0.1:29092,SSL://kafka:9094
       # These names are dictated by the image, not chosen. apache/kafka's
       # entrypoint, on seeing SSL:// in the advertised listeners, builds
       # ssl.keystore.location itself as /etc/kafka/secrets/$..._FILENAME and
@@ -90,7 +90,7 @@ services:
     container_name: redis
     command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
     ports:
-      - "${REDIS_HOST_PORT}:6379"
+      - "127.0.0.1:${REDIS_HOST_PORT}:6379"
     volumes:
       - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
       - redis_data:/data
@@ -101,8 +101,8 @@ services:
     image: ${CLICKHOUSE_IMAGE}
     container_name: clickhouse
     ports:
-      - "${CLICKHOUSE_HTTP_PORT}:8123"    # HTTP
-      - "${CLICKHOUSE_NATIVE_PORT}:9000"  # native protocol
+      - "127.0.0.1:${CLICKHOUSE_HTTP_PORT}:8123"    # HTTP
+      - "127.0.0.1:${CLICKHOUSE_NATIVE_PORT}:9000"  # native protocol
     environment:
       CLICKHOUSE_DB: ${CLICKHOUSE_DB}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER}
@@ -145,7 +145,7 @@ services:
     container_name: jobmanager
     command: jobmanager
     ports:
-      - "${FLINK_UI_PORT}:8081"           # Flink web UI
+      - "127.0.0.1:${FLINK_UI_PORT}:8081"           # Flink web UI
     environment:
       PAYLOAD_KEY_HEX: ${PAYLOAD_KEY_HEX}
       # Transport for the job's own Kafka client. PLAINTEXT or SSL; switching
@@ -204,7 +204,7 @@ services:
     image: ${GRAFANA_IMAGE}
     container_name: grafana
     ports:
-      - "${GRAFANA_PORT}:3000"
+      - "127.0.0.1:${GRAFANA_PORT}:3000"
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
       GF_INSTALL_PLUGINS: grafana-clickhouse-datasource

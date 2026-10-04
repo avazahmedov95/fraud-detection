@@ -133,6 +133,26 @@ def test_unavailable_redis_fails_open_rather_than_raising():
     s.record(_ev("tx-1"), now=1000)    # must not raise
 
 
+def test_a_failing_redis_is_left_alone_for_a_while(store):
+    """Under a running job an unreachable Redis must cost one timeout, not one per
+    call per transfer: the store answers 'unavailable' until it is due to retry."""
+    calls = []
+
+    class Down:
+        def zrangebyscore(self, *a, **k):
+            calls.append(a)
+            raise ConnectionError("unreachable")
+
+    store._redis = Down()
+    assert store.load(_payee(), now=1000) is None
+    assert store.load(_payee(), now=1001) is None
+    assert store.last_inbound(_payee(), 1001) is None
+    assert len(calls) == 1
+    store._down_until = 0.0                       # the retry is due
+    assert store.load(_payee(), now=1002) is None
+    assert len(calls) == 2
+
+
 def test_load_distinguishes_unavailable_from_empty(store):
     """Collapsing 'not computed' with an empty window makes a broken store quiet."""
     assert store.load("never-paid", now=1000).inbound == \
