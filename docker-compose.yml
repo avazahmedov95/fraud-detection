@@ -220,7 +220,7 @@ services:
       - clickhouse
     networks: [fraudnet]
 
-  # --- Sink writer: transactions.scored -> ClickHouse ------------------------
+  # --- Sink writer: transactions.scored -> ClickHouse, a case for each hold ---
   sink-writer:
     build:
       context: .
@@ -234,30 +234,8 @@ services:
       CLICKHOUSE_USER: ${CLICKHOUSE_USER}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
       CLICKHOUSE_DB: ${CLICKHOUSE_DB}
-    depends_on:
-      kafka:
-        condition: service_healthy
-      clickhouse:
-        condition: service_healthy
-    networks: [fraudnet]
-    restart: unless-stopped
-
-  # The consumer fraud.alerts did not have. Before this service the pipeline
-  # computed a decision, wrote it to the topic, and nothing read it.
-  case-manager:
-    build:
-      context: .
-      dockerfile: infra/case-manager/Dockerfile
-    image: fraud-case-manager:latest
-    container_name: case-manager
-    environment:
-      KAFKA_BOOTSTRAP: kafka:9092
-      TOPIC_ALERTS: fraud.alerts
-      CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_HTTP_PORT: "8123"
-      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
-      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+    volumes:
+      - ./ml/models:/ml/models:ro              # the model each case is explained by
     depends_on:
       kafka:
         condition: service_healthy

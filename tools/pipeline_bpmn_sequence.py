@@ -16,7 +16,7 @@ LANES = [("Lane_channel", "Payment channel", 160),
          ("Lane_second", "Second look", 180),
          ("Lane_sink", "Sink writer", 260),
          ("Lane_data", "Data stores", 140),
-         ("Lane_case", "Case manager", 150),
+         ("Lane_case", "Cases (sink writer)", 150),
          ("Lane_analyst", "Fraud analyst", 150),
          ("Lane_model", "Model owner", 190)]
 
@@ -49,7 +49,7 @@ NODES = [
     ("Decide", "exclusiveGateway", "Hold the transfer?",
      1, (2030, 375, 50, 50), (1995, 347, 120, 20)),
     ("AlertOut", "sendTask",
-     "Hold the transfer, publish the alert\n[Kafka: transactions.scored, fraud.alerts]",
+     "Hold the transfer\n[Kafka: transactions.scored]",
      1, (2130, 465, 180, 100), None),
     ("Band", "exclusiveGateway", "Just under the cut-off?",
      1, (2130, 375, 50, 50), (2100, 430, 110, 28)),
@@ -84,7 +84,7 @@ NODES = [
      3, (3015, 790, 180, 100), None),
     ("Recorded", "endEvent", "Decision recorded",
      3, (3235, 822, 36, 36), (3279, 830, 110, 20)),
-    ("Case", "serviceTask", "Open a case with its reasons\n[Python service]",
+    ("Case", "serviceTask", "Open a case with its reasons\n[sink writer]",
      5, (2220, 1185, 180, 100), None),
     ("Opened", "intermediateThrowEvent", "Case opened",
      5, (2440, 1217, 36, 36), (2415, 1257, 86, 20)),
@@ -357,7 +357,6 @@ MERMAID = """sequenceDiagram
     participant Second as Second look
     participant Sink as Sink writer
     participant DB as ClickHouse
-    participant Case as Case manager
     actor Analyst
 
     Customer->>App: confirms a transfer
@@ -370,16 +369,14 @@ MERMAID = """sequenceDiagram
     Flink->>Flink: build 24 features, run the 10 hard rules (0.65 ms)
     Flink->>Flink: score with the model (0.40 ms)
     Flink->>Flink: decide: allow, hold, or ask the second look (0.03 ms)
-    Flink->>Kafka: transactions.scored with the features, fraud.alerts for an alert (31 ms in all)
+    Flink->>Kafka: transactions.scored, with the features (31 ms in all)
     Kafka->>Second: fraud.second_look, a transfer just under the cut-off
     Second->>Kafka: TabPFN's decision, about 0.3 s later
     Kafka->>Sink: every decision
-    Sink->>DB: the decision and its audit record
-    Kafka->>Case: fraud.alerts
-    Case->>DB: open a case, with its reason in words
-    Case->>Analyst: the held transfer appears in the queue
+    Sink->>DB: the decision, its audit record and, for a hold, a case with its reason in words
+    DB->>Analyst: the held transfer appears in the queue (demo or CLI)
     Analyst->>DB: block it or release it, or correct an earlier verdict
-    Case->>Redis: a block adds the payee to the confirmed fraud accounts; a withdrawn one takes it out
+    Analyst->>Redis: a block adds the payee to the confirmed fraud accounts; a withdrawn one takes it out
 """
 path = os.path.join(OUT, "pipeline_sequence.mmd")
 with open(path, "w", encoding="utf-8", newline="\n") as fh:
@@ -396,8 +393,8 @@ ACCENT, ALERT = "#1c63c4", "#b34310"
 FAMILY = ["Calibri", "DejaVu Sans"]
 
 ACTORS = ["Bank app", "Kafka", "Flink engine", "Redis", "Second look", "Sink writer",
-          "ClickHouse", "Case manager", "Analyst"]
-X = {name: 9 + i * 17.7 for i, name in enumerate(ACTORS)}
+          "ClickHouse", "Analyst"]
+X = {name: 9 + i * 20.2 for i, name in enumerate(ACTORS)}
 
 MESSAGES = [
     ("Bank app", "Kafka", "the transfer, keyed by sender", "1.1 ms", False),
@@ -409,16 +406,14 @@ MESSAGES = [
     ("Flink engine", "Flink engine", "build 24 features, run the 10 hard rules", "0.65 ms", False),
     ("Flink engine", "Flink engine", "score with the model", "0.40 ms", False),
     ("Flink engine", "Flink engine", "decide: allow, hold, or ask the second look", "0.03 ms", False),
-    ("Flink engine", "Kafka", "scored with its features, and an alert when it is one", "31 ms in all", False),
+    ("Flink engine", "Kafka", "scored, with its features", "31 ms in all", False),
     ("Kafka", "Second look", "a transfer just under the cut-off", "", False),
     ("Second look", "Kafka", "TabPFN's decision", "about 0.3 s", True),
     ("Kafka", "Sink writer", "every decision", "", False),
-    ("Sink writer", "ClickHouse", "the decision and its audit record", "", False),
-    ("Kafka", "Case manager", "fraud.alerts", "", False),
-    ("Case manager", "ClickHouse", "a case, with its reason in words", "", False),
-    ("Case manager", "Analyst", "the held transfer appears in the queue", "", False),
+    ("Sink writer", "ClickHouse", "the decision, its audit record, a case per hold", "", False),
+    ("ClickHouse", "Analyst", "the held transfer, in the queue", "", False),
     ("Analyst", "ClickHouse", "block, release, or correct a verdict", "", True),
-    ("Case manager", "Redis", "a block adds the payee; a withdrawn one takes it out", "", False),
+    ("Analyst", "Redis", "a block adds the payee; a withdrawn one takes it out", "", False),
 ]
 
 fig, ax = plt.subplots(figsize=(16, 11))

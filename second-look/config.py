@@ -6,7 +6,6 @@ import os
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
 TOPIC_SECOND_LOOK = os.getenv("TOPIC_SECOND_LOOK", "fraud.second_look")
 TOPIC_SCORED = os.getenv("TOPIC_SCORED", "transactions.scored")
-TOPIC_ALERTS = os.getenv("TOPIC_ALERTS", "fraud.alerts")
 
 # A group of its own, as every consumer here has: shared, one service's commits
 # would stand in for the other's work.

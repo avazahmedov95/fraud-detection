@@ -24,11 +24,10 @@ def _stop(*_):
 
 
 def handle(event, look, send, now=None):
-    """Score one waiting transfer and publish its decision: every decision to the
-    scored topic, which the warehouse and the audit chain read, and a REVIEW to the
-    alert topic as well, which opens the case that holds it. A transfer that has
-    waited past the deadline is held unscored at once: asking TabPFN would only make
-    it, and every transfer queued behind it, wait longer."""
+    """Score one waiting transfer and publish its decision to the scored topic, where
+    the sink writer stores it and opens a case for a hold. A transfer that has waited
+    past the deadline is held unscored at once: asking TabPFN would only make it, and
+    every transfer queued behind it, wait longer."""
     age = waited(event, time.time() if now is None else now)
     score = None
     if age >= C.DEADLINE_S:
@@ -42,8 +41,6 @@ def handle(event, look, send, now=None):
                       event.get("transaction_id"), exc)
     out = verdict(event, score, look.spec["cut"], look.spec["checkpoint"])
     send(C.TOPIC_SCORED, out)
-    if out["decision"] == "REVIEW":
-        send(C.TOPIC_ALERTS, out)
     return out
 
 
@@ -90,8 +87,8 @@ def main():
         consumer_timeout_ms=1000,
     )
     alive = redis.Redis(host=C.REDIS_HOST, port=C.REDIS_PORT, socket_timeout=1)
-    log.info("second-look started: %s -> %s, %s; deadline %.0f s", C.TOPIC_SECOND_LOOK,
-             C.TOPIC_SCORED, C.TOPIC_ALERTS, C.DEADLINE_S)
+    log.info("second-look started: %s -> %s; deadline %.0f s", C.TOPIC_SECOND_LOOK,
+             C.TOPIC_SCORED, C.DEADLINE_S)
     total = 0
     while _running:
         _renew(alive)

@@ -56,17 +56,47 @@ class _FakeCH:
     def close(self): pass
 
 
-def test_ch_writer_batches_scored_and_audit():
+class _FakeExplainer:
+    def explain(self, features, score):
+        return "OK", ["amount: 9 000 000 UZS (+1.20)"]
+
+
+def _writer():
     w = ClickHouseWriter("h", 1, "u", "p", "fraud", audit_all=True)
-    w._client = _FakeCH()
+    w._client, w._explainer = _FakeCH(), _FakeExplainer()
+    return w
+
+
+def test_ch_writer_batches_the_decisions_their_audit_and_the_cases():
+    w = _writer()
     for _ in range(3):
         w.add(SCORED)
     assert w.pending() == 3
     w.flush()
-    tables = {t for t, _ in w._client.inserts}
-    assert tables == {"fraud.transactions_scored", "fraud.audit_log"}
-    assert all(n == 3 for _, n in w._client.inserts)
+    assert sorted(w._client.inserts) == [("fraud.audit_log", 3), ("fraud.cases", 3),
+                                         ("fraud.transactions_scored", 3)]
     assert w.pending() == 0
+
+
+def test_a_hold_opens_a_case_with_its_reasons_and_a_release_none():
+    import case as CASE
+    w = _writer()
+    w.add(SCORED)
+    w.add(ALLOW)
+    (row,) = w._rows["cases"]
+    case = dict(zip(CASE.CASE_COLUMNS, row))
+    assert (case["case_id"], case["disposition"]) == ("tx-1", "NEW")
+    assert (case["explanation_status"], case["explanation"]) == ("OK", ["amount: 9 000 000 UZS (+1.20)"])
+
+
+def test_rows_lost_to_a_down_warehouse_are_counted_aloud(caplog):
+    w = _writer()
+    w._client, w._last_attempt = None, 1e18           # down, and no reconnect due
+    w.add(SCORED)
+    with caplog.at_level("ERROR"):
+        w.flush()
+    assert w._lost == {"transactions_scored": 1, "audit_log": 1, "cases": 1}
+    assert "lost" in caplog.text
 
 
 # --- schema alignment -------------------------------------------------------

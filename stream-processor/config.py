@@ -31,7 +31,6 @@ def kafka_security_properties():
 
 TOPIC_RAW = os.getenv("TOPIC_RAW", "transactions.raw")
 TOPIC_SCORED = os.getenv("TOPIC_SCORED", "transactions.scored")
-TOPIC_ALERTS = os.getenv("TOPIC_ALERTS", "fraud.alerts")
 TOPIC_SECOND_LOOK = os.getenv("TOPIC_SECOND_LOOK", "fraud.second_look")
 CONSUMER_GROUP = os.getenv("CONSUMER_GROUP", "fraud-cep")
 

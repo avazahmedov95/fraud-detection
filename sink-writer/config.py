@@ -1,5 +1,4 @@
-"""Configuration for the sink-writer service (consumes transactions.scored and
-persists to ClickHouse). Defaults assume the Docker network service names."""
+"""Configuration for the sink-writer service. Defaults are the Docker network names."""
 
 import os
 
@@ -13,11 +12,9 @@ CH_USER = os.getenv("CLICKHOUSE_USER", "fraud")
 CH_PASSWORD = os.getenv("CLICKHOUSE_PASSWORD", "")
 CH_DB = os.getenv("CLICKHOUSE_DB", "fraud")
 
-
 BATCH_SIZE = int(os.getenv("SINK_BATCH_SIZE", "500"))
-# The warehouse path has no real-time requirement: the decision already EXISTS
-# and is published to fraud.alerts by now, and MergeTree dislikes small inserts.
-FLUSH_INTERVAL_S = float(os.getenv("SINK_FLUSH_INTERVAL_S", "5"))
+# A hold reaches the analyst's queue within this; MergeTree dislikes smaller inserts.
+FLUSH_INTERVAL_S = float(os.getenv("SINK_FLUSH_INTERVAL_S", "2"))
 
 # Audit every decision (compliance-complete) vs only the REVIEW ones.
 AUDIT_ALL = os.getenv("SINK_AUDIT_ALL", "true").lower() in ("1", "true", "yes")

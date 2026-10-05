@@ -55,8 +55,7 @@ promote-model: ## serve the retrained model (after reading retrain's comparison)
 	test -f ml/models/candidate/model.joblib
 	cp ml/models/candidate/* ml/models/
 	$(MAKE) export-model resume-job
-	$(COMPOSE) up -d --build case-manager
-	$(COMPOSE) restart second-look demo
+	$(COMPOSE) restart sink-writer second-look demo
 
 serve-prep: ## copy the trained ONNX model, its cutoff and the second look's band next to the Flink job
 	cp ml/models/model.onnx ml/models/thresholds.json stream-processor/

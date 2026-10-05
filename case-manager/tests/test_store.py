@@ -122,6 +122,11 @@ class FakeRedis:
         return member in self.sets.get(key, set())
 
 
+def _open(store, alert, explanation=None, status=""):
+    """A case as the sink writer opens it (sink-writer/ch_writer.py)."""
+    store._insert(CASE.case_row(alert, explanation, status))
+
+
 @pytest.fixture
 def store(monkeypatch):
     fake = FakeClient()
@@ -139,7 +144,7 @@ def store(monkeypatch):
 def test_the_shipped_ddl_parses_into_whole_statements():
     """_statements() strips line comments by hand: the first version split on ";"
     without doing so and tore the CREATE TABLE apart at a semicolon in a comment."""
-    with open(S._ddl_file(), encoding="utf-8") as fh:
+    with open(S._DDL, encoding="utf-8") as fh:
         stmts = list(S._statements(fh.read()))
     creates = [s for s in stmts if s.startswith("CREATE TABLE")]
     assert len(creates) == 1
@@ -174,11 +179,8 @@ def test_get_query_uses_final(store):
 
 # --- the round trip ----------------------------------------------------------
 
-def test_alert_becomes_an_open_case(store):
-    store.add(ALERT)
-    assert store.pending() == 1
-    store.flush()
-    assert store.pending() == 0
+def test_an_opened_case_is_in_the_queue(store):
+    _open(store, ALERT)
     rows = store.open_cases()
     assert [r["case_id"] for r in rows] == ["t_1"]
     assert rows[0]["disposition"] == "NEW"
@@ -189,9 +191,7 @@ def test_queue_orders_by_exposure_when_scores_tie(store):
     orders nothing, so the largest amount must come first."""
     assert "amount_uzs DESC" in _order_clause(store)
     for i, amt in enumerate([1_000_000, 9_000_000, 4_000_000]):
-        store.add(dict(ALERT, transaction_id=f"t_{i}", amount_uzs=amt,
-                       final_score=1.0))
-    store.flush()
+        _open(store, dict(ALERT, transaction_id=f"t_{i}", amount_uzs=amt, final_score=1.0))
     assert [r["amount_uzs"] for r in store.open_cases()] == \
         [9_000_000, 4_000_000, 1_000_000]
 
@@ -205,16 +205,14 @@ def test_since_keeps_only_the_cases_opened_from_then_on(store):
     """Asked of the store, not filtered after it: the queue's first rows by amount
     can all be older than a case opened a second ago."""
     t = ALERT["scored_at_job"]
-    store.add(dict(ALERT, transaction_id="old", amount_uzs=9_000_000, scored_at_job=t - 60))
-    store.add(dict(ALERT, transaction_id="new", amount_uzs=100_000, scored_at_job=t))
-    store.flush()
+    _open(store, dict(ALERT, transaction_id="old", amount_uzs=9_000_000, scored_at_job=t - 60))
+    _open(store, dict(ALERT, transaction_id="new", amount_uzs=100_000, scored_at_job=t))
     assert [r["case_id"] for r in store.open_cases(limit=1, since=t)] == ["new"]
     assert "opened_at >=" in store._fake.queries[-1]
 
 
 def test_resolved_case_leaves_the_queue(store):
-    store.add(ALERT)
-    store.flush()
+    _open(store, ALERT)
     assert store.resolve("t_1", "CONFIRMED_FRAUD", "analyst.k") is True
     assert store.open_cases() == []
     assert store.get("t_1")["resolved_by"] == "analyst.k"
@@ -222,11 +220,9 @@ def test_resolved_case_leaves_the_queue(store):
 
 def test_a_replayed_alert_does_not_reopen_a_resolved_case(store):
     """End to end: an alert redelivered after the verdict must not reopen the case."""
-    store.add(ALERT)
-    store.flush()
+    _open(store, ALERT)
     store.resolve("t_1", "FALSE_POSITIVE", "analyst.k")
-    store.add(ALERT)                                   # redelivered
-    store.flush()
+    _open(store, ALERT)                                # redelivered
     assert store.open_cases() == []
     assert store.get("t_1")["disposition"] == "FALSE_POSITIVE"
 
@@ -239,15 +235,13 @@ def test_resolving_an_unknown_case_reports_it(store):
 
 def test_a_confirmed_fraud_adds_its_payee_to_the_accounts_the_job_reads(store):
     for i, d in enumerate(["CONFIRMED_FRAUD", "FALSE_POSITIVE"]):
-        store.add(dict(ALERT, transaction_id=f"t_{i}", receiver_card=f"card_{i}"))
-        store.flush()
+        _open(store, dict(ALERT, transaction_id=f"t_{i}", receiver_card=f"card_{i}"))
         store.resolve(f"t_{i}", d, "analyst.k")
     assert store._redis.sets == {S.CONFIRMED_KEY: {"card_0"}}
 
 
 def _confirmed(store, case_id, card, at):
-    store.add(dict(ALERT, transaction_id=case_id, receiver_card=card))
-    store.flush()
+    _open(store, dict(ALERT, transaction_id=case_id, receiver_card=card))
     store.resolve(case_id, "CONFIRMED_FRAUD", "analyst.k", at_epoch=at)
 
 
@@ -296,8 +290,7 @@ def test_a_report_on_a_transfer_let_go_is_a_confirmed_case_kept_out_of_the_holds
 
 
 def test_a_report_on_a_held_transfer_confirms_its_case(store):
-    store.add(ALERT)
-    store.flush()
+    _open(store, ALERT)
     assert store.report("t_1", "analyst.k", at_epoch=5_000) is True
     assert store.get("t_1")["disposition"] == "CONFIRMED_FRAUD"
     assert store.stats()["_reported"] == 0
@@ -312,25 +305,11 @@ def test_redis_down_costs_the_mark_not_the_verdict(store, caplog):
         def sadd(self, *a):
             raise ConnectionError("refused")
     store._redis = Down()
-    store.add(ALERT)
-    store.flush()
+    _open(store, ALERT)
     with caplog.at_level("ERROR"):
         assert store.resolve("t_1", "CONFIRMED_FRAUD", "analyst.k") is True
     assert store.get("t_1")["disposition"] == "CONFIRMED_FRAUD"
     assert S.CONFIRMED_KEY in caplog.text
-
-
-# --- failure is loud, not silent ---------------------------------------------
-
-def test_cases_are_not_discarded_quietly(store, caplog):
-    """A queue that drops silently reads to the operator as 'nothing to work on'."""
-    store._client = None
-    store._last_attempt = 1e18            # block the reconnect attempt
-    store.add(ALERT)
-    with caplog.at_level("ERROR"):
-        store.flush()
-    assert "DISCARDED" in caplog.text
-    assert store._dropped == 1
 
 
 # --- what the queue is for ---------------------------------------------------
@@ -339,12 +318,9 @@ def test_precision_is_computed_over_resolved_cases_only(store):
     """Open cases are not 'not fraud'; folding them in drifts precision upward."""
     for i, (d, by) in enumerate([("CONFIRMED_FRAUD", "a"), ("CONFIRMED_FRAUD", "a"),
                                  ("FALSE_POSITIVE", "a")]):
-        alert = dict(ALERT, transaction_id=f"t_{i}")
-        store.add(alert)
-        store.flush()
+        _open(store, dict(ALERT, transaction_id=f"t_{i}"))
         store.resolve(f"t_{i}", d, by)
-    store.add(dict(ALERT, transaction_id="t_open"))     # still NEW
-    store.flush()
+    _open(store, dict(ALERT, transaction_id="t_open"))  # still NEW
 
     s = store.stats()
     assert s["_resolved"] == 3
@@ -352,24 +328,19 @@ def test_precision_is_computed_over_resolved_cases_only(store):
 
 
 def test_precision_is_undefined_before_anyone_resolves_anything(store):
-    store.add(ALERT)
-    store.flush()
+    _open(store, ALERT)
     assert store.stats()["_precision"] is None
 
 
 def test_stats_report_why_explanations_are_missing(store):
-    """Unexplained cases have three causes identical from the queue: a build
-    predating the column, a job not publishing features, or nothing consumed."""
-    store.add(ALERT)                       # no "features" key -> NO_FEATURES
-    store.flush()
+    _open(store, ALERT, status="NO_FEATURES")
     s = store.stats()
     assert s["_explanation"] == {"NO_FEATURES": 1}
     assert s["_last_opened"] is not None
 
 
 def test_holds_measure_the_wait_from_decision_to_verdict(store):
-    store.add(ALERT)
-    store.flush()
+    _open(store, ALERT)
     store.resolve("t_1", "FALSE_POSITIVE", "analyst.k", at_epoch=ALERT["scored_at_job"] + 240)
     h = store.holds(now=ALERT["scored_at_job"] + 999)
     assert "FINAL" in store._fake.queries[-1]

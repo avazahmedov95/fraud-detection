@@ -198,12 +198,11 @@ def b_sink_reads_only_emitted_keys():
     return None
 
 
-def b_case_manager_reads_only_emitted_keys():
-    src = _read("case-manager", "case.py") + _read("case-manager", "store.py")
-    read = set(re.findall(r'alert\.get\(\s*"([a-z_]+)"', src))
+def b_a_case_reads_only_emitted_keys():
+    read = set(re.findall(r'alert\.get\(\s*"([a-z_]+)"', _read("case-manager", "case.py")))
     missing = sorted(read - _job_output_keys())
     if missing:
-        return f"case-manager reads keys the job does not emit: {missing}"
+        return f"a case reads keys the job does not emit: {missing}"
     return None
 
 
@@ -456,13 +455,12 @@ def b_event_mapping_matches_the_csv():
 
 def b_compose_env_names_are_read():
     compose = _read("docker-compose.yml")
-    svc = compose.split("  case-manager:", 1)[1].split("networks:", 1)[0]
+    svc = compose.split("  sink-writer:", 1)[1].split("networks:", 1)[0]
     declared = set(re.findall(r"^\s{6}([A-Z_]+):", svc, re.M))
-    cfg = _read("case-manager", "config.py")
-    read = set(re.findall(r'os\.getenv\(\s*"([A-Z_]+)"', cfg))
+    read = set(re.findall(r'os\.getenv\(\s*"([A-Z_]+)"', _read("sink-writer", "config.py")))
     unused = sorted(declared - read)
     if unused:
-        return (f"docker-compose sets {unused} for case-manager but its config "
+        return (f"docker-compose sets {unused} for sink-writer but its config "
                 f"never reads them - the setting has no effect")
     return None
 
@@ -594,7 +592,7 @@ CHECKS = [
     ("duplicated modules identical", b_duplicated_modules_are_identical),
     ("wire -> routing key, plaintext and encrypted", b_routing_key_survives_the_wire),
     ("job record -> sink-writer", b_sink_reads_only_emitted_keys),
-    ("job record -> case-manager", b_case_manager_reads_only_emitted_keys),
+    ("job record -> a case", b_a_case_reads_only_emitted_keys),
     ("job record -> second look (topic, keys)", b_second_look_is_what_the_job_sends),
     ("second-look record -> where the job's goes", b_second_look_record_is_a_job_record),
     ("analyst verdict -> confirmed accounts the job reads", b_a_verdict_reaches_the_job),
@@ -606,7 +604,7 @@ CHECKS = [
     ("ReceiverStore write -> read (Redis member)", b_receiver_store_round_trips),
     ("features.event_from -> generated CSV columns", b_event_mapping_matches_the_csv),
     ("model manifest -> deployed artefacts", b_manifest_matches_the_deployment),
-    ("docker-compose env -> case-manager config", b_compose_env_names_are_read),
+    ("docker-compose env -> sink-writer config", b_compose_env_names_are_read),
     ("modules -> their package README", b_every_module_is_documented),
     ("generated CSV -> no new constant columns", b_no_new_constant_columns),
     ("metrics.json -> the figures ml/README.md quotes", b_documents_match_the_generated_figures),

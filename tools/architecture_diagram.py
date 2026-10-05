@@ -195,30 +195,24 @@ text(66.5, 35.6, "Redis", "recent payers;\nconfirmed fraud\naccounts", ha="right
 gear(103.8, 35.5, 2.4, "#7b4bb7")
 text(103.8, 32.4, "Second look", "TabPFN, Python")
 arrow((103.8, 52), (103.8, 38.4))
-arrow((106.4, 36.5), (114.6, 46.4), label="its decision", at=(110.5, 41.4))
+arrow((106.4, 36.5), (115.2, 54.2), label="its decision", at=(110.2, 44))
 
 # ---------------------------------------------------------------- delivery
-text(121, 74, "Apache Kafka")
-topic(121, 66, 11, 4, COLOUR["kafka"])
-text(121, 62.6, "", "transactions.scored:\nevery decision")
-topic(121, 47, 11, 4, COLOUR["kafka"])
-text(121, 43.6, "", "fraud.alerts:\nheld only")
-elbow([(107.6, 56), (110.5, 56), (110.5, 66), (114.6, 66)])
-elbow([(110.5, 56), (110.5, 47), (114.6, 47)], ALERT)
+text(121, 64, "Apache Kafka")
+topic(121, 56, 11, 4, COLOUR["kafka"])
+text(121, 52.6, "", "transactions.scored:\nevery decision")
+arrow((107.6, 56), (114.6, 56))
 
 # ---------------------------------------------------------------- storage and cases
-gear(138, 66, 2.6, COLOUR["python"])
-text(138, 62.4, "Sink writer", "Python")
+gear(138, 56, 2.6, COLOUR["python"])
+text(138, 52.4, "Sink writer", "Python; a case\nper hold")
 database(153.5, 70, 5.5, 4, COLOUR["clickhouse"])
 text(153.5, 66.2, "ClickHouse", "decisions,\naudit log")
-gear(138, 40, 2.6, COLOUR["python"])
-text(138, 36.4, "Case manager", "Python;\nverdicts, reports")
 database(153.5, 40, 5.5, 4, COLOUR["clickhouse"])
 text(153.5, 36.2, "ClickHouse", "cases,\nverdicts")
-arrow((127.4, 66), (134.6, 66))
-arrow((141.4, 67), (150.4, 69.4))
-arrow((127.4, 47), (135, 41.6), ALERT)
-arrow((141.4, 40), (150.4, 40), ALERT)
+arrow((127.4, 56), (134.6, 56))
+arrow((140.6, 58), (150.4, 68.4))
+arrow((140.6, 54), (150.4, 41.6), ALERT)
 
 # ---------------------------------------------------------------- outcome
 screen(166, 70, 5, COLOUR["grafana"])
@@ -230,7 +224,7 @@ arrow((156.6, 70), (162.6, 70))
 arrow((156.6, 40), (162.8, 40), ALERT, both=True)
 # A confirmation: the payee's card joins the confirmed fraud accounts the job reads;
 # a withdrawn one takes it out.
-elbow([(135.4, 39), (131.5, 39), (131.5, 26.5), (72.2, 26.5), (72.2, 30.4)], ALERT)
+elbow([(166, 36.4), (166, 26.5), (72.2, 26.5), (72.2, 30.4)], ALERT)
 ax.text(110, 25.1, "a confirmation adds the payee to the confirmed fraud accounts; "
                    "a withdrawn one takes it out", ha="center",
         va="center", fontsize=8.5, color=MUTED, family=FAMILY, zorder=6,

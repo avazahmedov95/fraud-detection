@@ -46,7 +46,7 @@
       </bpmn:lane>
       <bpmn:lane id="Lane_data" name="Data stores">
       </bpmn:lane>
-      <bpmn:lane id="Lane_case" name="Case manager">
+      <bpmn:lane id="Lane_case" name="Cases (sink writer)">
         <bpmn:flowNodeRef>Case</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Opened</bpmn:flowNodeRef>
       </bpmn:lane>
@@ -131,7 +131,7 @@
       <bpmn:outgoing>F_alert</bpmn:outgoing>
       <bpmn:outgoing>F_not_held</bpmn:outgoing>
     </bpmn:exclusiveGateway>
-    <bpmn:sendTask id="AlertOut" name="Hold the transfer, publish the alert&#10;[Kafka: transactions.scored, fraud.alerts]">
+    <bpmn:sendTask id="AlertOut" name="Hold the transfer&#10;[Kafka: transactions.scored]">
       <bpmn:incoming>F_alert</bpmn:incoming>
       <bpmn:incoming>F_answer_no</bpmn:incoming>
       <bpmn:outgoing>F_alert_out</bpmn:outgoing>
@@ -214,7 +214,7 @@
     <bpmn:endEvent id="Recorded" name="Decision recorded">
       <bpmn:incoming>F_store</bpmn:incoming>
     </bpmn:endEvent>
-    <bpmn:serviceTask id="Case" name="Open a case with its reasons&#10;[Python service]">
+    <bpmn:serviceTask id="Case" name="Open a case with its reasons&#10;[sink writer]">
       <bpmn:incoming>F_to_case</bpmn:incoming>
       <bpmn:outgoing>F_case</bpmn:outgoing>
       <bpmn:dataOutputAssociation id="D_case">

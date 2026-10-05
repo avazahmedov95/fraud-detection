@@ -15,8 +15,8 @@ data-generator/    synthetic transfers, and the producer into Kafka
 stream-processor/  the PyFlink job: features, rules, model, decision
 ml/                trains and retrains the model, exports ONNX, prepares the second look
 second-look/       TabPFN for the transfers just under the cut-off
-sink-writer/       every decision into ClickHouse, with the audit chain
-case-manager/      every hold as a case for the analyst
+sink-writer/       every decision into ClickHouse, the audit chain, a case for each hold
+case-manager/      the analyst's queue: verdicts, clients' reports, reasons in words
 demo/              one page over the running system
 validation/        the model on the public datasets PaySim and IBM AML
 infra/             Docker images, Kafka, ClickHouse schema, Redis, Grafana
@@ -28,9 +28,9 @@ thesis/            material for the thesis only - not used by the system
 
 ```
 bank app -> Kafka transactions.raw -> Flink job (Redis: payee side, confirmed accounts)
-         -> transactions.scored -> sink-writer -> ClickHouse -> Grafana, demo
-         -> fraud.alerts -> case-manager -> analyst (block: payee into Redis)
-         -> fraud.second_look -> second-look (TabPFN) -> transactions.scored, fraud.alerts
+         -> transactions.scored -> sink-writer -> ClickHouse (decisions, audit, cases)
+            -> Grafana, demo; analyst (demo or CLI; a block puts the payee into Redis)
+         -> fraud.second_look -> second-look (TabPFN) -> transactions.scored
 ClickHouse (decisions with features, verdicts, clients' reports) -> the retrainer
          (ml/retrain.py, every day) -> a candidate model, served once a person promotes it
 ```
@@ -66,7 +66,6 @@ Then the demo at http://localhost:8090. `.\run.ps1 help` lists every target;
 |---|---|
 | `transactions.raw` | transfers from the switch, keyed by sender |
 | `transactions.scored` | every decision |
-| `fraud.alerts` | holds, each a case for the analyst |
 | `fraud.second_look` | transfers just under the cut-off, waiting for TabPFN |
 
 ## Results

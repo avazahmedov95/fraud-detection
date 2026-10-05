@@ -101,7 +101,7 @@ ax.text(36, 45, "The engine's own work is 4.6 ms.\nThe other 26 ms is the transf
         bbox=dict(boxstyle="round,pad=0.6", facecolor="white", edgecolor=LINE))
 
 # --- row 2: out of the engine ----------------------------------------------
-sco = box(136, 24, 24, 12, "Kafka", "transactions.scored\nand fraud.alerts")
+sco = box(136, 24, 24, 12, "Kafka", "transactions.scored:\nevery decision")
 arrow(bottom(dcd), top(sco), rad=-0.15)
 
 # A transfer just under the cut-off waits for TabPFN (second-look/README.md).
@@ -113,9 +113,9 @@ for x, y, label in ((139.5, 53.8, "just under\nthe cut-off"), (128.5, 36.6, "its
     ax.text(x, y, label, ha="left" if x > 130 else "right", va="bottom", fontsize=8.5,
             color=MUTED, family=FAMILY)
 
-snk = box(104, 24, 24, 12, "Sink writer", "batches both writes,\nkeeps running if a\ndatabase is down",
+snk = box(104, 24, 24, 12, "Sink writer", "every decision, its audit\nrecord, and a case per\nhold with its reasons",
           sub_size=8.5)
-arrow(left(sco), right(snk), label="every decision")
+arrow(left(sco), right(snk))
 
 chs = box(68, 24, 28, 12, "ClickHouse", "every scored transfer,\naudit chain, cases",
           fill=STORE_FILL)
@@ -126,13 +126,10 @@ dash = box(20, 24, 40, 12, "Grafana and the demo page",
            fill=STORE_FILL, sub_size=8.5)
 arrow(left(chs), right(dash), dashed=True, color=MUTED, label="read only")
 
-# --- row 3: the graph and the people ---------------------------------------
-cas = box(136, 4, 24, 12, "Case manager", "opens a case per alert,\nwith its reason in words")
-arrow(bottom(sco), top(cas), color=ALERT, label="fraud.alerts", label_dy=0.4)
-
+# --- row 3: the people --------------------------------------------------------
 ana = box(104, 4, 24, 12, "Analyst", "blocks or releases, corrects a\nverdict, records a client's report;\nverdicts are the retraining labels",
           fill=ALERT_SOFT, edge=ALERT, sub_size=8.5)
-arrow(left(cas), right(ana), color=ALERT)
+arrow(bottom(chs), left(ana), color=ALERT, label="the queue: demo or CLI", rad=0.25)
 
 
 ax.text(0, 61.4, "Offline, not in the live path", fontsize=10, fontweight="bold",

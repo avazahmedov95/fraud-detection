@@ -1,13 +1,17 @@
-# Sink-writer service: consumes transactions.scored -> ClickHouse.
-# Build context is the repo root (so it can COPY sink-writer/).
+# Sink-writer: transactions.scored -> ClickHouse, with a case for each hold.
+# Build context is the repo root.
 FROM python:3.12-slim
+
+# lightgbm, which explains each hold, needs the OpenMP runtime.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY sink-writer/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY sink-writer/ .
-# Columns added after the table was created; ch_writer.py applies the file on every
-# connect, since ClickHouse runs its init scripts only on an empty data directory.
+COPY case-manager/case.py case-manager/explain.py ./
 COPY infra/clickhouse/init/03-columns.sql .
 
 CMD ["python", "-u", "consumer.py"]

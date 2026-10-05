@@ -1,6 +1,6 @@
 """The PyFlink job: apply the CEP rules, score with ONNX, decide.
 
-    transactions.raw --(key by sender)--> transactions.scored + fraud.alerts
+    transactions.raw --(key by sender)--> transactions.scored, fraud.second_look
 
 Degrades to CEP-only if the model is absent, stamping what actually ran.
 """
@@ -347,11 +347,6 @@ def main():
               .process(FraudDetector(), output_type=Types.STRING()))
 
     scored.sink_to(_kafka_sink(C.TOPIC_SCORED)).name("scored-sink")
-
-    (scored
-     .filter(lambda v: json.loads(v)["decision"] == "REVIEW")
-     .sink_to(_kafka_sink(C.TOPIC_ALERTS))
-     .name("alerts-sink"))
 
     (scored
      .filter(lambda v: json.loads(v)["decision"] == "SECOND_LOOK")

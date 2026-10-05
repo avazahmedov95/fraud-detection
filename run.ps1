@@ -305,8 +305,7 @@ switch ($Target.ToLower()) {
             Write-Host "The second look's band was not re-chosen (it needs ..\.venv-models and TABPFN_CHECKPOINT): the second look stays off under the new cut-off." -ForegroundColor Yellow
         }
         & $PSCommandPath resume-job
-        docker compose up -d --build case-manager
-        docker compose restart second-look demo
+        docker compose restart sink-writer second-look demo
     }
 
     "seed-confirmed" {
@@ -345,7 +344,7 @@ switch ($Target.ToLower()) {
         } else {
             $argv = @("list")
         }
-        docker compose exec -T case-manager python queue_cli.py @argv
+        docker compose exec -T demo python /repo/case-manager/queue_cli.py @argv
     }
 
     "status" {

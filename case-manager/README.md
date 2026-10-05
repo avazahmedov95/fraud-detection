@@ -1,40 +1,32 @@
 # case-manager
 
-Turns every alert into a case for an analyst: `fraud.alerts` into the ClickHouse
-table `fraud.cases`, each case with its reasons in words. A REVIEW holds the
-transfer until the analyst decides: CONFIRMED_FRAUD blocks it and the money stays
-with the payer, FALSE_POSITIVE releases it. The verdict is the only real label the
-system produces, and a CONFIRMED_FRAUD also adds the payee's card at once to the
-confirmed fraud accounts the job reads (Redis, `confirmed:accounts`). A verdict can
-be changed: withdrawing a CONFIRMED_FRAUD takes the card out again, unless another
-confirmed case or the labelled history (`confirmed:history`) still names it.
+The analyst's queue: the cases in the ClickHouse table `fraud.cases`, and what an
+analyst does with them. Not a service of its own: the sink writer opens a case for
+every hold, with its reasons in words, and the demo page and the command line work
+the queue through `store.py`.
 
-A client can also report a transfer the system let go: `report` opens a case for it,
-confirmed at once, so the payee joins the confirmed accounts and a retrain
-(`ml/retrain.py`) learns the miss. Such a case keeps the system's decision, ALLOW,
-and stays out of the hold figures and the precision: nobody held it.
+A hold waits until the analyst decides: CONFIRMED_FRAUD blocks the transfer and the
+money stays with the payer, FALSE_POSITIVE releases it. A confirmation also puts the
+payee's card into the confirmed fraud accounts the job reads (Redis,
+`confirmed:accounts`); a withdrawn one takes it out, unless another confirmed case or
+the history (`confirmed:history`) still names it. A client can report a transfer the
+system let go: it becomes a confirmed case, kept out of the hold figures, since
+nobody held it. Verdicts and reports are the labels the model is retrained on.
 
 | File | What it does |
 |---|---|
-| `consumer.py` | the service: `fraud.alerts` -> `fraud.cases` |
-| `case.py` | an alert as a case row, the verdict as a new row, how long a transfer was held; no I/O |
-| `store.py` | ClickHouse access - open, read, resolve, count, holds - and the confirmed payee into and out of Redis |
-| `explain.py` | each alert's reasons: the model's exact tree contributions, in words |
-| `queue_cli.py` | the analyst's queue on the command line: `list`, `show`, `resolve`, `report`, `stats` |
-| `config.py` | connections, from the environment |
+| `case.py` | a hold as a case row, a verdict or a report as a newer row, how long a transfer was held; no I/O |
+| `store.py` | the queue in ClickHouse - read, resolve, report, count, holds - and the confirmed accounts in Redis |
+| `explain.py` | a hold's reasons: the model's exact tree contributions, in words (run by the sink writer) |
+| `queue_cli.py` | the queue on the command line: `list`, `show`, `resolve`, `report`, `stats` |
+| `config.py` | the CLI's warehouse connection |
 | `tests/` | `python -m pytest case-manager -q` |
 
-The service applies `02-cases.sql` on every connect: ClickHouse runs its init
-scripts only on an empty data directory. A redelivered alert cannot reopen a case
-already decided.
-
-```bash
+```powershell
 .\run.ps1 cases                                                   # the queue
 .\run.ps1 cases -Case <id> -Verdict CONFIRMED_FRAUD -By analyst.k  # block it
 .\run.ps1 cases -Case <id> -Report -By analyst.k                  # a client's report
 .\run.ps1 cases -Stats                                            # verdicts, precision, holds
 ```
 
-The demo page's "Block" and "Release" buttons write the same verdicts through the
-same `store.py`, its list of verdicts changes one, and an allowed transfer has a
-button for the client's report; on the command line, resolve the case again.
+The CLI runs in the demo's container, beside the same `store.py` the page uses.

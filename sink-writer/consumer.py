@@ -1,5 +1,5 @@
-"""Sink-writer service: transactions.scored -> ClickHouse (analytics + audit).
-Batched by size and time."""
+"""Sink-writer service: transactions.scored -> ClickHouse: every decision, its audit
+record, and a case for each hold. Batched by size and time."""
 
 import json
 import logging

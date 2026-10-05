@@ -2,13 +2,9 @@
 
 TabPFN's second look at the transfers just under the review cut-off. The job sends
 such a transfer to `fraud.second_look` instead of letting it go; this service scores
-it with TabPFN and publishes the decision: at or above TabPFN's own cut-off the
-transfer is held for the analyst like any REVIEW, under it it goes.
-
-```
-fraud.second_look --> TabPFN, two pieces of context --> transactions.scored  every decision
-                                                     --> fraud.alerts        a hold
-```
+it with TabPFN and publishes the decision to `transactions.scored`: at or above
+TabPFN's own cut-off the transfer is held for the analyst like any REVIEW, and the
+sink writer opens its case; under it it goes.
 
 | File | What it does |
 |---|---|

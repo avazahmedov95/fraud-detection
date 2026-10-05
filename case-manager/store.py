@@ -1,54 +1,33 @@
-"""ClickHouse access for the case queue: open, read, resolve, count. Shared with
-the analyst CLI so the two cannot hold different opinions about how a case is stored."""
+"""The analyst's queue in ClickHouse: read the cases the sink writer opens, give or
+change a verdict, record a client's report, count. Shared by the demo and the CLI."""
 
 import logging
 import os
 import time
 
 import case as CASE
-from explain import Explainer
 
 log = logging.getLogger("case_store")
 
 RECONNECT_INTERVAL_S = 10.0
 _TABLE = "cases"
-#: The accounts in confirmed frauds the job reads (stream-processor/config.py): a
-#: CONFIRMED_FRAUD verdict adds the payee's card, and withdrawing it takes the card out.
+#: The accounts in confirmed frauds the job reads (stream-processor/config.py).
 CONFIRMED_KEY = "confirmed:accounts"
-#: The cards the labelled history confirmed (ml/seed_confirmed.py), which no
-#: withdrawn verdict takes out.
+#: The history's confirmed accounts (ml/seed_confirmed.py): no withdrawal removes them.
 HISTORY_KEY = "confirmed:history"
-#: The cases a hold opened. A client's report on a transfer the system let go is a
-#: case too (report), but nobody held it: the queue's figures leave it out.
+#: Cases a hold opened; a client's report on a transfer let go is not one.
 HELD = "decision = 'REVIEW'"
-
-#: The table DDL, shipped beside this module and applied on every connect:
-#: initdb scripts run only on an empty data directory, so a new schema file would
-#: otherwise never reach a running cluster.
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_DDL_CANDIDATES = (
-    os.path.join(_HERE, "02-cases.sql"),                       # in the image
-    os.path.join(_HERE, "..", "infra", "clickhouse", "init",   # in the repo
-                 "02-cases.sql"),
-)
-
-
-def _ddl_file():
-    for p in _DDL_CANDIDATES:
-        if os.path.exists(p):
-            return p
-    return _DDL_CANDIDATES[0]
+#: Applied on every connect: ClickHouse runs its init scripts only on an empty data
+#: directory.
+_DDL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "infra", "clickhouse",
+                    "init", "02-cases.sql")
 
 
 def _statements(sql: str):
-    """Split a DDL file into executable statements. Comments are stripped BEFORE
-    splitting, since a ";" inside a comment would tear a statement apart (line
-    comments only - test_store.py checks the shipped schema)."""
+    """The DDL file's statements, comments stripped first: a ";" in a comment would
+    otherwise split one."""
     stripped = "\n".join(ln.split("--", 1)[0] for ln in sql.splitlines())
-    for chunk in stripped.split(";"):
-        chunk = chunk.strip()
-        if chunk:
-            yield chunk
+    return [chunk.strip() for chunk in stripped.split(";") if chunk.strip()]
 
 
 class CaseStore:
@@ -58,11 +37,7 @@ class CaseStore:
         self._db = database
         self._client = None
         self._redis = None
-        self._buf = []
-        self._dropped = 0
         self._last_attempt = 0.0
-        # Lazy: an absent artefact disables explanations, not the queue.
-        self._explainer = Explainer()
 
     def open(self):
         self._last_attempt = time.time()
@@ -71,98 +46,64 @@ class CaseStore:
             self._client = clickhouse_connect.get_client(**self._cfg)
             self._client.ping()
             self._apply_schema()
-            log.info("ClickHouse connected (%s:%s/%s)",
-                     self._cfg["host"], self._cfg["port"], self._db)
         except Exception as exc:                       # noqa: BLE001
             log.warning("ClickHouse unavailable, will retry: %s", exc)
             self._client = None
 
     def _apply_schema(self):
-        """CREATE TABLE IF NOT EXISTS, every connect; idempotent by construction.
-        Failing here is fatal to this connection rather than tolerated: a store whose
-        table may not exist would discard cases while reporting itself connected."""
-        ddl = _ddl_file()
-        if not os.path.exists(ddl):
-            raise FileNotFoundError(
-                f"{ddl} is missing from the image. The case table cannot "
-                "be assumed to exist: ClickHouse only runs the init scripts on "
-                "an empty data directory. Check the COPY in "
-                "infra/case-manager/Dockerfile.")
-        with open(ddl, encoding="utf-8") as fh:
-            sql = fh.read()
-        for stmt in _statements(sql):
-            self._client.command(stmt)
+        with open(_DDL, encoding="utf-8") as fh:
+            for stmt in _statements(fh.read()):
+                self._client.command(stmt)
 
     def _ensure(self):
-        if self._client is None and (
-                time.time() - self._last_attempt >= RECONNECT_INTERVAL_S):
+        if self._client is None and time.time() - self._last_attempt >= RECONNECT_INTERVAL_S:
             self.open()
         return self._client is not None
 
-    def add(self, alert: dict):
-        status, lines = self._explainer.explain(alert.get("features"),
-                                                alert.get("ml_score"))
-        self._buf.append(CASE.case_row(alert, lines, status))
-
-    def pending(self):
-        return len(self._buf)
-
-    def flush(self):
-        if not self._buf:
-            return
-        if not self._ensure():
-            # Loud, with a running total: an empty queue reads as "nothing to work on".
-            self._dropped += len(self._buf)
-            log.error("ClickHouse down, DISCARDED %d cases (%d total this run)",
-                      len(self._buf), self._dropped)
-            self._buf.clear()
-            return
-        rows, self._buf = self._buf, []
-        try:
-            self._client.insert(_TABLE, rows, column_names=CASE.CASE_COLUMNS,
-                                database=self._db)
-        except Exception as exc:                       # noqa: BLE001
-            self._dropped += len(rows)
-            log.error("case insert failed, DISCARDED %d (%d total): %s",
-                      len(rows), self._dropped, exc)
-            self._client = None
-
-    def open_cases(self, limit=20, since=None):
-        """The work queue, most urgent first; with `since` (epoch seconds), the cases
-        opened from then on. FINAL is required: until parts merge, a plain SELECT can
-        return the open row beside its resolution."""
-        if not self._ensure():
-            return []
-        after = "" if since is None else "AND opened_at >= fromUnixTimestamp64Milli(%(since)s) "
-        q = (f"SELECT {', '.join(CASE.CASE_COLUMNS)} "
-             f"FROM {self._db}.{_TABLE} FINAL "
-             f"WHERE disposition = 'NEW' {after}"
-             # Exposure first: every case here is past the cutoff, and the amount at
-             # stake spans four orders of magnitude; the score breaks ties.
-             f"ORDER BY amount_uzs DESC, final_score DESC, "
-             f"opened_at ASC "
-             f"LIMIT {int(limit)}")
-        params = None if since is None else {"since": int(since * 1000)}
+    def _select(self, where, params=None, tail=""):
+        """Cases as dicts. FINAL: until parts merge, a plain SELECT can return a case's
+        open row beside its verdict."""
+        q = (f"SELECT {', '.join(CASE.CASE_COLUMNS)} FROM {self._db}.{_TABLE} FINAL "
+             f"WHERE {where} {tail}")
         return [dict(zip(CASE.CASE_COLUMNS, r))
                 for r in self._client.query(q, parameters=params).result_rows]
+
+    def _insert(self, row):
+        self._client.insert(_TABLE, [row], column_names=CASE.CASE_COLUMNS, database=self._db)
+
+    def open_cases(self, limit=20, since=None):
+        """The held transfers, the largest amount first; with `since` (epoch seconds),
+        those opened from then on."""
+        if not self._ensure():
+            return []
+        where = "disposition = 'NEW'"
+        if since is not None:
+            where += " AND opened_at >= fromUnixTimestamp64Milli(%(since)s)"
+        return self._select(where, None if since is None else {"since": int(since * 1000)},
+                            f"ORDER BY amount_uzs DESC, final_score DESC, opened_at ASC "
+                            f"LIMIT {int(limit)}")
 
     def get(self, case_id):
         if not self._ensure():
             return None
-        q = (f"SELECT {', '.join(CASE.CASE_COLUMNS)} "
-             f"FROM {self._db}.{_TABLE} FINAL WHERE case_id = %(cid)s")
-        rows = self._client.query(q, parameters={"cid": case_id}).result_rows
-        return dict(zip(CASE.CASE_COLUMNS, rows[0])) if rows else None
+        rows = self._select("case_id = %(cid)s", {"cid": case_id})
+        return rows[0] if rows else None
+
+    def resolved_cases(self, since, limit=20):
+        """The verdicts given from `since` (epoch seconds) on, the latest first."""
+        if not self._ensure():
+            return []
+        return self._select("disposition != 'NEW' AND resolved_at >= "
+                            "fromUnixTimestamp64Milli(%(since)s)", {"since": int(since * 1000)},
+                            f"ORDER BY resolved_at DESC LIMIT {int(limit)}")
 
     def resolve(self, case_id, disposition, by, at_epoch=None):
-        """Write a verdict, or change one. Returns False when there is no such case."""
+        """Give a verdict, or change one. False when there is no such case."""
         current = self.get(case_id)
         if current is None:
             return False
-        row = CASE.resolution_row(current, disposition, by,
-                                  time.time() if at_epoch is None else at_epoch)
-        self._client.insert(_TABLE, [row], column_names=CASE.CASE_COLUMNS,
-                            database=self._db)
+        self._insert(CASE.resolution_row(current, disposition, by,
+                                         time.time() if at_epoch is None else at_epoch))
         if disposition == "CONFIRMED_FRAUD":
             self._confirm(current["receiver_card"])
         elif current["disposition"] == "CONFIRMED_FRAUD":
@@ -170,38 +111,23 @@ class CaseStore:
         return True
 
     def report(self, transaction_id, by, at_epoch=None):
-        """A client reports a transfer as fraud. A held or decided one has its case
-        confirmed; one the system let go becomes a case confirmed at once, read from
-        the warehouse. Returns False when the warehouse does not have it yet."""
+        """A client reports a transfer as fraud: its case is confirmed, or, for one the
+        system let go, opened confirmed from the warehouse. False when the warehouse
+        does not have it yet."""
         if self.get(transaction_id) is not None:
             return self.resolve(transaction_id, "CONFIRMED_FRAUD", by, at_epoch)
         if not self._ensure():
             return False
         # The latest row: a transfer sent for the second look has its answer after it.
-        q = (f"SELECT {', '.join(CASE.REPORT_SOURCE)} "
-             f"FROM {self._db}.transactions_scored WHERE transaction_id = %(t)s "
-             f"ORDER BY scored_at DESC LIMIT 1")
+        q = (f"SELECT {', '.join(CASE.REPORT_SOURCE)} FROM {self._db}.transactions_scored "
+             f"WHERE transaction_id = %(t)s ORDER BY scored_at DESC LIMIT 1")
         rows = self._client.query(q, parameters={"t": transaction_id}).result_rows
         if not rows:
             return False
         transfer = dict(zip(CASE.REPORT_SOURCE, rows[0]))
-        row = CASE.report_row(transfer, by, time.time() if at_epoch is None else at_epoch)
-        self._client.insert(_TABLE, [row], column_names=CASE.CASE_COLUMNS,
-                            database=self._db)
+        self._insert(CASE.report_row(transfer, by, time.time() if at_epoch is None else at_epoch))
         self._confirm(transfer["receiver_card"])
         return True
-
-    def resolved_cases(self, since, limit=20):
-        """The verdicts given from `since` (epoch seconds) on, the latest first."""
-        if not self._ensure():
-            return []
-        q = (f"SELECT {', '.join(CASE.CASE_COLUMNS)} "
-             f"FROM {self._db}.{_TABLE} FINAL "
-             f"WHERE disposition != 'NEW' "
-             f"AND resolved_at >= fromUnixTimestamp64Milli(%(since)s) "
-             f"ORDER BY resolved_at DESC LIMIT {int(limit)}")
-        return [dict(zip(CASE.CASE_COLUMNS, r)) for r in self._client.query(
-            q, parameters={"since": int(since * 1000)}).result_rows]
 
     def _redis_client(self):
         if self._redis is None:
@@ -212,17 +138,16 @@ class CaseStore:
         return self._redis
 
     def _confirm(self, card):
-        """The confirmed payee joins the accounts the job reads. Redis down costs the
-        mark, said in the log, not the verdict, which is already stored."""
+        """The payee joins the confirmed accounts. Redis down costs the mark, not the
+        verdict, which is already stored."""
         try:
             self._redis_client().sadd(CONFIRMED_KEY, card)
         except Exception as exc:                       # noqa: BLE001
-            log.error("confirmed %s, but could not add it to %s: %s",
-                      card, CONFIRMED_KEY, exc)
+            log.error("confirmed %s, but could not add it to %s: %s", card, CONFIRMED_KEY, exc)
 
     def _withdraw(self, card):
-        """A withdrawn confirmation takes the payee out of the accounts the job reads,
-        unless another confirmed case or the labelled history still names it."""
+        """The payee leaves the confirmed accounts, unless another confirmed case or the
+        history still names it."""
         q = (f"SELECT count() FROM {self._db}.{_TABLE} FINAL "
              f"WHERE receiver_card = %(card)s AND disposition = 'CONFIRMED_FRAUD'")
         if self._client.query(q, parameters={"card": card}).result_rows[0][0]:
@@ -236,37 +161,29 @@ class CaseStore:
                       card, CONFIRMED_KEY, exc)
 
     def stats(self):
-        """Counts per disposition, and the precision they imply - the only place
-        precision comes from something other than generated ground truth. Over RESOLVED
-        cases only: open cases are not "not fraud" and would drift the number upward."""
+        """Counts per verdict and the precision they imply, over resolved holds only:
+        an open case is not "not fraud"."""
         if not self._ensure():
             return {}
         q = (f"SELECT disposition, count() FROM {self._db}.{_TABLE} FINAL "
              f"WHERE {HELD} GROUP BY disposition")
         counts = {d: n for d, n in self._client.query(q).result_rows}
-        confirmed = counts.get("CONFIRMED_FRAUD", 0)
-        false_pos = counts.get("FALSE_POSITIVE", 0)
-        resolved = confirmed + false_pos
-        counts["_resolved"] = resolved
-        counts["_precision"] = (confirmed / resolved) if resolved else None
+        confirmed, false_pos = counts.get("CONFIRMED_FRAUD", 0), counts.get("FALSE_POSITIVE", 0)
+        counts["_resolved"] = confirmed + false_pos
+        counts["_precision"] = confirmed / counts["_resolved"] if counts["_resolved"] else None
         q = (f"SELECT count() FROM {self._db}.{_TABLE} FINAL "
              f"WHERE NOT ({HELD}) AND disposition = 'CONFIRMED_FRAUD'")
         counts["_reported"] = self._client.query(q).result_rows[0][0]
-
-        # Three problems look identical in the queue: a build predating the column
-        # (empty status), features not published (NO_FEATURES), nothing consumed at all.
         q = (f"SELECT explanation_status, count() FROM {self._db}.{_TABLE} FINAL "
              f"WHERE {HELD} GROUP BY explanation_status")
-        counts["_explanation"] = {(d or "(written before the column existed)"): n
-                                  for d, n in self._client.query(q).result_rows}
+        counts["_explanation"] = {(d or "(none)"): n for d, n in self._client.query(q).result_rows}
         q = f"SELECT max(opened_at) FROM {self._db}.{_TABLE} FINAL WHERE {HELD}"
         rows = self._client.query(q).result_rows
         counts["_last_opened"] = rows[0][0] if rows else None
         return counts
 
     def holds(self, now=None):
-        """What holding costs and keeps (case.hold_summary). A case opened without a
-        decision time has no hold to measure and is left out."""
+        """What holding costs and keeps (case.hold_summary)."""
         if not self._ensure():
             return {}
         cols = ("disposition", "opened_at", "resolved_at", "amount_uzs")
@@ -274,15 +191,3 @@ class CaseStore:
              f"WHERE {HELD} AND toUnixTimestamp64Milli(opened_at) > 0")
         return CASE.hold_summary([dict(zip(cols, r)) for r in self._client.query(q).result_rows],
                                  time.time() if now is None else now)
-
-    def close(self):
-        self.flush()
-        if self._client is not None:
-            try:
-                self._client.close()
-            except Exception:                          # noqa: BLE001
-                pass
-        if self._dropped:
-            log.error("SHUTDOWN WITH LOSS: %d cases were never stored. Any "
-                      "queue-derived number from this run is invalid.",
-                      self._dropped)

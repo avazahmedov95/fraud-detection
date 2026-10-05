@@ -15,7 +15,6 @@ create transactions.raw     6
 # every transaction after CEP + ML scoring
 create transactions.scored  6
 # high-risk decisions for downstream consumers
-create fraud.alerts         3
 # transfers just under the review cut-off, waiting for TabPFN (second-look/README.md)
 create fraud.second_look    3
 

@@ -2,8 +2,10 @@
 
 Persists every decision from `transactions.scored` to ClickHouse: the decision with
 its stage times and the feature values it was taken on (`fraud.transactions_scored`,
-which `ml/retrain.py` learns from) and the audit record
-(`fraud.audit_log`, append-only, each record chained to the previous one by a hash).
+which `ml/retrain.py` learns from), the audit record (`fraud.audit_log`, append-only,
+each record chained to the previous one by a hash), and for a hold a case for the
+analyst (`fraud.cases`) with its reasons in words, by case-manager's `explain.py`
+over the served model (`ml/models`, mounted).
 A service of its own, so a slow or absent warehouse never holds back the job.
 
 | File | What it does |
