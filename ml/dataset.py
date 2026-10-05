@@ -7,6 +7,7 @@ import os
 import sys
 from collections import defaultdict
 
+import numpy as np
 import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "stream-processor"))
@@ -60,6 +61,22 @@ def build_matrix(csv_path: str, nrows=None) -> pd.DataFrame:
         row["event_time"] = d["event_time"]
         rows.append(row)
     return pd.DataFrame(rows)
+
+
+def cached_matrix(csv_path, cache=None):
+    """build_matrix's features and labels, read from `cache` when it holds these
+    columns and written to it when it does not exist: the replay takes minutes."""
+    if cache and os.path.exists(cache):
+        with np.load(cache, allow_pickle=False) as z:
+            if [str(n) for n in z["names"]] != list(FEATURE_NAMES):
+                raise SystemExit(f"{cache} holds other columns - delete it and re-run")
+            return z["X"], z["y"]
+    df = build_matrix(csv_path)
+    X = df[list(FEATURE_NAMES)].astype("float32").values
+    y = df["label"].values.astype("int8")
+    if cache:
+        np.savez_compressed(cache, X=X, y=y, names=np.array(list(FEATURE_NAMES)))
+    return X, y
 
 
 if __name__ == "__main__":

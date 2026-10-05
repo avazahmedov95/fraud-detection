@@ -43,21 +43,6 @@ PIECES = 2
 TIE = 1e-4
 
 
-def matrix(cache=None):
-    """train.py's matrix, read from `cache` when it holds these columns."""
-    if cache and os.path.exists(cache):
-        with np.load(cache, allow_pickle=False) as z:
-            if [str(n) for n in z["names"]] != list(D.FEATURE_NAMES):
-                raise SystemExit(f"{cache} holds other columns - delete it and re-run")
-            return z["X"], z["y"]
-    df = D.build_matrix(T.CSV)
-    X = df[list(D.FEATURE_NAMES)].astype("float32").values
-    y = df["label"].values.astype("int8")
-    if cache:
-        np.savez_compressed(cache, X=X, y=y, names=np.array(list(D.FEATURE_NAMES)))
-    return X, y
-
-
 def pieces(yfit, rows=TABPFN_ROWS, seed=42):
     """The training slice in pieces TabPFN can read: every fraud row in each piece
     and the ordinary rows dealt out between them, none above `rows`."""
@@ -99,7 +84,7 @@ def main():
 
     with open(os.path.join(T.MODELS_DIR, "thresholds.json"), encoding="utf-8") as fh:
         review = json.load(fh)["review"]
-    X, y = matrix(args.cache)
+    X, y = D.cached_matrix(T.CSV, args.cache)
     cut = T.cut_index(len(y))
     fit = int(cut * T.FIT_SHARE)
     Xfit, yfit, Xva, yva = X[:fit], y[:fit], X[fit:cut], y[fit:cut]

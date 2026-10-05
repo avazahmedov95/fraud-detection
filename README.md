@@ -13,7 +13,7 @@ suspicious transfer is held until an analyst blocks or releases it.
 ```
 data-generator/    synthetic transfers, and the producer into Kafka
 stream-processor/  the PyFlink job: features, rules, model, decision
-ml/                trains the model, exports ONNX, prepares the second look
+ml/                trains and retrains the model, exports ONNX, prepares the second look
 second-look/       TabPFN for the transfers just under the cut-off
 sink-writer/       every decision into ClickHouse, with the audit chain
 case-manager/      every hold as a case for the analyst
@@ -30,6 +30,8 @@ bank app -> Kafka transactions.raw -> Flink job (Redis: payee side, confirmed ac
          -> transactions.scored -> sink-writer -> ClickHouse -> Grafana, demo
          -> fraud.alerts -> case-manager -> analyst (block: payee into Redis)
          -> fraud.second_look -> second-look (TabPFN) -> transactions.scored, fraud.alerts
+ClickHouse (decisions with features, verdicts, clients' reports) -> ml/retrain.py
+         -> a candidate model, served once a person promotes it
 ```
 
 ## Run

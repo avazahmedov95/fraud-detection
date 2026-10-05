@@ -13,6 +13,7 @@ trains on exactly what it will be served.
 | `manifest.py` | records what the served model was built from: dataset, features, artefacts |
 | `second_look.py` | the second look's band and TabPFN context |
 | `seed_confirmed.py` | the history's confirmed fraud accounts, into Redis |
+| `retrain.py` | a new model from the decisions the job logged and the verdicts people gave, against the served one; and the drift since training |
 | `tests/` | `python -m pytest ml -q` |
 
 ## Run
@@ -22,6 +23,8 @@ python train.py          # model.joblib, thresholds.json, feature_names.json, me
 ..\run.ps1 export-model  # export_onnx.py in a container: model.txt, model.onnx, manifest.json
 python second_look.py --cache models_matrix.npz --tabpfn-model <checkpoint>
 python seed_confirmed.py # with the stack up
+..\run.ps1 retrain       # with the stack up: models/candidate/, and whether it is better
+..\run.ps1 promote-model # serve the candidate
 ```
 
 `export_onnx.py` runs in a container (`infra/ml/Dockerfile`, the versions this
@@ -70,3 +73,17 @@ Over twenty generated datasets, 3,497 held-out frauds, means with 95% intervals:
 
 The second look beats a lowered cut-off on 13 of 20 datasets, F1 +1.0 [+0.3, +1.6];
 against the model alone it trades about eight points of precision for eight of recall.
+
+## Retraining on people's decisions
+
+Every decision is stored with the feature values it was taken on (`features` in
+`fraud.transactions_scored`), and every verdict and client's report in
+`fraud.cases`. `retrain.py` (`run.ps1 retrain`, weekly or when the drift says so)
+fits the same committee on the served model's training rows plus the logged
+decisions, fraud where a person confirmed it; sets the cut-off at the served model's
+workload; and compares the two on the latest fifth of the logged decisions, which
+neither trained on. It writes the candidate to `models/candidate/` and serves
+nothing: `run.ps1 promote-model` does, after a person has read the comparison -
+export, the second look's band, the job, the case explanations. Before that it
+gives each feature's population stability index against the training rows: over
+0.25, a feature has moved.

@@ -5,7 +5,7 @@ The PyFlink job that decides every transfer before it settles. It reads
 in Redis, computes 24 features, runs 10 hard rules, scores the model (ONNX) and
 decides: ALLOW, REVIEW - held for the analyst - or SECOND_LOOK, just under the
 cut-off, sent to TabPFN (`second-look/`). Every decision goes to
-`transactions.scored`, holds to `fraud.alerts` as well.
+`transactions.scored` with its feature values, holds to `fraud.alerts` as well.
 
 | File | What it does |
 |---|---|

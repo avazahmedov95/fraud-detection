@@ -735,7 +735,8 @@ class App:
                           for c in items],
                 "done": [{"id": c["case_id"], "amount": c["amount_uzs"],
                           "to": mask(c["receiver_card"]), "type": c["predicted_type"],
-                          "verdict": c["disposition"], "by": c["resolved_by"]}
+                          "verdict": c["disposition"], "by": c["resolved_by"],
+                          "held": c["decision"] == "REVIEW"}
                          for c in done],
                 "stats": {k: v for k, v in stats.items()
                           if k in ("NEW", "CONFIRMED_FRAUD", "FALSE_POSITIVE", "_precision")},
@@ -747,6 +748,10 @@ class App:
         if disposition not in ("CONFIRMED_FRAUD", "FALSE_POSITIVE"):
             raise ValueError(f"unknown disposition {disposition!r}")
         return {"ok": bool(self.store().resolve(case_id, disposition, "demo"))}
+
+    def report(self, transaction_id):
+        """The client says a transfer the system let go was fraud."""
+        return {"ok": bool(self.store().report(transaction_id, "demo"))}
 
 
 APP = None
@@ -812,6 +817,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(APP.start_run(data.get("kind", "")))
             elif self.path.startswith("/api/cases/") and self.path.endswith("/resolve"):
                 self._json(APP.resolve(self.path.split("/")[3], data.get("disposition", "")))
+            elif self.path == "/api/report":
+                self._json(APP.report(data.get("transaction_id", "")))
             else:
                 self._json({"error": "not found"}, 404)
         except Exception as exc:                       # noqa: BLE001 - shown on the page

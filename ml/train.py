@@ -69,6 +69,18 @@ def make_model(scale_pos_weight, random_state=42):
         n_jobs=-1, verbose=-1)
 
 
+def fit_committee(X, y):
+    """The five fits on these rows and the one booster they merge into, the one the
+    job serves (committee.py); retrain.py fits the same way."""
+    spw = class_weight(int(y.sum()), int((y == 0).sum()))
+    members = []
+    for seed in COMMITTEE_SEEDS:
+        m = make_model(spw, random_state=seed)
+        m.fit(X, y)
+        members.append(m.booster_)
+    return committee.merge(members), members
+
+
 def choose_review_cutoff(y, p):
     """REVIEW maximises F1 on the validation rows. A REVIEW holds the transfer for a
     person, who blocks or releases it; the system never blocks on its own."""
@@ -116,12 +128,7 @@ def main():
           f"(pos={int(y[fit:cut].sum())}) | test {len(yte):,} (pos={int(yte.sum())}) "
           f"| scale_pos_weight={spw:.1f}")
 
-    members = []
-    for seed in COMMITTEE_SEEDS:
-        m = make_model(spw, random_state=seed)
-        m.fit(X[:fit], y[:fit])
-        members.append(m.booster_)
-    model = committee.merge(members)
+    model, members = fit_committee(X[:fit], y[:fit])
     committee.check(model, members, Xte[:5000])
 
     review = choose_review_cutoff(y[fit:cut], model.predict(X[fit:cut]))

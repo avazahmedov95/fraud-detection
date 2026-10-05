@@ -18,6 +18,9 @@ CONFIRMED_KEY = "confirmed:accounts"
 #: The cards the labelled history confirmed (ml/seed_confirmed.py), which no
 #: withdrawn verdict takes out.
 HISTORY_KEY = "confirmed:history"
+#: The cases a hold opened. A client's report on a transfer the system let go is a
+#: case too (report), but nobody held it: the queue's figures leave it out.
+HELD = "decision = 'REVIEW'"
 
 #: The table DDL, shipped beside this module and applied on every connect:
 #: initdb scripts run only on an empty data directory, so a new schema file would
@@ -166,6 +169,28 @@ class CaseStore:
             self._withdraw(current["receiver_card"])
         return True
 
+    def report(self, transaction_id, by, at_epoch=None):
+        """A client reports a transfer as fraud. A held or decided one has its case
+        confirmed; one the system let go becomes a case confirmed at once, read from
+        the warehouse. Returns False when the warehouse does not have it yet."""
+        if self.get(transaction_id) is not None:
+            return self.resolve(transaction_id, "CONFIRMED_FRAUD", by, at_epoch)
+        if not self._ensure():
+            return False
+        # The latest row: a transfer sent for the second look has its answer after it.
+        q = (f"SELECT {', '.join(CASE.REPORT_SOURCE)} "
+             f"FROM {self._db}.transactions_scored WHERE transaction_id = %(t)s "
+             f"ORDER BY scored_at DESC LIMIT 1")
+        rows = self._client.query(q, parameters={"t": transaction_id}).result_rows
+        if not rows:
+            return False
+        transfer = dict(zip(CASE.REPORT_SOURCE, rows[0]))
+        row = CASE.report_row(transfer, by, time.time() if at_epoch is None else at_epoch)
+        self._client.insert(_TABLE, [row], column_names=CASE.CASE_COLUMNS,
+                            database=self._db)
+        self._confirm(transfer["receiver_card"])
+        return True
+
     def resolved_cases(self, since, limit=20):
         """The verdicts given from `since` (epoch seconds) on, the latest first."""
         if not self._ensure():
@@ -217,21 +242,24 @@ class CaseStore:
         if not self._ensure():
             return {}
         q = (f"SELECT disposition, count() FROM {self._db}.{_TABLE} FINAL "
-             f"GROUP BY disposition")
+             f"WHERE {HELD} GROUP BY disposition")
         counts = {d: n for d, n in self._client.query(q).result_rows}
         confirmed = counts.get("CONFIRMED_FRAUD", 0)
         false_pos = counts.get("FALSE_POSITIVE", 0)
         resolved = confirmed + false_pos
         counts["_resolved"] = resolved
         counts["_precision"] = (confirmed / resolved) if resolved else None
+        q = (f"SELECT count() FROM {self._db}.{_TABLE} FINAL "
+             f"WHERE NOT ({HELD}) AND disposition = 'CONFIRMED_FRAUD'")
+        counts["_reported"] = self._client.query(q).result_rows[0][0]
 
         # Three problems look identical in the queue: a build predating the column
         # (empty status), features not published (NO_FEATURES), nothing consumed at all.
         q = (f"SELECT explanation_status, count() FROM {self._db}.{_TABLE} FINAL "
-             f"GROUP BY explanation_status")
+             f"WHERE {HELD} GROUP BY explanation_status")
         counts["_explanation"] = {(d or "(written before the column existed)"): n
                                   for d, n in self._client.query(q).result_rows}
-        q = f"SELECT max(opened_at) FROM {self._db}.{_TABLE} FINAL"
+        q = f"SELECT max(opened_at) FROM {self._db}.{_TABLE} FINAL WHERE {HELD}"
         rows = self._client.query(q).result_rows
         counts["_last_opened"] = rows[0][0] if rows else None
         return counts
@@ -243,7 +271,7 @@ class CaseStore:
             return {}
         cols = ("disposition", "opened_at", "resolved_at", "amount_uzs")
         q = (f"SELECT {', '.join(cols)} FROM {self._db}.{_TABLE} FINAL "
-             f"WHERE toUnixTimestamp64Milli(opened_at) > 0")
+             f"WHERE {HELD} AND toUnixTimestamp64Milli(opened_at) > 0")
         return CASE.hold_summary([dict(zip(cols, r)) for r in self._client.query(q).result_rows],
                                  time.time() if now is None else now)
 

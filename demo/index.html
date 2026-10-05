@@ -348,10 +348,14 @@ ru: {
   empty_cases: "Задержанных переводов нет. Покажите случай мошенничества — он появится здесь через несколько секунд.",
   no_store: "Очередь недоступна: ",
   done_title: "Решения аналитика",
-  done_hint: "Решения с начала показа. Ошибку можно исправить: если снять подтверждение мошенничества, счёт получателя уходит из памяти подтверждённых мошенников, если его не подтверждает другой случай.",
+  done_hint: "Решения и сообщения клиентов с начала показа. Ошибку можно исправить: если снять подтверждение мошенничества, счёт получателя уходит из памяти подтверждённых мошенников, если его не подтверждает другой случай.",
   done_conf: "заблокирован: мошенничество", done_fp: "отпущен: ложная тревога",
   to_fp: "Ошибка: отпустить", to_conf: "Ошибка: это мошенничество",
   empty_done: "Решений пока нет.",
+  done_rep: "сообщение клиента: мошенничество", done_rep_off: "сообщение клиента снято", to_not: "Ошибка: не мошенничество",
+  report: "Клиент сообщил: это мошенничество",
+  report_note: "Перевод уже ушёл. Сообщение клиента становится меткой для переобучения модели, а счёт получателя сразу попадает в память подтверждённых мошенников.",
+  reported: "Записано", report_wait: "Перевода ещё нет в хранилище — попробуйте через несколько секунд",
   grafana_hint: "Панель мониторинга Grafana из этого же стека: те же решения, собранные в базе, — число переводов и тревог, типы, распределение риска, регионы, последние тревоги с причинами. Если в рамке появится вход: логин admin, пароль из файла .env.",
   grafana_open: "Открыть Grafana в отдельной вкладке",
   live_tag: "живые данные из базы",
@@ -463,10 +467,14 @@ en: {
   empty_cases: "Nothing is held. Show a fraud case — it appears here within seconds.",
   no_store: "Queue unavailable: ",
   done_title: "Analyst verdicts",
-  done_hint: "Verdicts given since this demo started. A mistake can be corrected: withdrawing a fraud confirmation takes the payee's account out of the confirmed fraud accounts, unless another case confirms it.",
+  done_hint: "Verdicts and client reports since this demo started. A mistake can be corrected: withdrawing a fraud confirmation takes the payee's account out of the confirmed fraud accounts, unless another case confirms it.",
   done_conf: "blocked: fraud", done_fp: "released: false alarm",
   to_fp: "Mistake: release", to_conf: "Mistake: it was fraud",
   empty_done: "No verdicts yet.",
+  done_rep: "client report: fraud", done_rep_off: "client report withdrawn", to_not: "Mistake: not fraud",
+  report: "Client reported: this was fraud",
+  report_note: "The transfer has gone. The client's report becomes a label the model is retrained on, and the payee's account joins the confirmed fraud accounts at once.",
+  reported: "Recorded", report_wait: "Not in the warehouse yet — try again in a few seconds",
   grafana_hint: "The Grafana dashboard from the same stack: the same decisions as stored in the database — transfer and alert counts, types, the risk distribution, regions, the latest alerts with their reasons. If a login appears in the frame: user admin, password from the .env file.",
   grafana_open: "Open Grafana in its own tab",
   live_tag: "live, from the database",
@@ -790,7 +798,9 @@ function renderDetail() {
       <div class="part-h"><span>${t("part_rules")}</span><b>${fill(t("rules_fired"), {n: rules.length})}</b></div>
       ${rules.length ? `<div class="rules">${rules.map(r => `<span class="rule ${MUST.has(r) ? "must" : ""}" title="${esc(r)}">${esc(t("rules")[r] || r)}</span>`).join("")}</div>` : ""}
       ${rnote ? `<p class="small-note">${rnote}</p>` : ""}
-    </div></div>`;
+    </div>
+    ${x.decision === "ALLOW" ? `<div class="part"><div class="acts"><button type="button" data-report="${esc(x.id)}">${t("report")}</button></div>
+      <p class="small-note">${t("report_note")}</p></div>` : ""}</div>`;
 }
 
 function renderQueue() {
@@ -808,9 +818,10 @@ function renderQueue() {
 
 function renderDone() {
   const ds = (lastCases && lastCases.done) || [], conf = c => c.verdict === "CONFIRMED_FRAUD";
+  const what = c => c.held ? (conf(c) ? "done_conf" : "done_fp") : (conf(c) ? "done_rep" : "done_rep_off");
   $("#done").innerHTML = ds.length ? ds.map(c => `<li data-done="${esc(c.id)}">` +
-    `<div><div class="amt">${fmtInt(c.amount)} ${t("sum")}</div><div class="kind">${esc(c.type ? kindName(c.type) : t("type_none"))} · ${t(conf(c) ? "done_conf" : "done_fp")}</div></div>` +
-    `<div class="acts"><button type="button" data-res="${conf(c) ? "FALSE_POSITIVE" : "CONFIRMED_FRAUD"}">${t(conf(c) ? "to_fp" : "to_conf")}</button></div></li>`).join("")
+    `<div><div class="amt">${fmtInt(c.amount)} ${t("sum")}</div><div class="kind">${esc(c.type ? kindName(c.type) : t("type_none"))} · ${t(what(c))}</div></div>` +
+    `<div class="acts"><button type="button" data-res="${conf(c) ? "FALSE_POSITIVE" : "CONFIRMED_FRAUD"}">${t(conf(c) ? (c.held ? "to_fp" : "to_not") : "to_conf")}</button></div></li>`).join("")
     : `<p class="empty">${t("empty_done")}</p>`;
 }
 
@@ -884,7 +895,7 @@ async function openTab(name) {
 }
 
 document.addEventListener("click", async e => {
-  const el = e.target.closest("[data-tab],[data-lang],[data-play],[data-row],[data-res],[data-case],[data-more],[data-less],[data-filter],[data-filter-reset],[data-close],#modal,#bg-btn");
+  const el = e.target.closest("[data-tab],[data-lang],[data-play],[data-row],[data-res],[data-report],[data-case],[data-more],[data-less],[data-filter],[data-filter-reset],[data-close],#modal,#bg-btn");
   if (!el) return;
   if (el.id === "modal") { if (e.target === el) closeModal(); }
   else if (el.hasAttribute("data-close")) closeModal();
@@ -904,6 +915,13 @@ document.addEventListener("click", async e => {
     el.disabled = true;
     await api(`/api/cases/${encodeURIComponent(id)}/resolve`, {disposition: el.dataset.res});
     if (selected && selected.id === id) selected = null;
+    refreshCases();
+  }
+  else if (el.dataset.report) {
+    el.disabled = true;
+    const r = await api("/api/report", {transaction_id: el.dataset.report});
+    el.textContent = t(r.ok ? "reported" : "report_wait");
+    if (!r.ok) el.disabled = false;
     refreshCases();
   }
   else if (el.dataset.case) { selected = {src: "case", id: el.dataset.case}; renderStream(); renderQueue(); renderDetail(); }

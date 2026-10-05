@@ -114,6 +114,13 @@ def test_each_stage_time_lands_in_its_own_column_and_an_untimed_one_is_null():
     assert all(before[c] is None for c in R.STAGE_COLUMNS)
 
 
+def test_the_served_features_are_stored_with_a_gap_as_nan():
+    d = dict(zip(R.SCORED_COLUMNS, R.scored_row({**SCORED, "features": [1.5, None, 0]})))
+    assert d["features"][0] == 1.5 and d["features"][1] != d["features"][1] \
+        and d["features"][2] == 0.0
+    assert dict(zip(R.SCORED_COLUMNS, R.scored_row(SCORED)))["features"] == []
+
+
 def test_the_stage_columns_follow_the_jobs_stages():
     """The job names the stages and the sink stores them: a stage added on one side
     only would be dropped without a word. fraud_job.py needs PyFlink, so its source

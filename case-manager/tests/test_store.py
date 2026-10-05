@@ -15,6 +15,9 @@ ALERT = {
 }
 
 
+ALERT_TIME = CASE._dt(ALERT["event_time"])
+
+
 class FakeResult:
     def __init__(self, rows):
         self.result_rows = rows
@@ -28,6 +31,7 @@ class FakeClient:
         self.inserts = []
         self.queries = []
         self.rows = {}
+        self.transfers = {}
         self.closed = False
 
     def ping(self):
@@ -48,6 +52,16 @@ class FakeClient:
     def query(self, q, parameters=None):
         self.queries.append(q)
         rows = list(self.rows.values())
+        decision = CASE.CASE_COLUMNS.index("decision")
+        if f"NOT ({S.HELD})" in q:
+            return FakeResult([[sum(
+                1 for r in rows if r[decision] != "REVIEW"
+                and r[CASE.CASE_COLUMNS.index("disposition")] == "CONFIRMED_FRAUD")]])
+        if f"WHERE {S.HELD}" in q:
+            rows = [r for r in rows if r[decision] == "REVIEW"]
+        if "transactions_scored" in q:
+            t = self.transfers.get(parameters["t"])
+            return FakeResult([[t[c] for c in CASE.REPORT_SOURCE]] if t else [])
         if "disposition = 'NEW'" in q:
             rows = [r for r in rows
                     if r[CASE.CASE_COLUMNS.index("disposition")] == "NEW"]
@@ -262,6 +276,35 @@ def test_resolved_cases_are_the_latest_verdicts_first(store):
     for i, at in enumerate([1_000, 3_000, 2_000]):
         _confirmed(store, f"t_{i}", f"card_{i}", at)
     assert [c["case_id"] for c in store.resolved_cases(since=1.5e3)] == ["t_1", "t_2"]
+
+
+LET_GO = {"transaction_id": "t_9", "event_time": ALERT_TIME, "sender_card": "card_s",
+          "receiver_card": "card_9", "amount_uzs": 2_000_000, "final_score": 0.01,
+          "decision": "ALLOW", "predicted_type": "", "model_version": "cep+ml-fusion-v2",
+          "ml_score": 0.01}
+
+
+def test_a_report_on_a_transfer_let_go_is_a_confirmed_case_kept_out_of_the_holds(store):
+    store._fake.transfers["t_9"] = LET_GO
+    assert store.report("t_9", "analyst.k", at_epoch=5_000) is True
+    case = store.get("t_9")
+    assert (case["disposition"], case["decision"]) == ("CONFIRMED_FRAUD", "ALLOW")
+    assert store._redis.sets[S.CONFIRMED_KEY] == {"card_9"}
+    s = store.stats()
+    assert s["_reported"] == 1 and s.get("CONFIRMED_FRAUD", 0) == 0 and s["_precision"] is None
+    assert store.holds(now=6_000)["CONFIRMED_FRAUD"]["n"] == 0
+
+
+def test_a_report_on_a_held_transfer_confirms_its_case(store):
+    store.add(ALERT)
+    store.flush()
+    assert store.report("t_1", "analyst.k", at_epoch=5_000) is True
+    assert store.get("t_1")["disposition"] == "CONFIRMED_FRAUD"
+    assert store.stats()["_reported"] == 0
+
+
+def test_a_report_on_a_transfer_not_yet_stored_says_so(store):
+    assert store.report("t_unknown", "analyst.k") is False
 
 
 def test_redis_down_costs_the_mark_not_the_verdict(store, caplog):

@@ -1,7 +1,8 @@
 # sink-writer
 
 Persists every decision from `transactions.scored` to ClickHouse: the decision with
-its stage times (`fraud.transactions_scored`) and the audit record
+its stage times and the feature values it was taken on (`fraud.transactions_scored`,
+which `ml/retrain.py` learns from) and the audit record
 (`fraud.audit_log`, append-only, each record chained to the previous one by a hash).
 A service of its own, so a slow or absent warehouse never holds back the job.
 

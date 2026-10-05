@@ -239,12 +239,12 @@ class FraudDetector(KeyedProcessFunction):
             # a substituted event.
             "ingress_hash": event.get("ingress_hash"),
         }
-        # The feature vector, on alerts and on transfers sent for a second look:
-        # case-manager explains from it, the second look scores it, and neither can
-        # recompute sender state. NaN -> None, as a bare NaN is not valid JSON.
-        if decision != "ALLOW":
-            out["features"] = [None if v != v else round(float(v), 6)
-                               for v in result["features"]]
+        # The feature vector, on every decision: case-manager explains from it, the
+        # second look scores it, and a retrain (ml/retrain.py) learns from exactly
+        # what was served - none of them can recompute sender state. NaN -> None,
+        # as a bare NaN is not valid JSON.
+        out["features"] = [None if v != v else round(float(v), 6)
+                           for v in result["features"]]
 
         _lap(stages, "decide", mark)
         _before_operator(stages, event.get("ingested_at"), ctx.timestamp(), scoring_started)

@@ -31,6 +31,7 @@ ml/models/*.joblib
 ml/models/*.onnx
 ml/models/*.txt
 ml/models/*.npz
+ml/models/candidate/
 # manifest.json is the PROVENANCE record and IS tracked - it is what says the
 # untracked artefacts above belonged together.
 !ml/models/manifest.json

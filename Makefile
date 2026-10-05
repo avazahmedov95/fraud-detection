@@ -7,7 +7,7 @@ GEN_DIR = data-generator
 -include .env
 export
 
-.PHONY: help up down clean ps logs topics generate produce produce-stream no-active-job fresh-taskmanager export-model seed-confirmed serve-prep submit-job resume-job sink-logs verify-audit query-scored
+.PHONY: help up down clean ps logs topics generate produce produce-stream no-active-job fresh-taskmanager export-model seed-confirmed retrain promote-model serve-prep submit-job resume-job sink-logs verify-audit query-scored
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -45,6 +45,18 @@ export-model: ## the trained model to ONNX for the job, in a container (infra/ml
 
 seed-confirmed: ## load the history's confirmed fraud accounts into Redis
 	cd ml && python seed_confirmed.py --port $${REDIS_HOST_PORT}
+
+retrain: ## a new model from the logged decisions and people's verdicts, against the served one
+	cd ml && python retrain.py --cache models_matrix.npz
+
+# The second look's band is re-chosen by hand where TabPFN is installed
+# (ml/second_look.py); until then it stays off under the new cut-off.
+promote-model: ## serve the retrained model (after reading retrain's comparison)
+	test -f ml/models/candidate/model.joblib
+	cp ml/models/candidate/* ml/models/
+	$(MAKE) export-model resume-job
+	$(COMPOSE) up -d --build case-manager
+	$(COMPOSE) restart second-look demo
 
 serve-prep: ## copy the trained ONNX model, its cutoff and the second look's band next to the Flink job
 	cp ml/models/model.onnx ml/models/thresholds.json stream-processor/

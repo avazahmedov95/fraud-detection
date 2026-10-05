@@ -20,11 +20,13 @@ param(
     #   .\run.ps1 cases
     #   .\run.ps1 cases -Case t_0041237
     #   .\run.ps1 cases -Case t_0041237 -Verdict CONFIRMED_FRAUD -By analyst.k
+    #   .\run.ps1 cases -Case t_0041237 -Report -By analyst.k   (a client's report)
     #   .\run.ps1 cases -Stats
     [string]$Case = "",
     [ValidateSet("", "CONFIRMED_FRAUD", "FALSE_POSITIVE")]
     [string]$Verdict = "",
     [string]$By = "",
+    [switch]$Report,
     [switch]$Stats
 )
 
@@ -88,6 +90,9 @@ function Wait-Ready {
 }
 
 function Get-ActiveJobs {
+    # Call it as @(Get-ActiveJobs): a function's output is unrolled, so one job comes
+    # back as the job itself, whose .Count PowerShell 5.1 leaves empty - and the
+    # guard against a second job then let one through.
     $jobs = (Invoke-RestMethod -Uri "http://localhost:8081/jobs/overview" -TimeoutSec 5).jobs
     return @($jobs | Where-Object { $_.state -notin @("FAILED", "CANCELED", "FINISHED") })
 }
@@ -97,7 +102,7 @@ function Assert-JobRunning {
     # container is Up. Recreating the jobmanager discards the job.
     $deadline = (Get-Date).AddSeconds(60)
     while ((Get-Date) -lt $deadline) {
-        try { $active = Get-ActiveJobs } catch {
+        try { $active = @(Get-ActiveJobs) } catch {
             Write-Host "Flink REST API unreachable on :8081 - is the stack up?" -ForegroundColor Red
             return $false
         }
@@ -153,7 +158,7 @@ function Invoke-SubmitJob {
     # windows begin blank. resume-job restores the newest checkpoint instead.
     param([string]$FromCheckpoint)
 
-    $active = Get-ActiveJobs
+    $active = @(Get-ActiveJobs)
     if ($active.Count -gt 0) {
         # A second job would read every partition and score every event twice.
         Write-Host "A JOB IS ALREADY ACTIVE ($($active[0].jid)) - cancel it first:" -ForegroundColor Red
@@ -200,10 +205,12 @@ switch ($Target.ToLower()) {
             "produce-stream" = "replay paced to the original timing (200x)"
             "export-model"   = "the trained model to ONNX for the job, in a container"
             "seed-confirmed" = "load the history's confirmed fraud accounts into Redis"
+            "retrain"        = "a new model from the logged decisions and people's verdicts, against the served one"
+            "promote-model"  = "serve the retrained model (after reading retrain's comparison)"
             "serve-prep"     = "copy the model, its cut-off and the second look's band next to the job"
             "submit-job"     = "fresh TaskManager, then the PyFlink job (empty state)"
             "resume-job"     = "same, restoring keyed state from the newest checkpoint"
-            "cases"          = "the analyst queue (-Case <id> to show, +-Verdict/-By to resolve, -Stats)"
+            "cases"          = "the analyst queue (-Case <id> to show, +-Verdict/-By to resolve, +-Report/-By for a client's report, -Stats)"
             "status"         = "containers, job, rows, offsets"
             "query-scored"   = "decision counts in ClickHouse"
             "sink-logs"      = "tail the sink-writer logs"
@@ -275,6 +282,33 @@ switch ($Target.ToLower()) {
         }
     }
 
+    "retrain" {
+        # Reads the warehouse, so the stack must be up; writes ml/models/candidate/.
+        Push-Location ml
+        try { python retrain.py --cache models_matrix.npz } finally { Pop-Location }
+    }
+
+    "promote-model" {
+        # The steps after train.py, for retrain.py's candidate: export, the second
+        # look's band under the new cut-off, then everything that reads the model.
+        if (-not (Test-Path "ml/models/candidate/model.joblib")) {
+            throw "no candidate in ml/models/candidate: run .\run.ps1 retrain first"
+        }
+        Copy-Item "ml/models/candidate/*" "ml/models/" -Force
+        & $PSCommandPath export-model
+        $tabpfn = Join-Path (Split-Path (Get-Location).Path) ".venv-models\Scripts\python.exe"
+        if ((Test-Path $tabpfn) -and $DotEnv.TABPFN_CHECKPOINT) {
+            $ckpt = (Resolve-Path $DotEnv.TABPFN_CHECKPOINT).Path
+            Push-Location ml
+            try { & $tabpfn second_look.py --cache models_matrix.npz --tabpfn-model $ckpt } finally { Pop-Location }
+        } else {
+            Write-Host "The second look's band was not re-chosen (it needs ..\.venv-models and TABPFN_CHECKPOINT): the second look stays off under the new cut-off." -ForegroundColor Yellow
+        }
+        & $PSCommandPath resume-job
+        docker compose up -d --build case-manager
+        docker compose restart second-look demo
+    }
+
     "seed-confirmed" {
         Push-Location ml
         try { python seed_confirmed.py --port $DotEnv.REDIS_HOST_PORT } finally { Pop-Location }
@@ -303,9 +337,9 @@ switch ($Target.ToLower()) {
     "cases" {
         if ($Stats) {
             $argv = @("stats")
-        } elseif ($Case -and $Verdict) {
+        } elseif ($Case -and ($Verdict -or $Report)) {
             if (-not $By) { throw "-By is required: an unattributed label cannot be audited or withdrawn." }
-            $argv = @("resolve", $Case, $Verdict, "--by", $By)
+            $argv = if ($Report) { @("report", $Case, "--by", $By) } else { @("resolve", $Case, $Verdict, "--by", $By) }
         } elseif ($Case) {
             $argv = @("show", $Case)
         } else {

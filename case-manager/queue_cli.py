@@ -1,7 +1,7 @@
-"""The analyst surface: look at the held transfers, block or release one, see what
-holding costs.
+"""The analyst surface: look at the held transfers, block or release one, record a
+client's report, see what holding costs.
 
-  queue_cli.py list | show ID | resolve ID VERDICT --by WHO | stats"""
+  queue_cli.py list | show ID | resolve ID VERDICT --by WHO | report ID --by WHO | stats"""
 
 import argparse
 import logging
@@ -110,6 +110,13 @@ def cmd_resolve(args):
           "row is versioned, so a later verdict supersedes this one.")
 
 
+def cmd_report(args):
+    if not _store().report(args.transaction_id, args.by):
+        raise SystemExit(f"no transfer {args.transaction_id!r} in the warehouse yet")
+    print(f"{args.transaction_id} -> CONFIRMED_FRAUD on the client's report (by {args.by}): "
+          f"the payee joins the confirmed accounts, and a retrain learns from it.")
+
+
 def cmd_stats(args):
     store = _store()
     s, h = store.stats(), store.holds()
@@ -128,6 +135,7 @@ def cmd_stats(args):
                             key=lambda kv: -kv[1]):
         print(f"  {status:<40}{n:>8}")
     print(f"\nmost recent case opened: {s.get('_last_opened') or 'never'}")
+    print(f"reported by clients after the system let them go: {s['_reported']}")
 
     if h:
         held, blocked, released = h["NEW"], h["CONFIRMED_FRAUD"], h["FALSE_POSITIVE"]
@@ -169,6 +177,11 @@ def main():
                    help="who is making this call; a label with no author "
                         "cannot be audited or withdrawn")
     p.set_defaults(func=cmd_resolve)
+
+    p = sub.add_parser("report", help="a client reports a transfer as fraud")
+    p.add_argument("transaction_id")
+    p.add_argument("--by", required=True, help="who recorded the report")
+    p.set_defaults(func=cmd_report)
 
     p = sub.add_parser("stats", help="verdicts, the precision they imply, and what "
                                      "holding costs")

@@ -57,7 +57,7 @@ SCORED_COLUMNS = [
     "predicted_type", "model_version",
     "active_call", "secs_login_to_confirm", "secs_login_z",
     "ingested_at", "scored_at_job", "scoring_ms",
-] + STAGE_COLUMNS
+] + STAGE_COLUMNS + ["features"]
 
 
 def _stage_times(e: dict) -> list:
@@ -94,7 +94,11 @@ def scored_row(e: dict) -> list:
         _epoch_dt(e.get("ingested_at")),
         _epoch_dt(e.get("scored_at_job")),
         _f(e.get("scoring_ms")),
-    ] + _stage_times(e)
+    ] + _stage_times(e) + [
+        # The served feature vector; a feature the job did not compute arrives as
+        # None and is stored as NaN, which is how the model reads a missing value.
+        [float("nan") if v is None else float(v) for v in e.get("features") or []],
+    ]
 
 
 # fraud.audit_log is append-only / WORM. The chain columns (seq, prev_hash,

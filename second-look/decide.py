@@ -31,6 +31,4 @@ def verdict(event, score, cut, checkpoint):
     else:
         out["decision"] = "REVIEW" if score >= cut else "ALLOW"
         out["final_score"] = round(score, 4)
-    if out["decision"] == "ALLOW":
-        out.pop("features", None)               # alerts only, as the job publishes them
     return out

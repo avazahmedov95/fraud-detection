@@ -268,9 +268,9 @@ def b_scored_row_matches_the_schema():
     R = pkg("sink-writer", "record")
     sql = _read("infra", "clickhouse", "init", "01-schema.sql")
     declared = _ddl_columns(sql, "fraud.transactions_scored")
-    # The stage columns come later, from the migration sink-writer applies on connect.
-    stages = re.sub(r"--[^\n]*", "", _read("infra", "clickhouse", "init", "03-stages.sql"))
-    declared += re.findall(r"ADD COLUMN IF NOT EXISTS\s+([a-z_]+)\s", stages)
+    # The later columns come from the migration sink-writer applies on connect.
+    later = re.sub(r"--[^\n]*", "", _read("infra", "clickhouse", "init", "03-columns.sql"))
+    declared += re.findall(r"ADD COLUMN IF NOT EXISTS\s+([a-z_]+)\s", later)
     extra = [c for c in R.SCORED_COLUMNS if c not in declared]
     if extra:
         return f"scored_row writes columns the table does not have: {extra}"

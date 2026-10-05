@@ -21,7 +21,8 @@ def test_tabpfn_at_or_above_its_cutoff_holds_the_transfer():
 
 def test_under_its_cutoff_the_transfer_goes():
     out = verdict(EVENT, 0.40, 0.88, "ckpt")
-    assert out["decision"] == "ALLOW" and "features" not in out
+    assert out["decision"] == "ALLOW"
+    assert out["features"] == EVENT["features"]    # every decision carries them, as the job's do
 
 
 def test_no_score_holds_the_transfer_and_says_so():

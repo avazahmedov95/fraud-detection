@@ -9,13 +9,18 @@ confirmed fraud accounts the job reads (Redis, `confirmed:accounts`). A verdict 
 be changed: withdrawing a CONFIRMED_FRAUD takes the card out again, unless another
 confirmed case or the labelled history (`confirmed:history`) still names it.
 
+A client can also report a transfer the system let go: `report` opens a case for it,
+confirmed at once, so the payee joins the confirmed accounts and a retrain
+(`ml/retrain.py`) learns the miss. Such a case keeps the system's decision, ALLOW,
+and stays out of the hold figures and the precision: nobody held it.
+
 | File | What it does |
 |---|---|
 | `consumer.py` | the service: `fraud.alerts` -> `fraud.cases` |
 | `case.py` | an alert as a case row, the verdict as a new row, how long a transfer was held; no I/O |
 | `store.py` | ClickHouse access - open, read, resolve, count, holds - and the confirmed payee into and out of Redis |
 | `explain.py` | each alert's reasons: the model's exact tree contributions, in words |
-| `queue_cli.py` | the analyst's queue on the command line: `list`, `show`, `resolve`, `stats` |
+| `queue_cli.py` | the analyst's queue on the command line: `list`, `show`, `resolve`, `report`, `stats` |
 | `config.py` | connections, from the environment |
 | `tests/` | `python -m pytest case-manager -q` |
 
@@ -26,9 +31,10 @@ already decided.
 ```bash
 .\run.ps1 cases                                                   # the queue
 .\run.ps1 cases -Case <id> -Verdict CONFIRMED_FRAUD -By analyst.k  # block it
+.\run.ps1 cases -Case <id> -Report -By analyst.k                  # a client's report
 .\run.ps1 cases -Stats                                            # verdicts, precision, holds
 ```
 
 The demo page's "Block" and "Release" buttons write the same verdicts through the
-same `store.py`, and its list of verdicts changes one; on the command line, resolve
-the case again.
+same `store.py`, its list of verdicts changes one, and an allowed transfer has a
+button for the client's report; on the command line, resolve the case again.

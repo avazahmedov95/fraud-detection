@@ -94,6 +94,26 @@ def resolution_row(case: dict, disposition: str, by: str, at_epoch: float) -> li
     return row
 
 
+#: What a client's report reads of the transfer, from fraud.transactions_scored.
+REPORT_SOURCE = ["transaction_id", "event_time", "sender_card", "receiver_card",
+                 "amount_uzs", "final_score", "decision", "predicted_type",
+                 "model_version", "ml_score"]
+
+
+def report_row(transfer: dict, by: str, at_epoch: float) -> list:
+    """A transfer the system let go, reported as fraud by the client: a case opened
+    and confirmed at once. It keeps the system's own decision, which is what keeps it
+    out of the queue's hold figures and precision: nobody held it."""
+    if not by:
+        raise ValueError("a report must name who recorded it")
+    at = _epoch_dt(at_epoch)
+    row = dict(transfer, case_id=transfer["transaction_id"], opened_at=at,
+               rule_hits=[], disposition="CONFIRMED_FRAUD", resolved_by=by,
+               resolved_at=at, version=int(at_epoch * 1000), explanation=[],
+               explanation_status="")
+    return [row[c] for c in CASE_COLUMNS]
+
+
 def _seconds(dt):
     """A stored DateTime as epoch seconds; the client returns it naive, in UTC."""
     return (dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt).timestamp()
