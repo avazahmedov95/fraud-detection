@@ -56,6 +56,17 @@
         <bpmn:flowNodeRef>Fraud</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Blocked</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Released</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>ReportIn</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Report</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Reported</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_model" name="Model owner">
+        <bpmn:flowNodeRef>Weekly</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Retrain</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Better</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Promote</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Served</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Kept</bpmn:flowNodeRef>
       </bpmn:lane>
     </bpmn:laneSet>
     <bpmn:startEvent id="Start" name="Transfer confirmed by the payer">
@@ -193,7 +204,7 @@
       <bpmn:outgoing>F_letgo_in</bpmn:outgoing>
       <bpmn:linkEventDefinition id="Link_LetGoIn" name="Let go by the second look" />
     </bpmn:intermediateCatchEvent>
-    <bpmn:serviceTask id="Store" name="Store the decision and its audit record&#10;[Python → ClickHouse]">
+    <bpmn:serviceTask id="Store" name="Store the decision, its feature values and its audit record&#10;[Python → ClickHouse]">
       <bpmn:incoming>F_merge</bpmn:incoming>
       <bpmn:outgoing>F_store</bpmn:outgoing>
       <bpmn:dataOutputAssociation id="D_store">
@@ -218,7 +229,7 @@
       <bpmn:incoming>F_opened</bpmn:incoming>
       <bpmn:outgoing>F_review</bpmn:outgoing>
     </bpmn:userTask>
-    <bpmn:userTask id="Verdict" name="Decide: block it or release it&#10;[saved to ClickHouse; a block adds the payee to Redis]">
+    <bpmn:userTask id="Verdict" name="Block it or release it, or correct an earlier verdict&#10;[ClickHouse; the payee into or out of Redis]">
       <bpmn:incoming>F_review</bpmn:incoming>
       <bpmn:outgoing>F_verdict</bpmn:outgoing>
       <bpmn:dataOutputAssociation id="D_verdict">
@@ -239,9 +250,58 @@
     <bpmn:endEvent id="Released" name="Transfer released">
       <bpmn:incoming>F_release</bpmn:incoming>
     </bpmn:endEvent>
+    <bpmn:startEvent id="ReportIn" name="A client reports a fraud the system let go">
+      <bpmn:outgoing>F_report_in</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="Trigger_ReportIn" />
+    </bpmn:startEvent>
+    <bpmn:userTask id="Report" name="Record the client's report: a case confirmed at once&#10;[demo page or CLI; the payee into Redis]">
+      <bpmn:incoming>F_report_in</bpmn:incoming>
+      <bpmn:outgoing>F_report</bpmn:outgoing>
+      <bpmn:dataOutputAssociation id="D_report_case">
+        <bpmn:targetRef>Cases</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+      <bpmn:dataOutputAssociation id="D_report_redis">
+        <bpmn:targetRef>Redis</bpmn:targetRef>
+      </bpmn:dataOutputAssociation>
+    </bpmn:userTask>
+    <bpmn:endEvent id="Reported" name="Report recorded">
+      <bpmn:incoming>F_report</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:startEvent id="Weekly" name="Every week, or when the drift report says so">
+      <bpmn:outgoing>F_weekly</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="Trigger_Weekly" />
+    </bpmn:startEvent>
+    <bpmn:serviceTask id="Retrain" name="Retrain on the logged decisions, labelled by people; read the drift&#10;[ml/retrain.py]">
+      <bpmn:incoming>F_weekly</bpmn:incoming>
+      <bpmn:outgoing>F_retrain</bpmn:outgoing>
+      <bpmn:property id="Property_Retrain" name="__targetRef_placeholder" />
+      <bpmn:dataInputAssociation id="D_retrain_verdicts">
+        <bpmn:sourceRef>Cases</bpmn:sourceRef>
+        <bpmn:targetRef>Property_Retrain</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+      <bpmn:dataInputAssociation id="D_retrain_decisions">
+        <bpmn:sourceRef>Warehouse</bpmn:sourceRef>
+        <bpmn:targetRef>Property_Retrain</bpmn:targetRef>
+      </bpmn:dataInputAssociation>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="Better" name="Better at the same workload?" default="F_kept">
+      <bpmn:incoming>F_retrain</bpmn:incoming>
+      <bpmn:outgoing>F_promote</bpmn:outgoing>
+      <bpmn:outgoing>F_kept</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="Promote" name="A person promotes it&#10;[run.ps1 promote-model]">
+      <bpmn:incoming>F_promote</bpmn:incoming>
+      <bpmn:outgoing>F_served</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="Served" name="New model served">
+      <bpmn:incoming>F_served</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="Kept" name="Served model kept">
+      <bpmn:incoming>F_kept</bpmn:incoming>
+    </bpmn:endEvent>
     <bpmn:dataStoreReference id="Redis" name="Redis: recent payers, confirmed fraud accounts" />
-    <bpmn:dataStoreReference id="Cases" name="ClickHouse: cases and verdicts" />
-    <bpmn:dataStoreReference id="Warehouse" name="ClickHouse: decisions, audit log" />
+    <bpmn:dataStoreReference id="Cases" name="ClickHouse: cases, verdicts, clients' reports" />
+    <bpmn:dataStoreReference id="Warehouse" name="ClickHouse: decisions with their features, audit log" />
     <bpmn:sequenceFlow id="F_start" sourceRef="Start" targetRef="Create" />
     <bpmn:sequenceFlow id="F_create" sourceRef="Create" targetRef="Publish" />
     <bpmn:sequenceFlow id="F_publish" sourceRef="Publish" targetRef="Read" />
@@ -282,6 +342,13 @@
     <bpmn:sequenceFlow id="F_verdict" sourceRef="Verdict" targetRef="Fraud" />
     <bpmn:sequenceFlow id="F_block" name="Yes" sourceRef="Fraud" targetRef="Blocked" />
     <bpmn:sequenceFlow id="F_release" name="No" sourceRef="Fraud" targetRef="Released" />
+    <bpmn:sequenceFlow id="F_report_in" sourceRef="ReportIn" targetRef="Report" />
+    <bpmn:sequenceFlow id="F_report" sourceRef="Report" targetRef="Reported" />
+    <bpmn:sequenceFlow id="F_weekly" sourceRef="Weekly" targetRef="Retrain" />
+    <bpmn:sequenceFlow id="F_retrain" sourceRef="Retrain" targetRef="Better" />
+    <bpmn:sequenceFlow id="F_promote" name="Yes" sourceRef="Better" targetRef="Promote" />
+    <bpmn:sequenceFlow id="F_served" sourceRef="Promote" targetRef="Served" />
+    <bpmn:sequenceFlow id="F_kept" name="No" sourceRef="Better" targetRef="Kept" />
     <bpmn:textAnnotation id="Note_decision">
       <bpmn:text>Hold (REVIEW) at or above the alert cut-off, or when a mandatory rule fired; just under it, ask the second look; otherwise allow</bpmn:text>
     </bpmn:textAnnotation>
@@ -290,7 +357,7 @@
   <bpmndi:BPMNDiagram id="Diagram_1">
     <bpmndi:BPMNPlane id="Plane_1" bpmnElement="Collaboration_1">
       <bpmndi:BPMNShape id="Participant_1_di" bpmnElement="Participant_1" isHorizontal="true">
-        <dc:Bounds x="160" y="60" width="3300" height="1400" />
+        <dc:Bounds x="160" y="60" width="3300" height="1590" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Lane_channel_di" bpmnElement="Lane_channel" isHorizontal="true">
         <dc:Bounds x="190" y="60" width="3270" height="160" />
@@ -312,6 +379,9 @@
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Lane_analyst_di" bpmnElement="Lane_analyst" isHorizontal="true">
         <dc:Bounds x="190" y="1310" width="3270" height="150" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_model_di" bpmnElement="Lane_model" isHorizontal="true">
+        <dc:Bounds x="190" y="1460" width="3270" height="190" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Start_di" bpmnElement="Start">
         <dc:Bounds x="232" y="122" width="36" height="36" />
@@ -443,17 +513,50 @@
         <dc:Bounds x="3010" y="1402" width="36" height="36" />
         <bpmndi:BPMNLabel><dc:Bounds x="3054" y="1410" width="110" height="20" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ReportIn_di" bpmnElement="ReportIn">
+        <dc:Bounds x="1700" y="1367" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1650" y="1407" width="136" height="28" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Report_di" bpmnElement="Report">
+        <dc:Bounds x="1780" y="1335" width="180" height="100" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Reported_di" bpmnElement="Reported">
+        <dc:Bounds x="2000" y="1367" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="1975" y="1407" width="86" height="20" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Weekly_di" bpmnElement="Weekly">
+        <dc:Bounds x="2560" y="1522" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="2515" y="1562" width="126" height="28" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Retrain_di" bpmnElement="Retrain">
+        <dc:Bounds x="2640" y="1490" width="180" height="100" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Better_di" bpmnElement="Better" isMarkerVisible="true">
+        <dc:Bounds x="2860" y="1515" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="2805" y="1482" width="160" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Promote_di" bpmnElement="Promote">
+        <dc:Bounds x="2960" y="1490" width="180" height="100" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Served_di" bpmnElement="Served">
+        <dc:Bounds x="3180" y="1522" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="3224" y="1530" width="100" height="20" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Kept_di" bpmnElement="Kept">
+        <dc:Bounds x="3000" y="1592" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="3044" y="1600" width="110" height="20" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Redis_di" bpmnElement="Redis">
         <dc:Bounds x="1035" y="1055" width="50" height="50" />
         <bpmndi:BPMNLabel><dc:Bounds x="870" y="1062" width="150" height="36" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Cases_di" bpmnElement="Cases">
         <dc:Bounds x="2350" y="1055" width="50" height="50" />
-        <bpmndi:BPMNLabel><dc:Bounds x="2406" y="1066" width="120" height="28" /></bpmndi:BPMNLabel>
+        <bpmndi:BPMNLabel><dc:Bounds x="2406" y="1066" width="130" height="28" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Warehouse_di" bpmnElement="Warehouse">
         <dc:Bounds x="3080" y="1055" width="50" height="50" />
-        <bpmndi:BPMNLabel><dc:Bounds x="3045" y="1110" width="120" height="28" /></bpmndi:BPMNLabel>
+        <bpmndi:BPMNLabel><dc:Bounds x="3040" y="1110" width="140" height="28" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Note_decision_di" bpmnElement="Note_decision">
         <dc:Bounds x="1785" y="224" width="230" height="70" />
@@ -641,6 +744,37 @@
         <di:waypoint x="3010" y="1420" />
         <bpmndi:BPMNLabel><dc:Bounds x="2943" y="1423" width="18" height="14" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F_report_in_di" bpmnElement="F_report_in">
+        <di:waypoint x="1736" y="1385" />
+        <di:waypoint x="1780" y="1385" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F_report_di" bpmnElement="F_report">
+        <di:waypoint x="1960" y="1385" />
+        <di:waypoint x="2000" y="1385" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F_weekly_di" bpmnElement="F_weekly">
+        <di:waypoint x="2596" y="1540" />
+        <di:waypoint x="2640" y="1540" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F_retrain_di" bpmnElement="F_retrain">
+        <di:waypoint x="2820" y="1540" />
+        <di:waypoint x="2860" y="1540" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F_promote_di" bpmnElement="F_promote">
+        <di:waypoint x="2910" y="1540" />
+        <di:waypoint x="2960" y="1540" />
+        <bpmndi:BPMNLabel><dc:Bounds x="2916" y="1521" width="20" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F_served_di" bpmnElement="F_served">
+        <di:waypoint x="3140" y="1540" />
+        <di:waypoint x="3180" y="1540" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="F_kept_di" bpmnElement="F_kept">
+        <di:waypoint x="2885" y="1565" />
+        <di:waypoint x="2885" y="1610" />
+        <di:waypoint x="3000" y="1610" />
+        <bpmndi:BPMNLabel><dc:Bounds x="2892" y="1572" width="18" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="D_redis_read_di" bpmnElement="D_redis_read">
         <di:waypoint x="1050" y="1055" />
         <di:waypoint x="1050" y="450" />
@@ -666,6 +800,31 @@
         <di:waypoint x="2780" y="1450" />
         <di:waypoint x="1060" y="1450" />
         <di:waypoint x="1060" y="1105" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="D_report_case_di" bpmnElement="D_report_case">
+        <di:waypoint x="1930" y="1335" />
+        <di:waypoint x="1930" y="1090" />
+        <di:waypoint x="2350" y="1090" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="D_report_redis_di" bpmnElement="D_report_redis">
+        <di:waypoint x="1810" y="1335" />
+        <di:waypoint x="1810" y="1130" />
+        <di:waypoint x="1075" y="1130" />
+        <di:waypoint x="1075" y="1105" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="D_retrain_verdicts_di" bpmnElement="D_retrain_verdicts">
+        <di:waypoint x="2400" y="1080" />
+        <di:waypoint x="2410" y="1080" />
+        <di:waypoint x="2410" y="1472" />
+        <di:waypoint x="2700" y="1472" />
+        <di:waypoint x="2700" y="1490" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="D_retrain_decisions_di" bpmnElement="D_retrain_decisions">
+        <di:waypoint x="3130" y="1080" />
+        <di:waypoint x="3200" y="1080" />
+        <di:waypoint x="3200" y="1472" />
+        <di:waypoint x="2790" y="1472" />
+        <di:waypoint x="2790" y="1490" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Note_decision_link_di" bpmnElement="Note_decision_link">
         <di:waypoint x="1900" y="350" />

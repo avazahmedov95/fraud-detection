@@ -21,7 +21,8 @@ demo/              one page over the running system
 validation/        the model on the public datasets PaySim and IBM AML
 infra/             Docker images, Kafka, ClickHouse schema, Redis, Grafana
 tools/             boundary_audit.py and the diagram generators
-docs/              the diagrams
+docs/              the diagrams: architecture, integration (how the services talk),
+                   the BPMN process, one transfer step by step
 thesis/            material for the thesis only - not used by the system
 ```
 

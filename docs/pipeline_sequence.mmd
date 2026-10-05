@@ -12,22 +12,22 @@ sequenceDiagram
     actor Analyst
 
     Customer->>App: confirms a transfer
-    App->>Kafka: transactions.raw, keyed by sender (1.7 ms)
-    Kafka->>Flink: the record, fetched and batched (92 ms)
+    App->>Kafka: transactions.raw, keyed by sender (1.1 ms)
+    Kafka->>Flink: the record, fetched and batched (25 ms)
     Flink->>Flink: decode (0.05 ms)
-    Flink->>Flink: read this sender's state (0.12 ms)
+    Flink->>Flink: read this sender's state (1.9 ms)
     Flink->>Redis: how many people paid this receiver? any confirmed fraud accounts?
-    Redis-->>Flink: counts for the hour, day and week, and the confirmed ones (2.07 ms)
-    Flink->>Flink: build 24 features, run the 10 hard rules (0.90 ms)
-    Flink->>Flink: score with the model (0.46 ms)
+    Redis-->>Flink: counts for the hour, day and week, and the confirmed ones (1.6 ms)
+    Flink->>Flink: build 24 features, run the 10 hard rules (0.65 ms)
+    Flink->>Flink: score with the model (0.40 ms)
     Flink->>Flink: decide: allow, hold, or ask the second look (0.03 ms)
-    Flink->>Kafka: transactions.scored, and fraud.alerts when it is an alert (97 ms in all)
+    Flink->>Kafka: transactions.scored with the features, fraud.alerts for an alert (31 ms in all)
     Kafka->>Second: fraud.second_look, a transfer just under the cut-off
-    Second->>Kafka: TabPFN's decision, about a second later
+    Second->>Kafka: TabPFN's decision, about 0.3 s later
     Kafka->>Sink: every decision
     Sink->>DB: the decision and its audit record
     Kafka->>Case: fraud.alerts
     Case->>DB: open a case, with its reason in words
     Case->>Analyst: the held transfer appears in the queue
-    Analyst->>DB: block it, or release it
-    Case->>Redis: a block adds the payee to the confirmed fraud accounts
+    Analyst->>DB: block it or release it, or correct an earlier verdict
+    Case->>Redis: a block adds the payee to the confirmed fraud accounts; a withdrawn one takes it out

@@ -17,7 +17,8 @@ LANES = [("Lane_channel", "Payment channel", 160),
          ("Lane_sink", "Sink writer", 260),
          ("Lane_data", "Data stores", 140),
          ("Lane_case", "Case manager", 150),
-         ("Lane_analyst", "Fraud analyst", 150)]
+         ("Lane_analyst", "Fraud analyst", 150),
+         ("Lane_model", "Model owner", 190)]
 
 NODES = [
     # id, kind, name, lane, (x, y, w, h) of the shape, its label's box or None
@@ -78,7 +79,8 @@ NODES = [
     ("Merge", "exclusiveGateway", "", 3, (2925, 815, 50, 50), None),
     ("LetGoIn", "intermediateCatchEvent", "Let go by the second look",
      3, (2932, 932, 36, 36), (2974, 941, 110, 28)),
-    ("Store", "serviceTask", "Store the decision and its audit record\n[Python → ClickHouse]",
+    ("Store", "serviceTask",
+     "Store the decision, its feature values and its audit record\n[Python → ClickHouse]",
      3, (3015, 790, 180, 100), None),
     ("Recorded", "endEvent", "Decision recorded",
      3, (3235, 822, 36, 36), (3279, 830, 110, 20)),
@@ -89,12 +91,28 @@ NODES = [
     ("Review", "userTask", "Review the held transfer\n[analyst queue: demo page or CLI]",
      6, (2470, 1335, 180, 100), None),
     ("Verdict", "userTask",
-     "Decide: block it or release it\n[saved to ClickHouse; a block adds the payee to Redis]",
+     "Block it or release it, or correct an earlier verdict\n[ClickHouse; the payee into or "
+     "out of Redis]",
      6, (2690, 1335, 180, 100), None),
     ("Fraud", "exclusiveGateway", "Fraud?", 6, (2910, 1360, 50, 50), (2885, 1326, 46, 18)),
     ("Blocked", "endEvent", "Transfer blocked", 6, (3010, 1332, 36, 36), (3054, 1340, 110, 20)),
     ("Released", "endEvent", "Transfer released", 6, (3010, 1402, 36, 36),
      (3054, 1410, 110, 20)),
+    ("ReportIn", "startEvent", "A client reports a fraud the system let go", 6,
+     (1700, 1367, 36, 36), (1650, 1407, 136, 28)),
+    ("Report", "userTask", "Record the client's report: a case confirmed at once\n"
+     "[demo page or CLI; the payee into Redis]", 6, (1780, 1335, 180, 100), None),
+    ("Reported", "endEvent", "Report recorded", 6, (2000, 1367, 36, 36), (1975, 1407, 86, 20)),
+    ("Weekly", "startEvent", "Every week, or when the drift report says so", 7,
+     (2560, 1522, 36, 36), (2515, 1562, 126, 28)),
+    ("Retrain", "serviceTask", "Retrain on the logged decisions, labelled by people; "
+     "read the drift\n[ml/retrain.py]", 7, (2640, 1490, 180, 100), None),
+    ("Better", "exclusiveGateway", "Better at the same workload?", 7, (2860, 1515, 50, 50),
+     (2805, 1482, 160, 14)),
+    ("Promote", "userTask", "A person promotes it\n[run.ps1 promote-model]", 7,
+     (2960, 1490, 180, 100), None),
+    ("Served", "endEvent", "New model served", 7, (3180, 1522, 36, 36), (3224, 1530, 100, 20)),
+    ("Kept", "endEvent", "Served model kept", 7, (3000, 1592, 36, 36), (3044, 1600, 110, 20)),
 ]
 
 FLOWS = [
@@ -147,23 +165,36 @@ FLOWS = [
      (2943, 1331, 20, 14)),
     ("F_release", "Fraud", "Released", "No", [(2935, 1410), (2935, 1420), (3010, 1420)],
      (2943, 1423, 18, 14)),
+    ("F_report_in", "ReportIn", "Report", "", [(1736, 1385), (1780, 1385)], None),
+    ("F_report", "Report", "Reported", "", [(1960, 1385), (2000, 1385)], None),
+    ("F_weekly", "Weekly", "Retrain", "", [(2596, 1540), (2640, 1540)], None),
+    ("F_retrain", "Retrain", "Better", "", [(2820, 1540), (2860, 1540)], None),
+    ("F_promote", "Better", "Promote", "Yes", [(2910, 1540), (2960, 1540)],
+     (2916, 1521, 20, 14)),
+    ("F_served", "Promote", "Served", "", [(3140, 1540), (3180, 1540)], None),
+    ("F_kept", "Better", "Kept", "No", [(2885, 1565), (2885, 1610), (3000, 1610)],
+     (2892, 1572, 18, 14)),
 ]
 #: The "No" of each question is its default flow.
 DEFAULTS = {"Decide": "F_not_held", "Band": "F_allow", "Answering": "F_answer_no",
-            "Late": "F_late_no", "TabCut": "F_letgo", "Fraud": "F_release"}
+            "Late": "F_late_no", "TabCut": "F_letgo", "Fraud": "F_release",
+            "Better": "F_kept"}
 #: Link events: the second look's lane hands its outcomes to the sink writer's
 #: without long flows across the diagram - the events of one name meet.
 LINKS = {"HeldOut": "Held by the second look", "HeldLateOut": "Held by the second look",
          "HeldIn": "Held by the second look",
          "LetGoOut": "Let go by the second look", "LetGoIn": "Let go by the second look"}
+#: What starts the two paths that begin outside the transfer: a client's call, a timer.
+TRIGGERS = {"ReportIn": "messageEventDefinition", "Weekly": "timerEventDefinition"}
 
 STORES = [
     # id, name, (x, y, w, h), label's box
     ("Redis", "Redis: recent payers, confirmed fraud accounts", (1035, 1055, 50, 50),
      (870, 1062, 150, 36)),
-    ("Cases", "ClickHouse: cases and verdicts", (2350, 1055, 50, 50), (2406, 1066, 120, 28)),
-    ("Warehouse", "ClickHouse: decisions, audit log", (3080, 1055, 50, 50),
-     (3045, 1110, 120, 28)),
+    ("Cases", "ClickHouse: cases, verdicts, clients' reports", (2350, 1055, 50, 50),
+     (2406, 1066, 130, 28)),
+    ("Warehouse", "ClickHouse: decisions with their features, audit log",
+     (3080, 1055, 50, 50), (3040, 1110, 140, 28)),
 ]
 
 DATA = [
@@ -175,6 +206,13 @@ DATA = [
     ("D_verdict", "Verdict", "Cases", "out", [(2780, 1335), (2390, 1105)]),
     ("D_confirmed", "Verdict", "Redis", "out",
      [(2780, 1435), (2780, 1450), (1060, 1450), (1060, 1105)]),
+    ("D_report_case", "Report", "Cases", "out", [(1930, 1335), (1930, 1090), (2350, 1090)]),
+    ("D_report_redis", "Report", "Redis", "out",
+     [(1810, 1335), (1810, 1130), (1075, 1130), (1075, 1105)]),
+    ("D_retrain_verdicts", "Retrain", "Cases", "in",
+     [(2400, 1080), (2410, 1080), (2410, 1472), (2700, 1472), (2700, 1490)]),
+    ("D_retrain_decisions", "Retrain", "Warehouse", "in",
+     [(3130, 1080), (3200, 1080), (3200, 1472), (2790, 1472), (2790, 1490)]),
 ]
 
 NOTES = [
@@ -254,6 +292,8 @@ for nid, kind, name, *_ in NODES:
                   '      </bpmn:dataOutputAssociation>']
     if nid in LINKS:
         parts.append(f'      <bpmn:linkEventDefinition id="Link_{nid}" name="{esc(LINKS[nid])}" />')
+    if nid in TRIGGERS:
+        parts.append(f'      <bpmn:{TRIGGERS[nid]} id="Trigger_{nid}" />')
     parts.append(f'    </bpmn:{kind}>')
 for sid, sname, *_ in STORES:
     parts.append(f'    <bpmn:dataStoreReference id="{sid}" name="{esc(sname)}" />')
@@ -321,25 +361,25 @@ MERMAID = """sequenceDiagram
     actor Analyst
 
     Customer->>App: confirms a transfer
-    App->>Kafka: transactions.raw, keyed by sender (1.7 ms)
-    Kafka->>Flink: the record, fetched and batched (92 ms)
+    App->>Kafka: transactions.raw, keyed by sender (1.1 ms)
+    Kafka->>Flink: the record, fetched and batched (25 ms)
     Flink->>Flink: decode (0.05 ms)
-    Flink->>Flink: read this sender's state (0.12 ms)
+    Flink->>Flink: read this sender's state (1.9 ms)
     Flink->>Redis: how many people paid this receiver? any confirmed fraud accounts?
-    Redis-->>Flink: counts for the hour, day and week, and the confirmed ones (2.07 ms)
-    Flink->>Flink: build 24 features, run the 10 hard rules (0.90 ms)
-    Flink->>Flink: score with the model (0.46 ms)
+    Redis-->>Flink: counts for the hour, day and week, and the confirmed ones (1.6 ms)
+    Flink->>Flink: build 24 features, run the 10 hard rules (0.65 ms)
+    Flink->>Flink: score with the model (0.40 ms)
     Flink->>Flink: decide: allow, hold, or ask the second look (0.03 ms)
-    Flink->>Kafka: transactions.scored, and fraud.alerts when it is an alert (97 ms in all)
+    Flink->>Kafka: transactions.scored with the features, fraud.alerts for an alert (31 ms in all)
     Kafka->>Second: fraud.second_look, a transfer just under the cut-off
-    Second->>Kafka: TabPFN's decision, about a second later
+    Second->>Kafka: TabPFN's decision, about 0.3 s later
     Kafka->>Sink: every decision
     Sink->>DB: the decision and its audit record
     Kafka->>Case: fraud.alerts
     Case->>DB: open a case, with its reason in words
     Case->>Analyst: the held transfer appears in the queue
-    Analyst->>DB: block it, or release it
-    Case->>Redis: a block adds the payee to the confirmed fraud accounts
+    Analyst->>DB: block it or release it, or correct an earlier verdict
+    Case->>Redis: a block adds the payee to the confirmed fraud accounts; a withdrawn one takes it out
 """
 path = os.path.join(OUT, "pipeline_sequence.mmd")
 with open(path, "w", encoding="utf-8", newline="\n") as fh:
@@ -360,25 +400,25 @@ ACTORS = ["Bank app", "Kafka", "Flink engine", "Redis", "Second look", "Sink wri
 X = {name: 9 + i * 17.7 for i, name in enumerate(ACTORS)}
 
 MESSAGES = [
-    ("Bank app", "Kafka", "the transfer, keyed by sender", "1.7 ms", False),
-    ("Kafka", "Flink engine", "the record, fetched and batched", "92 ms", False),
+    ("Bank app", "Kafka", "the transfer, keyed by sender", "1.1 ms", False),
+    ("Kafka", "Flink engine", "the record, fetched and batched", "25 ms", False),
     ("Flink engine", "Flink engine", "decode the record", "0.05 ms", False),
-    ("Flink engine", "Flink engine", "read the sender's state", "0.12 ms", False),
+    ("Flink engine", "Flink engine", "read the sender's state", "1.9 ms", False),
     ("Flink engine", "Redis", "who paid this receiver? confirmed fraud accounts?", "", False),
-    ("Redis", "Flink engine", "counts for the hour, day, week; confirmed ones", "2.07 ms", True),
-    ("Flink engine", "Flink engine", "build 24 features, run the 10 hard rules", "0.90 ms", False),
-    ("Flink engine", "Flink engine", "score with the model", "0.46 ms", False),
+    ("Redis", "Flink engine", "counts for the hour, day, week; confirmed ones", "1.6 ms", True),
+    ("Flink engine", "Flink engine", "build 24 features, run the 10 hard rules", "0.65 ms", False),
+    ("Flink engine", "Flink engine", "score with the model", "0.40 ms", False),
     ("Flink engine", "Flink engine", "decide: allow, hold, or ask the second look", "0.03 ms", False),
-    ("Flink engine", "Kafka", "scored, and an alert when it is one", "97 ms in all", False),
+    ("Flink engine", "Kafka", "scored with its features, and an alert when it is one", "31 ms in all", False),
     ("Kafka", "Second look", "a transfer just under the cut-off", "", False),
-    ("Second look", "Kafka", "TabPFN's decision", "about 1 s", True),
+    ("Second look", "Kafka", "TabPFN's decision", "about 0.3 s", True),
     ("Kafka", "Sink writer", "every decision", "", False),
     ("Sink writer", "ClickHouse", "the decision and its audit record", "", False),
     ("Kafka", "Case manager", "fraud.alerts", "", False),
     ("Case manager", "ClickHouse", "a case, with its reason in words", "", False),
     ("Case manager", "Analyst", "the held transfer appears in the queue", "", False),
-    ("Analyst", "ClickHouse", "block it, or release it", "", True),
-    ("Case manager", "Redis", "a block adds the payee to the confirmed fraud accounts", "", False),
+    ("Analyst", "ClickHouse", "block, release, or correct a verdict", "", True),
+    ("Case manager", "Redis", "a block adds the payee; a withdrawn one takes it out", "", False),
 ]
 
 fig, ax = plt.subplots(figsize=(16, 11))
@@ -390,7 +430,7 @@ fig.patch.set_facecolor("white")
 ax.text(0, 106, "One transfer through the system, step by step",
         fontsize=18, fontweight="bold", color=INK, family=FAMILY, va="bottom")
 ax.text(0, 102.8, "The same path as the diagram, read top to bottom. Times are averages over "
-                 "1,000 transfers at 10 a second, measured on the running stack on 30 September 2026.",
+                 "1,000 transfers at 10 a second, measured on the running stack on 5 October 2026, on battery.",
         fontsize=10.5, color=MUTED, family=FAMILY, va="bottom")
 
 top_y, step = 96, 4.6

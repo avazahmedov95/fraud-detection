@@ -123,7 +123,8 @@ def page(x, y, s, colour):
 ax.text(0, 98, "Real-time fraud detection: architecture", fontsize=19, fontweight="bold",
         color=INK, family=FAMILY, va="top")
 ax.text(0, 94.4, "What runs where, from the payer's confirmation to the analyst's verdict. "
-                 "The model is trained offline and loaded into the stream job.",
+                 "The model is trained offline, retrained on people's decisions, and "
+                 "loaded into the stream job.",
         fontsize=10.5, color=MUTED, family=FAMILY, va="top")
 
 STAGES = [("Event source", 0, 24), ("Ingestion", 25, 44), ("Stream processing", 45, 110),
@@ -156,7 +157,7 @@ arrow((15.6, 56), (28.2, 56))
 # ---------------------------------------------------------------- the Flink job
 ax.add_patch(FancyBboxPatch((46.5, 41), 62.3, 34, boxstyle="round,pad=0,rounding_size=1.4",
                             facecolor="#f3f7fd", edgecolor=ACCENT, lw=1.5, zorder=1))
-ax.text(48.5, 73.6, "Apache Flink job (PyFlink): one transfer at a time, keyed by sender",
+ax.text(48.5, 73.6, "Apache Flink job (PyFlink): three copies side by side, keyed by sender",
         fontsize=10.5, fontweight="bold", color=ACCENT, family=FAMILY, va="top", zorder=6)
 
 
@@ -211,7 +212,7 @@ text(138, 62.4, "Sink writer", "Python")
 database(153.5, 70, 5.5, 4, COLOUR["clickhouse"])
 text(153.5, 66.2, "ClickHouse", "decisions,\naudit log")
 gear(138, 40, 2.6, COLOUR["python"])
-text(138, 36.4, "Case manager", "Python")
+text(138, 36.4, "Case manager", "Python;\nverdicts, reports")
 database(153.5, 40, 5.5, 4, COLOUR["clickhouse"])
 text(153.5, 36.2, "ClickHouse", "cases,\nverdicts")
 arrow((127.4, 66), (134.6, 66))
@@ -223,13 +224,15 @@ arrow((141.4, 40), (150.4, 40), ALERT)
 screen(166, 70, 5, COLOUR["grafana"])
 text(170.5, 72.4, "Dashboards", "Grafana, over\nClickHouse", ha="left")
 person(166, 40, 5, ALERT)
-text(170.5, 42.4, "Analyst queue", "demo page or CLI;\nblocks or releases\nthe held transfer",
-     ha="left", colour=ALERT)
+text(170.5, 42.4, "Analyst queue", "demo page or CLI:\nblock or release,\na client's "
+     "report,\ncorrect a verdict", ha="left", colour=ALERT)
 arrow((156.6, 70), (162.6, 70))
 arrow((156.6, 40), (162.8, 40), ALERT, both=True)
-# A block: the payee's card joins the confirmed fraud accounts the job reads.
+# A confirmation: the payee's card joins the confirmed fraud accounts the job reads;
+# a withdrawn one takes it out.
 elbow([(135.4, 39), (131.5, 39), (131.5, 26.5), (72.2, 26.5), (72.2, 30.4)], ALERT)
-ax.text(120.5, 25.1, "a block adds the payee to the confirmed fraud accounts", ha="center",
+ax.text(110, 25.1, "a confirmation adds the payee to the confirmed fraud accounts; "
+                   "a withdrawn one takes it out", ha="center",
         va="center", fontsize=8.5, color=MUTED, family=FAMILY, zorder=6,
         bbox=dict(boxstyle="round,pad=0.2", facecolor="white", edgecolor="none"))
 
@@ -237,7 +240,7 @@ ax.text(120.5, 25.1, "a block adds the payee to the confirmed fraud accounts", h
 ax.add_patch(FancyBboxPatch((0.3, 3), 189.4, 20, boxstyle="round,pad=0,rounding_size=1.5",
                             facecolor="#f7f9fc", edgecolor="#c7d2e0", lw=1.3,
                             linestyle=(0, (5, 3)), zorder=1))
-ax.text(2, 21.2, "Offline: model training, not in the live path", fontsize=11,
+ax.text(2, 21.2, "Offline: training and retraining, not in the live path", fontsize=11,
         fontweight="bold", color=MUTED, family=FAMILY, va="top")
 gear(8, 11, 2.6, COLOUR["python"])
 text(12.5, 13.6, "Data generator", "Python: people,\ntransfers, fraud", ha="left")
@@ -251,7 +254,19 @@ arrow((80, 11), (85.4, 11), MUTED)
 page(89, 11, 5, MUTED)
 text(92.5, 13.6, "model.onnx", "and the alert\ncut-off", ha="left")
 arrow((93.1, 16.6), (93.1, 43), MUTED, dashed=True, label="loaded by the job",
-      at=(93.1, 25))
+      at=(93.1, 33))
+
+# Retraining: the logged decisions and people's verdicts make a candidate, which a
+# person promotes (ml/retrain.py).
+gear(136, 11, 2.6, COLOUR["python"])
+text(140.5, 13.6, "Retraining", "Python: the same committee on the\nlogged decisions, "
+                                "labelled by people;\ndrift reported", ha="left")
+arrow((152.5, 30.2), (138.6, 13.8), MUTED, dashed=True)
+ax.text(149, 19.8, "from ClickHouse: decisions with\ntheir features, verdicts, reports",
+        ha="left",
+        va="center", fontsize=8.3, color=MUTED, family=FAMILY, zorder=6,
+        bbox=dict(boxstyle="round,pad=0.2", facecolor="white", edgecolor="none"))
+arrow((132.6, 9), (107, 9), MUTED, label="a person promotes it", at=(119.8, 9))
 
 for ext in ("png", "svg"):
     out = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
