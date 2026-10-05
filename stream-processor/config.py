@@ -121,8 +121,14 @@ SCALE_THRESHOLDS_BY_CAPABILITY = (
     not in ("0", "false", "no"))
 
 # --- Latency tuning: every default below favoured throughput ------------------
+# Copies of the job running side by side: the Kafka partitions are shared between
+# them and the senders hashed across them, one Python worker and one task slot each.
+# One worker queued at 100 transfers a second; three keep p99 under 300 ms to 200
+# (stream-processor/README.md, Speed). Four contended for this laptop's cores.
+JOB_PARALLELISM = int(os.getenv("JOB_PARALLELISM", "3"))
 # PyFlink batches records before crossing into Python; the default bundle never fills.
-PY_BUNDLE_TIME_MS = int(os.getenv("PY_BUNDLE_TIME_MS", "50"))
+# 20 ms halves the wait of 50 up to 200 a second; past that the extra bundles cost.
+PY_BUNDLE_TIME_MS = int(os.getenv("PY_BUNDLE_TIME_MS", "20"))
 PY_BUNDLE_SIZE = int(os.getenv("PY_BUNDLE_SIZE", "100"))
 # 5 rather than 0: sending each record individually costs more than it saves.
 BUFFER_TIMEOUT_MS = int(os.getenv("BUFFER_TIMEOUT_MS", "5"))

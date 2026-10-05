@@ -87,3 +87,23 @@ nothing: `run.ps1 promote-model` does, after a person has read the comparison -
 export, the second look's band, the job, the case explanations. Before that it
 gives each feature's population stability index against the training rows: over
 0.25, a feature has moved.
+
+Whether it helps was measured once, offline, on six generated datasets (the dataset
+of record and seeds 1-5). In each, the first 40% is the bank's history with one
+fraud type left out - a scheme the bank has not seen - and the next 40% runs on the
+history's model: a held fraud is known a day later, half the missed ones a week
+later, when the client reports them. The last 20% judges, every model at the same
+number of alerts. Means over the six; the retrained model beats the kept one in all
+30 runs:
+
+| new scheme | known to the bank | PR-AUC kept | retrained | all known | caught, kept -> retrained | its frauds caught |
+|---|---|---|---|---|---|---|
+| none | 62% | 0.695 | 0.730 | 0.741 | 58.2% -> 60.7% | - |
+| MULE | 56% | 0.616 | 0.702 | 0.735 | 51.7% -> 55.5% | 25 -> 47 of 238 |
+| APP | 52% | 0.590 | 0.669 | 0.717 | 42.1% -> 44.9% | 28 -> 50 of 367 |
+| ATO | 56% | 0.579 | 0.674 | 0.723 | 46.1% -> 51.7% | 70 -> 120 of 273 |
+| STRUCTURING | 57% | 0.577 | 0.672 | 0.717 | 47.1% -> 53.8% | 64 -> 113 of 262 |
+
+At the same workload the retrained model catches about 1.8 times as many of a new
+scheme's frauds, 330 against 187 of 1,140; knowing every fraud would catch 512. The
+gap is the labels a bank never gets.

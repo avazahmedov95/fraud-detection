@@ -108,13 +108,14 @@ ru: {
       "Читает решения из Kafka и пачками записывает их в ClickHouse.",
       "Если база недоступна, продолжает работать и считает, сколько записей потеряно."]],
     ch: ["ClickHouse", "ClickHouse", "хранилище", [
-      "Каждое решение со временем всех этапов — по ним строится вкладка «Данные и результаты».",
+      "Каждое решение со временем всех этапов и значениями признаков — по ним строится вкладка «Данные и результаты» и переобучается модель.",
       "Цепочка аудита: каждая запись связана с предыдущей хешем, поэтому незаметно изменить историю нельзя.",
       "Дела аналитика и его отметки."]],
     cases: ["Разбор тревог", "Python", "case-manager", [
       "На каждую тревогу открывает дело с причинами словами — из вклада признаков в оценку модели.",
-      "Аналитик решает: заблокировать перевод (мошенничество) или отпустить (ложная тревога). Эти решения — единственные настоящие метки в системе, на них банк переобучал бы модель.",
-      "Заблокированный перевод система запоминает сразу: карта получателя попадает в список подтверждённых мошенников, и модель видит это на следующих переводах с этой карты и на неё.",
+      "Аналитик решает: заблокировать перевод (мошенничество) или отпустить (ложная тревога). Решение можно исправить, а о пропущенном мошенничестве можно записать сообщение клиента.",
+      "Эти решения и сообщения — единственные настоящие метки в системе: на них модель переобучается (ml/retrain.py), а новую модель включает человек.",
+      "Заблокированный перевод система запоминает сразу: карта получателя попадает в список подтверждённых мошенников, и модель видит это на следующих переводах с этой карты и на неё. Снятое подтверждение убирает карту из списка.",
       "Дела можно отобрать по тому, кто задержал перевод: основная модель, жёсткое правило или вторая проверка."]],
     dash: ["Мониторинг", "Grafana · демо", "что видит банк", [
       "Grafana показывает число переводов и тревог, типы, распределение риска, регионы.",
@@ -254,13 +255,14 @@ en: {
       "Reads the decisions from Kafka and writes them to ClickHouse in batches.",
       "When a database is down it keeps running and counts how many records were lost."]],
     ch: ["ClickHouse", "ClickHouse", "the warehouse", [
-      "Every decision with the time of each stage — the Data & results tab is built from them.",
+      "Every decision with the time of each stage and its feature values — the Data & results tab is built from them, and the model is retrained on them.",
       "An audit chain: each record is linked to the one before by a hash, so the history cannot be changed unnoticed.",
       "The analyst's cases and verdicts."]],
     cases: ["Case manager", "Python", "case-manager", [
       "Opens a case for every alert, with its reasons in words — from each feature's share of the model's score.",
-      "The analyst blocks the transfer (fraud) or releases it (false alarm). Those verdicts are the only real labels the system gets; a bank would retrain the model on them.",
-      "A blocked transfer teaches the system at once: the payee's card joins the list of confirmed fraud accounts, and the model sees it on the next transfers from or to that card.",
+      "The analyst blocks the transfer (fraud) or releases it (false alarm). A verdict can be corrected, and a client's report of a fraud the system let go can be recorded.",
+      "Those verdicts and reports are the only real labels the system gets: the model is retrained on them (ml/retrain.py), and a person switches the new model on.",
+      "A blocked transfer teaches the system at once: the payee's card joins the list of confirmed fraud accounts, and the model sees it on the next transfers from or to that card. A withdrawn confirmation takes the card off the list.",
       "Cases can be filtered by what held the transfer: the model, a hard rule or the second look."]],
     dash: ["Monitoring", "Grafana · demo", "what the bank watches", [
       "Grafana shows transfer and alert counts, types, the risk distribution, regions.",

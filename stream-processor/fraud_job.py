@@ -315,6 +315,7 @@ def _tune_for_latency(env):
 
     env.configure(conf)
     env.set_buffer_timeout(C.BUFFER_TIMEOUT_MS)
+    env.set_parallelism(C.JOB_PARALLELISM)
     return env
 
 

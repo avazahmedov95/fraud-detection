@@ -46,6 +46,27 @@ CAP_CONFIRMED_CASES=on|off        confirmed fraud accounts (Redis) and their con
 When Redis is down the job keeps deciding: the payee-side features read as nothing
 seen, and the confirmed accounts as none.
 
+## Speed
+
+Three copies of the job run side by side (`JOB_PARALLELISM`), each handing Python
+a bundle at least every 20 ms (`PY_BUNDLE_TIME_MS`). Arrival to decision in ms,
+3,000 generated transfers per rate (1,000 at 10 a second, 6,000 at 50), producer
+inside Docker, measured on 5 October 2026 on battery - mains power is faster:
+
+| transfers a second | one copy, 50 ms: mean / p95 / p99 | three copies, 20 ms: mean / p95 / p99 |
+|---|---|---|
+| 10 | 56 / 59 / 60 (4 October, mains) | 31 / 34 / 48 |
+| 50 | 84 / 133 / 163 (4 October, mains) | 32 / 58 / 75 |
+| 100 | 2,380 / 3,964 / 4,134 | 64 / 115 / 209 |
+| 150 | 3,696 / 7,211 / 7,828 | 79 / 139 / 188 |
+| 200 | 4,976 / 9,654 / 10,445 | 114 / 224 / 290 |
+| 250 | 3,771 / 6,375 / 6,885 | 313 / 1,054 / 1,371 |
+
+The work itself is 4-5 ms a transfer; the rest is the wait between Kafka and
+Python. One copy could not keep up at 100 a second; three hold the 300 ms target
+to 200. Past that, 50 ms bundles do better (three copies at 250: p99 408), and four
+copies contended for this laptop's cores.
+
 ## Run
 
 `run.ps1 submit-job` (empty state) or `resume-job` (from the newest checkpoint)
