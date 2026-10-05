@@ -283,6 +283,10 @@ button.on-filter{border-color:var(--accent);background:var(--accent-soft)}
         <p class="lead" data-t="verdicts_hint"></p>
         <div class="tiles" id="verdicts"></div>
       </div>
+      <div class="panel timing">
+        <div class="panel-h"><h2 data-t="retrain_title"></h2><span class="grow"></span><span class="live" data-t="live_tag"></span></div>
+        <p class="lead" id="retrain"></p>
+      </div>
       <h2 class="part-title" id="trained-title"></h2>
       <p class="hint" data-t="trained_hint"></p>
       <div class="cmp-wrap"><table class="cmp">
@@ -372,6 +376,15 @@ ru: {
   total_avg: "От прихода до решения, в среднем",
   time_fine: "Среднее по последним {n} решениям в базе. Половина из них принята быстрее {median}, 99% — быстрее {p99}. Решения попадают в базу примерно через полминуты.",
   time_empty: "В базе ещё нет решений со временем этапов. Запустите поток или покажите случай — через полминуты они появятся здесь.",
+  retrain_title: "Переобучение модели",
+  rt_never: "Служба переобучения ещё не запускалась.",
+  rt_on: "Включено, раз в {h} ч. Последний запуск: {when}.",
+  rt_rows: "Мало решений для сравнения: {n} свежих из нужных {need}. Модель не менялась.",
+  rt_fraud: "Мало подтверждённого мошенничества среди свежих переводов: {n} из нужных {need}. Модель не менялась — подтверждайте случаи в очереди.",
+  rt_better: "Новая модель лучше: при том же числе тревог ловит {a} против {b}. Включает её человек: .\\run.ps1 promote-model.",
+  rt_not: "Новая модель не лучше ({a} против {b}): оставлена прежняя.",
+  rt_failed: "Запуск не удался: {e}",
+  rt_moved: "Сильнее всего изменились признаки: {f}.",
   verdicts_title: "Задержанные переводы и решения аналитика", verdicts_hint: "Все дела в базе, включая прошлые показы.",
   v_open: "Задержаны сейчас", v_conf: "Заблокировано: мошенничество", v_fp: "Отпущено: ложные тревоги", v_prec: "Точность по разобранным",
   v_open_sub: "дольше всех: {t}", v_conf_sub: "{amount} сум остались у отправителей",
@@ -491,6 +504,15 @@ en: {
   total_avg: "From arrival to decision, on average",
   time_fine: "Average over the latest {n} decisions in the database. Half of them were decided within {median}, 99% within {p99}. Decisions reach the database about half a minute after they are made.",
   time_empty: "The database holds no decision with stage times yet. Start the stream or show a case: they appear here within half a minute.",
+  retrain_title: "Model retraining",
+  rt_never: "The retraining service has not run yet.",
+  rt_on: "On, every {h} h. Last run: {when}.",
+  rt_rows: "Too few decisions to compare: {n} recent of the {need} needed. The model is unchanged.",
+  rt_fraud: "Too little confirmed fraud among recent transfers: {n} of the {need} needed. The model is unchanged — confirm cases in the queue.",
+  rt_better: "The new model is better: at the same number of alerts it catches {a} against {b}. A person switches it on: .\\run.ps1 promote-model.",
+  rt_not: "The new model is not better ({a} against {b}): the current one stays.",
+  rt_failed: "The run failed: {e}",
+  rt_moved: "Most moved features: {f}.",
   verdicts_title: "Held transfers and the analyst's verdicts", verdicts_hint: "Every case in the database, earlier demos included.",
   v_open: "Held now", v_conf: "Blocked: fraud", v_fp: "Released: false alarms", v_prec: "Precision on resolved",
   v_open_sub: "the longest: {t}", v_conf_sub: "{amount} UZS kept with the senders",
@@ -864,6 +886,24 @@ function renderLive() {
     ["v_prec", v._precision == null ? "—" : pct(v._precision), ""]]
     .map(([k, val, sub]) => `<div class="tile"><span>${t(k)}</span><b>${val}</b>` +
       `${sub ? `<small>${esc(sub)}</small>` : ""}</div>`).join("");
+  $("#retrain").textContent = retrainText(live.retrain);
+}
+
+// The retrainer's latest run (ml/retrain.py), in words.
+function retrainText(s) {
+  if (!s) return t("rt_never");
+  const when = new Date(s.at * 1000).toLocaleString(locale(), {day: "numeric", month: "long", hour: "2-digit", minute: "2-digit"});
+  const need = s.needed || {};
+  const body = {
+    too_few_rows: () => fill(t("rt_rows"), {n: fmtInt(s.recent || 0), need: fmtInt(need.rows)}),
+    too_few_fraud: () => fill(t("rt_fraud"), {n: fmtInt(s.deciding_fraud || 0), need: fmtInt(need.fraud)}),
+    better: () => fill(t("rt_better"), {a: fmtInt(s.retrained.caught), b: fmtInt(s.served.caught)}),
+    not_better: () => fill(t("rt_not"), {a: fmtInt(s.retrained.caught), b: fmtInt(s.served.caught)}),
+    failed: () => fill(t("rt_failed"), {e: s.error || ""}),
+  }[s.outcome];
+  const name = n => (lang === "ru" && T.ru.feat[n]) || n.replace(/_/g, " ");
+  const moved = s.moved && s.moved.length ? " " + fill(t("rt_moved"), {f: s.moved.slice(0, 3).map(name).join("; ")}) : "";
+  return fill(t("rt_on"), {h: s.every_hours || "—", when}) + " " + (body ? body() : s.outcome) + moved;
 }
 
 // What the second look adds on our own data, as results.json quotes it.

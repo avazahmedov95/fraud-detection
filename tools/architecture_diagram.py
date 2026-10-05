@@ -259,8 +259,8 @@ arrow((93.1, 16.6), (93.1, 43), MUTED, dashed=True, label="loaded by the job",
 # Retraining: the logged decisions and people's verdicts make a candidate, which a
 # person promotes (ml/retrain.py).
 gear(136, 11, 2.6, COLOUR["python"])
-text(140.5, 13.6, "Retraining", "Python: the same committee on the\nlogged decisions, "
-                                "labelled by people;\ndrift reported", ha="left")
+text(140.5, 13.6, "Retraining, every day", "the retrainer: the same committee on\nthe logged "
+                                "decisions, labelled by\npeople; drift reported", ha="left")
 arrow((152.5, 30.2), (138.6, 13.8), MUTED, dashed=True)
 ax.text(149, 19.8, "from ClickHouse: decisions with\ntheir features, verdicts, reports",
         ha="left",

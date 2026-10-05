@@ -138,7 +138,7 @@ arrow(left(cas), right(ana), color=ALERT)
 ax.text(0, 61.4, "Offline, not in the live path", fontsize=10, fontweight="bold",
         color=INK, family=FAMILY, va="center")
 trn = box(0, 42, 32, 18, "Training (ml/)", "replays the same feature code,\nfits five models into one,\n"
-                                           "exports ONNX and the cut-off;\nretrains on the logged decisions",
+                                           "exports ONNX and the cut-off;\nretrains every day on the decisions",
           sub_size=8.5)
 arrow(right(trn), (56, 62), dashed=True, color=MUTED, label="model.onnx", label_dy=0.8)
 

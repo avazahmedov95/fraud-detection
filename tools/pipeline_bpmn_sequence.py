@@ -103,10 +103,10 @@ NODES = [
     ("Report", "userTask", "Record the client's report: a case confirmed at once\n"
      "[demo page or CLI; the payee into Redis]", 6, (1780, 1335, 180, 100), None),
     ("Reported", "endEvent", "Report recorded", 6, (2000, 1367, 36, 36), (1975, 1407, 86, 20)),
-    ("Weekly", "startEvent", "Every week, or when the drift report says so", 7,
+    ("Daily", "startEvent", "Every day: the retrainer service", 7,
      (2560, 1522, 36, 36), (2515, 1562, 126, 28)),
     ("Retrain", "serviceTask", "Retrain on the logged decisions, labelled by people; "
-     "read the drift\n[ml/retrain.py]", 7, (2640, 1490, 180, 100), None),
+     "read the drift\n[retrainer: ml/retrain.py]", 7, (2640, 1490, 180, 100), None),
     ("Better", "exclusiveGateway", "Better at the same workload?", 7, (2860, 1515, 50, 50),
      (2805, 1482, 160, 14)),
     ("Promote", "userTask", "A person promotes it\n[run.ps1 promote-model]", 7,
@@ -167,7 +167,7 @@ FLOWS = [
      (2943, 1423, 18, 14)),
     ("F_report_in", "ReportIn", "Report", "", [(1736, 1385), (1780, 1385)], None),
     ("F_report", "Report", "Reported", "", [(1960, 1385), (2000, 1385)], None),
-    ("F_weekly", "Weekly", "Retrain", "", [(2596, 1540), (2640, 1540)], None),
+    ("F_daily", "Daily", "Retrain", "", [(2596, 1540), (2640, 1540)], None),
     ("F_retrain", "Retrain", "Better", "", [(2820, 1540), (2860, 1540)], None),
     ("F_promote", "Better", "Promote", "Yes", [(2910, 1540), (2960, 1540)],
      (2916, 1521, 20, 14)),
@@ -185,7 +185,7 @@ LINKS = {"HeldOut": "Held by the second look", "HeldLateOut": "Held by the secon
          "HeldIn": "Held by the second look",
          "LetGoOut": "Let go by the second look", "LetGoIn": "Let go by the second look"}
 #: What starts the two paths that begin outside the transfer: a client's call, a timer.
-TRIGGERS = {"ReportIn": "messageEventDefinition", "Weekly": "timerEventDefinition"}
+TRIGGERS = {"ReportIn": "messageEventDefinition", "Daily": "timerEventDefinition"}
 
 STORES = [
     # id, name, (x, y, w, h), label's box

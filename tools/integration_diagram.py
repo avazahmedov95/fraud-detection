@@ -101,7 +101,7 @@ store(172, 117, "ClickHouse", "transactions_scored,\naudit_log, cases", WAY["sql
 node(192, 96, "Grafana", "dashboards", w=14, h=8)
 node(110, 83, "demo server", "the page's API, the live\nstream, the scenarios", w=26)
 node(150, 83, "Analyst's browser", "the demo page,\nGrafana", w=22)
-node(22, 96, "ml/ scripts", "train, export, second look,\nseed, retrain", w=28)
+node(22, 96, "ml/ and the retrainer", "train, export, second look, seed;\nretrain every day", w=28)
 node(70, 136, "Operator: run.ps1, make", "", w=30, h=5)
 
 # ------------------------------------------------------------------ Kafka
@@ -202,7 +202,7 @@ ROWS = [
      "second_look.npz to second-look"),
     (23, "redis", "ml/seed_confirmed.py -> Redis", "SADD confirmed:accounts and "
      "confirmed:history: the history's confirmed fraud accounts"),
-    (24, "sql", "ml/retrain.py -> ClickHouse", "SELECT transaction_id, features FROM "
+    (24, "sql", "retrainer -> ClickHouse", "every day: SELECT transaction_id, features FROM "
      "transactions_scored; SELECT transaction_id FROM cases FINAL WHERE disposition = "
      "'CONFIRMED_FRAUD'"),
     (25, "http", "Operator -> Flink", "GET /jobs/overview, GET /taskmanagers, PATCH "

@@ -1,8 +1,9 @@
-# Exports the trained model for the job (ml/export_onnx.py: model.onnx, model.txt,
-# manifest.json) with the versions ml/requirements.txt pins. A container rather
-# than the host's Python: on the owner's Windows, Smart App Control blocks the
-# native library onnx loads (ml_dtypes). The repository is mounted at /repo
-# (run.ps1 export-model), so the files land in ml/models as before.
+# The training environment, pinned by ml/requirements.txt, in a container: on the
+# owner's Windows, Smart App Control blocks the native library onnx loads
+# (ml_dtypes). The repository is mounted at /repo, so files land in ml/models.
+# Two uses: run.ps1 export-model runs the default command (ml/export_onnx.py:
+# model.onnx, model.txt, manifest.json), and the retrainer service runs
+# ml/retrain.py every day (docker-compose.yml).
 FROM python:3.11-slim
 
 # lightgbm links against the OpenMP runtime, which python:3.11-slim does not ship.

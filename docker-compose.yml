@@ -292,6 +292,33 @@ services:
     networks: [fraudnet]
     restart: unless-stopped
 
+  # Retrains the model every day on the decisions the job logged and the verdicts
+  # people gave (ml/retrain.py), and leaves the outcome in
+  # ml/models/retrain_status.json for the demo page. It serves nothing: a person
+  # promotes a better model with run.ps1 promote-model.
+  retrainer:
+    build:
+      context: .
+      dockerfile: infra/ml/Dockerfile
+    image: fraud-ml:latest
+    container_name: retrainer
+    command: ["python", "retrain.py", "--cache", "models_matrix.npz",
+              "--every-hours", "${RETRAIN_EVERY_HOURS:-24}"]
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_HTTP_PORT: "8123"
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - .:/repo
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    networks: [fraudnet]
+    restart: unless-stopped
+
   # The demo page (demo/README.md). It shows only a status screen until Kafka,
   # ClickHouse, the Flink job and the generated dataset are all there.
   demo:

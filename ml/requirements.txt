@@ -20,6 +20,8 @@ numpy==2.1.3
 joblib==1.5.3
 # seed_confirmed.py writes the confirmed accounts into the stack's Redis.
 redis==5.3.1
+# retrain.py reads the logged decisions and the verdicts (the retrainer service).
+clickhouse-connect==1.6.0
 
 # Note on numpy: training runs here on numpy 2.x while the Flink image serves on
 # numpy 1.24.4. That divergence is harmless precisely because the handoff is

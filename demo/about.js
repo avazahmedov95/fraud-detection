@@ -114,7 +114,7 @@ ru: {
     cases: ["Разбор тревог", "Python", "case-manager", [
       "На каждую тревогу открывает дело с причинами словами — из вклада признаков в оценку модели.",
       "Аналитик решает: заблокировать перевод (мошенничество) или отпустить (ложная тревога). Решение можно исправить, а о пропущенном мошенничестве можно записать сообщение клиента.",
-      "Эти решения и сообщения — единственные настоящие метки в системе: на них модель переобучается (ml/retrain.py), а новую модель включает человек.",
+      "Эти решения и сообщения — единственные настоящие метки в системе: на них модель сама переобучается раз в сутки (служба retrainer), а новую модель включает человек.",
       "Заблокированный перевод система запоминает сразу: карта получателя попадает в список подтверждённых мошенников, и модель видит это на следующих переводах с этой карты и на неё. Снятое подтверждение убирает карту из списка.",
       "Дела можно отобрать по тому, кто задержал перевод: основная модель, жёсткое правило или вторая проверка."]],
     dash: ["Мониторинг", "Grafana · демо", "что видит банк", [
@@ -261,7 +261,7 @@ en: {
     cases: ["Case manager", "Python", "case-manager", [
       "Opens a case for every alert, with its reasons in words — from each feature's share of the model's score.",
       "The analyst blocks the transfer (fraud) or releases it (false alarm). A verdict can be corrected, and a client's report of a fraud the system let go can be recorded.",
-      "Those verdicts and reports are the only real labels the system gets: the model is retrained on them (ml/retrain.py), and a person switches the new model on.",
+      "Those verdicts and reports are the only real labels the system gets: the model retrains itself on them every day (the retrainer service), and a person switches the new model on.",
       "A blocked transfer teaches the system at once: the payee's card joins the list of confirmed fraud accounts, and the model sees it on the next transfers from or to that card. A withdrawn confirmation takes the card off the list.",
       "Cases can be filtered by what held the transfer: the model, a hard rule or the second look."]],
     dash: ["Monitoring", "Grafana · demo", "what the bank watches", [

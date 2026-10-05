@@ -1,24 +1,29 @@
 """Retrains the model on what the running system served and what people decided, and
-says whether the new model should replace the served one. Nothing changes until a
-person promotes it: .\\run.ps1 promote-model.
+says whether the new model should replace the served one. The retrainer service runs
+it every day (docker-compose.yml); nothing changes until a person promotes the new
+model: .\\run.ps1 promote-model.
 
-The rows: every decision the job logged with its feature values
-(fraud.transactions_scored, `features`), once per transfer, in the order the job made
-them, added to the rows the served model was trained on. The labels: fraud where an
-analyst confirmed it or a client reported it (fraud.cases), not fraud everywhere
-else - a fraud nobody reported stays a wrong label, as it does in a bank.
+The rows: the decisions the job logged with their feature values
+(fraud.transactions_scored, `features`), the latest MAX_ROWS of them, once per
+transfer, in the order the job made them, added to the rows the served model was
+trained on. The labels: fraud where an analyst confirmed it or a client reported it
+(fraud.cases), not fraud everywhere else - a fraud nobody reported stays a wrong
+label, as it does in a bank.
 
 The logged rows split as train.py splits its data: the earliest 64% join the training
 rows; the next 16% set the new model's cut-off at as many alerts as the served model
 raises there, so the analysts' workload stays the same; the last 20%, which neither
 model trained on, decide between the two. First it says which features have moved
-since the served model was trained: the drift a retrain answers.
+since the served model was trained: the drift a retrain answers. Every run leaves
+its outcome in models/retrain_status.json, which the demo page shows.
 
-    python retrain.py [--cache models_matrix.npz]
+    python retrain.py [--cache models_matrix.npz] [--every-hours 24]
 """
 import argparse
 import json
 import os
+import time
+import traceback
 
 import joblib
 import numpy as np
@@ -28,6 +33,7 @@ import dataset as D
 import train as T
 
 CANDIDATE_DIR = os.path.join(T.MODELS_DIR, "candidate")
+STATUS = os.path.join(T.MODELS_DIR, "retrain_status.json")
 #: Below this many known frauds in the deciding rows a comparison is noise, and no
 #: candidate is written.
 MIN_FRAUD = 30
@@ -36,6 +42,8 @@ MIN_FRAUD = 30
 PSI_MOVED = 0.25
 #: Fewer recent decisions than this, and a PSI reads the sample, not the traffic.
 MIN_DRIFT_ROWS = 1000
+#: The newest decisions read: a month of a busy stream fits, the memory stays bounded.
+MAX_ROWS = 1_000_000
 
 
 def warehouse():
@@ -48,14 +56,16 @@ def warehouse():
 
 
 def logged(client):
-    """The decisions logged with a whole feature vector, the first one per transfer
-    (a second look adds another), in the order the job made them, labelled by what
+    """The newest decisions logged with a whole feature vector, one per transfer (a
+    second look adds another), in the order the job made them, labelled by what
     people called fraud."""
     n = len(D.FEATURE_NAMES)
     rows = client.query(
-        "SELECT transaction_id, features FROM transactions_scored "
+        "SELECT transaction_id, features FROM ("
+        "SELECT transaction_id, features, scored_at_job FROM transactions_scored "
         "WHERE length(features) = %(n)s "
-        "ORDER BY scored_at_job LIMIT 1 BY transaction_id", parameters={"n": n}).result_rows
+        "ORDER BY scored_at_job DESC LIMIT 1 BY transaction_id LIMIT %(cap)s) "
+        "ORDER BY scored_at_job", parameters={"n": n, "cap": MAX_ROWS}).result_rows
     fraud = {r[0] for r in client.query(
         "SELECT transaction_id FROM cases FINAL "
         "WHERE disposition = 'CONFIRMED_FRAUD'").result_rows}
@@ -113,7 +123,9 @@ def drift(ref, cur):
     return dict(sorted(out.items(), key=lambda kv: -kv[1]))
 
 
-def main(cache):
+def run(cache):
+    """One retrain. Returns its outcome: too_few_rows, too_few_fraud, better or
+    not_better, with the figures it was decided on."""
     with open(os.path.join(T.MODELS_DIR, "thresholds.json"), encoding="utf-8") as fh:
         served_cut = json.load(fh)["review"]
     served = joblib.load(os.path.join(T.MODELS_DIR, "model.joblib"))
@@ -122,11 +134,13 @@ def main(cache):
     Xh, yh = Xh[:T.cut_index(len(yh))], yh[:T.cut_index(len(yh))]
     X, y = logged(warehouse())
     fit, cut = split(len(y))
+    status = {"logged": int(len(y)), "known_fraud": int(y.sum()),
+              "needed": {"rows": MIN_DRIFT_ROWS, "fraud": MIN_FRAUD}}
     print(f"logged decisions: {len(y):,}, {int(y.sum())} of them called fraud by people")
     if len(y) - fit < MIN_DRIFT_ROWS:
         print(f"too few to read drift or compare ({len(y) - fit} recent of the "
               f"{MIN_DRIFT_ROWS} needed): keep the served model")
-        return
+        return dict(status, outcome="too_few_rows", recent=int(len(y) - fit))
 
     moved = drift(Xh, X[fit:])
     print(f"\n=== drift: the latest {len(y) - fit:,} decisions against the served "
@@ -137,12 +151,14 @@ def main(cache):
     rate_now = float((served.predict(X[fit:]) >= served_cut).mean())
     print(f"  served model's alert rate: {rate_then:.3%} on its own cut-off rows, "
           f"{rate_now:.3%} now")
+    status.update(recent=int(len(y) - fit), alert_rate={"then": rate_then, "now": rate_now},
+                  moved=[n for n, v in moved.items() if v > PSI_MOVED])
 
     known = int(y[cut:].sum())
     if known < MIN_FRAUD:
         print(f"\nThe deciding rows hold {known} known frauds, under the {MIN_FRAUD} a "
               f"comparison needs: no candidate. Keep the served model.")
-        return
+        return dict(status, outcome="too_few_fraud", deciding_fraud=known)
     model, _ = T.fit_committee(np.vstack([Xh, X[:fit]]), np.concatenate([yh, y[:fit]]))
     new_cut = same_workload_cut(model.predict(X[fit:cut]), served.predict(X[fit:cut]),
                                 served_cut)
@@ -173,10 +189,31 @@ def main(cache):
                                    f"labelled by analysts' verdicts and clients' reports"),
                   fh, indent=2)
     print(f"candidate written to {CANDIDATE_DIR}/")
+    return dict(status, outcome="better" if better else "not_better", deciding_fraud=known,
+                served=old, retrained=new)
+
+
+def write_status(status, every_hours):
+    """The outcome of the latest run, for the demo page and run.ps1 status."""
+    with open(STATUS, "w", encoding="utf-8") as fh:
+        json.dump(dict(status, at=time.time(), every_hours=every_hours), fh, indent=2)
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--cache", help="npz of the training matrix (X, y, names)")
-    main(ap.parse_args().cache)
+    ap.add_argument("--every-hours", type=float,
+                    help="run again every so many hours, for ever: the retrainer service")
+    a = ap.parse_args()
+    while True:
+        try:
+            outcome = run(a.cache)
+        except Exception as exc:                       # noqa: BLE001 - the schedule goes on
+            traceback.print_exc()
+            outcome = {"outcome": "failed", "error": f"{type(exc).__name__}: {exc}"[:300]}
+        write_status(outcome, a.every_hours)
+        if not a.every_hours:
+            break
+        print(f"next retrain in {a.every_hours:g} h", flush=True)
+        time.sleep(a.every_hours * 3600)

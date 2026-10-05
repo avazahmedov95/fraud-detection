@@ -269,6 +269,15 @@ def stage_summary(row):
             "median_ms": median, "p99_ms": p99}
 
 
+def retrain_status():
+    """What the retrainer's latest run left (ml/retrain.py), or None before its first."""
+    try:
+        with open(os.path.join(MODELS, "retrain_status.json"), encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+
+
 def _reachable(host, port):
     try:
         socket.create_connection((host, port), timeout=1).close()
@@ -696,7 +705,8 @@ class App:
             self._warehouse = None
             timing = {"error": str(exc)[:300]}
         queue = self.cases()
-        return {"timing": timing, "verdicts": queue["stats"], "holds": queue["holds"]}
+        return {"timing": timing, "verdicts": queue["stats"], "holds": queue["holds"],
+                "retrain": retrain_status()}
 
     def cases(self, new_only=False, limit=PAGE, flt=None):
         """case-manager's queue, in its own order: the first `limit` cases that pass

@@ -1,10 +1,21 @@
 """retrain.py's pieces that decide: the split, the cut-off that keeps the workload,
-what an alert list makes of the known frauds, and the drift measure."""
+what an alert list makes of the known frauds, the drift measure, and the outcome
+each run leaves for the demo page."""
+
+import json
 
 import numpy as np
 import pytest
 
 import retrain as R
+
+
+def test_every_run_leaves_its_outcome_for_the_page(tmp_path, monkeypatch):
+    monkeypatch.setattr(R, "STATUS", str(tmp_path / "status.json"))
+    R.write_status({"outcome": "too_few_fraud", "known_fraud": 2}, 24)
+    s = json.loads((tmp_path / "status.json").read_text(encoding="utf-8"))
+    assert (s["outcome"], s["known_fraud"], s["every_hours"]) == ("too_few_fraud", 2, 24)
+    assert s["at"] > 0
 
 
 def test_the_logged_rows_split_as_train_py_splits_its_data():

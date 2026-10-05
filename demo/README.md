@@ -22,8 +22,9 @@ Tabs:
 - **About the project** - every component, the path of one real decision with its
   stage times, the 24 features and the 10 rules.
 - **Grafana** - the dashboard (Grafana asks for its login).
-- **Data & results** - the live stage times and verdicts, the model's figures from
-  `ml/models/metrics.json`, the second look, and the two public datasets.
+- **Data & results** - the live stage times and verdicts, the retrainer's latest
+  run, the model's figures from `ml/models/metrics.json`, the second look, and the two
+  public datasets.
 
 It runs as the `demo` container (`docker compose up`); the code is mounted, so a
 restart of the container picks up a change.
