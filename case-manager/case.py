@@ -1,18 +1,15 @@
-"""Pure mapping of an alert into a case row, and of a verdict into its
-replacement. Column order matches infra/clickhouse/init/02-cases.sql."""
+"""A hold as a case row, and a verdict or a report as a newer row; no I/O. Column
+order matches infra/clickhouse/init/02-cases.sql."""
 
 from datetime import datetime, timezone
 from statistics import median
 
-#: A case is a held transfer. NEW: still held; CONFIRMED_FRAUD blocks it, and the
-#: money stays with the payer; FALSE_POSITIVE releases it. Both verdicts are also
-#: the labels a retrain would use.
+#: NEW: still held; CONFIRMED_FRAUD blocks it, and the money stays with the payer;
+#: FALSE_POSITIVE releases it. The verdicts are the labels the model retrains on.
 DISPOSITIONS = ("NEW", "CONFIRMED_FRAUD", "FALSE_POSITIVE")
 
-#: Versions written when a case is OPENED - never wall clock, so a redelivered alert
-#: cannot outrank a resolution (versioned by epoch ms; 02-cases.sql). Two of them
-#: because ReplacingMergeTree keeps an arbitrary row among ties: an explanation is
-#: more information about the same event, so it wins deterministically.
+#: An opened case's versions: never the clock, so a redelivered hold cannot outrank
+#: a verdict (versioned in epoch ms). The explained row wins a tie.
 OPEN_VERSION = 0
 OPEN_VERSION_EXPLAINED = 1
 
@@ -45,10 +42,8 @@ CASE_COLUMNS = [
 
 
 def case_row(alert: dict, explanation=None, explanation_status="") -> list:
-    """One alert -> one case row, deterministically: the alert topic is AT_LEAST_ONCE,
-    and a duplicate must collapse in ReplacingMergeTree - hence `opened_at` from the
-    pipeline's stamp, not now()."""
-    # Explanation is passed in, not computed here: store.py owns the Explainer.
+    """One hold -> one case row, the same on redelivery (so duplicates collapse in
+    ReplacingMergeTree): `opened_at` is the job's stamp, not now()."""
     return [
         alert.get("transaction_id", "") or "",     # case_id: one case per alert
         alert.get("transaction_id", "") or "",
@@ -88,8 +83,7 @@ def resolution_row(case: dict, disposition: str, by: str, at_epoch: float) -> li
     row[CASE_COLUMNS.index("disposition")] = disposition
     row[CASE_COLUMNS.index("resolved_by")] = by
     row[CASE_COLUMNS.index("resolved_at")] = _epoch_dt(at_epoch)
-    # Strictly greater than OPEN_VERSION for any real timestamp, so a replayed
-    # alert re-inserting the open row can never win the merge.
+    # Above the open versions, so a redelivered hold never wins the merge.
     row[CASE_COLUMNS.index("version")] = int(at_epoch * 1000)
     return row
 

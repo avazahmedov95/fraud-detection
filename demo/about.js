@@ -243,23 +243,23 @@ en: {
       "When the risk is just under the alert level, the transfer goes to the second look.",
       "The system blocks nothing by itself: a person decides on a suspicious transfer.",
       "The rules give the alert its name — for example, 'phone scam'."]],
-    out: ["Kafka: decisions and alerts", "Apache Kafka", "transactions.scored, fraud.alerts, fraud.second_look", [
-      "Every decision goes to one topic, alerts to a second one as well, and transfers for the second look to a third.",
-      "So writing to the database and the analyst's work do not hold each other up."]],
+    out: ["Kafka: decisions", "Apache Kafka", "transactions.scored, fraud.second_look", [
+      "Every decision goes to one topic, and transfers for the second look to another.",
+      "Writing to the database does not hold up the decision: it reads the topic separately."]],
     second: ["Second look", "Python · TabPFN", "second-look", [
       "Transfers with a risk just under the alert level wait about a second while a second model, TabPFN, looks at them.",
       "If it sees fraud, the transfer is held for the analyst; otherwise it goes.",
       "If it has not answered within 5 seconds, or is down, the transfer waits no longer: it is held for the analyst.",
       "On held-out data this band held 20 frauds the main model missed. The second look found 14 of them, and the share of fraud caught rose from 70.5% to 78.4%."]],
     sink: ["Sink writer", "Python", "sink-writer", [
-      "Reads the decisions from Kafka and writes them to ClickHouse in batches.",
+      "Reads the decisions from Kafka and writes them to ClickHouse in batches; opens a case for the analyst on every hold.",
       "When a database is down it keeps running and counts how many records were lost."]],
     ch: ["ClickHouse", "ClickHouse", "the warehouse", [
       "Every decision with the time of each stage and its feature values — the Data & results tab is built from them, and the model is retrained on them.",
       "An audit chain: each record is linked to the one before by a hash, so the history cannot be changed unnoticed.",
       "The analyst's cases and verdicts."]],
     cases: ["Analyst's queue", "Python", "demo · command line", [
-      "Opens a case for every alert, with its reasons in words — from each feature's share of the model's score.",
+      "A case carries its reasons in words: each feature's share of the model's score, worked out when it is written.",
       "The analyst blocks the transfer (fraud) or releases it (false alarm). A verdict can be corrected, and a client's report of a fraud the system let go can be recorded.",
       "Those verdicts and reports are the only real labels the system gets: the model retrains itself on them every day (the retrainer service), and a person switches the new model on.",
       "A blocked transfer teaches the system at once: the payee's card joins the list of confirmed fraud accounts, and the model sees it on the next transfers from or to that card. A withdrawn confirmation takes the card off the list.",

@@ -1,10 +1,8 @@
-"""Uzbekistan's 14 regions as administrative-centre coordinates, and great-circle
-distance. IMPOSSIBLE_TRAVEL compensates for that approximation with
-MIN_TRAVEL_DISTANCE_KM."""
+"""Uzbekistan's 14 regions as their administrative centres, and the distance between
+them; IMPOSSIBLE_TRAVEL allows for the approximation (MIN_TRAVEL_DISTANCE_KM)."""
 
 import math
 
-# Administrative centre; Tashkent City and Tashkent Region are separate units.
 REGION_COORDS = {
     "Andijan":         (40.7821, 72.3442),
     "Bukhara":         (39.7747, 64.4286),
@@ -43,11 +41,9 @@ def region_distance_km(r1: str, r2: str):
 
 
 def implied_speed_kmh(r1: str, r2: str, elapsed_s: float):
-    """Speed needed to be in r2 `elapsed_s` after r1; None if a region is unknown.
-    An unknown region must never be treated as a zero-distance move."""
+    """Speed needed to be in r2 `elapsed_s` after r1; None if a region is unknown."""
     dist = region_distance_km(r1, r2)
     if dist is None:
         return None
-    # max(..., 1.0): a raw division would raise on same-second events, and one
-    # second is the finest resolution event_time has.
+    # At least a second: event times are whole seconds.
     return dist / (max(float(elapsed_s), 1.0) / 3600.0)

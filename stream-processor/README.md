@@ -17,7 +17,7 @@ for each hold.
 | `capabilities.py` | what the bank can observe, and so which features and rules are on |
 | `receiver_store.py` | the payee's side in Redis: recent payers, counterparties, contacts, confirmed fraud accounts |
 | `geo.py` | region coordinates and distances for GEO_ANOMALY and IMPOSSIBLE_TRAVEL |
-| `payload_crypto.py` | AES-256-GCM payloads, when `PAYLOAD_KEY_HEX` is set |
+| `payload_crypto.py` | AES-256-GCM payloads, when `PAYLOAD_KEY_HEX` is set; the generator encrypts with it |
 | `config.py` | windows, thresholds, topics, Redis keys |
 | `tests/` | `python -m pytest stream-processor -q` |
 

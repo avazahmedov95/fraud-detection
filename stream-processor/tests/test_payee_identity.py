@@ -128,8 +128,7 @@ def test_a_missing_card_collapses_every_payee_into_one(mode, caplog):
         ka, kb = F.payee_key(a), F.payee_key(b)
 
     assert ka == kb == "", "two different payees must be seen to collapse"
-    assert any("payee key is empty" in r.message or "EVERY" in r.message
-               for r in caplog.records), \
+    assert any(r.message == F._NO_PAYEE_KEY for r in caplog.records), \
         "collapsing every payee into one key must not be silent"
 
 

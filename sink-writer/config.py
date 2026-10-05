@@ -16,5 +16,5 @@ BATCH_SIZE = int(os.getenv("SINK_BATCH_SIZE", "500"))
 # A hold reaches the analyst's queue within this; MergeTree dislikes smaller inserts.
 FLUSH_INTERVAL_S = float(os.getenv("SINK_FLUSH_INTERVAL_S", "2"))
 
-# Audit every decision (compliance-complete) vs only the REVIEW ones.
+# Audit every decision, or only the holds.
 AUDIT_ALL = os.getenv("SINK_AUDIT_ALL", "true").lower() in ("1", "true", "yes")

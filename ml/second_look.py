@@ -1,13 +1,9 @@
-"""The second look's artefacts, written beside the served model. TabPFN reads the
-transfers just under the review cut-off and holds the ones it calls fraud
-(second-look/README.md). Everything is chosen on the cutoff rows; the held-out
-slice is not read:
+"""The second look's artefacts beside the served model, chosen on the cut-off rows
+(the held-out slice is not read):
 
-  second_look.json  the band - served score from `from` up to `review` - and
-                    TabPFN's cut-off in it. The job reads `from` only while `review`
-                    is the cut-off it serves: a band chosen for one model means
-                    nothing under another.
-  second_look.npz   TabPFN's context: the pieces of the training slice it reads.
+  second_look.json  the band (served score from `from` up to `review`) and TabPFN's
+                    cut-off in it; the job uses it only while `review` is its cut-off.
+  second_look.npz   TabPFN's context: pieces of the training slice.
 
 Runs where TabPFN is installed (.venv-models), after train.py and export_onnx.py:
 
@@ -33,19 +29,16 @@ import train as T
 BAND = 100
 #: TabPFN refuses more than this many context rows on a CPU.
 TABPFN_ROWS = 5_000
-#: Each piece is a gigabyte in the service: TabPFN cannot share its weights between
-#: members that cache their context. Two held as much of the cutoff band's fraud as
-#: five, with no more alerts.
+#: A gigabyte each in the service; two held as much of the band's fraud as five.
 PIECES = 2
-#: The F1 peak sits exactly on one fraud row's score, and the service's cached
-#: TabPFN answers within 1e-5 of the uncached one it was chosen on - enough to drop
-#: that row under its own cut-off. Set this far below it, the row stays held.
+#: The cut-off sits this far under the F1 peak, a fraud row's own score: the service's
+#: cached TabPFN answers within 1e-5 of the scores it was chosen on.
 TIE = 1e-4
 
 
 def pieces(yfit, rows=TABPFN_ROWS, seed=42):
-    """The training slice in pieces TabPFN can read: every fraud row in each piece
-    and the ordinary rows dealt out between them, none above `rows`."""
+    """The training slice in pieces of at most `rows`: every fraud row in each, the
+    ordinary rows dealt out between them."""
     rng = np.random.default_rng(seed)
     fraud = np.flatnonzero(yfit == 1)
     legit = rng.permutation(np.flatnonzero(yfit == 0))

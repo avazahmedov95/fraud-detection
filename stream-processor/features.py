@@ -1,6 +1,5 @@
-"""The single train/serve feature contract: the SAME function builds the vector for
-offline training and for online scoring, so the model cannot be served features it
-was not trained on. Pure."""
+"""The features: one function builds the vector for training and for scoring, so the
+model is never served features it was not trained on. Pure."""
 
 import logging
 import math
@@ -10,25 +9,18 @@ import config as C
 import geo as G
 import capabilities as CAP
 
-# Derived from the capability registry, so the train/serve contract cannot
-# drift from what the deployment can observe.
 FEATURE_NAMES = CAP.feature_names()
 
-
-_NO_PINFL = ("CAP_PAYEE_IDENTITY=pinfl but the events carry no receiver_pinfl; "
-             "keying the payee by card instead. The live wire format does not "
-             "carry the payee's identity - only the offline harnesses, which "
-             "read the generated CSV, can run this mode.")
-_NO_PAYEE_KEY = ("no receiver_card on the event, so the payee key is empty and "
-                 "EVERY payee shares one receiver-side state. Fan-in is then "
-                 "computed over the whole stream and will fire on ordinary "
-                 "traffic. A source with account identifiers but no PANs "
+_NO_PINFL = ("CAP_PAYEE_IDENTITY=pinfl but the events carry no receiver_pinfl; keying "
+             "the payee by card. Only the offline harnesses have the payee's identity.")
+_NO_PAYEE_KEY = ("no receiver_card on the event: every payee shares one receiver-side "
+                 "state and fan-in fires on ordinary traffic. A source without cards "
                  "(PaySim) needs CAP_PAYEE_IDENTITY=pinfl.")
 _warned = set()
 
 
 def _warn_once(message):
-    """Once per process: on the 300 ms path, and the condition never changes."""
+    """Once per process: the condition never changes."""
     if message not in _warned:
         _warned.add(message)
         logging.getLogger("features").warning(message)
@@ -39,18 +31,15 @@ _FALSEY_TEXT = {"", "0", "false", "f", "no", "n", "none", "null", "nan"}
 
 
 def truthy(v) -> int:
-    """Coerce a wire-shaped flag to 0/1. Kafka fields arrive as text, and "False"
-    is a non-empty string."""
+    """A flag as 0/1; from Kafka it may be text, and "False" is a non-empty string."""
     if isinstance(v, str):
         return 0 if v.strip().lower() in _FALSEY_TEXT else 1
     return 1 if v else 0
 
 
 def unusable(event: dict):
-    """Why an event cannot be scored, or None. Raised inside the Flink operator,
-    the error would fail the task again on every replay of the record and stop
-    the stream; a NaN or infinite amount would poison the sender's baseline for
-    good. The job drops such a record and counts it."""
+    """Why an event cannot be scored, or None. Raised in the operator, it would fail
+    the task on every replay; a NaN amount would poison the sender's baseline."""
     try:
         amount = float(event["amount_uzs"])
         secs = float(event.get("secs_login_to_confirm") or 0.0)
@@ -64,26 +53,21 @@ def unusable(event: dict):
 
 
 def event_from(row: dict) -> dict:
-    """One generated-CSV row as the event `rules.evaluate` expects - offline only,
-    and the one copy of this mapping every replay uses."""
+    """A generated CSV row as the event `rules.evaluate` expects (offline replays)."""
     return {
         "amount_uzs": row["amount_uzs"],
         "sender_pinfl": row["sender_pinfl"],
         "receiver_pinfl": row["receiver_pinfl"],
         "sender_region": row["sender_region"],
-        # Behavioural session signals - COACHED_SESSION and the secs_login_z
-        # baseline train as constant zeros without them.
         "active_call": truthy(row.get("active_call")),
         "secs_login_to_confirm": row.get("secs_login_to_confirm", 0.0),
-        # The cards: the payee is keyed by card, as the job keys it.
         "sender_card": row.get("sender_card", ""),
         "receiver_card": row.get("receiver_card", ""),
     }
 
 
 def sender_key(event: dict) -> str:
-    """The sender's own account in the SAME key space as payee_key: what the
-    receiver-side store filed this sender under when they were last paid."""
+    """The sender's own account in payee_key's key space."""
     if CAP.mode("payee_identity") == "pinfl":
         pinfl = str(event.get("sender_pinfl", "") or "")
         if pinfl:
@@ -92,28 +76,23 @@ def sender_key(event: dict) -> str:
 
 
 def payee_key(event: dict) -> str:
-    """The identity the payee is pinned to - card (default) or pinfl - uniform per
-    deployment: every receiver-side store keys on it, and a per-transfer mix loses
-    fan-in hits."""
+    """The payee's key, card or pinfl, the same for every transfer of a deployment."""
     if CAP.mode("payee_identity") == "pinfl":
         pinfl = str(event.get("receiver_pinfl", "") or "")
         if pinfl:
             return pinfl
-        # Normal live: receiver_pinfl is not on the wire, and "" would disable fan-in.
         _warn_once(_NO_PINFL)
     card = str(event.get("receiver_card", "") or "")
     if not card:
-        # An empty key would merge every payee into one state and manufacture fan-in.
         _warn_once(_NO_PAYEE_KEY)
     return card
 
 
 def extract(event: dict, state, now: float, receiver_state=None,
             sender_inbound_ts=None, confirmed=frozenset()) -> dict:
-    """Read-only feature extraction; does NOT mutate either state. `receiver_state`
-    may be None when the shared store is down - inbound features then read as zero,
-    the fail-open behaviour used elsewhere. `confirmed`: the accounts in confirmed
-    frauds, or at least those among the payee, the sender and the payee's cards."""
+    """The features of one event; mutates nothing. `receiver_state` is None while
+    Redis is down: the payee-side features then read as nothing seen. `confirmed`: the
+    confirmed fraud accounts among the payee, the sender and the payee's contacts."""
     amount = float(event["amount_uzs"])
     payee = payee_key(event)
     region = event.get("sender_region", "")
@@ -124,7 +103,7 @@ def extract(event: dict, state, now: float, receiver_state=None,
     mean = state.mean_amt
     std = math.sqrt(state.m2_amt / n_hist) if n_hist > 0 else 0.0
 
-    def win_count(window):                      # count in window, current included
+    def win_count(window):                      # this transfer included
         return sum(1 for e in ev if now - e[0] <= window) + 1
 
     band_low = C.STRUCTURING_BAND_LOW * C.STRUCTURING_THRESHOLD
@@ -141,8 +120,7 @@ def extract(event: dict, state, now: float, receiver_state=None,
         if sum(state.region_counts.values()) >= 3 and region != home:
             geo_is_anomaly = 1
 
-    # Rule helper, not a model feature: near-zero for almost every event so it
-    # carries little gradient, but as a rule it is a physical contradiction.
+    # For the IMPOSSIBLE_TRAVEL rule only, not the model.
     travel_kmh = 0.0
     travel_distance_km = 0.0
     if state.last_region and region and region != state.last_region:
@@ -158,8 +136,7 @@ def extract(event: dict, state, now: float, receiver_state=None,
     amount_to_mean = (amount / mean) if mean > 0 else float(C.NEW_PAYEE_AMOUNT_FACTOR + 1)
     amount_z = ((amount - mean) / std) if std > 0 else 0.0
 
-    # Inbound concentration on the PAYEE - the fan-in shape sender-keyed state
-    # cannot see. Distinct senders, not transfers: ten from one person is a habit.
+    # Fan-in on the payee: distinct senders, since ten from one person is a habit.
     rcv_senders, rcv_inflow = 0, 0.0
     if receiver_state is not None:
         recent = [e for e in receiver_state.inbound
@@ -167,15 +144,11 @@ def extract(event: dict, state, now: float, receiver_state=None,
         rcv_senders = len({e[1] for e in recent} | {event.get("sender_pinfl", "")})
         rcv_inflow = sum(e[2] for e in recent) + amount
 
-    # The same counting over the windows the AML rules count over (a day and a
-    # week, config.LINK_*), on both sides, plus the interval since the SENDER's
-    # own account was last paid: a mule collects over days and passes the money
-    # on. Fail open exactly like the fan-in features - a store that is down
-    # reads as nothing seen, not as a small count.
+    # Counterparties over a day and a week on both sides, and the time since the
+    # sender was last paid: a mule collects over days and passes the money on.
     def _windows(times, self_key):
-        """Distinct counterparties in each window, this transfer's own included. One
-        pass and no set: a hub account can hold tens of thousands of these, and the
-        foreign files have hub accounts."""
+        """Distinct counterparties per window, this transfer's included; one pass,
+        since a hub account can hold tens of thousands."""
         day = week = 0
         for other, t in times.items():
             if other == self_key:
@@ -192,16 +165,13 @@ def extract(event: dict, state, now: float, receiver_state=None,
         payee_payers_24h, payee_payers_7d = _windows(
             receiver_state.payers, event.get("sender_pinfl", ""))
     sender_payees_24h, sender_payees_7d = _windows(state.payee_times, payee)
-    # Capped, never NaN: 'never paid' and 'the store is down' are the same
-    # observation here, and the cap keeps the column finite for every model.
+    # Capped, never NaN: "never paid" and "Redis down" read alike.
     secs_since_sender_inbound = float(C.LINK_WEEK_S)
     if sender_inbound_ts:
         secs_since_sender_inbound = max(0.0, min(now - float(sender_inbound_ts),
                                                  float(C.LINK_WEEK_S)))
 
-    # Confirmed cases spread one step along the graph: the payee, the sender, and the
-    # cards the payee dealt with over the week, against the accounts in confirmed
-    # frauds.
+    # The payee's contacts of the week among the confirmed fraud accounts.
     flagged_contacts = 0
     if receiver_state is not None:
         flagged_contacts = sum(1 for card, t in receiver_state.contacts.items()
@@ -210,8 +180,7 @@ def extract(event: dict, state, now: float, receiver_state=None,
     active_call = truthy(event.get("active_call"))
     secs_login = float(event.get("secs_login_to_confirm") or 0.0)
 
-    # z-score in LOG space: session latency is lognormal, so untransformed the
-    # right tail dominates and z is meaningless.
+    # In log space: session times are lognormal.
     log_secs = math.log1p(secs_login)
     secs_login_z = 0.0
     if state.n_secs >= C.SECS_LOGIN_MIN_HISTORY:
@@ -244,7 +213,7 @@ def extract(event: dict, state, now: float, receiver_state=None,
         "secs_since_last": secs_since_last,
         "daily_sum_ratio": daily_sum / C.LIMIT_DAILY,
         "hour": float(datetime.datetime.fromtimestamp(now, datetime.timezone.utc).hour),
-        # --- rule helpers (NOT model features) ---
+        # Rule helpers, not model features:
         "travel_kmh": travel_kmh,
         "travel_distance_km": travel_distance_km,
         "amount": amount,
@@ -260,8 +229,7 @@ def to_vector(feat: dict) -> list:
 
 
 def _prune_links(times: dict, now: float) -> None:
-    """Drop counterparties older than the longest window. Memory only: extract
-    filters by time, so a late prune cannot change a feature."""
+    """Drop counterparties older than a week (memory only: extract filters by time)."""
     if len(times) <= C.LINK_PRUNE_AT:
         return
     cutoff = now - C.LINK_WEEK_S
@@ -271,9 +239,8 @@ def _prune_links(times: dict, now: float) -> None:
 
 
 def add_contact(account_state, card: str, now: float) -> None:
-    """File `card` among the cards this account dealt with (call AFTER extract). Both
-    ends of a transfer get the other: the payee in update_receiver_state, the sender
-    by the caller, which holds the sender account's receiver-side state."""
+    """File `card` among this account's contacts (after extract); each end of a
+    transfer files the other."""
     if account_state is None or not card:
         return
     account_state.contacts[card] = now
@@ -298,29 +265,24 @@ def update_receiver_state(receiver_state, event: dict, now: float) -> None:
 def update_state(state, event: dict, now: float) -> None:
     """Advance per-sender state with the current event (call AFTER extract)."""
     amount = float(event["amount_uzs"])
-    # Same resolver as extract(): a differently-keyed write would make
-    # is_new_payee read 1 on every event forever.
     payee = payee_key(event)
     state.seen_payees.add(payee)
     state.payee_times[payee] = now
     _prune_links(state.payee_times, now)
     state.events.append((now, amount, payee))
-    # Bound the window deque (memory). Stale entries are time-filtered in extract anyway.
     while state.events and now - state.events[0][0] > C.RECENT_RETENTION_S:
         state.events.popleft()
     region = event.get("sender_region", "")
     state.region_counts[region] += 1
-    # Last *located* event: only advanced when the event carries a region, so a
-    # region-less event cannot reset the origin and mask an impossible journey.
+    # Only a located event moves the origin of the next journey.
     if region:
         state.last_region = region
         state.last_region_ts = now
-    # Welford running amount baseline: full-history mean/std with O(1) memory.
+    # Running mean and variance (Welford): the whole history in constant memory.
     state.n_amt += 1
     delta = amount - state.mean_amt
     state.mean_amt += delta / state.n_amt
     state.m2_amt += delta * (amount - state.mean_amt)
-    # Welford on LOG(secs) — matches the z computed in extract().
     log_secs = math.log1p(float(event.get("secs_login_to_confirm") or 0.0))
     state.n_secs += 1
     d = log_secs - state.mean_secs

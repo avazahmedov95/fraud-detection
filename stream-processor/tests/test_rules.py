@@ -4,6 +4,7 @@ import pytest
 
 from rules import SenderState, evaluate
 import config as C
+import fusion
 import capabilities as CAP
 from conftest import payee_card
 
@@ -24,7 +25,7 @@ def test_known_small_payment_is_allowed():
     for _ in range(6):
         evaluate(_ev(100_000, payee="friend"), st, now=1000)
     res = evaluate(_ev(120_000, payee="friend"), st, now=2000)
-    assert res["decision"] == "ALLOW"
+    assert fusion.decide(res["cep_score"], res["rule_hits"], cep_only=True) == "ALLOW"
     assert res["is_new_payee"] is False
 
 
@@ -70,7 +71,7 @@ def test_impossible_travel_is_flagged():
     res = evaluate(_ev(150_000, payee="friend", region="Karakalpakstan"), st, now=1000 + 600)
     assert "IMPOSSIBLE_TRAVEL" in res["rule_hits"]
     # On its own the rule must be decisive enough to reach REVIEW.
-    assert res["decision"] == "REVIEW"
+    assert fusion.decide(res["cep_score"], res["rule_hits"], cep_only=True) == "REVIEW"
 
 
 @needs_geo

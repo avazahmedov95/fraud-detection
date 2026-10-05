@@ -164,18 +164,17 @@ ROWS = [
      "answers; without it the job holds the band itself"),
     (9, "kafka", "Kafka -> sink-writer", "consume transactions.scored, group "
      "fraud-sink-writer"),
-    (10, "sql", "sink-writer -> ClickHouse", "HTTP 8123. On connect ALTER TABLE ... ADD "
-     "COLUMN IF NOT EXISTS (03-columns.sql); INSERT INTO transactions_scored and audit_log "
-     "(each record hash-chained), and INTO cases for a hold, its reasons from explain.py "
-     "over the served model; SELECT seq, record_hash for the chain's head"),
+    (10, "sql", "sink-writer -> ClickHouse", "HTTP 8123. INSERT INTO transactions_scored "
+     "and audit_log (each record hash-chained), and INTO cases for a hold, its reasons from "
+     "explain.py over the served model; SELECT seq, record_hash for the chain's head"),
     (11, "kafka", "Kafka -> demo server", "consume transactions.scored from the latest "
      "offset, no group: the live stream"),
     (12, "kafka", "demo server -> Kafka", "produce transactions.raw: the fraud scenarios "
      "and the background replay, generated rows"),
     (13, "sql", "demo server -> ClickHouse", "SELECT the stage times FROM "
      "transactions_scored; the analyst's queue through case-manager's store.py, the CLI's "
-     "too: CREATE TABLE IF NOT EXISTS cases (02-cases.sql), SELECT ... FINAL, INSERT a "
-     "verdict or a client's report as a newer version"),
+     "too: SELECT ... FROM cases FINAL, INSERT a verdict or a client's report as a newer "
+     "version"),
     (14, "redis", "demo server -> Redis", "a confirmation SADD confirmed:accounts; its "
      "withdrawal SREM, unless another case or SISMEMBER confirmed:history keeps the card"),
     (15, "http", "demo server -> Flink", "GET :8081/jobs/overview - the page opens only "

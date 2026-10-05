@@ -15,7 +15,7 @@ def _fixed_model_cutoffs(monkeypatch):
     """These tests describe the decision layer, not whichever model serve-prep
     last copied beside the job: the model's cutoffs are pinned to the fixed ones.
     The two tests at the end read the shipped file through its loader instead."""
-    monkeypatch.setattr(C, "MODEL_REVIEW_THRESHOLD", C.FINAL_REVIEW_THRESHOLD)
+    monkeypatch.setattr(C, "MODEL_REVIEW_THRESHOLD", C.REVIEW_THRESHOLD)
     # The second look's band, likewise: off unless a test sets it.
     monkeypatch.setattr(C, "SECOND_LOOK_FROM", None)
 
@@ -70,7 +70,7 @@ def test_full_capability_does_not_move_either_operating_point(profile):
     _full(profile)
     assert fusion.review_cutoff(cep_only=False) == C.MODEL_REVIEW_THRESHOLD
     assert fusion.review_cutoff(cep_only=True) == pytest.approx(
-        C.FINAL_REVIEW_THRESHOLD, abs=1e-6)
+        C.REVIEW_THRESHOLD, abs=1e-6)
 
 
 def test_a_probability_is_never_rescaled(profile):
@@ -81,14 +81,14 @@ def test_a_probability_is_never_rescaled(profile):
 
 def test_reduced_capability_lowers_the_fallback_cutoff(profile):
     _reduced(profile)
-    assert fusion.review_cutoff(cep_only=True) < C.FINAL_REVIEW_THRESHOLD
+    assert fusion.review_cutoff(cep_only=True) < C.REVIEW_THRESHOLD
 
 
 def test_the_silent_layer_is_what_this_prevents(profile):
     """The PaySim shape: one rule at 0.35 against a 0.40 cutoff flags nothing."""
     _reduced(profile)
     lone_rule_score = C.W_NEW_PAYEE_HIGH          # 0.35
-    assert lone_rule_score < C.FINAL_REVIEW_THRESHOLD
+    assert lone_rule_score < C.REVIEW_THRESHOLD
     # Fused, that is correctly ALLOW - the model was asked and said no.
     assert decide(lone_rule_score, ["NEW_PAYEE_HIGH_AMOUNT"]) == "ALLOW"
     # On the fallback there IS no model, and going silent is the failure.
@@ -100,7 +100,7 @@ def test_scaling_can_be_switched_off(profile, monkeypatch):
     """The previous fixed-cutoff behaviour stays available for comparison."""
     monkeypatch.setattr(C, "SCALE_THRESHOLDS_BY_CAPABILITY", False)
     _reduced(profile)
-    assert fusion.review_cutoff(cep_only=True) == C.FINAL_REVIEW_THRESHOLD
+    assert fusion.review_cutoff(cep_only=True) == C.REVIEW_THRESHOLD
 
 
 def test_default_is_the_fused_path(profile):
@@ -221,7 +221,7 @@ def test_the_model_cutoffs_come_from_the_file_shipped_with_it(tmp_path):
 
 def test_without_that_file_the_fixed_cutoffs_stand(tmp_path):
     assert C._model_review_threshold(str(tmp_path / "absent.json")) == \
-        C.FINAL_REVIEW_THRESHOLD
+        C.REVIEW_THRESHOLD
 
 
 def test_a_score_just_under_the_cutoff_waits_for_a_second_look(monkeypatch):

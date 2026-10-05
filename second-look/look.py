@@ -23,10 +23,8 @@ def _sha256(path):
 
 
 def _named(checkpoint, name):
-    """TabPFN reads the model's version from the file's NAME - "v3.5" in it - and
-    without one silently takes the oldest version, with another configuration and
-    other answers. The mount has a name of its own, so a link restores the name the
-    cut-off was chosen under."""
+    """A link under the checkpoint's own name: TabPFN reads its version from the
+    file name and, without one, silently takes the oldest."""
     link = os.path.join(tempfile.gettempdir(), name)
     if not os.path.lexists(link):
         os.symlink(checkpoint, link)

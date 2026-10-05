@@ -1,7 +1,5 @@
-"""Builds the training matrix by replaying the CSV through the SAME feature
-extractor the Flink job uses (rows mapped by `features.event_from`), so the model
-trains on what it will be served.
-"""
+"""The training matrix: the CSV replayed through the job's own features and rules,
+so the model trains on what it will be served."""
 
 import os
 import sys
@@ -19,18 +17,15 @@ FEATURE_NAMES = F.FEATURE_NAMES
 
 
 def confirmations(df):
-    """When each labelled fraud's payee joins the confirmed accounts: a day after the
-    fraud, as the analysts' verdicts build them live (config.CONFIRMED_KEY)."""
+    """When each fraud's payee joins the confirmed accounts: a day later, as the
+    analysts' verdicts add them live."""
     frauds = df[df["label_is_fraud"] == 1].to_dict("records")
     return sorted((pd.Timestamp(r["event_time"]).timestamp() + C.CONFIRMATION_DELAY_S,
                    F.payee_key(F.event_from(r))) for r in frauds)
 
 
 def build_matrix(csv_path: str, nrows=None) -> pd.DataFrame:
-    """The generated CSV replayed through the deployed features and rules, in time
-    order: the matrix train.py fits on."""
-    # nrows: the first rows only - the file is written in time order - for a caller
-    # that needs valid feature vectors rather than the whole replay.
+    """The generated CSV replayed in time order; `nrows` replays only the first rows."""
     df = pd.read_csv(csv_path, nrows=nrows).sort_values("event_time").reset_index(drop=True)
     states = defaultdict(R.SenderState)
     # Keyed by payee, mirroring the shared store the live job reads.

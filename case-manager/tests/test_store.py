@@ -131,36 +131,11 @@ def _open(store, alert, explanation=None, status=""):
 def store(monkeypatch):
     fake = FakeClient()
     st = S.CaseStore("h", 1, "u", "p", "fraud")
-    monkeypatch.setattr(st, "open", lambda: (
-        setattr(st, "_client", fake), st._apply_schema()))
+    monkeypatch.setattr(st, "open", lambda: setattr(st, "_client", fake))
     st.open()
     st._fake = fake
     st._redis = FakeRedis()
     return st
-
-
-# --- the schema that would otherwise never be applied ------------------------
-
-def test_the_shipped_ddl_parses_into_whole_statements():
-    """_statements() strips line comments by hand: the first version split on ";"
-    without doing so and tore the CREATE TABLE apart at a semicolon in a comment."""
-    with open(S._DDL, encoding="utf-8") as fh:
-        stmts = list(S._statements(fh.read()))
-    creates = [s for s in stmts if s.startswith("CREATE TABLE")]
-    assert len(creates) == 1
-    assert "ReplacingMergeTree(version)" in creates[0]
-    # Every other statement must be idempotent: a bare ALTER fails on re-apply.
-    for s in stmts:
-        if s.startswith("ALTER TABLE"):
-            assert "IF NOT EXISTS" in s, s
-        else:
-            assert s.startswith("CREATE TABLE"), s
-
-
-def test_schema_is_applied_on_connect(store):
-    """ClickHouse runs init scripts only on an empty data dir; the service must."""
-    assert any("CREATE TABLE IF NOT EXISTS fraud.cases" in c
-               for c in store._fake.commands)
 
 
 # --- the read that must not forget FINAL -------------------------------------

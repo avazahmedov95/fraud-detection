@@ -1,21 +1,11 @@
-"""Live demo: one page that shows the running system deciding.
+"""Live demo: one page showing the running system decide - the stream, fraud
+episodes replayed on demand with their decisions and reasons, the analyst's queue,
+and where the decision time goes. It adds no detection logic, and until Kafka,
+ClickHouse, the Flink job and the dataset are all there it shows only what is
+missing. It runs in the stack, on the containers' clock the stage times use.
 
-The transfers streaming through, fraud cases replayed on demand with their decision
-and reasons, the analyst queue, and where the decision time goes. It adds no
-detection logic: transfers are built by data-generator's
-`kafka_producer._row_to_message`, decisions come back from `transactions.scored`,
-reasons and queue from case-manager's `Explainer` and `CaseStore`, stage times from
-the warehouse.
-
-It runs as the stack's `demo` container (infra/demo/Dockerfile). Until Kafka,
-ClickHouse, the Flink job and the generated dataset are all there, the page shows
-only which of them is missing: everything it shows comes from the running system.
-In the stack rather than on the host because the transfers it sends are stamped
-on the containers' clock, the one the stage times are measured against.
-
-Scenarios are real episodes from the held-out 20% of the dataset, replayed under
-a fresh sender card and moved in time to end now; receivers keep their cards.
-The background stream replays the same held-out part at its own pacing.
+Episodes are real ones from the held-out 20% of the dataset, replayed under a fresh
+sender card and moved in time to end now.
 
     .\\run.ps1 up; .\\run.ps1 submit-job     # then open http://localhost:8090
 """
@@ -44,8 +34,7 @@ ROOT = os.path.dirname(HERE)
 GEN = os.path.join(ROOT, "data-generator")
 CM = os.path.join(ROOT, "case-manager")
 MODELS = os.path.join(ROOT, "ml", "models")
-# Imported from these: kafka_producer and integrity, store, case and explain. None
-# of them imports `config`, the one module name both directories hold.
+# Nothing taken from these imports `config`, which both directories hold.
 sys.path[:0] = [GEN, CM]
 import case as CASE           # noqa: E402
 import explain as EX          # noqa: E402
@@ -84,21 +73,18 @@ def _is_fraud(row):
 
 
 def _epoch(row):
-    # Naive, as the CSV writes it. Only differences between rows are used, so the
-    # timezone it is read in cancels out.
+    # Naive; only differences between rows are used.
     return datetime.fromisoformat(row["event_time"]).timestamp()
 
 
 def _utc_iso(epoch):
-    """Naive UTC, the form the job reads: its containers run in UTC, and the
-    hour-of-day feature is taken from this timestamp."""
+    """Naive UTC, as the job reads it (the hour feature comes from it)."""
     return (datetime.fromtimestamp(epoch, timezone.utc).replace(tzinfo=None)
             .isoformat(timespec="milliseconds"))
 
 
 def _as_epoch(dt):
-    """A ClickHouse DateTime as epoch seconds. The client returns it naive, in the
-    server's zone, which is UTC in these containers."""
+    """A ClickHouse DateTime (naive, UTC) as epoch seconds."""
     return dt.replace(tzinfo=timezone.utc).timestamp() if dt.tzinfo is None else dt.timestamp()
 
 
@@ -127,8 +113,8 @@ def _limit(query):
 
 
 def parse_filter(query):
-    """The page's filter: card digits, an amount range, a time range (epoch
-    seconds), a decision, an alert type. Anything empty or unreadable is left out."""
+    """The page's filter: card digits, amount and time ranges, decision, alert type,
+    what held it; anything unreadable is left out."""
     f = {}
     for key in ("sender", "receiver"):
         digits = "".join(ch for ch in query.get(key, [""])[0] if ch.isdigit())
@@ -146,17 +132,14 @@ def parse_filter(query):
 
 
 def _card_matches(card, digits):
-    """Typed digits against what the page shows of a card - its first six and last
-    four - or the whole number."""
+    """Typed digits against a card's first six, last four or whole number."""
     card = str(card or "")
     return (card == digits or (len(digits) <= 6 and card.startswith(digits))
             or (len(digits) <= 4 and card.endswith(digits)))
 
 
 def passes(f, sender, receiver, amount, at, decisions, kind, held=()):
-    """Whether one decision or case passes the filter `parse_filter` read. A record
-    can match more than one decision (`_decisions`), and a case more than one cause
-    of its hold (`_held_by`)."""
+    """Whether a decision or a case passes the filter."""
     amount = float(amount or 0)
     return not (
         ("sender" in f and not _card_matches(sender, f["sender"]))
@@ -176,9 +159,8 @@ def mask(card):
 
 
 def _dashboard_url():
-    """The provisioned overview dashboard, in kiosk mode for the page's frame. Its
-    panels are keyed on event_time and the background replay keeps the dataset's
-    own times, so the range reaches back far enough to hold them."""
+    """The overview dashboard in kiosk mode, reaching back to the dataset's own
+    times, which the background replay keeps."""
     try:
         with open(DASHBOARD, encoding="utf-8") as fh:
             uid = json.load(fh)["uid"]
@@ -188,7 +170,7 @@ def _dashboard_url():
 
 
 def _review_cut():
-    """The alert level the job decides by: the model's cutoff, shipped beside it."""
+    """The model's cut-off, shipped beside it."""
     try:
         with open(os.path.join(MODELS, "thresholds.json"), encoding="utf-8") as fh:
             return float(json.load(fh)["review"])
@@ -211,8 +193,7 @@ def _second(rec):
 
 
 def _scores(rec):
-    """The served model's risk, which every list on the page shows, and - when the
-    second look took the decision - its own score, on TabPFN's scale."""
+    """The served model's risk, and the second look's own score when it decided."""
     if not _second(rec):
         return {"score": rec.get("final_score"), "second_score": None}
     unscored = rec["model_version"].endswith(":unscored")
@@ -221,20 +202,17 @@ def _scores(rec):
 
 
 def _decisions(rec):
-    """What the decision filter matches a record by: its decision, and the second
-    look too once that has decided - the transfer's row has left SECOND_LOOK by then."""
+    """A record's decision, and SECOND_LOOK too once the second look has decided."""
     return (rec.get("decision"), "SECOND_LOOK") if _second(rec) else (rec.get("decision"),)
 
 
-#: The job's MANDATORY_REVIEW_RULES (stream-processor/config.py): these hold a
-#: transfer by themselves.
+#: The job's MANDATORY_REVIEW_RULES: these hold a transfer alone.
 MANDATORY = ("STRUCTURING", "DAILY_LIMIT_BREACH")
 
 
 def _held_by(case, cut):
-    """What held the transfer, as fusion.decide and the second look decide: the second
-    look, or the model's risk at or past its cut-off and a hard rule - both can hold
-    one. A case with no model score was held by the rules' own score."""
+    """What held the transfer: the second look, or the model's risk at its cut-off
+    and/or a hard rule; with no model score, the rules."""
     if _second(case):
         return ("SECOND_LOOK",)
     ml = case.get("ml_score")
@@ -244,8 +222,7 @@ def _held_by(case, cut):
 
 
 def decision_ms(rec):
-    """Arrival to decision: the producer's ingested_at to the job's scored_at_job,
-    both stamped on the containers' clock."""
+    """Arrival to decision: ingested_at to scored_at_job."""
     try:
         return (float(rec["scored_at_job"]) - float(rec["ingested_at"])) * 1000.0
     except (KeyError, TypeError, ValueError):
@@ -259,8 +236,8 @@ def job_running(overview):
 
 
 def stage_summary(row):
-    """(count, one average per stage, median, p99) -> what the page draws. The
-    stage averages add up to the average time from arrival to decision."""
+    """(count, an average per stage, median, p99) as the page draws it; the averages
+    add up to the mean time from arrival to decision."""
     n = int(row[0] or 0)
     values = [_finite(v) for v in row[1:]] if n else [None] * (len(STAGES) + 2)
     avgs, (median, p99) = values[:len(STAGES)], values[len(STAGES):]
@@ -296,8 +273,7 @@ def _get(url):
 
 
 class Health:
-    """What the page needs running, checked every few seconds. Until every part is
-    there the page shows which one is missing, and nothing else."""
+    """What the page needs running, checked every few seconds."""
 
     def __init__(self, data_error):
         self.parts = {"kafka": False, "clickhouse": False, "job": False,
@@ -325,8 +301,8 @@ class Health:
 
 
 class Episodes:
-    """The dataset, indexed for picking one episode of a kind, held as typed
-    columns (a dict per row of 500,000 cost over a gigabyte)."""
+    """The dataset as typed columns (a dict per row cost over a gigabyte), indexed
+    for picking an episode."""
 
     _CATEGORIES = ("sender_pinfl", "sender_card", "sender_network", "receiver_card",
                    "receiver_network", "device_id", "sender_region", "active_call",
@@ -337,8 +313,7 @@ class Episodes:
         keep.discard("transaction_id")                     # a replay gets new ids
         df = pd.read_csv(path, usecols=lambda c: c in keep,
                          dtype={c: "category" for c in self._CATEGORIES})
-        # Naive, as written; ISO8601 explicitly, since the file mixes times with and
-        # without fractional seconds.
+        # ISO8601: some times carry fractional seconds, some do not.
         df["t"] = pd.to_datetime(df.pop("event_time"), format="ISO8601").astype("int64") / 1e9
         self.df = df.sort_values("t", kind="stable").reset_index(drop=True)
         self.t = self.df["t"].to_numpy()
@@ -359,8 +334,7 @@ class Episodes:
         return r
 
     def replay_start(self, rng=random):
-        """A row inside the held-out part to start the background replay at. The
-        generator writes the file in time order, which the producer's --skip counts."""
+        """A row of the held-out part to start the background replay at (--skip)."""
         return rng.randrange(self.cut, max(self.cut + 1, len(self.df) - 1000))
 
     def _prior(self, i):
@@ -391,8 +365,7 @@ class Episodes:
         i = int(rng.choice(list(self.fraud[kind])))
         near = self._near(i, kind)
         if kind == "MULE":
-            # The mule is the account the pattern turns on - paid by many, then
-            # paying out - so its card is whichever side of the picked row recurs.
+            # The mule, paid by many and paying out, is whichever side recurs.
             rcv = self.receiver[i]
             mule = rcv if (self.receiver[near] == rcv).sum() > 1 else self.sender[i]
             return [(self.row(j), "episode") for j in near
@@ -401,10 +374,8 @@ class Episodes:
 
 
 def replay_messages(items, now, rng=random):
-    """The rows as kafka_producer sends them, re-identified and moved in time:
-    senders get new PINFLs and new cards with the same BIN (the same issuing bank);
-    receivers, and a sender also paid in the episode, keep their cards.
-    Times shift so the last row lands at `now`, keeping every gap."""
+    """The rows as kafka_producer sends them: senders get new PINFLs and cards of the
+    same bank, receivers keep theirs, and the times shift to end at `now`."""
     keep = {row["receiver_card"] for row, _ in items}
     cards, pinfls = {}, {}
     last = _epoch(items[-1][0])
@@ -430,10 +401,8 @@ _PHRASE = re.compile(r"^(?P<label>.+?): (?P<shown>.*) \((?P<w>[+-]\d+\.\d+)\)$")
 
 
 def split_phrases(phrases):
-    """case-manager's explanation lines - "distinct senders paying this payee in an
-    hour: 3 (+0.42)" -
-    back into (feature, shown value, weight), so the page can say them in either
-    language without a second explainer to drift from the first."""
+    """case-manager's explanation lines ("...: 3 (+0.42)") back into (feature, value,
+    weight), so the page can say them in either language."""
     names = {label: name for name, (label, _) in EX._PHRASES.items()}
     items = []
     for p in phrases:
@@ -458,8 +427,8 @@ class Decisions:
 
     def add(self, rec):
         with self.lock:
-            # A transfer sent for a second look is decided twice. It keeps its row and
-            # counts once, as its latest decision; its time to decision is the job's.
+            # A second look decides a transfer twice: one row, counted as the latest,
+            # timed by the job.
             prev = self.by_id.get(rec.get("transaction_id"))
             if prev is not None:
                 self.counts[prev.get("decision") or "?"] -= 1
@@ -495,10 +464,8 @@ class Decisions:
 
 
 class Background:
-    """data-generator's producer run unchanged - the dataset at its own pacing,
-    200 times faster - so the stream is the one every figure was measured on.
-    Starts at a random row of the held-out part, which the model never trained on,
-    so that two demos do not show the same minutes."""
+    """data-generator's producer, unchanged: the held-out part from a random row,
+    200 times faster than it happened."""
 
     def __init__(self):
         self.proc = None
@@ -591,9 +558,8 @@ class App:
                 "grafana": self.grafana}
 
     def stream(self, flt=None, limit=PAGE):
-        """The latest `limit` decisions that pass the filter, newest first, each with
-        the reasons if it is an alert and, if a scenario sent it, its role and true
-        type; and how many pass, so the page can offer the rest."""
+        """The latest `limit` decisions passing the filter, newest first, with an
+        alert's reasons and a scenario's role and true type; and how many pass."""
         with self.decisions.lock:
             recs = list(self.decisions.recent)
         if flt:
@@ -649,9 +615,8 @@ class App:
         return {**run, "rows": rows}
 
     def results(self):
-        """The model's test figures as ml/train.py wrote them to metrics.json, when
-        it was trained, what the data it was tested on holds, and the public
-        datasets from results.json."""
+        """The model's test figures (metrics.json), when it was trained, the test
+        data's make-up, and the public datasets (results.json)."""
         own = {}
         try:
             with open(os.path.join(MODELS, "metrics.json"), encoding="utf-8") as fh:
@@ -688,9 +653,8 @@ class App:
         return self._warehouse
 
     def live(self):
-        """What the warehouse holds now: each stage's average over the latest
-        decisions that carry stage times, arrival to decision over the same rows,
-        and the analyst's verdicts."""
+        """Each stage's average and arrival to decision over the latest decisions,
+        the verdicts, the holds and the retrainer's last run."""
         cols = [f"stage_{s}_ms" for s in STAGES]
         q = (f"SELECT count(), {', '.join(f'avg({c})' for c in cols)}, "
              f"quantileExact(0.5)(total), quantileExact(0.99)(total) FROM ("
@@ -709,19 +673,14 @@ class App:
                 "retrain": retrain_status()}
 
     def cases(self, new_only=False, limit=PAGE, flt=None):
-        """case-manager's queue, in its own order: the first `limit` cases that pass
-        the filter and how many do. `new_only` keeps the cases opened since this
-        server started: the warehouse also holds every alert of every earlier
-        measurement run, and the case a scenario just opened drowns in them - the
-        store is asked for them, since its first 500 by amount can all be older."""
+        """The queue's first `limit` cases passing the filter, and how many pass.
+        `new_only`: opened since this server started, not in earlier runs."""
         try:
             s = self.store()
-            # A store that cannot connect answers with an empty queue, which the page
-            # would show as "no new alerts".
+            # Unconnected, the store would answer with an empty queue.
             if not s._ensure():
                 raise RuntimeError("the case store cannot reach ClickHouse; see docker logs demo")
             items = s.open_cases(limit=500, since=self.started if new_only else None)
-            # The verdicts given during this showing, each of which can be changed.
             done = s.resolved_cases(since=self.started, limit=PAGE) if new_only else []
             stats, holds = s.stats(), s.holds()
         except Exception as exc:                       # noqa: BLE001 - shown on the page
@@ -841,8 +800,7 @@ def main():
     APP.health.check()
     threading.Thread(target=APP.health.run, daemon=True).start()
     threading.Thread(target=APP.decisions.run, daemon=True).start()
-    # Every interface inside the container; compose publishes the port on the
-    # host's loopback only, since the page can send transfers and close cases.
+    # compose publishes it on the host's loopback only.
     srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     print(f"demo: http://localhost:{PORT}   (Kafka {KAFKA}, ClickHouse "
           f"{CLICKHOUSE['host']}:{CLICKHOUSE['port']}, Flink {FLINK})")

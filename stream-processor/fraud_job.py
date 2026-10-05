@@ -17,6 +17,7 @@ from pyflink.common import Configuration, Types
 from pyflink.common.serialization import SimpleStringSchema
 from pyflink.common.watermark_strategy import WatermarkStrategy
 from pyflink.datastream import StreamExecutionEnvironment, KeyedProcessFunction, RuntimeContext
+from pyflink.datastream.checkpoint_config import ExternalizedCheckpointCleanup
 from pyflink.datastream.state import ValueStateDescriptor
 from pyflink.datastream.connectors.kafka import (
     KafkaSource, KafkaOffsetsInitializer, KafkaSink, KafkaRecordSerializationSchema,
@@ -42,7 +43,7 @@ def _event_epoch(event: dict) -> float:
 
 
 def _warn_cep_only(reason: str) -> None:
-    """Announce a rules-only run loudly; its records carry a distinct version."""
+    """Announce a rules-only run loudly; its records carry a version of their own."""
     # No flush=True: PyFlink's stdout shim rejects the keyword.
     bar = "!" * 72
     print(f"\n{bar}\n[fraud_job] RUNNING CEP-ONLY, NO ML SCORE - {reason}\n"
@@ -50,10 +51,8 @@ def _warn_cep_only(reason: str) -> None:
           f"[fraud_job] in the mounted job directory, then resubmit.\n{bar}\n")
 
 
-#: The decision path in the order a record travels it. Every decision carries one
-#: wall time per stage, `stage_ms`, which sink-writer stores as stage_<name>_ms.
-#: kafka and handoff happen before this operator and are timed against Kafka's own
-#: append time: transactions.raw is LogAppendTime (infra/kafka/create-topics.sh).
+#: The decision path, stage by stage; every decision carries each stage's wall time
+#: in `stage_ms`. kafka and handoff are timed against Kafka's own append time.
 STAGES = ("kafka", "handoff", "decode", "state", "redis", "rules", "model", "decide")
 
 
@@ -65,9 +64,8 @@ def _lap(stages, name, mark):
 
 
 def _before_operator(stages, ingested_at, appended_ms, arrived):
-    """The two stages before this operator, from the producer's ingested_at, Kafka's
-    append time (ms) and the moment the record got here. A missing stamp leaves its
-    stage out rather than inventing one."""
+    """The two stages before this operator, from the producer's stamp, Kafka's append
+    time (ms) and the arrival here. A missing stamp leaves its stage out."""
     if appended_ms is None:
         return
     appended = appended_ms / 1000.0
@@ -77,8 +75,7 @@ def _before_operator(stages, ingested_at, appended_ms, arrived):
 
 
 def _positive_proba(outputs) -> float:
-    """The fraud-class probability from a single-row ONNX output: the [1, 2]
-    probability tensor ml/export_onnx.py writes (zipmap off)."""
+    """The fraud probability from the [1, 2] tensor ml/export_onnx.py writes."""
     import numpy as np
     for out in outputs:
         arr = np.asarray(out)
@@ -88,13 +85,12 @@ def _positive_proba(outputs) -> float:
 
 
 class FraudDetector(KeyedProcessFunction):
-    """Stateful per-sender CEP, with ONNX model fusion."""
+    """Per-sender CEP and the ONNX model, fused into one decision."""
 
     def open(self, ctx: RuntimeContext):
         self._state = ctx.get_state(
             ValueStateDescriptor("sender_state", Types.PICKLED_BYTE_ARRAY()))
-        # Outside Flink state: keyed by sender, so a payee's inbound transfers
-        # are spread across every partition (receiver_store.py).
+        # The payee's side lives in Redis: the stream is keyed by sender.
         self._receivers = ReceiverStore(C.REDIS_HOST, C.REDIS_PORT)
         self._receivers.open()
         import redis
@@ -102,23 +98,20 @@ class FraudDetector(KeyedProcessFunction):
                                   socket_timeout=0.2, socket_connect_timeout=0.2)
         self._answering = True
 
-        # Absent is legitimate (the plaintext arm); present-and-unusable is not,
-        # so it fails here rather than as undecodable records later.
         self._unusable = 0
         self._crypto_key = None
         if os.getenv("PAYLOAD_KEY_HEX"):
+            # A key that is set but unusable fails here, not on every record.
             self._crypto_key = payload_crypto.key_from_env()
             print("[fraud_job] payload decryption enabled (AES-256-GCM)")
 
-        # Load the ONNX model; degrade to CEP-only if unavailable.
         self._sess = None
         self._in_name = None
         try:
             import onnxruntime as ort
             if os.path.exists(C.MODEL_ONNX_PATH):
-                # One thread: a single-row call gains a quarter of a millisecond from
-                # more, and onnxruntime's extra threads spin after every call - five
-                # to six cores at 100 calls a second, against 4% of one.
+                # One thread: more gain a quarter of a millisecond on one row, and
+                # their spinning took five cores at 100 calls a second.
                 opts = ort.SessionOptions()
                 opts.intra_op_num_threads = 1
                 self._sess = ort.InferenceSession(
@@ -134,8 +127,8 @@ class FraudDetector(KeyedProcessFunction):
               f"[fraud_job] second look off: no {C.SECOND_LOOK_PATH} chosen under this cut-off")
 
     def _second_look_answering(self):
-        """Whether the second look renewed its key within its deadline, as it does
-        while it answers. No Redis reads as no: the transfer is held, not sent."""
+        """Whether the second look renewed its key in time. No Redis reads as no: the
+        transfer is held rather than sent to wait."""
         try:
             answering = bool(self._lease.exists(C.SECOND_LOOK_ALIVE_KEY))
         except Exception:                              # noqa: BLE001
@@ -158,15 +151,13 @@ class FraudDetector(KeyedProcessFunction):
         stages = {}
         mark = time.perf_counter()
         try:
-            # Both arms, discriminated by prefix. Decryption sits INSIDE the
-            # scoring_ms bracket on purpose - its cost is what is measured.
+            # Encrypted or plain; decryption is part of the measured time.
             event = payload_crypto.loads_maybe_encrypted(value, self._crypto_key)
             problem = F.unusable(event)
             if problem:
                 raise ValueError(problem)
         except Exception as exc:                          # noqa: BLE001
-            # Counted and printed, never dropped silently: a wrong key makes every
-            # record undecodable, a whole-stream outage.
+            # Counted aloud: a wrong key makes every record undecodable.
             self._unusable += 1
             if self._unusable in (1, 10, 100) or self._unusable % 1000 == 0:
                 print(f"[fraud_job] UNUSABLE RECORD "
@@ -175,36 +166,27 @@ class FraudDetector(KeyedProcessFunction):
         mark = _lap(stages, "decode", mark)
 
         state = self._state.value() or SenderState()
-        # SIMULATED clock, like the windows it is compared against. The
-        # wall-clock stamps below measure the pipeline and never enter a feature.
+        # The event's own (simulated) time, as in training; wall time only measures.
         event_epoch = _event_epoch(event)
         mark = _lap(stages, "state", mark)
         receiver_state = self._receivers.load(F.payee_key(event), event_epoch)
-        # The sender's own account, in the same key space: when it was last paid.
-        sender_inbound = self._receivers.last_inbound(F.sender_key(event),
-                                                      event_epoch)
+        sender_inbound = self._receivers.last_inbound(F.sender_key(event), event_epoch)
         confirmed = self._receivers.confirmed_among(event, receiver_state, event_epoch)
-
         mark = _lap(stages, "redis", mark)
 
         result = evaluate(event, state, event_epoch, receiver_state,
-                          sender_inbound_ts=sender_inbound,
-                          confirmed=confirmed)
+                          sender_inbound_ts=sender_inbound, confirmed=confirmed)
         self._state.update(state)
         self._receivers.record(event, event_epoch)
-
         mark = _lap(stages, "rules", mark)
 
         cep_score = result["cep_score"]
         ml_score = self._ml_score(result["features"])
         mark = _lap(stages, "model", mark)
-        # One call: score_and_decide knows whether the score is a probability.
-        final, decision = fusion.score_and_decide(
-            cep_score, ml_score, result["rule_hits"])
-        # From what ran, not from configuration: a rules-only run must not be stored
-        # as a fused one.
+        final, decision = fusion.score_and_decide(cep_score, ml_score, result["rule_hits"])
+        # From what ran: a rules-only run must not be stored as a fused one.
         model_version = C.MODEL_VERSION if self._sess is not None else C.MODEL_VERSION_CEP_ONLY
-        if decision == "SECOND_LOOK" and not self._second_look_answering():   # config.py
+        if decision == "SECOND_LOOK" and not self._second_look_answering():
             decision, model_version = "REVIEW", C.SECOND_LOOK_UNSCORED
         predicted_type = fusion.classify_type(result["rule_hits"]) if decision != "ALLOW" else None
 
@@ -214,8 +196,6 @@ class FraudDetector(KeyedProcessFunction):
             "sender_card": event.get("sender_card"),
             "receiver_card": event.get("receiver_card"),
             "sender_pinfl": event.get("sender_pinfl"),
-            # No receiver_pinfl: a sending bank cannot resolve the destination PAN to
-            # a person, so the payee is keyed by card.
             "amount_uzs": event.get("amount_uzs"),
             "sender_region": event.get("sender_region"),
             "is_new_payee": result["is_new_payee"],
@@ -227,25 +207,16 @@ class FraudDetector(KeyedProcessFunction):
             "rule_hits": result["rule_hits"],
             "active_call": result["active_call"],
             "secs_login_z": result["secs_login_z"],
-            # Raw, from the event: the job does not recompute what the app sent.
             "secs_login_to_confirm": event.get("secs_login_to_confirm"),
             "model_version": model_version,
-            # Latency instrumentation (wall clock, never a feature). t0 from the
-            # producer, t1 here, t2 at the sink - so a breach points at a stage.
             "ingested_at": event.get("ingested_at"),
             "scored_at_job": time.time(),
             "scoring_ms": round((time.time() - scoring_started) * 1000.0, 3),
-            # Forwarded untouched. Recomputing here would let the job mint a hash for
-            # a substituted event.
+            # Forwarded untouched: recomputed here, it could vouch for a substituted event.
             "ingress_hash": event.get("ingress_hash"),
+            # Explained, rescored by the second look, retrained on; NaN is not JSON.
+            "features": [None if v != v else round(float(v), 6) for v in result["features"]],
         }
-        # The feature vector, on every decision: case-manager explains from it, the
-        # second look scores it, and a retrain (ml/retrain.py) learns from exactly
-        # what was served - none of them can recompute sender state. NaN -> None,
-        # as a bare NaN is not valid JSON.
-        out["features"] = [None if v != v else round(float(v), 6)
-                           for v in result["features"]]
-
         _lap(stages, "decide", mark)
         _before_operator(stages, event.get("ingested_at"), ctx.timestamp(), scoring_started)
         out["stage_ms"] = stages
@@ -258,7 +229,7 @@ class FraudDetector(KeyedProcessFunction):
 
 
 def _apply_security(builder):
-    """Add the transport-security properties, if any, to a Kafka source or sink."""
+    """The transport-security properties, if any, on a Kafka source or sink."""
     props = C.kafka_security_properties()
     for k, v in props.items():
         builder = builder.set_property(k, v)
@@ -273,13 +244,11 @@ def _kafka_source():
             .set_bootstrap_servers(C.KAFKA_BOOTSTRAP)
             .set_topics(C.TOPIC_RAW)
             .set_group_id(C.CONSUMER_GROUP)
-            # Committed offsets, the topic start only on a first run;
-            # earliest() rescored the whole topic on every restart.
+            # Committed offsets; the topic's start only on a first run.
             .set_starting_offsets(KafkaOffsetsInitializer.committed_offsets(
                 KafkaOffsetResetStrategy.EARLIEST))
             .set_property("commit.offsets.on.checkpoint", "true")
             .set_value_only_deserializer(SimpleStringSchema())
-            # fetch.max.wait.ms bounds how long a fetch parks on an empty topic.
             .set_property("fetch.max.wait.ms", str(C.KAFKA_FETCH_MAX_WAIT_MS))
             .set_property("fetch.min.bytes", "1")
             .build())
@@ -298,21 +267,17 @@ def _kafka_sink(topic):
 
 
 def _tune_for_latency(env):
-    """Trade throughput for latency; each value is explained in config.py."""
-    # Job-level options go through Configuration and env.configure();
-    # env.get_config() is an ExecutionConfig with no string interface.
+    """Latency over throughput (config.py, Latency)."""
+    # Job options go through Configuration: ExecutionConfig takes no strings.
     conf = Configuration()
     conf.set_string("python.fn-execution.bundle.time", str(C.PY_BUNDLE_TIME_MS))
     conf.set_string("python.fn-execution.bundle.size", str(C.PY_BUNDLE_SIZE))
-
     conf.set_string("restart-strategy.type", "failure-rate")
     conf.set_string("restart-strategy.failure-rate.max-failures-per-interval",
                     str(C.RESTART_ATTEMPTS))
     conf.set_string("restart-strategy.failure-rate.failure-rate-interval",
                     f"{C.RESTART_WINDOW_MS} ms")
-    conf.set_string("restart-strategy.failure-rate.delay",
-                    f"{C.RESTART_DELAY_MS} ms")
-
+    conf.set_string("restart-strategy.failure-rate.delay", f"{C.RESTART_DELAY_MS} ms")
     env.configure(conf)
     env.set_buffer_timeout(C.BUFFER_TIMEOUT_MS)
     env.set_parallelism(C.JOB_PARALLELISM)
@@ -322,37 +287,22 @@ def _tune_for_latency(env):
 def main():
     env = StreamExecutionEnvironment.get_execution_environment()
     env.enable_checkpointing(C.CHECKPOINT_INTERVAL_MS)
-
-    # Retained beyond the job and outside the container - config.CHECKPOINT_DIR.
     chk = env.get_checkpoint_config()
     chk.set_checkpoint_storage_dir(C.CHECKPOINT_DIR)
-    try:
-        from pyflink.datastream.checkpoint_config import ExternalizedCheckpointCleanup
-        chk.set_externalized_checkpoint_cleanup(
-            ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION)
-    except ImportError:                                   # older PyFlink layout
-        chk.enable_externalized_checkpoints(
-            __import__("pyflink.datastream",
-                       fromlist=["ExternalizedCheckpointCleanup"])
-            .ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION)
-
+    chk.set_externalized_checkpoint_cleanup(ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION)
     _tune_for_latency(env)
 
     raw = env.from_source(
         _kafka_source(), WatermarkStrategy.no_watermarks(), "transactions.raw")
-
     scored = (raw
-              # Partition on the clear routing field, without decrypting.
+              # Partitioned on the clear routing field, without decrypting.
               .key_by(lambda v: payload_crypto.routing_key(v), key_type=Types.STRING())
               .process(FraudDetector(), output_type=Types.STRING()))
-
     scored.sink_to(_kafka_sink(C.TOPIC_SCORED)).name("scored-sink")
-
     (scored
      .filter(lambda v: json.loads(v)["decision"] == "SECOND_LOOK")
      .sink_to(_kafka_sink(C.TOPIC_SECOND_LOOK))
      .name("second-look-sink"))
-
     env.execute("fraud-detection-cep-ml")
 
 

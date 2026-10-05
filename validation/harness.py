@@ -45,10 +45,8 @@ class Event(NamedTuple):
 
 
 def capability_profile(*off, payee_identity="pinfl"):
-    """What the dataset cannot supply switched OFF - an absent field would reach the
-    extractor as a zero - and the payee keyed by account, since these datasets name
-    accounts and issue no PANs. No analyst confirmed their frauds either, so
-    confirmed_cases is off on every one."""
+    """What the dataset cannot supply switched off (an absent field would read as
+    zero), the payee keyed by account (no cards), and confirmed_cases off (no verdicts)."""
     for key in off + ("confirmed_cases",):
         CAP.MODES[key] = "off"
     CAP.MODES["payee_identity"] = payee_identity
@@ -107,9 +105,8 @@ def cached_matrix(cache, build):
 
 
 def fit_and_score(X, y, fit, cut, seed=0):
-    """train.py's recipe fitted on rows [:fit], its cut-off - the F1 peak - chosen on
-    [fit:cut], and the rows from `cut` on scored at it. Weighted only above 0.5%
-    fraud, as train.py fits."""
+    """train.py's recipe: fitted on [:fit], the F1-peak cut-off chosen on [fit:cut],
+    the rows from `cut` on scored at it."""
     model = T.make_model(T.class_weight(int(y[:fit].sum()), int((y[:fit] == 0).sum())),
                          random_state=seed)
     model.fit(X[:fit], y[:fit])

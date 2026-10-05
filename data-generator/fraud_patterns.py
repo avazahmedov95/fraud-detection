@@ -98,9 +98,7 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
                         region = where
                 else:
                     region = str(rng.choice(REGIONS))
-            # 2..8 events: an attacker in a hurry cannot slow down, so takeovers can trip
-            # VELOCITY. STRUCTURING's slow spacing below is left alone - a smurfing run
-            # that paces itself is the modelled behaviour.
+            # 2..8 events: an attacker in a hurry can trip VELOCITY.
             for i in range(int(rng.integers(2, 9))):
                 fraudster = pick(fraud_accounts)
                 amount = maybe_round(

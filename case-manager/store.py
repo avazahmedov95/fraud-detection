@@ -17,17 +17,6 @@ CONFIRMED_KEY = "confirmed:accounts"
 HISTORY_KEY = "confirmed:history"
 #: Cases a hold opened; a client's report on a transfer let go is not one.
 HELD = "decision = 'REVIEW'"
-#: Applied on every connect: ClickHouse runs its init scripts only on an empty data
-#: directory.
-_DDL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "infra", "clickhouse",
-                    "init", "02-cases.sql")
-
-
-def _statements(sql: str):
-    """The DDL file's statements, comments stripped first: a ";" in a comment would
-    otherwise split one."""
-    stripped = "\n".join(ln.split("--", 1)[0] for ln in sql.splitlines())
-    return [chunk.strip() for chunk in stripped.split(";") if chunk.strip()]
 
 
 class CaseStore:
@@ -45,15 +34,9 @@ class CaseStore:
             import clickhouse_connect
             self._client = clickhouse_connect.get_client(**self._cfg)
             self._client.ping()
-            self._apply_schema()
         except Exception as exc:                       # noqa: BLE001
             log.warning("ClickHouse unavailable, will retry: %s", exc)
             self._client = None
-
-    def _apply_schema(self):
-        with open(_DDL, encoding="utf-8") as fh:
-            for stmt in _statements(fh.read()):
-                self._client.command(stmt)
 
     def _ensure(self):
         if self._client is None and time.time() - self._last_attempt >= RECONNECT_INTERVAL_S:

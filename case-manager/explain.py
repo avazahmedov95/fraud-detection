@@ -1,6 +1,6 @@
-"""Turns a model-only alert into words: the top tree contributions, phrased as
-findings an analyst can read out. Refuses to speak rather than risk a wrong reason.
-It runs here, off the scoring path: a decision never waits for its explanation."""
+"""A hold's reasons in words: the model's top tree contributions, phrased as findings
+an analyst can read out; nothing rather than a wrong reason. The sink writer runs it,
+off the scoring path: a decision never waits for its explanation."""
 
 import logging
 import os
@@ -137,9 +137,8 @@ class Explainer:
             self._booster = None
 
     def explain(self, features, recorded_score):
-        """(status, [top-N phrases]) for one alert. `features` is the vector the JOB
-        scored on, republished in the alert: recomputing needs streaming state this
-        process lacks, and would explain a different event than the one that alerted."""
+        """(status, [top-N phrases]) for one hold, from the vector the job scored on
+        (recomputing it needs the job's state)."""
         # Features first: checking the model first made NO_MODEL mask a missing vector.
         if not features:
             return NO_FEATURES, []

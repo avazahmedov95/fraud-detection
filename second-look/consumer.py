@@ -24,10 +24,8 @@ def _stop(*_):
 
 
 def handle(event, look, send, now=None):
-    """Score one waiting transfer and publish its decision to the scored topic, where
-    the sink writer stores it and opens a case for a hold. A transfer that has waited
-    past the deadline is held unscored at once: asking TabPFN would only make it, and
-    every transfer queued behind it, wait longer."""
+    """Score one waiting transfer and publish its decision to the scored topic. Past
+    the deadline it is held unscored at once, so nothing queued behind waits longer."""
     age = waited(event, time.time() if now is None else now)
     score = None
     if age >= C.DEADLINE_S:
@@ -45,9 +43,8 @@ def handle(event, look, send, now=None):
 
 
 def _renew(alive):
-    """Tell the job the service is answering: the key lapses DEADLINE_S after the
-    last renewal, and the job then holds band transfers itself. Renewed between
-    transfers and once a second while idle, so a stuck answer lets it lapse too."""
+    """Tell the job the service is answering; DEADLINE_S after the last renewal the
+    key lapses and the job holds band transfers itself."""
     try:
         alive.set(C.ALIVE_KEY, int(time.time()), px=int(C.DEADLINE_S * 1000))
     except Exception as exc:                           # noqa: BLE001 - the job holds instead
@@ -79,8 +76,7 @@ def main():
         C.TOPIC_SECOND_LOOK,
         bootstrap_servers=C.KAFKA_BOOTSTRAP,
         group_id=C.CONSUMER_GROUP,
-        # Committed only after the decision is published: a crash re-decides a
-        # transfer rather than losing it, and the case store collapses the repeat.
+        # Committed after publishing: a crash re-decides a transfer, never loses it.
         enable_auto_commit=False,
         auto_offset_reset="earliest",
         value_deserializer=lambda v: json.loads(v.decode("utf-8")),

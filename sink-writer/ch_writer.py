@@ -2,7 +2,6 @@
 hold. Fails open, but every discarded row is logged with a running total."""
 
 import logging
-import os
 import time
 
 import case as CASE
@@ -15,25 +14,6 @@ log = logging.getLogger("ch_writer")
 RECONNECT_INTERVAL_S = 10.0
 COLUMNS = {"transactions_scored": R.SCORED_COLUMNS, "audit_log": R.AUDIT_COLUMNS,
            "cases": CASE.CASE_COLUMNS}
-
-#: Columns added after the tables were made. ClickHouse runs its init scripts only on
-#: an empty data directory, so the writer applies this file on every connect.
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_MIGRATION_CANDIDATES = (
-    os.path.join(_HERE, "03-columns.sql"),                                       # in the image
-    os.path.join(_HERE, "..", "infra", "clickhouse", "init", "03-columns.sql"),  # in the repo
-)
-
-
-def _migration_sql():
-    """03-columns.sql as one query: comments stripped, no trailing semicolon."""
-    path = next((p for p in _MIGRATION_CANDIDATES if os.path.exists(p)), None)
-    if path is None:
-        raise FileNotFoundError("03-columns.sql is missing; check the COPY in "
-                                "infra/sink-writer/Dockerfile")
-    with open(path, encoding="utf-8") as fh:
-        sql = "\n".join(ln.split("--", 1)[0] for ln in fh.read().splitlines())
-    return sql.strip().rstrip(";")
 
 
 class ClickHouseWriter:
@@ -56,7 +36,6 @@ class ClickHouseWriter:
             import clickhouse_connect
             self._client = clickhouse_connect.get_client(**self._cfg)
             self._client.ping()
-            self._client.command(_migration_sql())
             log.info("ClickHouse connected (%s:%s/%s)",
                      self._cfg["host"], self._cfg["port"], self._db)
             self._resume_chain()
@@ -66,8 +45,7 @@ class ClickHouseWriter:
         return self._client is not None
 
     def _resume_chain(self):
-        """Continue the audit chain across restarts, as the verifier expects. One
-        writer only: a second would need a chain of its own."""
+        """Continue the audit chain across restarts (one writer: one chain)."""
         try:
             rows = self._client.query(f"SELECT seq, record_hash FROM {self._db}.audit_log "
                                       f"ORDER BY seq DESC LIMIT 1").result_rows

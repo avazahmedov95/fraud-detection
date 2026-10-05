@@ -24,8 +24,7 @@ def _store():
     return s
 
 
-#: Case ids are transaction ids - 36-character UUIDs in live data. The first column
-#: was 16 wide and every row overflowed it, pushing the whole table out of alignment.
+#: Case ids are transaction ids: 36-character UUIDs.
 _ID_W = 38
 
 
@@ -73,8 +72,7 @@ def cmd_show(args):
         raise SystemExit(f"no case {args.case_id!r}")
     width = max(len(k) for k in c)
     for k, v in c.items():
-        # An unresolved case stores the epoch in resolved_at: the right sentinel in
-        # the column, but "1970-01-01" reads to a person as a bug, not as "not yet".
+        # An open case stores the epoch in resolved_at; a person reads that as a bug.
         if k in ("resolved_at", "resolved_by") and c["disposition"] == "NEW":
             v = "-"
         print(f"{k:<{width}}  {v}")

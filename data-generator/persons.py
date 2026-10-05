@@ -27,8 +27,7 @@ class Person:
     decision_time_median: float = 40.0   # personal login->confirm baseline (sec)
     # A laptop beside the phone, or a replaced handset (config.SECOND_DEVICE_*).
     has_second_device: bool = False
-    # A card at a second bank, used only when RECEIVING - see SECOND_CARD_* in
-    # config.py. Empty string means the person holds one card, which most do.
+    # A card at a second bank, used only when receiving; "" for most people.
     card2: str = ""
     network2: str = ""
     bank_code2: str = ""
@@ -75,7 +74,6 @@ def network_from_bin(bin6):
 
 def gen_card(rng):
     """Return (network, 16-digit PAN) starting with a real bank BIN."""
-    # Sampled by market share, not uniformly: see WEIGHT_BANKS_BY_CARD_SHARE.
     bank = BANKS[int(rng.choice(len(BANKS), p=BANK_WEIGHTS))]
     bin6 = bank["bin"]
     network = network_from_bin(bin6)

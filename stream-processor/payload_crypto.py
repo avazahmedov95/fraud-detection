@@ -2,8 +2,8 @@
 
 Wire format:  "FDE1:" + routing_key + ":" + base64(nonce(12) || ct || tag(16))
 
-Hash the plaintext BEFORE encrypting (integrity.py). The copies in
-data-generator/ and stream-processor/ must stay byte-identical.
+Hash the plaintext before encrypting (integrity.py). The generator encrypts with
+this module too.
 """
 import base64
 import json
@@ -16,8 +16,8 @@ NONCE_BYTES = 12          # GCM standard; 96-bit nonces avoid an internal rehash
 KEY_BYTES = 32            # AES-256
 ROUTING_FIELD = "sender_card"   # what the Flink job keys the stream by
 
-# For records whose routing field cannot be read: dropped, never raised, since
-# an exception in key_by would halt the job on that record forever.
+# A record whose routing field cannot be read: dropped, since raising in key_by
+# would stop the job on it for good.
 POISON_KEY = "__undecodable__"
 
 
@@ -44,8 +44,7 @@ def key_from_env(var="PAYLOAD_KEY_HEX"):
 
 
 def _aesgcm(key):
-    # Lazy, so the plaintext arm of the experiment can run on a host without
-    # `cryptography` installed.
+    # Lazy: plaintext runs without `cryptography` installed.
     try:
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     except ImportError as exc:                          # pragma: no cover
@@ -100,8 +99,7 @@ def encrypt(event: dict, key: bytes, field=ROUTING_FIELD) -> str:
     """Serialise and encrypt one event into the wire envelope."""
     routing = str(event.get(field, ""))
     if SEP in routing:
-        # Would make the envelope ambiguous. Card numbers are digits, so this
-        # guards a future field choice rather than a case that occurs today.
+        # Would make the envelope ambiguous; card numbers are digits.
         raise PayloadCryptoError(
             f"routing field {field!r} contains the separator {SEP!r}: {routing!r}")
     plaintext = json.dumps(event, separators=(",", ":")).encode("utf-8")

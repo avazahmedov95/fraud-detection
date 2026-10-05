@@ -1,12 +1,9 @@
-# The training environment, pinned by ml/requirements.txt, in a container: on the
-# owner's Windows, Smart App Control blocks the native library onnx loads
-# (ml_dtypes). The repository is mounted at /repo, so files land in ml/models.
-# Two uses: run.ps1 export-model runs the default command (ml/export_onnx.py:
-# model.onnx, model.txt, manifest.json), and the retrainer service runs
-# ml/retrain.py every day (docker-compose.yml).
+# The training environment (ml/requirements.txt) in a container, since Windows' Smart
+# App Control blocks a library onnx loads. Used by run.ps1 export-model and by the
+# retrainer service; the repository is mounted at /repo.
 FROM python:3.11-slim
 
-# lightgbm links against the OpenMP runtime, which python:3.11-slim does not ship.
+# lightgbm needs the OpenMP runtime the slim image lacks.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libgomp1 \
     && rm -rf /var/lib/apt/lists/*

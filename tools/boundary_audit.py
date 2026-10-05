@@ -1,7 +1,6 @@
-"""Checks every place one component hands something to another.
-Reading a file says a component is right, not that what it PRODUCES is what the
-next one EXPECTS. Run before a walkthrough and after touching any wire format.
-"""
+"""Checks every place one component hands something to another: reading a file says
+a component is right, not that what it produces is what the next one expects. Run
+after touching any wire format."""
 
 import argparse
 import ast
@@ -13,8 +12,8 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# config.py, integrity.py and payload_crypto.py exist in more than one package, so
-# each package is imported in isolation rather than from one flat sys.path.
+# config.py exists in several packages, so each package is imported in isolation
+# rather than from one flat sys.path.
 _PKG_CACHE = {}
 
 
@@ -132,37 +131,9 @@ def b_hash_covers_only_sent_fields():
     return None
 
 
-def b_duplicated_modules_are_identical():
-    """Modules that DECLARE themselves duplicates must be byte-identical. The set is
-    whatever says "byte-identical" in its own docstring, not a hard-coded pair."""
-    declared = {}
-    for pkg in ("stream-processor", "data-generator", "sink-writer",
-                "case-manager", "validation", "ml"):
-        d = os.path.join(ROOT, pkg)
-        if not os.path.isdir(d):
-            continue
-        for fn in sorted(os.listdir(d)):
-            if not fn.endswith(".py") or fn.startswith("test_"):
-                continue
-            body = _read(pkg, fn)
-            if "byte-identical" in body.split('"""')[1 if body.startswith('"""') else 0]:
-                declared.setdefault(fn, []).append((f"{pkg}/{fn}", body))
-    problems = []
-    for fn, copies in sorted(declared.items()):
-        if len(copies) < 2:
-            problems.append(f"{copies[0][0]} claims to be byte-identical to a "
-                            f"copy that does not exist")
-        elif len({b for _, b in copies}) > 1:
-            problems.append(f"{fn} differs between "
-                            f"{', '.join(p for p, _ in copies)}")
-    if not declared:
-        return "no module declares itself a duplicate - has the convention changed?"
-    return "; ".join(problems) or None
-
-
 def b_routing_key_survives_the_wire():
     P = pkg("data-generator", "kafka_producer")
-    PC = pkg("data-generator", "payload_crypto")
+    PC = pkg("stream-processor", "payload_crypto")
     row = _sample_row()
     if row is None:
         return "SKIP: dataset not generated"
@@ -208,9 +179,8 @@ def b_a_case_reads_only_emitted_keys():
 
 def b_second_look_is_what_the_job_sends():
     """The job sends a waiting transfer to the topic the second look reads, with the
-    keys it reads, and that topic is created. While the second look does not answer
-    the job holds the transfer itself: both name the same Redis key, and the job's
-    hold carries the second look's own unscored mark."""
+    keys it reads; while the second look does not answer, the job holds it itself,
+    under the same Redis key and unscored mark."""
     J, L = pkg("stream-processor", "config"), pkg("second-look", "config")
     D = pkg("second-look", "decide")
     if J.TOPIC_SECOND_LOOK != L.TOPIC_SECOND_LOOK:
@@ -267,9 +237,6 @@ def b_scored_row_matches_the_schema():
     R = pkg("sink-writer", "record")
     sql = _read("infra", "clickhouse", "init", "01-schema.sql")
     declared = _ddl_columns(sql, "fraud.transactions_scored")
-    # The later columns come from the migration sink-writer applies on connect.
-    later = re.sub(r"--[^\n]*", "", _read("infra", "clickhouse", "init", "03-columns.sql"))
-    declared += re.findall(r"ADD COLUMN IF NOT EXISTS\s+([a-z_]+)\s", later)
     extra = [c for c in R.SCORED_COLUMNS if c not in declared]
     if extra:
         return f"scored_row writes columns the table does not have: {extra}"
@@ -282,7 +249,6 @@ def b_case_row_matches_the_schema():
     C = pkg("case-manager", "case")
     sql = _read("infra", "clickhouse", "init", "02-cases.sql")
     declared = _ddl_columns(sql, "fraud.cases")
-    declared += re.findall(r"ADD COLUMN IF NOT EXISTS\s+([a-z_]+)\s", sql)
     if declared != C.CASE_COLUMNS:
         return f"fraud.cases DDL {declared} != CASE_COLUMNS {C.CASE_COLUMNS}"
     return None
@@ -374,9 +340,8 @@ def b_no_artefact_path_derived_from_file():
 
 
 def b_manifest_matches_the_deployment():
-    """The served artefacts, dataset and feature contract must be the manifest's - a
-    drift in any of them leaves a system that runs and reports itself healthy. A
-    clone that has trained and generated nothing yet has nothing to drift."""
+    """The served artefacts, dataset and feature contract must be the manifest's
+    (a clone that has generated nothing yet has nothing to compare)."""
     m = pkg("ml", "manifest")
     if not os.path.exists(m.PATH):
         return "SKIP: no manifest - run ml/export_onnx.py"
@@ -520,9 +485,8 @@ def b_no_new_constant_columns():
     return "; ".join(problems) or None
 
 
-#: Every figure ml/README.md quotes from metrics.json: (pattern with ONE capture
-#: group, keys into metrics.json, how the value renders). A pattern that stops
-#: matching fails as loudly as a wrong number.
+#: Every figure ml/README.md quotes from metrics.json: (pattern with one capture
+#: group, keys into metrics.json, how it renders); a pattern that stops matching fails.
 _f3 = lambda v: f"{v:.3f}"
 _pct1 = lambda v: f"{v*100:.1f}"
 
@@ -589,7 +553,6 @@ CHECKS = [
     ("producer message -> feature extractor (equivalence)", b_wire_extracts_like_typed),
     ("feature extractor -> producer (nothing absent)", b_extractor_needs_nothing_absent),
     ("producer message -> ingress hash (fields sent)", b_hash_covers_only_sent_fields),
-    ("duplicated modules identical", b_duplicated_modules_are_identical),
     ("wire -> routing key, plaintext and encrypted", b_routing_key_survives_the_wire),
     ("job record -> sink-writer", b_sink_reads_only_emitted_keys),
     ("job record -> a case", b_a_case_reads_only_emitted_keys),

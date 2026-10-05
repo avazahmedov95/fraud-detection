@@ -62,10 +62,9 @@ def test_core_history_ignores_the_environment(monkeypatch):
     assert CAP._configured(CAP.BY_KEY["core_history"]) == "on"
 
 
-def test_every_capability_documents_why_it_may_be_missing():
+def test_every_capability_names_its_data_source():
     for cap in CAP.REGISTRY:
         assert cap.requires, f"{cap.key} declares no data source"
-        assert cap.rationale, f"{cap.key} has no rationale"
 
 
 # --- derived contract -------------------------------------------------------

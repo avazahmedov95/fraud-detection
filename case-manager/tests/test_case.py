@@ -106,8 +106,7 @@ def test_only_terminal_dispositions_can_be_written(bad):
 # --- drift guard -------------------------------------------------------------
 
 def test_columns_match_the_clickhouse_schema():
-    """CASE_COLUMNS must match the DDL - the CREATE and the later ALTER ... ADD
-    COLUMN migrations alike - because insert() takes the columns positionally."""
+    """CASE_COLUMNS must match the DDL: insert() takes the columns positionally."""
     ddl = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
                        "infra", "clickhouse", "init", "02-cases.sql")
     with open(ddl, encoding="utf-8") as fh:
@@ -123,8 +122,6 @@ def test_columns_match_the_clickhouse_schema():
         m = re.match(r"^([a-z_]+)\s+[A-Za-z]", line)
         if m:
             declared.append(m.group(1))
-
-    declared += re.findall(r"ADD COLUMN IF NOT EXISTS\s+([a-z_]+)\s", sql)
     assert declared == CASE.CASE_COLUMNS
 
 

@@ -5,7 +5,9 @@ import json
 import os
 import sys
 
-import integrity
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             "data-generator"))
+import integrity  # noqa: E402
 
 CH_HOST = os.getenv("CLICKHOUSE_HOST", "localhost")
 CH_PORT = int(os.getenv("CLICKHOUSE_HTTP_PORT", "8123"))
@@ -34,10 +36,9 @@ def _fetch(limit):
 
 
 def verify(records, window=False):
-    """Return a list of findings; empty means the log is intact. A `window` - the
-    most recent records only - starts from its first record's prev_hash, a link
-    only the record before the window could confirm; the whole log starts from
-    genesis, so a deleted head is caught."""
+    """Findings; none means the log is intact. A `window` of the latest records
+    starts from its first prev_hash; the whole log from genesis, so a deleted head
+    is caught."""
     findings = []
     prev_hash = records[0]["prev_hash"] if window and records else integrity.GENESIS
     expected_seq = None

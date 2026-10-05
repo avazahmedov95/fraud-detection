@@ -1,21 +1,13 @@
 """Retrains the model on what the running system served and what people decided, and
 says whether the new model should replace the served one. The retrainer service runs
-it every day (docker-compose.yml); nothing changes until a person promotes the new
-model: .\\run.ps1 promote-model.
+it daily; nothing changes until a person promotes it (.\\run.ps1 promote-model).
 
-The rows: the decisions the job logged with their feature values
-(fraud.transactions_scored, `features`), the latest MAX_ROWS of them, once per
-transfer, in the order the job made them, added to the rows the served model was
-trained on. The labels: fraud where an analyst confirmed it or a client reported it
-(fraud.cases), not fraud everywhere else - a fraud nobody reported stays a wrong
-label, as it does in a bank.
-
-The logged rows split as train.py splits its data: the earliest 64% join the training
-rows; the next 16% set the new model's cut-off at as many alerts as the served model
-raises there, so the analysts' workload stays the same; the last 20%, which neither
-model trained on, decide between the two. First it says which features have moved
-since the served model was trained: the drift a retrain answers. Every run leaves
-its outcome in models/retrain_status.json, which the demo page shows.
+Rows: the job's logged decisions with their features (fraud.transactions_scored),
+added to the served model's training rows. Labels: fraud where an analyst confirmed
+it or a client reported it (fraud.cases). The logged rows split as in train.py: the
+earliest 64% train, the next 16% set the cut-off at the served model's number of
+alerts, the last 20% decide between the two. Drift is read first; the outcome goes to
+models/retrain_status.json for the demo page.
 
     python retrain.py [--cache models_matrix.npz] [--every-hours 24]
 """
@@ -34,15 +26,13 @@ import train as T
 
 CANDIDATE_DIR = os.path.join(T.MODELS_DIR, "candidate")
 STATUS = os.path.join(T.MODELS_DIR, "retrain_status.json")
-#: Below this many known frauds in the deciding rows a comparison is noise, and no
-#: candidate is written.
+#: Fewer known frauds in the deciding rows, and a comparison is noise.
 MIN_FRAUD = 30
-#: Population stability index over which a feature counts as moved: under 0.1 is
-#: read as stable, 0.1-0.25 as some change, over 0.25 as a large one.
+#: Population stability index over which a feature has moved (under 0.1: stable).
 PSI_MOVED = 0.25
-#: Fewer recent decisions than this, and a PSI reads the sample, not the traffic.
+#: Fewer recent decisions, and a PSI reads the sample, not the traffic.
 MIN_DRIFT_ROWS = 1000
-#: The newest decisions read: a month of a busy stream fits, the memory stays bounded.
+#: The newest decisions read, so memory stays bounded.
 MAX_ROWS = 1_000_000
 
 
@@ -56,9 +46,8 @@ def warehouse():
 
 
 def logged(client):
-    """The newest decisions logged with a whole feature vector, one per transfer (a
-    second look adds another), in the order the job made them, labelled by what
-    people called fraud."""
+    """The newest decisions with a whole feature vector, one per transfer, in the
+    job's order, labelled by what people called fraud."""
     n = len(D.FEATURE_NAMES)
     rows = client.query(
         "SELECT transaction_id, features FROM ("
@@ -75,15 +64,13 @@ def logged(client):
 
 
 def split(n):
-    """train.py's shares over n time-ordered rows: where fitting ends, where the
-    cut-off rows end."""
+    """Where fitting ends and where the cut-off rows end, as in train.py."""
     cut = T.cut_index(n)
     return int(cut * T.FIT_SHARE), cut
 
 
 def same_workload_cut(new, old, old_cut):
-    """The new model's cut-off: as many alerts as the served model raises on the same
-    rows."""
+    """The new model's cut-off: as many alerts as the served model's on these rows."""
     k = int((old >= old_cut).sum())
     return float(np.sort(new)[::-1][k - 1]) if k else float(new.max()) + 1e-9
 
@@ -100,9 +87,8 @@ def read(y, p, cut):
 
 
 def psi(ref, cur, bins=10):
-    """How far one feature's distribution in `cur` has moved from `ref` (population
-    stability index), over the deciles of `ref`; a value never computed (NaN) is a
-    bin of its own."""
+    """How far a feature moved from `ref` to `cur` (population stability index) over
+    `ref`'s deciles; NaN is a bin of its own."""
     seen = ref[~np.isnan(ref)]
     edges = np.unique(np.quantile(seen, np.linspace(0, 1, bins + 1)[1:-1])) if len(seen) else []
 
@@ -124,8 +110,7 @@ def drift(ref, cur):
 
 
 def run(cache):
-    """One retrain. Returns its outcome: too_few_rows, too_few_fraud, better or
-    not_better, with the figures it was decided on."""
+    """One retrain: too_few_rows, too_few_fraud, better or not_better, with figures."""
     with open(os.path.join(T.MODELS_DIR, "thresholds.json"), encoding="utf-8") as fh:
         served_cut = json.load(fh)["review"]
     served = joblib.load(os.path.join(T.MODELS_DIR, "model.joblib"))
@@ -194,7 +179,7 @@ def run(cache):
 
 
 def write_status(status, every_hours):
-    """The outcome of the latest run, for the demo page and run.ps1 status."""
+    """The latest run's outcome, for the demo page."""
     with open(STATUS, "w", encoding="utf-8") as fh:
         json.dump(dict(status, at=time.time(), every_hours=every_hours), fh, indent=2)
 

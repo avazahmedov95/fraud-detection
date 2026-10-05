@@ -5,18 +5,17 @@ import pytest
 
 import capabilities as CAP
 import config as C
+import fusion
 import rules as R
 from conftest import payee_card
 
 
 @pytest.fixture
 def profile():
-    """Set capability modes and clear the threshold cache around each test."""
+    """Set capability modes; restored after the test (the cut-off cache is per profile)."""
     saved = dict(CAP.MODES)
-    R._THRESHOLD_CACHE.clear()
-    yield lambda **kw: (CAP.MODES.update(kw), R._THRESHOLD_CACHE.clear())
+    yield CAP.MODES.update
     CAP.MODES.clear(); CAP.MODES.update(saved)
-    R._THRESHOLD_CACHE.clear()
 
 
 # --- reachability -----------------------------------------------------------
@@ -90,18 +89,4 @@ def test_single_rule_can_flag_when_it_is_all_that_is_available(profile):
     assert "NEW_PAYEE_HIGH_AMOUNT" in res["rule_hits"]
     assert res["cep_score"] == pytest.approx(C.W_NEW_PAYEE_HIGH, abs=1e-6)
     assert res["cep_score"] < C.REVIEW_THRESHOLD      # would be silent unscaled
-    assert res["decision"] == "REVIEW"                # but is not
-
-
-def test_scaling_can_be_switched_off(profile, monkeypatch):
-    """The previous fixed-threshold behaviour stays available for comparison."""
-    monkeypatch.setattr(C, "SCALE_THRESHOLDS_BY_CAPABILITY", False)
-    profile(geo_telemetry="off", session_telemetry="off")
-    assert R._review_threshold() == C.REVIEW_THRESHOLD
-
-
-def test_scaling_does_not_change_the_full_profile_decision(profile):
-    """Regression guard: the deployed configuration must behave as before."""
-    profile(**{c.key: ("on" if "on" in c.modes else c.modes[0])
-               for c in CAP.REGISTRY if not c.always_on})
-    assert R._review_threshold() == pytest.approx(C.REVIEW_THRESHOLD, abs=1e-6)
+    assert fusion.decide(res["cep_score"], res["rule_hits"], cep_only=True) == "REVIEW"

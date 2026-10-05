@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from collections import Counter
 import csv
 import os
-import sys
 
 # --- Behavioural session signals --------------------------------------------
 DECISION_TIME_MEDIAN_SEC = 40.0       # population median, login -> confirm
@@ -14,23 +13,21 @@ ATO_TIME_COMPRESS = (0.4, 0.7)        # attacker in a hurry: faster
 SECS_LOGIN_FLOOR = 3.0                # physical minimum
 
 # --- Devices ----------------------------------------------------------------
-# Legitimate people own a second device and replace phones, so a new one is not fraud.
+# People own second devices and replace phones: a new one is not fraud.
 SECOND_DEVICE_SHARE = 0.25    # people who use a second device at all
 SECOND_DEVICE_USE_RATE = 0.15 # share of THEIR transactions sent from it
 
 # --- Second card ------------------------------------------------------------
-# Some people receive on cards at two banks, so PAN and PINFL keys can differ
-# (payee_identity). Receiving only: a second sending card splits the history.
+# Paid on cards at two banks, so card and PINFL keys differ (payee_identity).
 SECOND_CARD_SHARE = 0.20      # people who hold a second card
 SECOND_CARD_USE_RATE = 0.40   # share of transfers TO them that arrive on it
 
 # --- Kinship (households stand in for MyID-verified relatives) ---------------
-# Both shares stay non-zero, or is_family would separate the classes by construction.
+# Both non-zero, or is_family_transfer would separate the classes by construction.
 FAMILY_PAYEE_SHARE = 0.35     # frequent payees who are relatives
 FAMILY_FRAUD_SHARE = 0.10     # eligible fraud legs routed to a relative
 
 # --- Card networks (BIN prefixes) -------------------------------------------
-# CONFIRM against current UzCard / HUMO network specifications.
 CARD_NETWORKS = {
     "UZCARD": "8600",
     "HUMO": "9860",
@@ -38,14 +35,13 @@ CARD_NETWORKS = {
 CARD_LENGTH = 16  # 16-digit PAN with a valid Luhn check digit
 
 # --- Currency & amounts (UZS) -----------------------------------------------
-# Global clips; each person also gets a personal typical_amount baseline.
+# Clips; each person also has a typical amount of their own.
 AMOUNT_MIN = 1_000
 AMOUNT_MAX = 50_000_000
 
 # --- Transfer thresholds (UZS) ----------------------------------------------
-# A chosen round figure, not from Regulation 3759 (which sets no sums); it should
-# become a dated BRV multiple. STRUCTURING is placed at 0.85-0.99 of it and the
-# rule watches the same constant, so that recall is partly by construction.
+# A chosen round figure (Regulation 3759 sets no sum). STRUCTURING sits just under it
+# (structuring_fraction) and the rule watches it, so that recall is partly built in.
 STRUCTURING_THRESHOLD = 10_000_000
 
 # A bank limit, not a regulatory one (DAILY_LIMIT_BREACH).
@@ -102,57 +98,38 @@ PROFILE = GeneratorConfig()
 
 
 # --- Issuing banks ------------------------------------------------------------
-# Header `bin,code,name,cards_mln`, one row per BIN. No fallback table: a synthetic
-# one would silently change the bank mix of every generated card.
+# bin,code,name,cards_mln, one row per BIN; nothing stands in for it.
 BANKS_SOURCE = "banks.csv"
 
 
 def _load_banks():
-    """Bank BIN/MFO table from BANKS_SOURCE. Raises if it is missing or empty."""
+    """The banks' BINs from BANKS_SOURCE; raises if it is missing or empty."""
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), BANKS_SOURCE)
     if not os.path.exists(path):
         raise FileNotFoundError(
-            f"bank registry '{BANKS_SOURCE}' not found at {path}. Nothing is "
-            f"substituted for it: market structure decides which bank issues "
-            f"each generated card. "
-            f"Supply the UzCard/HUMO BIN registry as CSV with the header "
-            f"bin,code,name,cards_mln.")
+            f"{path} not found: supply the UzCard/HUMO BIN registry as CSV with the "
+            f"header bin,code,name,cards_mln.")
     with open(path, newline="", encoding="utf-8") as fh:
         rows = [{"bin": r["bin"].strip(), "code": r["code"].strip(),
                  "name": r["name"].strip(),
                  "cards_mln": float(r.get("cards_mln") or 0.0)}
                 for r in csv.DictReader(fh) if r.get("bin", "").strip()]
     if not rows:
-        raise ValueError(
-            f"bank registry '{BANKS_SOURCE}' at {path} carries no BIN row. An "
-            f"empty table is the silent substitution this file exists to prevent.")
+        raise ValueError(f"{path} has no BIN row")
     return rows
 
 
 BANKS = _load_banks()
 
-# Card-share weighting reproduces the real bank concentration; False = uniform,
-# a control.
-WEIGHT_BANKS_BY_CARD_SHARE = True
-
 
 def _bank_weights():
-    """Per-BIN weights from each bank's cards in circulation, split evenly across
-    its BINs."""
-    n = len(BANKS)
-    if not WEIGHT_BANKS_BY_CARD_SHARE:
-        return [1.0 / n] * n
-
+    """Per-BIN weights: each bank's cards in circulation, split across its BINs, so
+    the generated cards follow the real bank concentration."""
     bins_per_bank = Counter(b["name"] for b in BANKS)
-    raw = [float(b.get("cards_mln") or 0.0) / bins_per_bank[b["name"]] for b in BANKS]
+    raw = [b["cards_mln"] / bins_per_bank[b["name"]] for b in BANKS]
     total = sum(raw)
     if total <= 0:
-        # Uniform is a legitimate control; it is only dangerous unchosen.
-        print(f"WARNING: {BANKS_SOURCE} carries no cards_mln figures; bank "
-              f"assignment falls back to UNIFORM weights. The on-us rate drops "
-              f"to about 1/n_banks, a property of the list rather than of the "
-              f"market.", file=sys.stderr)
-        return [1.0 / n] * n
+        raise ValueError(f"{BANKS_SOURCE} has no cards_mln figures")
     return [w / total for w in raw]
 
 

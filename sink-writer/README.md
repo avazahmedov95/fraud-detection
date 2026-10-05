@@ -11,9 +11,8 @@ A service of its own, so a slow or absent warehouse never holds back the job.
 | File | What it does |
 |---|---|
 | `consumer.py` | the service loop: batch by size and time |
-| `ch_writer.py` | batched inserts and the audit hash chain |
+| `ch_writer.py` | batched inserts and the audit hash chain (data-generator's `integrity.py`) |
 | `record.py` | a decision as ClickHouse rows; no I/O |
-| `integrity.py` | the hashes; byte-identical to data-generator's copy |
 | `verify_audit.py` | recomputes the chain over the warehouse and reports any break |
 | `config.py` | connections and batch settings, from the environment |
 | `tests/` | `python -m pytest sink-writer -q` |

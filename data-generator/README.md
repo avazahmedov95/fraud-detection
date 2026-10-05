@@ -14,9 +14,8 @@ fraud's shapes, and a tenth of fraud never reported.
 | `events.py` | one transfer row |
 | `fraud_patterns.py` | APP (a coached victim), ATO (a taken-over account), MULE (fan-in to a drop account), STRUCTURING (sums just under the reporting threshold) |
 | `travel.py` | journeys between regions, so a transfer from another region is not by itself fraud |
-| `kafka_producer.py` | replays the CSV into `transactions.raw`, stamping `ingested_at` and the integrity hash |
-| `integrity.py` | the ingress hash; byte-identical to sink-writer's copy |
-| `payload_crypto.py` | AES-256-GCM payloads for `--encrypt`; byte-identical to stream-processor's copy |
+| `kafka_producer.py` | replays the CSV into `transactions.raw`, stamping `ingested_at` and the integrity hash; `--encrypt` uses stream-processor's `payload_crypto.py` |
+| `integrity.py` | the ingress hash, and the audit chain's hash the sink writer uses |
 | `tests/` | `python -m pytest data-generator -q` |
 
 ```bash

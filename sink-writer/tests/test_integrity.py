@@ -1,7 +1,6 @@
 """Unit tests for the audit integrity chain.
 
-The known-answer vectors pin integrity.py; data-generator/'s copy must match this
-one byte for byte (data-generator/tests/test_shared_copies.py).
+The known-answer vectors pin data-generator/integrity.py, which the writer uses.
 """
 
 

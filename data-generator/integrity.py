@@ -3,9 +3,7 @@
 `ingress_hash` binds a stored decision to the event that produced it;
 `record_hash` folds in the previous hash, so altering, deleting or reordering a
 record breaks every later link, and a published head hash (verify_audit.py)
-anchors the chain.
-
-The copies in data-generator/ and sink-writer/ must stay byte-identical.
+anchors the chain. The generator stamps the first, the sink writer chains the second.
 """
 
 import hashlib

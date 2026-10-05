@@ -16,8 +16,7 @@ Open Grafana at http://localhost:3000 (`admin` / `.env` password). Panels over
 - **Alerts over time** — REVIEW counts bucketed by the dashboard interval.
 - **Alerts by predicted type** — APP / ATO / MULE / STRUCTURING split.
 - **Risk score distribution** — histogram of `final_score`.
-- **Alerts by sender region**. (The channel panel went with the `channel`
-  column on 07.09.2026 - `infra/clickhouse/init/01-schema.sql` says why.)
+- **Alerts by sender region**.
 - **Recent alerts** — latest flagged transactions with their CEP reason codes
   (`rule_hits`) from the WORM audit log.
 

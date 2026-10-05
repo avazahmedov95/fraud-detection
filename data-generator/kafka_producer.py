@@ -5,15 +5,19 @@ stamps ingested_at (t0 for every latency figure) and ingress_hash."""
 import argparse
 import csv
 import json
+import os
+import sys
 import time
 import warnings
 from datetime import datetime
 
 import integrity
-import payload_crypto
 
-# kafka-python warns for any serializer that is not its own ABC subclass; a plain
-# callable is the supported form, and PowerShell shows the warning as an error.
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             "stream-processor"))
+import payload_crypto  # noqa: E402
+
+# kafka-python warns about a plain-callable serializer; PowerShell shows it as an error.
 warnings.filterwarnings("ignore", message=".*does not implement kafka.serializer.Serializer",
                         category=DeprecationWarning)
 
@@ -26,8 +30,7 @@ RAW_FIELDS = [
     "transaction_id", "event_time", "sender_pinfl", "sender_card", "sender_network",
     "receiver_card", "receiver_network", "amount_uzs",
     "device_id", "sender_region", "sender_balance_before",
-    # Session signals the mobile app sends with the confirmation - raw, so the live
-    # job scores the values the model was trained on.
+    # Session signals the app sends with the confirmation.
     "active_call", "secs_login_to_confirm",
 ]
 # NOT sent: receiver_pinfl (the sending bank sees only the destination PAN) and the

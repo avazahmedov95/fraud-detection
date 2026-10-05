@@ -78,7 +78,7 @@ def test_missing_receiver_state_fails_open():
     """An unreachable shared store must keep scoring, not stall or crash."""
     res = evaluate(_ev("s1"), SenderState(), now=1000, receiver_state=None)
     assert "MULE_FAN_IN" not in res["rule_hits"]
-    assert res["decision"] in ("ALLOW", "REVIEW")
+    assert len(res["features"]) == len(F.FEATURE_NAMES)
 
 
 def test_receiver_state_is_pruned_to_the_window():

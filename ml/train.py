@@ -1,11 +1,6 @@
 """Trains the scoring committee on a time-ordered split and writes the model, the
-cutoff the job decides with, and metrics.json.
-
-The earliest 64% of rows fit the committee, the next 16% choose the REVIEW
-cutoff, and every printed figure is measured on the last 20%. Calibration
-is reported beside the AUCs because a rank statistic cannot see a score that
-ranks well yet cannot order a queue.
-"""
+cut-off the job decides with, and metrics.json: the earliest 64% of rows fit, the
+next 16% choose the REVIEW cut-off, the last 20% measure."""
 
 import argparse
 import json
@@ -27,14 +22,10 @@ MODELS_DIR = os.getenv(
 CSV = os.getenv(
     "DATASET_CSV", os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "data-generator", "out", "transactions.csv"))
-REVIEW_THRESHOLD = 0.40   # CEP flag cutoff, for the head-to-head comparison
 TRAIN_SHARE = 0.80        # the earliest 80% trains; the rest is the held-out slice
-FIT_SHARE = 0.80          # of the training slice: the committee fits on this much,
-                          # and the cutoffs are chosen on the rest
+FIT_SHARE = 0.80          # of the training slice: fitting; the rest sets the cut-off
 
-#: Class weighting (negatives over positives) is validated at 1.5% fraud; below
-#: this rate it collapses the ranking, so the default fits unweighted and the
-#: cutoffs are chosen on validation rows (thresholds.json), not fixed.
+#: Below this fraud rate class weighting collapses the ranking (validated at 1.5%).
 MIN_WEIGHTED_POSITIVE_RATE = 0.005
 #: auto: weight above the line, unweighted below it. on / off: force either.
 CLASS_WEIGHTING = os.getenv("CLASS_WEIGHTING", "auto")
@@ -59,9 +50,8 @@ def class_weight(pos, neg, mode=None):
 
 
 def make_model(scale_pos_weight, random_state=42):
-    """The deployed recipe, in one place: the committee and the public-dataset
-    adapters fit it. The L2 penalty bounds the leaf values: without it, Newton steps
-    over vanishing second derivatives reached 18,111 on this data."""
+    """The deployed recipe, in one place. The L2 penalty bounds the leaf values
+    (without it they reached 18,111 on this data)."""
     return lgb.LGBMClassifier(
         n_estimators=400, learning_rate=0.05, num_leaves=31,
         colsample_bytree=0.8, min_child_samples=30, reg_lambda=10.0,
@@ -70,8 +60,7 @@ def make_model(scale_pos_weight, random_state=42):
 
 
 def fit_committee(X, y):
-    """The five fits on these rows and the one booster they merge into, the one the
-    job serves (committee.py); retrain.py fits the same way."""
+    """Five fits on these rows, merged into the one booster the job serves."""
     spw = class_weight(int(y.sum()), int((y == 0).sum()))
     members = []
     for seed in COMMITTEE_SEEDS:
@@ -82,8 +71,7 @@ def fit_committee(X, y):
 
 
 def choose_review_cutoff(y, p):
-    """REVIEW maximises F1 on the validation rows. A REVIEW holds the transfer for a
-    person, who blocks or releases it; the system never blocks on its own."""
+    """The cut-off that maximises F1 on the validation rows."""
     prec, rec, thr = precision_recall_curve(y, p)
     f1 = 2 * prec[:-1] * rec[:-1] / np.maximum(prec[:-1] + rec[:-1], 1e-12)
     return float(thr[int(np.argmax(f1))])
@@ -146,7 +134,7 @@ def main():
           f"recall={mr['recall']:.3f}  f1={mr['f1']:.3f}  "
           f"(tp={mr['tp']} fp={mr['fp']} fn={mr['fn']})")
 
-    cep_flag = (test["cep_score"].values >= REVIEW_THRESHOLD).astype(int)
+    cep_flag = (test["cep_score"].values >= D.C.REVIEW_THRESHOLD).astype(int)
     cep = _metrics(yte, cep_flag.astype(float), 0.5)
     print("\n=== CEP-only vs ML (same test slice) ===")
     print(f"CEP rules    : precision={cep['precision']:.3f}  recall={cep['recall']:.3f}")
@@ -165,8 +153,7 @@ def main():
     print("\nrecall by fraud type (ML at REVIEW):")
     tdf = test.copy()
     tdf["pred"] = (proba >= review).astype(int)
-    # Counts beside the rate: a per-type recall on a few dozen events has a wide
-    # binomial interval.
+    # Counts beside the rate: a few dozen events give a wide interval.
     by_type = {}
     for ftype, grp in tdf[tdf.label == 1].groupby("fraud_type"):
         by_type[ftype] = {"recall": float(grp["pred"].mean()),

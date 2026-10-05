@@ -127,12 +127,9 @@ def _schema_columns(table):
 
 
 def test_scored_columns_match_the_schema_in_order():
-    # `scored_at` is filled by the column DEFAULT at insert time; not sent. The
-    # stage columns come from the migration that adds them.
-    import ch_writer
+    # `scored_at` is filled by the column DEFAULT at insert time; not sent.
     schema = [c for c in _schema_columns("transactions_scored") if c != "scored_at"]
-    added = re.findall(r"ADD COLUMN IF NOT EXISTS (\w+)", ch_writer._migration_sql())
-    assert schema + added == R.SCORED_COLUMNS
+    assert schema == R.SCORED_COLUMNS
 
 
 def test_each_stage_time_lands_in_its_own_column_and_an_untimed_one_is_null():
@@ -162,13 +159,6 @@ def test_the_stage_columns_follow_the_jobs_stages():
     stages = next(n.value for n in tree.body if isinstance(n, ast.Assign)
                   and getattr(n.targets[0], "id", "") == "STAGES")
     assert ast.literal_eval(stages) == R.STAGES
-
-
-def test_the_stage_migration_is_one_query_naming_every_stage_column():
-    import ch_writer
-    sql = ch_writer._migration_sql()
-    assert ";" not in sql and "--" not in sql
-    assert re.findall(r"(stage_\w+_ms)", sql) == R.STAGE_COLUMNS
 
 
 def test_audit_columns_match_the_schema_in_order():

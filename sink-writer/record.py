@@ -1,5 +1,5 @@
-"""Pure mapping of a scored event (the JSON the Flink job emits) into storage rows.
-Column orders match the ClickHouse schema in infra/clickhouse/init/01-schema.sql."""
+"""A decision (the JSON the job emits) as ClickHouse rows; no I/O. Column orders
+match infra/clickhouse/init/."""
 
 import json
 from datetime import datetime, timezone
@@ -36,17 +36,14 @@ _EPOCH = datetime.fromtimestamp(0, timezone.utc)
 
 
 def _epoch_dt(v):
-    """Unix seconds (float) -> datetime, for the latency stamps. Missing stamps
-    become the epoch rather than "now": a plausible-looking `now` would silently
-    report a few milliseconds and hide that nothing was measured."""
+    """Unix seconds -> datetime; a missing stamp is the epoch, never a plausible now."""
     try:
         return datetime.fromtimestamp(float(v), timezone.utc)
     except (TypeError, ValueError, OSError, OverflowError):
         return _EPOCH
 
 
-#: The job's decision path (stream-processor/fraud_job.py STAGES), one column each,
-#: added by infra/clickhouse/init/03-stages.sql.
+#: The job's stages (fraud_job.py), one column each.
 STAGES = ("kafka", "handoff", "decode", "state", "redis", "rules", "model", "decide")
 STAGE_COLUMNS = [f"stage_{s}_ms" for s in STAGES]
 
@@ -61,8 +58,7 @@ SCORED_COLUMNS = [
 
 
 def _stage_times(e: dict) -> list:
-    """One value per stage; None, stored as NULL, where the job did not time it, so
-    an untimed stage never reads as an instant one."""
+    """One value per stage; NULL where the job did not time it, never 0."""
     stages = e.get("stage_ms") or {}
     out = []
     for s in STAGES:
@@ -95,14 +91,12 @@ def scored_row(e: dict) -> list:
         _epoch_dt(e.get("scored_at_job")),
         _f(e.get("scoring_ms")),
     ] + _stage_times(e) + [
-        # The served feature vector; a feature the job did not compute arrives as
-        # None and is stored as NaN, which is how the model reads a missing value.
+        # A feature the job did not compute is NaN, as the model reads it.
         [float("nan") if v is None else float(v) for v in e.get("features") or []],
     ]
 
 
-# fraud.audit_log is append-only / WORM. The chain columns (seq, prev_hash,
-# record_hash) are appended by the writer, which is where the chain state lives.
+# fraud.audit_log is append-only; the writer adds the chain columns.
 AUDIT_CORE_COLUMNS = [
     "transaction_id", "event_time", "decision", "final_score",
     "model_version", "rule_hits", "payload", "ingress_hash",
@@ -110,8 +104,6 @@ AUDIT_CORE_COLUMNS = [
 AUDIT_CHAIN_COLUMNS = ["seq", "prev_hash", "record_hash"]
 AUDIT_COLUMNS = AUDIT_CORE_COLUMNS + AUDIT_CHAIN_COLUMNS
 
-# Derived from the column list rather than written as literals: reordering the
-# columns then cannot silently change what is signed.
 _PAYLOAD_IDX = AUDIT_CORE_COLUMNS.index("payload")
 _INGRESS_IDX = AUDIT_CORE_COLUMNS.index("ingress_hash")
 
@@ -126,22 +118,18 @@ def audit_core(e: dict) -> list:
         e.get("model_version", "") or "",
         list(e.get("rule_hits") or []),
         json.dumps(e, ensure_ascii=False, separators=(",", ":")),
-        # Computed at ingress, carried through Flink untouched. Empty when a producer
-        # predates the integrity chain - visible in a verify pass, not treated as valid.
+        # Stamped by the producer, carried through the job untouched.
         e.get("ingress_hash", "") or "",
     ]
 
 
 def audit_signed_values(core: list) -> list:
-    """The values the chain hash binds: [ingress_hash, payload]. The payload is the
-    authoritative snapshot and the flat columns a projection the verifier checks
-    against it; only strings are hashed, since Float32 columns do not read back
-    byte-for-byte."""
+    """What the chain hash binds: the ingress hash and the payload, the record's
+    authoritative copy (Float32 columns do not read back byte for byte)."""
     return [core[_INGRESS_IDX], core[_PAYLOAD_IDX]]
 
 
 def is_alert(e: dict) -> bool:
-    """A held transfer. A SECOND_LOOK is not one yet: it waits for the second look's
-    own record, which arrives on this topic as REVIEW or ALLOW."""
+    """A held transfer; a SECOND_LOOK becomes REVIEW or ALLOW in a later record."""
     return e.get("decision") == "REVIEW"
 

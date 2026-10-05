@@ -118,9 +118,7 @@ def generate_normal(config, persons, by_pinfl, n_normal, rng, start_dt, trips):
                 rp = cand
 
         receiver = by_pinfl[rp]
-        # Generator-internal: outside the sender's assigned payee set. Not the
-        # stream-derived "new payee" of features.py; _signal_check prints how
-        # often the two differ.
+        # Outside the sender's usual payees; not features.py's is_new_payee.
         is_new = rp not in known[sender.pinfl]
         known[sender.pinfl].add(rp)
 

@@ -1,7 +1,6 @@
 name: fraud-detection
 
-# Local development stack for the real-time P2P fraud-detection pipeline.
-# Bring everything up with `make up` (or `docker compose up -d --build`).
+# The whole pipeline on one machine: .\run.ps1 up (or docker compose up -d --build).
 
 services:
 
@@ -16,27 +15,13 @@ services:
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,SSL:SSL
-      # INTERNAL  -> other containers reach the broker at kafka:9092
-      # EXTERNAL  -> your host reaches it at 127.0.0.1:29092
-      # SSL       -> the same topics over mutual TLS at kafka:9094
-      #
-      # The plaintext and TLS listeners run SIDE BY SIDE on purpose. Both serve
-      # the same partitions, so the security-overhead arms (reviewer point 3)
-      # differ only in which port the clients dial - no redeploy of the broker,
-      # no separate data set, nothing else varying between the measurements.
+      # INTERNAL kafka:9092 for containers, EXTERNAL 127.0.0.1:29092 for the host,
+      # SSL kafka:9094 for mutual TLS: side by side, so measuring TLS changes a port.
       KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:29092,SSL://0.0.0.0:9094
       KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://127.0.0.1:29092,SSL://kafka:9094
-      # These names are dictated by the image, not chosen. apache/kafka's
-      # entrypoint, on seeing SSL:// in the advertised listeners, builds
-      # ssl.keystore.location itself as /etc/kafka/secrets/$..._FILENAME and
-      # reads both passwords out of files in that directory - so setting
-      # ssl.keystore.location directly is ignored, and omitting the FILENAME
-      # variable aborts the container with "!1: unbound variable" from its own
-      # `ensure` helper.
-      #
-      # PKCS12 rather than PEM for the same reason: the script unconditionally
-      # requires a keystore password and a key password, and an unencrypted PEM
-      # key has neither. The clients still use PEM - see infra/kafka/certs.
+      # The names the image's entrypoint requires: it finds the stores under
+      # /etc/kafka/secrets by *_FILENAME and reads their passwords from files there,
+      # hence PKCS12 (the clients use PEM).
       KAFKA_SSL_KEYSTORE_FILENAME: kafka.keystore.p12
       KAFKA_SSL_KEYSTORE_TYPE: PKCS12
       KAFKA_SSL_KEYSTORE_CREDENTIALS: keystore_creds
@@ -44,10 +29,7 @@ services:
       KAFKA_SSL_TRUSTSTORE_FILENAME: kafka.truststore.p12
       KAFKA_SSL_TRUSTSTORE_TYPE: PKCS12
       KAFKA_SSL_TRUSTSTORE_CREDENTIALS: truststore_creds
-      # `required` is what makes this MUTUAL TLS rather than server-side TLS:
-      # the broker rejects any client that cannot present a certificate signed
-      # by the CA. Measuring one-way TLS and calling it mTLS would understate
-      # the handshake, which is the part with a real cost.
+      # Mutual TLS: a client without a certificate signed by the CA is refused.
       KAFKA_SSL_CLIENT_AUTH: required
       KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: https
       KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
@@ -60,9 +42,7 @@ services:
       KAFKA_LOG_DIRS: /var/lib/kafka/data
     volumes:
       - kafka_data:/var/lib/kafka/data
-      # /etc/kafka/secrets is not a choice: the image's entrypoint hardcodes it
-      # as the directory it resolves KAFKA_SSL_*_FILENAME against.
-      # Generate with: .\run.ps1 make-certs   (before the first `up`)
+      # Made by .\run.ps1 make-certs before the first up.
       - ./infra/kafka/certs:/etc/kafka/secrets:ro
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list || exit 1"]
@@ -115,15 +95,9 @@ services:
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ./infra/clickhouse/init:/docker-entrypoint-initdb.d:ro   # schema on first boot
-    # The probe checks the SCHEMA, not just the port. `depends_on:
-    # service_started` only waits for the container to exist, and a ClickHouse
-    # that answers on 8123 but has not yet run docker-entrypoint-initdb.d is
-    # still useless to the sink. sink-writer connects once at boot, so losing
-    # that race used to disable its sink for the whole run.
+    # Healthy once the schema exists, not just the port. Double quotes: in single
+    # ones $$CLICKHOUSE_DB would not expand ($$ is compose's escape for $).
     healthcheck:
-      # Double quotes around the query, not single: `$$CLICKHOUSE_DB` inside
-      # single quotes reaches ClickHouse as a literal and the probe can never
-      # pass. `$$` is compose escaping for a single `$` handed to the shell.
       test:
         - CMD-SHELL
         - >-
@@ -148,17 +122,15 @@ services:
       - "127.0.0.1:${FLINK_UI_PORT}:8081"           # Flink web UI
     environment:
       PAYLOAD_KEY_HEX: ${PAYLOAD_KEY_HEX}
-      # Transport for the job's own Kafka client. PLAINTEXT or SSL; switching
-      # requires a resubmit, unlike the payload arms, because the connector
-      # properties are fixed when the job graph is built.
+      # PLAINTEXT or SSL; switching needs a resubmit.
       KAFKA_SECURITY_PROTOCOL: ${KAFKA_SECURITY_PROTOCOL:-PLAINTEXT}
       KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:-kafka:9092}
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: jobmanager
     volumes:
-      - ./stream-processor:/opt/flink/usrjobs   # PyFlink jobs
+      - ./stream-processor:/opt/flink/usrjobs   # the job's modules
       - flink_checkpoints:/opt/flink/checkpoints
-      - ./infra/kafka/certs:/certs:ro           # mutual TLS arm (point 3)
+      - ./infra/kafka/certs:/certs:ro
     depends_on:
       kafka:
         condition: service_healthy
@@ -168,21 +140,11 @@ services:
     image: fraud-flink:${FLINK_VERSION}
     container_name: taskmanager
     command: taskmanager
-    # Brings the TaskManager back after it dies on its own. It has died that
-    # way: Metaspace exhausted after eight job submissions on one process, and
-    # with no restart policy the cluster sat with zero TaskManagers while every
-    # other container read Up. unless-stopped,
-    # not always: an operator who runs docker compose stop is left alone, and so
-    # is docker compose kill - checked.
+    # Back after it dies on its own (it once ran out of Metaspace).
     restart: unless-stopped
     environment:
-      # Present permanently; it only enables DEcryption. Records without the
-      # envelope prefix are still read as plaintext, so both arms of the
-      # security-overhead measurement run against this one deployment.
+      # Only enables decryption: records without the envelope are read as they are.
       PAYLOAD_KEY_HEX: ${PAYLOAD_KEY_HEX}
-      # Transport for the job's own Kafka client. PLAINTEXT or SSL; switching
-      # requires a resubmit, unlike the payload arms, because the connector
-      # properties are fixed when the job graph is built.
       KAFKA_SECURITY_PROTOCOL: ${KAFKA_SECURITY_PROTOCOL:-PLAINTEXT}
       KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:-kafka:9092}
       FLINK_PROPERTIES: |
@@ -191,10 +153,7 @@ services:
     volumes:
       - ./stream-processor:/opt/flink/usrjobs
       - flink_checkpoints:/opt/flink/checkpoints
-      # The Kafka client runs HERE, not on the jobmanager, so this mount is the
-      # one that actually matters for the mutual-TLS arm. Omitting it fails the
-      # job at SSL initialisation with no mention of a missing file.
-      - ./infra/kafka/certs:/certs:ro
+      - ./infra/kafka/certs:/certs:ro             # the job's Kafka client runs here
     depends_on:
       - jobmanager
     networks: [fraudnet]
@@ -244,10 +203,8 @@ services:
     networks: [fraudnet]
     restart: unless-stopped
 
-  # The second look (second-look/README.md): TabPFN decides the transfers just under
-  # the review cut-off. Its context and cut-offs come from ml/models
-  # (ml/second_look.py); its weights are a gated download fetched by hand, named by
-  # TABPFN_CHECKPOINT in .env. Without them it says so and stops.
+  # TabPFN decides the transfers just under the cut-off (second-look/README.md); its
+  # weights are fetched by hand, named by TABPFN_CHECKPOINT in .env.
   second-look:
     build:
       context: .
@@ -256,9 +213,8 @@ services:
     container_name: second-look
     environment:
       KAFKA_BOOTSTRAP: kafka:9092
-      # Two threads that sleep while they wait. With torch's default - a thread per
-      # core, spinning - an answer took 0.3 s on an idle machine and 6 to 20 s beside
-      # the running stream, whose processes the spinning threads fought for the cores.
+      # Two sleeping threads: torch's spinning default fought the stream for the
+      # cores, and answers took 6 to 20 s.
       OMP_NUM_THREADS: "2"
       OMP_WAIT_POLICY: PASSIVE
     volumes:
@@ -270,10 +226,8 @@ services:
     networks: [fraudnet]
     restart: unless-stopped
 
-  # Retrains the model every day on the decisions the job logged and the verdicts
-  # people gave (ml/retrain.py), and leaves the outcome in
-  # ml/models/retrain_status.json for the demo page. It serves nothing: a person
-  # promotes a better model with run.ps1 promote-model.
+  # Retrains the model daily on the logged decisions and the verdicts (ml/retrain.py);
+  # a person promotes a better one (run.ps1 promote-model).
   retrainer:
     build:
       context: .
@@ -297,8 +251,7 @@ services:
     networks: [fraudnet]
     restart: unless-stopped
 
-  # The demo page (demo/README.md). It shows only a status screen until Kafka,
-  # ClickHouse, the Flink job and the generated dataset are all there.
+  # The demo page (demo/README.md).
   demo:
     build:
       context: .
@@ -320,9 +273,9 @@ services:
     volumes:
       - ./demo:/repo/demo:ro
       - ./data-generator:/repo/data-generator:ro
+      # The generator encrypts with the job's payload_crypto.py.
+      - ./stream-processor:/repo/stream-processor:ro
       - ./case-manager:/repo/case-manager:ro
-      # case-manager's store applies 02-cases.sql on connect and refuses without it.
-      - ./infra/clickhouse/init:/repo/infra/clickhouse/init:ro
       - ./ml/models:/repo/ml/models:ro
       - ./infra/grafana/provisioning/dashboards/json:/repo/infra/grafana/provisioning/dashboards/json:ro
     depends_on:
@@ -342,9 +295,6 @@ volumes:
   redis_data:
   clickhouse_data:
   grafana_data:
-  # Retained Flink checkpoints. Shared by jobmanager and taskmanager, and
-  # deliberately a named volume: checkpoints that die with the container leave a
-  # resubmitted job nothing to restore from, so it re-reads the topic from the
-  # start and re-alerts on transfers that settled days ago.
+  # Outlives the containers, so a resubmitted job resumes instead of rescoring.
   flink_checkpoints:
 

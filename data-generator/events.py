@@ -43,15 +43,9 @@ def gen_session_signals(sender, fraud_type, rng):
 
 
 def round_like_a_person(amount, rng, down=False):
-    """People send round sums - to 10,000, 50,000 or 100,000 UZS, the step growing
-    with the amount.
-
-    `down` where the amount has a ceiling it must not cross: a mule cannot pay on
-    more than it collected, a structuring transfer must stay under the reporting
-    threshold, and a drain cannot exceed the balance. Rounding up there would
-    invent money or break the pattern it belongs to."""
-    # The step is drawn, not fixed: people round to 100,000 and to a million alike,
-    # and a fixed ladder puts a seam at its band edges that separates nothing real.
+    """Rounded as people round, the step growing with the amount. `down` where a
+    ceiling must hold: what a mule collected, the reporting threshold, a balance."""
+    # The step is drawn: a fixed ladder would put a seam at its band edges.
     if amount >= 1_000_000:
         steps, weights = (100_000, 500_000, 1_000_000), (0.55, 0.30, 0.15)
     elif amount >= 100_000:
