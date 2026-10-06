@@ -1,11 +1,12 @@
 # validation
 
-This project's model on two public datasets, through the same feature extractor
-the live job runs. Each adapter prints what the file holds and the model's recall,
-precision and F1 on the held-out rows: one fit of `ml/train.py`'s recipe, its
-cut-off at the F1 peak on the rows just before the test slice. What a dataset lacks
-is switched off rather than faked (`harness.capability_profile`): no call state, no
-region, no session timing, no analysts' verdicts - 18 of the 24 features remain.
+Our model on two public datasets, through the same feature code the live job runs.
+Each adapter prints what the file holds and the model's recall, precision and F1 on
+the test rows. The model is trained the way `ml/train.py` trains it, with the
+cut-off where F1 is highest on the rows just before the test. What a dataset does
+not have is switched off rather than faked (`harness.capability_profile`): no call
+state, no region, no session timing, no analysts' verdicts, so 18 of the 24
+features remain.
 
 | File | What it does |
 |---|---|
@@ -29,5 +30,6 @@ python ibm_aml_adapter.py --file HI-Small_Trans.csv
 | PaySim | 6.36M simulated mobile-money transactions over 31 days, 8,213 fraud | its 532,909 TRANSFER rows, 4,097 fraud; 24 days train, 7 test (920 fraud) | 27.6% | 63.8% | 38.5% |
 | IBM AML HI-Small | 4.49M transfers between bank accounts over 17 days, 5,166 laundering | 60/20/20 by time; 1,653 laundering in test | 44.3% | 79.2% | 56.8% |
 
-PaySim's clock is the hour, so the sub-hour features see nothing there. IBM's
-accounts include banks and companies, so it reports for information only.
+PaySim's clock counts hours, so the features over minutes see nothing there. IBM's
+accounts include banks and companies, not only people, so it is reported for
+information only.

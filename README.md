@@ -1,12 +1,12 @@
 # Real-time fraud detection for instant P2P payments
 
-Scores every instant P2P card transfer **before it settles**: Kafka, a PyFlink job
-with hard rules and a gradient-boosting model, a memory of confirmed fraud accounts
-and a TabPFN second look, calibrated to Uzbekistan's UzCard and HUMO networks. A
-suspicious transfer is held until an analyst blocks or releases it.
+Checks every instant card-to-card transfer **before the money leaves**. Built for
+Uzbekistan's UzCard and HUMO networks from Kafka, a PyFlink job with hard rules and
+a LightGBM model, a memory of confirmed fraud accounts, and a second look by
+TabPFN. A suspicious transfer is held until an analyst blocks or releases it.
 
-> Research prototype on synthetic data: the figures are design targets, not
-> findings from production.
+> A research prototype on generated data: the figures are design targets, not
+> results from a real bank.
 
 ## Components
 
@@ -24,7 +24,7 @@ infra/             Docker images, Kafka, ClickHouse schema, Redis, Grafana
 tools/             boundary_audit.py and the diagram generators
 docs/              the diagrams: architecture, integration (how the services talk),
                    the BPMN process, one transfer step by step
-thesis/            material for the thesis only - not used by the system
+thesis/            notes for the thesis in plain English - not used by the system
 ```
 
 ```
@@ -71,7 +71,8 @@ Then the demo at http://localhost:8090. `.\run.ps1 help` lists every target;
 
 ## Results
 
-The model's figures are in `ml/README.md` (and `ml/models/metrics.json`), the
+Before and after the latest changes, in plain words: `thesis/results.md`. The
+model's exact figures are in `ml/README.md` (and `ml/models/metrics.json`), the
 public datasets in `validation/README.md`.
 
 ## Tests

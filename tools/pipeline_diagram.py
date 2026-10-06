@@ -1,5 +1,5 @@
 """The end-to-end diagram: every component, what it does, and the measured time of
-each stage inside the engine (docs/irp-framing.md 7.1c). Writes docs/pipeline_diagram
+each stage inside the engine (thesis/results.md, Speed). Writes docs/pipeline_diagram
 as PNG, for a document, and SVG, which stays sharp at any size."""
 import os
 
