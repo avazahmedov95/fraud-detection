@@ -1,5 +1,5 @@
 """The analyst's queue in ClickHouse: read the cases the sink writer opens, give or
-change a verdict, record a client's report, count. Shared by the demo and the CLI."""
+change a verdict, record a client's report, count. Used by the page and the CLI."""
 
 import logging
 import os
@@ -9,6 +9,12 @@ import case as CASE
 
 log = logging.getLogger("case_store")
 
+#: The warehouse; the defaults are the Docker network's.
+CLICKHOUSE = dict(host=os.getenv("CLICKHOUSE_HOST", "clickhouse"),
+                  port=int(os.getenv("CLICKHOUSE_HTTP_PORT", "8123")),
+                  username=os.getenv("CLICKHOUSE_USER", "fraud"),
+                  password=os.getenv("CLICKHOUSE_PASSWORD", ""),
+                  database=os.getenv("CLICKHOUSE_DB", "fraud"))
 RECONNECT_INTERVAL_S = 10.0
 _TABLE = "cases"
 #: The accounts in confirmed frauds the job reads (stream-processor/config.py).
@@ -20,8 +26,8 @@ HELD = "decision = 'REVIEW'"
 
 
 class CaseStore:
-    def __init__(self, host, port, user, password, database):
-        self._cfg = dict(host=host, port=port, username=user,
+    def __init__(self, host, port, username, password, database):
+        self._cfg = dict(host=host, port=port, username=username,
                          password=password, database=database)
         self._db = database
         self._client = None

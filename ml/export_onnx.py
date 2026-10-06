@@ -1,5 +1,5 @@
 """Exports the trained committee to ONNX for serving inside Flink, plus model.txt
-for the case-manager's explanations, and checks the ONNX against the native model.
+for the sink writer's explanations, and checks the ONNX against the native model.
 """
 
 import argparse
@@ -20,7 +20,7 @@ CSV = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 ONNX_PATH = os.path.join(MODELS_DIR, "model.onnx")
 PARITY_ROWS = 60_000
 
-#: Plain-text booster for case-manager/explain.py - no scikit-learn needed there -
+#: Plain-text booster for sink-writer/explain.py - no scikit-learn needed there -
 #: written from the same object that is converted to ONNX below.
 BOOSTER_PATH = os.path.join(MODELS_DIR, "model.txt")
 

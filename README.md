@@ -16,8 +16,9 @@ stream-processor/  the PyFlink job: features, rules, model, decision
 ml/                trains and retrains the model, exports ONNX, prepares the second look
 second-look/       TabPFN for the transfers just under the cut-off
 sink-writer/       every decision into ClickHouse, the audit chain, a case for each hold
-case-manager/      the analyst's queue: verdicts, clients' reports, reasons in words
-demo/              one page over the running system
+                   with its reasons in words
+demo/              one page over the running system, and the analyst's queue on it and
+                   on the command line
 validation/        the model on the public datasets PaySim and IBM AML
 infra/             Docker images, Kafka, ClickHouse schema, Redis, Grafana
 tools/             boundary_audit.py and the diagram generators
@@ -81,7 +82,6 @@ Each package is tested on its own (module names repeat across packages):
 python -m pytest stream-processor -q
 python -m pytest data-generator   -q
 python -m pytest sink-writer      -q
-python -m pytest case-manager     -q
 python -m pytest second-look      -q
 python -m pytest demo             -q
 python -m pytest ml               -q

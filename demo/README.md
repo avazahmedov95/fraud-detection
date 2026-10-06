@@ -7,7 +7,9 @@ comes from them.
 
 | File | What it does |
 |---|---|
-| `server.py` | the page's server: sends transfers, reads decisions from `transactions.scored`, the case queue through case-manager's `store.py` |
+| `server.py` | the page's server: sends transfers, reads decisions from `transactions.scored`, the case queue through `store.py` |
+| `store.py` | the analyst's queue in ClickHouse - read, resolve, report, count, holds - and the confirmed fraud accounts in Redis |
+| `queue_cli.py` | the same queue on the command line: `list`, `show`, `resolve`, `report`, `stats` |
 | `index.html` | the page |
 | `about.js` | the "About the project" tab |
 | `results.json` | the figures the results tab quotes, each with the line of the document it came from |
@@ -26,5 +28,18 @@ Tabs:
   run, the model's figures from `ml/models/metrics.json`, the second look, and the two
   public datasets.
 
+A verdict is the analyst's: CONFIRMED_FRAUD blocks the held transfer and puts the
+payee's card into the confirmed fraud accounts the job reads (Redis,
+`confirmed:accounts`); FALSE_POSITIVE releases it; a withdrawn confirmation takes the
+card out unless another case or the history (`confirmed:history`) names it. Verdicts
+and clients' reports are the labels the model is retrained on.
+
+```powershell
+.\run.ps1 cases                                                   # the queue
+.\run.ps1 cases -Case <id> -Verdict CONFIRMED_FRAUD -By analyst.k  # block it
+.\run.ps1 cases -Case <id> -Report -By analyst.k                  # a client's report
+.\run.ps1 cases -Stats                                            # verdicts, precision, holds
+```
+
 It runs as the `demo` container (`docker compose up`); the code is mounted, so a
-restart of the container picks up a change.
+restart of the container picks up a change. The command line runs in it too.

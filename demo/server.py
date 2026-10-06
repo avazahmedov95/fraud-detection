@@ -32,14 +32,15 @@ import pandas as pd
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 GEN = os.path.join(ROOT, "data-generator")
-CM = os.path.join(ROOT, "case-manager")
+SW = os.path.join(ROOT, "sink-writer")
 MODELS = os.path.join(ROOT, "ml", "models")
 # Nothing taken from these imports `config`, which both directories hold.
-sys.path[:0] = [GEN, CM]
+sys.path[:0] = [GEN, SW]
 import case as CASE           # noqa: E402
 import explain as EX          # noqa: E402
 import integrity              # noqa: E402
 import kafka_producer as KP   # noqa: E402
+from store import CLICKHOUSE, CaseStore  # noqa: E402
 
 CSV_PATH = os.path.join(GEN, "out", "transactions.csv")
 TOPIC_RAW, TOPIC_SCORED = "transactions.raw", "transactions.scored"
@@ -54,11 +55,6 @@ LIVE_WINDOW = 1000      # how many of the latest decisions the time figures cove
 PAGE = 20               # rows the stream and the queue show before "show more"
 
 KAFKA = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
-CLICKHOUSE = dict(host=os.getenv("CLICKHOUSE_HOST", "clickhouse"),
-                  port=int(os.getenv("CLICKHOUSE_HTTP_PORT", "8123")),
-                  username=os.getenv("CLICKHOUSE_USER", "fraud"),
-                  password=os.getenv("CLICKHOUSE_PASSWORD", ""),
-                  database=os.getenv("CLICKHOUSE_DB", "fraud"))
 FLINK = os.getenv("FLINK_REST", "http://jobmanager:8081")
 JOB_NAME = "fraud-detection-cep-ml"     # stream-processor/fraud_job.py
 PORT = 8090
@@ -401,7 +397,7 @@ _PHRASE = re.compile(r"^(?P<label>.+?): (?P<shown>.*) \((?P<w>[+-]\d+\.\d+)\)$")
 
 
 def split_phrases(phrases):
-    """case-manager's explanation lines ("...: 3 (+0.42)") back into (feature, value,
+    """The explanation lines ("...: 3 (+0.42)") back into (feature, value,
     weight), so the page can say them in either language."""
     names = {label: name for name, (label, _) in EX._PHRASES.items()}
     items = []
@@ -639,9 +635,7 @@ class App:
 
     def store(self):
         if self._store is None:
-            from store import CaseStore
-            c = CLICKHOUSE
-            s = CaseStore(c["host"], c["port"], c["username"], c["password"], c["database"])
+            s = CaseStore(**CLICKHOUSE)
             s.open()
             self._store = s
         return self._store

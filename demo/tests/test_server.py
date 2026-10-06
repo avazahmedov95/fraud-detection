@@ -8,8 +8,8 @@ from types import SimpleNamespace
 
 import pytest
 
-import server as S  # first: it puts case-manager, where explain lives, on the path
-import explain as EX  # noqa: E402
+import explain as EX
+import server as S
 
 COLUMNS = ["transaction_id", "event_time", "sender_pinfl", "sender_card", "sender_network",
            "receiver_card", "receiver_network", "amount_uzs", "device_id", "sender_region",
@@ -92,15 +92,15 @@ def test_an_ordinary_scenario_is_a_legitimate_transfer_with_history(tmp_path):
     assert sum(role == "history" for _, role in items) == S.HISTORY_ROWS
 
 
-def test_case_manager_phrases_split_back_into_feature_value_weight():
+def test_explanation_phrases_split_back_into_feature_value_weight():
     phrases = [EX.phrase("rcv_distinct_senders_1h", 3.0, 0.42), EX.phrase("hour", 14.0, 0.1)]
     assert S.split_phrases(phrases) == [
         {"feature": "rcv_distinct_senders_1h", "label_en": "distinct senders paying this payee in an hour", "shown": "3", "weight": 0.42},
         {"feature": "hour", "label_en": "hour of day (UTC)", "shown": "14:00", "weight": 0.1}]
 
 
-def test_the_case_queue_reads_only_what_case_manager_stores():
-    """The queue once read a column case-manager had dropped, and failed on every
+def test_the_case_queue_reads_only_what_a_case_stores():
+    """The queue once read a column the cases had dropped, and failed on every
     open case."""
     import case as CASE
     row = dict.fromkeys(CASE.CASE_COLUMNS, "")

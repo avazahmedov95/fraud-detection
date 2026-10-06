@@ -128,9 +128,9 @@ function Get-LatestCheckpoint {
 }
 
 function Restart-TaskManager {
-    # A fresh TaskManager JVM per job: cancelling a job does not give back its
-    # Metaspace, and the eighth job on one process died of it. Waits for a NEW
-    # registration, not the old one lingering until its heartbeat times out.
+    # A fresh TaskManager per job, from the current image: cancelling a job does not
+    # give back its Metaspace, and the eighth job on one process died of it. Waits for
+    # a NEW registration, not the old one lingering until its heartbeat times out.
     $oldIds = $null
     $deadline = (Get-Date).AddSeconds(60)
     while ($null -eq $oldIds -and (Get-Date) -lt $deadline) {
@@ -140,7 +140,7 @@ function Restart-TaskManager {
         } catch { Start-Sleep -Seconds 3 }
     }
     if ($null -eq $oldIds) { throw "Flink REST API unreachable on :8081 - is the stack up?" }
-    docker compose restart taskmanager | Out-Null
+    docker compose up -d --force-recreate --no-deps taskmanager | Out-Null
     $deadline = (Get-Date).AddSeconds(120)
     while ((Get-Date) -lt $deadline) {
         try {
@@ -276,9 +276,9 @@ switch ($Target.ToLower()) {
         # In a container: Smart App Control blocks onnx's native library on this
         # host (infra/ml/Dockerfile). The repository is mounted, so the files land
         # in ml/models.
-        docker build -q -t fraud-ml-export -f infra/ml/Dockerfile .
+        docker compose build -q retrainer
         if ($LASTEXITCODE -eq 0) {
-            docker run --rm -v "$((Get-Location).Path):/repo" fraud-ml-export
+            docker run --rm -v "$((Get-Location).Path):/repo" fraud-ml:latest
         }
     }
 
@@ -344,7 +344,7 @@ switch ($Target.ToLower()) {
         } else {
             $argv = @("list")
         }
-        docker compose exec -T demo python /repo/case-manager/queue_cli.py @argv
+        docker compose exec -T demo python /repo/demo/queue_cli.py @argv
     }
 
     "status" {

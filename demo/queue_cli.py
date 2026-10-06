@@ -5,11 +5,14 @@ client's report, see what holding costs.
 
 import argparse
 import logging
+import os
+import sys
 import time
 
-import config as C
-from case import DISPOSITIONS, held_seconds
-from store import CaseStore
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             "sink-writer"))
+from case import DISPOSITIONS, held_seconds  # noqa: E402
+from store import CLICKHOUSE, CaseStore      # noqa: E402
 
 #: What each verdict does to the held transfer.
 ACTION = {"CONFIRMED_FRAUD": "blocked: the money stays with the payer",
@@ -19,7 +22,7 @@ logging.basicConfig(level=logging.WARNING)
 
 
 def _store():
-    s = CaseStore(C.CH_HOST, C.CH_PORT, C.CH_USER, C.CH_PASSWORD, C.CH_DB)
+    s = CaseStore(**CLICKHOUSE)
     s.open()
     return s
 
@@ -62,7 +65,7 @@ def cmd_list(args):
           f"until it is blocked or released.")
     if unexplained:
         print(f"{unexplained} case(s) have neither a rule hit nor a model "
-              f"explanation. Check the case-manager log: the artefact is "
+              f"explanation. Check the sink-writer log: the artefact is "
               f"missing, or the explaining model disagreed with the scorer.")
 
 

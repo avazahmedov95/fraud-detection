@@ -40,8 +40,8 @@ produce-stream: ## paced replay (200x)
 	cd $(GEN_DIR) && python kafka_producer.py --file out/transactions.csv --realtime --speed 200 --bootstrap 127.0.0.1:29092 --topic transactions.raw
 
 export-model: ## the trained model to ONNX for the job, in a container (infra/ml/Dockerfile)
-	docker build -q -t fraud-ml-export -f infra/ml/Dockerfile .
-	docker run --rm -v "$(CURDIR):/repo" fraud-ml-export
+	docker compose build -q retrainer
+	docker run --rm -v "$(CURDIR):/repo" fraud-ml:latest
 
 seed-confirmed: ## load the history's confirmed fraud accounts into Redis
 	cd ml && python seed_confirmed.py --port $${REDIS_HOST_PORT}
@@ -75,12 +75,12 @@ no-active-job:
 	  echo "  curl -X PATCH 'http://localhost:8081/jobs/<jid>?mode=cancel'"; exit 1; \
 	fi
 
-# A fresh TaskManager JVM before every submission: cancelled jobs do not return
-# Metaspace. run.ps1's Restart-TaskManager, in sh.
+# A fresh TaskManager from the current image before every submission: cancelled
+# jobs do not return Metaspace. run.ps1's Restart-TaskManager, in sh.
 fresh-taskmanager: no-active-job
 	@OLD=$$(curl -s --max-time 10 http://localhost:8081/taskmanagers | \
 	  grep -o '"id":"[^"]*"' | tr '\n' ' '); \
-	$(COMPOSE) restart taskmanager >/dev/null; \
+	$(COMPOSE) up -d --force-recreate --no-deps taskmanager >/dev/null 2>&1; \
 	i=0; while [ $$i -lt 40 ]; do \
 	  for id in $$(curl -s --max-time 10 http://localhost:8081/taskmanagers | \
 	      grep -o '"id":"[^"]*"'); do \

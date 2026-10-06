@@ -131,7 +131,7 @@ class Explainer:
                 # The wheel is installed: a native dependency is missing from the IMAGE.
                 hint = (" - this is a missing system library, not a bad model. "
                         "lightgbm needs the OpenMP runtime; install libgomp1 in "
-                        "the image (see infra/case-manager/Dockerfile).")
+                        "the image (see infra/sink-writer/Dockerfile).")
             log.warning("could not load %s, explanations disabled: %s%s",
                         path, exc, hint)
             self._booster = None

@@ -170,7 +170,7 @@ def b_sink_reads_only_emitted_keys():
 
 
 def b_a_case_reads_only_emitted_keys():
-    read = set(re.findall(r'alert\.get\(\s*"([a-z_]+)"', _read("case-manager", "case.py")))
+    read = set(re.findall(r'alert\.get\(\s*"([a-z_]+)"', _read("sink-writer", "case.py")))
     missing = sorted(read - _job_output_keys())
     if missing:
         return f"a case reads keys the job does not emit: {missing}"
@@ -214,11 +214,12 @@ def b_second_look_record_is_a_job_record():
 def b_a_verdict_reaches_the_job():
     """A CONFIRMED_FRAUD verdict, from the queue or the demo, adds its payee to the
     Redis set the job reads confirmed_cases from; withdrawing it spares the history's."""
-    J, S = pkg("stream-processor", "config"), pkg("case-manager", "store")
-    if J.CONFIRMED_KEY != S.CONFIRMED_KEY:
-        return f"the job reads {J.CONFIRMED_KEY}, a verdict adds to {S.CONFIRMED_KEY}"
-    if J.HISTORY_KEY != S.HISTORY_KEY:
-        return f"the history is seeded into {J.HISTORY_KEY}, a withdrawal checks {S.HISTORY_KEY}"
+    J, store = pkg("stream-processor", "config"), _read("demo", "store.py")
+    keys = dict(re.findall(r'^(CONFIRMED_KEY|HISTORY_KEY) = "([^"]+)"', store, re.M))
+    if J.CONFIRMED_KEY != keys.get("CONFIRMED_KEY"):
+        return f"the job reads {J.CONFIRMED_KEY}, a verdict adds to {keys.get('CONFIRMED_KEY')}"
+    if J.HISTORY_KEY != keys.get("HISTORY_KEY"):
+        return f"the history is seeded into {J.HISTORY_KEY}, a withdrawal checks {keys.get('HISTORY_KEY')}"
     return None
 
 
@@ -246,7 +247,7 @@ def b_scored_row_matches_the_schema():
 
 
 def b_case_row_matches_the_schema():
-    C = pkg("case-manager", "case")
+    C = pkg("sink-writer", "case")
     sql = _read("infra", "clickhouse", "init", "02-cases.sql")
     declared = _ddl_columns(sql, "fraud.cases")
     if declared != C.CASE_COLUMNS:
@@ -434,7 +435,7 @@ def b_every_module_is_documented():
     """Each package's README must mention every .py file beside it."""
     problems = []
     for pkg in ("stream-processor", "data-generator", "ml", "sink-writer",
-                "case-manager", "validation", "tools", "demo", "second-look"):
+                "validation", "tools", "demo", "second-look"):
         d = os.path.join(ROOT, pkg)
         readme = os.path.join(d, "README.md")
         if not os.path.isdir(d) or not os.path.exists(readme):

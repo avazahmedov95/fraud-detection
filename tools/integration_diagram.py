@@ -172,7 +172,7 @@ ROWS = [
     (12, "kafka", "demo server -> Kafka", "produce transactions.raw: the fraud scenarios "
      "and the background replay, generated rows"),
     (13, "sql", "demo server -> ClickHouse", "SELECT the stage times FROM "
-     "transactions_scored; the analyst's queue through case-manager's store.py, the CLI's "
+     "transactions_scored; the analyst's queue through demo/store.py, the CLI's "
      "too: SELECT ... FROM cases FINAL, INSERT a verdict or a client's report as a newer "
      "version"),
     (14, "redis", "demo server -> Redis", "a confirmation SADD confirmed:accounts; its "

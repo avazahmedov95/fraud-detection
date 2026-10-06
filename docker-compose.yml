@@ -275,7 +275,7 @@ services:
       - ./data-generator:/repo/data-generator:ro
       # The generator encrypts with the job's payload_crypto.py.
       - ./stream-processor:/repo/stream-processor:ro
-      - ./case-manager:/repo/case-manager:ro
+      - ./sink-writer:/repo/sink-writer:ro
       - ./ml/models:/repo/ml/models:ro
       - ./infra/grafana/provisioning/dashboards/json:/repo/infra/grafana/provisioning/dashboards/json:ro
     depends_on:

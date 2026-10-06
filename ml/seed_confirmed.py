@@ -1,7 +1,7 @@
 """Seeds the accounts in confirmed frauds the job reads (config.CONFIRMED_KEY) with
 the labelled history: the payees of the frauds confirmed by the first held-out
 transfer, the set the model's test rows start from. The analysts' verdicts add to
-it from there (case-manager/store.py); config.HISTORY_KEY keeps the history's own
+it from there (demo/store.py); config.HISTORY_KEY keeps the history's own
 copy, so withdrawing a verdict cannot take one of these out.
 
     python seed_confirmed.py [--host localhost] [--port 6379]

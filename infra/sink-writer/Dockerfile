@@ -11,6 +11,6 @@ WORKDIR /app
 COPY sink-writer/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY sink-writer/ .
-COPY case-manager/case.py case-manager/explain.py data-generator/integrity.py ./
+COPY data-generator/integrity.py ./
 
 CMD ["python", "-u", "consumer.py"]
