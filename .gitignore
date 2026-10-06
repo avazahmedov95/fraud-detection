@@ -56,6 +56,5 @@ infra/kafka/certs/
 # Editor and shell scratch.
 *.tmp
 
-# Warehouse exports taken before the 2026-09-07 and 2026-09-12 truncations: the
-# evidence behind the audit anchors.
+# Warehouse exports taken before each truncation: the evidence behind the audit anchors.
 _warehouse_backup_*/
