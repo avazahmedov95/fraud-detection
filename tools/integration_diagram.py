@@ -87,19 +87,19 @@ def link(n, way, points, at=None, both=False):
 
 # ------------------------------------------------------------------ the parts
 node(13, 122, "Payment switch", "creates each transfer;\nhere kafka_producer.py")
-topic(40, 122, "transactions.raw", "6 partitions, key: sender card", above=True)
+topic(40, 122, "transactions.raw", "6 parts, in order per sender card", above=True)
 node(70, 122, "Flink job", "fraud_job.py: features,\nrules, model, decision", w=26, h=12,
      edge=ACCENT)
-store(70, 96, "Redis", "payee windows, contacts,\nconfirmed accounts", WAY["redis"])
-topic(101, 131, "transactions.scored", "6 partitions: every decision")
-topic(101, 103, "fraud.second_look", "3 partitions: under the cut-off")
+store(70, 96, "Redis", "who paid each card, contacts,\nconfirmed fraud cards", WAY["redis"])
+topic(101, 131, "transactions.scored", "6 parts: every decision")
+topic(101, 103, "fraud.second_look", "3 parts: just under the cut-off")
 node(136, 131, "sink-writer", "decisions, audit,\na case per hold")
 node(136, 103, "second-look", "TabPFN on the\ntransfers just under")
 store(172, 117, "ClickHouse", "transactions_scored,\naudit_log, cases", WAY["sql"], w=22)
-node(192, 96, "Grafana", "dashboards", w=14, h=8)
+node(192, 96, "Grafana", "charts", w=14, h=8)
 node(110, 83, "demo server", "the page's API, the live stream,\nthe analyst's queue (store.py)", w=26)
 node(150, 83, "Analyst's browser", "the demo page,\nGrafana", w=22)
-node(22, 96, "ml/ and the retrainer", "train, export, second look, seed;\nretrain every day", w=28)
+node(22, 96, "ml/ and the retrainer", "trains the model; the retrainer\nmakes a new one every day", w=28)
 node(70, 136, "Operator: run.ps1, make", "", w=30, h=5)
 
 # ------------------------------------------------------------------ Kafka
@@ -146,50 +146,51 @@ for x0, way, name in ((118, "kafka", "Kafka"), (132, "redis", "Redis"),
 
 # ------------------------------------------------------------------ the table
 ROWS = [
-    (1, "kafka", "Payment switch -> Kafka", "produce transactions.raw: the transfer as JSON "
-     "(an AES-GCM envelope when encrypted), keyed by sender card; ingested_at and "
-     "ingress_hash stamped; the topic keeps Kafka's own append time"),
-    (2, "kafka", "Kafka -> Flink job", "consume transactions.raw, group fraud-cep; the "
-     "offsets live in Flink's checkpoints, every 2 s"),
-    (3, "redis", "Flink job <-> Redis", "read ZRANGEBYSCORE rcv:{payee}, cp:in:{payee}, "
-     "cp:card:{payee}; ZREVRANGE cp:in:{sender}; SMISMEMBER confirmed:accounts; EXISTS "
-     "second-look:alive. Write, one pipeline: ZADD, ZREMRANGEBYSCORE, EXPIRE"),
-    (4, "kafka", "Flink job -> Kafka", "produce transactions.scored: every decision, with "
-     "its feature values and stage times"),
-    (5, "kafka", "Flink job -> Kafka", "produce fraud.second_look: SECOND_LOOK, a score "
-     "just under the cut-off"),
-    (6, "kafka", "Kafka -> second-look", "consume fraud.second_look, group fraud-second-look"),
-    (7, "kafka", "second-look -> Kafka", "produce transactions.scored: the final decision"),
-    (8, "redis", "second-look -> Redis", "SET second-look:alive PX 5000, renewed while it "
-     "answers; without it the job holds the band itself"),
-    (9, "kafka", "Kafka -> sink-writer", "consume transactions.scored, group "
-     "fraud-sink-writer"),
-    (10, "sql", "sink-writer -> ClickHouse", "HTTP 8123. INSERT INTO transactions_scored "
-     "and audit_log (each record hash-chained), and INTO cases for a hold, its reasons from "
-     "explain.py over the served model; SELECT seq, record_hash for the chain's head"),
-    (11, "kafka", "Kafka -> demo server", "consume transactions.scored from the latest "
-     "offset, no group: the live stream"),
-    (12, "kafka", "demo server -> Kafka", "produce transactions.raw: the fraud scenarios "
-     "and the background replay, generated rows"),
-    (13, "sql", "demo server -> ClickHouse", "SELECT the stage times FROM "
-     "transactions_scored; the analyst's queue through demo/store.py, the CLI's "
-     "too: SELECT ... FROM cases FINAL, INSERT a verdict or a client's report as a newer "
-     "version"),
-    (14, "redis", "demo server -> Redis", "a confirmation SADD confirmed:accounts; its "
-     "withdrawal SREM, unless another case or SISMEMBER confirmed:history keeps the card"),
-    (15, "http", "demo server -> Flink", "GET :8081/jobs/overview - the page opens only "
+    (1, "kafka", "Payment switch -> Kafka", "sends each transfer to transactions.raw as JSON "
+     "(encrypted, if switched on), keyed by sender card, with its arrival time "
+     "(ingested_at) and hash (ingress_hash)"),
+    (2, "kafka", "Kafka -> Flink job", "the job reads transactions.raw (group fraud-cep); "
+     "its read position is saved every 2 s"),
+    (3, "redis", "Flink job <-> Redis", "reads the payee's side: ZRANGEBYSCORE rcv:{payee}, "
+     "cp:in:{payee}, cp:card:{payee}; ZREVRANGE cp:in:{sender}; SMISMEMBER confirmed:accounts; "
+     "EXISTS second-look:alive. Writes back in one go: ZADD, ZREMRANGEBYSCORE, EXPIRE"),
+    (4, "kafka", "Flink job -> Kafka", "every decision to transactions.scored, with "
+     "its feature values and the time of each step"),
+    (5, "kafka", "Flink job -> Kafka", "transfers just under the cut-off to "
+     "fraud.second_look"),
+    (6, "kafka", "Kafka -> second-look", "reads fraud.second_look (group fraud-second-look)"),
+    (7, "kafka", "second-look -> Kafka", "its final decision to transactions.scored"),
+    (8, "redis", "second-look -> Redis", "SET second-look:alive PX 5000 while it is working; "
+     "without this flag the job holds these transfers itself"),
+    (9, "kafka", "Kafka -> sink-writer", "reads transactions.scored (group "
+     "fraud-sink-writer)"),
+    (10, "sql", "sink-writer -> ClickHouse", "HTTP 8123: INSERT every decision into "
+     "transactions_scored and audit_log (each record linked to the one before by a hash); "
+     "INSERT a case with its reasons into cases for every hold; SELECT seq, record_hash to "
+     "continue the chain"),
+    (11, "kafka", "Kafka -> demo server", "reads transactions.scored from the newest "
+     "message: the live stream"),
+    (12, "kafka", "demo server -> Kafka", "sends the fraud scenarios and the background "
+     "stream of generated transfers to transactions.raw"),
+    (13, "sql", "demo server -> ClickHouse", "SELECT the step times FROM "
+     "transactions_scored; the analyst's queue (demo/store.py, also the command line): "
+     "SELECT ... FROM cases FINAL; a verdict or a client's report is INSERTed as a newer "
+     "version of the case"),
+    (14, "redis", "demo server -> Redis", "a confirmed fraud: SADD confirmed:accounts; "
+     "cancelled: SREM, unless another case or confirmed:history (SISMEMBER) still has the card"),
+    (15, "http", "demo server -> Flink", "GET :8081/jobs/overview: the page opens only "
      "while the job runs"),
     (16, "http", "browser <-> demo server", ":8090 GET /api/status, /api/stream, /api/live, "
      "/api/cases, /api/results, /api/episode/{id}; POST /api/episode, /api/background, "
      "/api/cases/{id}/resolve, /api/report"),
-    (17, "http", "browser -> Grafana", ":3000, also framed in the demo page; its own login"),
-    (18, "sql", "Grafana -> ClickHouse", "native protocol, port 9000: SELECT ... FROM "
-     "transactions_scored, eight panels"),
+    (17, "http", "browser -> Grafana", ":3000, also shown inside the demo page; its own login"),
+    (18, "sql", "Grafana -> ClickHouse", "port 9000: SELECT ... FROM transactions_scored "
+     "for eight charts"),
     (19, "file", "ml/ -> the services", "model.onnx, thresholds.json, second_look.json "
-     "beside the job (run.ps1 serve-prep); ml/models mounted into the sink writer "
+     "copied next to the job (run.ps1 serve-prep); ml/models shared with the sink writer "
      "(model.txt explains the cases), second-look and the demo"),
     (20, "redis", "ml/seed_confirmed.py -> Redis", "SADD confirmed:accounts and "
-     "confirmed:history: the history's confirmed fraud accounts"),
+     "confirmed:history: the confirmed fraud cards from the history"),
     (21, "sql", "retrainer -> ClickHouse", "every day: SELECT transaction_id, features FROM "
      "transactions_scored; SELECT transaction_id FROM cases FINAL WHERE disposition = "
      "'CONFIRMED_FRAUD'"),

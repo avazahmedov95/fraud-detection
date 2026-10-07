@@ -12,39 +12,39 @@ OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
 
 POOL = dict(x=160, y=60, w=3300)
 LANES = [("Lane_channel", "Payment channel", 160),
-         ("Lane_flink", "Apache Flink job", 360),
+         ("Lane_flink", "Flink job", 360),
          ("Lane_second", "Second look", 180),
          ("Lane_sink", "Sink writer", 260),
-         ("Lane_data", "Data stores", 140),
+         ("Lane_data", "Stored data", 140),
          ("Lane_case", "Cases (sink writer)", 150),
-         ("Lane_analyst", "Fraud analyst", 150),
+         ("Lane_analyst", "Analyst", 150),
          ("Lane_model", "Model owner", 190)]
 
 NODES = [
     # id, kind, name, lane, (x, y, w, h) of the shape, its label's box or None
     ("Start", "startEvent", "Transfer confirmed by the payer", 0,
      (232, 122, 36, 36), (195, 162, 110, 28)),
-    ("Create", "serviceTask", "Create the transfer event\n[payment switch, simulated in Python]",
+    ("Create", "serviceTask", "Create the transfer\n[payment switch; here our generator]",
      0, (310, 90, 180, 100), None),
-    ("Publish", "sendTask", "Publish the event\n[Kafka: transactions.raw]",
+    ("Publish", "sendTask", "Send it to the queue\n[Kafka: transactions.raw]",
      0, (530, 90, 180, 100), None),
-    ("Read", "serviceTask", "Read and decode the event\n[Flink Kafka source]",
+    ("Read", "serviceTask", "Read the transfer\n[Flink]",
      1, (530, 350, 180, 100), None),
-    ("Sender", "serviceTask", "Load the sender's history\n[Flink keyed state]",
+    ("Sender", "serviceTask", "Load the sender's history\n[kept in Flink]",
      1, (750, 350, 180, 100), None),
     ("Receiver", "serviceTask",
-     "Read and update the receiver's recent payers, look up confirmed fraud accounts\n[Redis]",
+     "Read and update who paid the payee; check confirmed fraud cards\n[Redis]",
      1, (970, 350, 180, 100), None),
-    ("Features", "serviceTask", "Compute the features\n[Python in Flink]",
+    ("Features", "serviceTask", "Compute the 24 features\n[Python in Flink]",
      1, (1190, 350, 180, 100), None),
     ("Split", "parallelGateway", "", 1, (1410, 375, 50, 50), None),
-    ("Rules", "businessRuleTask", "Check the hard rules, name the alert type\n[Python in Flink]",
+    ("Rules", "businessRuleTask", "Run the 10 rules; name the alert type\n[Python in Flink]",
      1, (1500, 235, 180, 100), None),
-    ("Model", "serviceTask", "Score the risk\n[LightGBM via ONNX Runtime]",
+    ("Model", "serviceTask", "Score the risk\n[LightGBM model]",
      1, (1500, 465, 180, 100), None),
     ("Join", "parallelGateway", "", 1, (1720, 375, 50, 50), None),
     ("Decision", "businessRuleTask",
-     "Decide from the model score and the rule results\n[Python in Flink]",
+     "Decide from the risk and the rules\n[Python in Flink]",
      1, (1810, 350, 180, 100), None),
     ("Decide", "exclusiveGateway", "Hold the transfer?",
      1, (2030, 375, 50, 50), (1995, 347, 120, 20)),
@@ -53,20 +53,20 @@ NODES = [
      1, (2130, 465, 180, 100), None),
     ("Band", "exclusiveGateway", "Just under the cut-off?",
      1, (2130, 375, 50, 50), (2100, 430, 110, 28)),
-    ("AllowOut", "sendTask", "Publish the decision ALLOW\n[Kafka: transactions.scored]",
+    ("AllowOut", "sendTask", "Allow the transfer\n[Kafka: transactions.scored]",
      1, (2230, 228, 180, 100), None),
-    ("Answering", "exclusiveGateway", "Second look answering?\n[flag in Redis]",
+    ("Answering", "exclusiveGateway", "Is the second look working?\n[flag in Redis]",
      1, (2225, 375, 50, 50), (2185, 330, 130, 44)),
-    ("SecondOut", "sendTask", "Hold it for a second look\n[Kafka: fraud.second_look]",
+    ("SecondOut", "sendTask", "Send it to the second look\n[Kafka: fraud.second_look]",
      1, (2320, 350, 180, 100), None),
     ("Late", "exclusiveGateway", "Waited 5 s or more?",
      2, (2385, 645, 50, 50), (2270, 598, 110, 28)),
-    ("HeldLateOut", "intermediateThrowEvent", "Held unscored: waited too long",
+    ("HeldLateOut", "intermediateThrowEvent", "Held: no answer in time",
      2, (2302, 652, 36, 36), (2262, 692, 116, 28)),
     ("Look", "serviceTask",
-     "Score it with TabPFN, publish the decision\n[Python, TabPFN; answering flag in Redis]",
+     "Check it with TabPFN, send the decision\n[TabPFN]",
      2, (2475, 620, 180, 100), None),
-    ("TabCut", "exclusiveGateway", "TabPFN at or above its cut-off?",
+    ("TabCut", "exclusiveGateway", "Does TabPFN see fraud?",
      2, (2695, 645, 50, 50), (2665, 608, 110, 28)),
     ("HeldOut", "intermediateThrowEvent", "Held by the second look",
      2, (2795, 652, 36, 36), (2837, 656, 100, 28)),
@@ -80,7 +80,7 @@ NODES = [
     ("LetGoIn", "intermediateCatchEvent", "Let go by the second look",
      3, (2932, 932, 36, 36), (2974, 941, 110, 28)),
     ("Store", "serviceTask",
-     "Store the decision, its feature values and its audit record\n[Python → ClickHouse]",
+     "Save the decision and its audit record\n[ClickHouse]",
      3, (3015, 790, 180, 100), None),
     ("Recorded", "endEvent", "Decision recorded",
      3, (3235, 822, 36, 36), (3279, 830, 110, 20)),
@@ -88,11 +88,11 @@ NODES = [
      5, (2220, 1185, 180, 100), None),
     ("Opened", "intermediateThrowEvent", "Case opened",
      5, (2440, 1217, 36, 36), (2415, 1257, 86, 20)),
-    ("Review", "userTask", "Review the held transfer\n[analyst queue: demo page or CLI]",
+    ("Review", "userTask", "Look at the held transfer\n[demo page or command line]",
      6, (2470, 1335, 180, 100), None),
     ("Verdict", "userTask",
-     "Block it or release it, or correct an earlier verdict\n[ClickHouse; the payee into or "
-     "out of Redis]",
+     "Block or release it, or fix an earlier decision\n[ClickHouse; the payee's card into "
+     "or out of Redis]",
      6, (2690, 1335, 180, 100), None),
     ("Fraud", "exclusiveGateway", "Fraud?", 6, (2910, 1360, 50, 50), (2885, 1326, 46, 18)),
     ("Blocked", "endEvent", "Transfer blocked", 6, (3010, 1332, 36, 36), (3054, 1340, 110, 20)),
@@ -100,19 +100,19 @@ NODES = [
      (3054, 1410, 110, 20)),
     ("ReportIn", "startEvent", "A client reports a fraud the system let go", 6,
      (1700, 1367, 36, 36), (1650, 1407, 136, 28)),
-    ("Report", "userTask", "Record the client's report: a case confirmed at once\n"
-     "[demo page or CLI; the payee into Redis]", 6, (1780, 1335, 180, 100), None),
+    ("Report", "userTask", "Record the client's report: the case is confirmed at once\n"
+     "[demo page or command line; the payee into Redis]", 6, (1780, 1335, 180, 100), None),
     ("Reported", "endEvent", "Report recorded", 6, (2000, 1367, 36, 36), (1975, 1407, 86, 20)),
-    ("Daily", "startEvent", "Every day: the retrainer service", 7,
+    ("Daily", "startEvent", "Every day: the retrainer", 7,
      (2560, 1522, 36, 36), (2515, 1562, 126, 28)),
-    ("Retrain", "serviceTask", "Retrain on the logged decisions, labelled by people; "
-     "read the drift\n[retrainer: ml/retrain.py]", 7, (2640, 1490, 180, 100), None),
-    ("Better", "exclusiveGateway", "Better at the same workload?", 7, (2860, 1515, 50, 50),
+    ("Retrain", "serviceTask", "Train a new model on the analysts' decisions; "
+     "check what has changed\n[retrainer]", 7, (2640, 1490, 180, 100), None),
+    ("Better", "exclusiveGateway", "Better with as many alerts?", 7, (2860, 1515, 50, 50),
      (2805, 1482, 160, 14)),
-    ("Promote", "userTask", "A person promotes it\n[run.ps1 promote-model]", 7,
+    ("Promote", "userTask", "A person switches it on\n[run.ps1 promote-model]", 7,
      (2960, 1490, 180, 100), None),
-    ("Served", "endEvent", "New model served", 7, (3180, 1522, 36, 36), (3224, 1530, 100, 20)),
-    ("Kept", "endEvent", "Served model kept", 7, (3000, 1592, 36, 36), (3044, 1600, 110, 20)),
+    ("Served", "endEvent", "New model in use", 7, (3180, 1522, 36, 36), (3224, 1530, 100, 20)),
+    ("Kept", "endEvent", "Old model kept", 7, (3000, 1592, 36, 36), (3044, 1600, 110, 20)),
 ]
 
 FLOWS = [
@@ -189,9 +189,9 @@ TRIGGERS = {"ReportIn": "messageEventDefinition", "Daily": "timerEventDefinition
 
 STORES = [
     # id, name, (x, y, w, h), label's box
-    ("Redis", "Redis: recent payers, confirmed fraud accounts", (1035, 1055, 50, 50),
+    ("Redis", "Redis: who paid each card, confirmed fraud cards", (1035, 1055, 50, 50),
      (870, 1062, 150, 36)),
-    ("Cases", "ClickHouse: cases, verdicts, clients' reports", (2350, 1055, 50, 50),
+    ("Cases", "ClickHouse: cases, analysts' decisions, clients' reports", (2350, 1055, 50, 50),
      (2406, 1066, 130, 28)),
     ("Warehouse", "ClickHouse: decisions with their features, audit log",
      (3080, 1055, 50, 50), (3040, 1110, 140, 28)),
@@ -217,8 +217,8 @@ DATA = [
 
 NOTES = [
     # id, text, (x, y, w, h), the task it explains, waypoints
-    ("Note_decision", "Hold (REVIEW) at or above the alert cut-off, or when a "
-                      "mandatory rule fired; just under it, ask the second look; "
+    ("Note_decision", "Hold if the risk is at or above the alert level, or a "
+                      "required rule fired; just under it, ask the second look; "
                       "otherwise allow",
      (1785, 224, 230, 70), "Decision", [(1900, 350), (1900, 294)]),
 ]
@@ -352,7 +352,7 @@ MERMAID = """sequenceDiagram
     actor Customer
     participant App as Bank app
     participant Kafka as Kafka
-    participant Flink as Flink engine
+    participant Flink as Flink job
     participant Redis as Redis
     participant Second as Second look
     participant Sink as Sink writer
@@ -360,23 +360,23 @@ MERMAID = """sequenceDiagram
     actor Analyst
 
     Customer->>App: confirms a transfer
-    App->>Kafka: transactions.raw, keyed by sender (1.1 ms)
-    Kafka->>Flink: the record, fetched and batched (25 ms)
-    Flink->>Flink: decode (0.05 ms)
-    Flink->>Flink: read this sender's state (1.9 ms)
-    Flink->>Redis: how many people paid this receiver? any confirmed fraud accounts?
-    Redis-->>Flink: counts for the hour, day and week, and the confirmed ones (1.6 ms)
-    Flink->>Flink: build 24 features, run the 10 hard rules (0.65 ms)
+    App->>Kafka: transactions.raw, in order per sender (1.1 ms)
+    Kafka->>Flink: the transfer, in batches (25 ms)
+    Flink->>Flink: read the transfer (0.05 ms)
+    Flink->>Flink: load this sender's history (1.9 ms)
+    Flink->>Redis: how many people paid this card? any confirmed fraud cards?
+    Redis-->>Flink: counts for the hour, day and week, and the confirmed cards (1.6 ms)
+    Flink->>Flink: compute 24 features, run the 10 rules (0.65 ms)
     Flink->>Flink: score with the model (0.40 ms)
     Flink->>Flink: decide: allow, hold, or ask the second look (0.03 ms)
-    Flink->>Kafka: transactions.scored, with the features (31 ms in all)
+    Flink->>Kafka: transactions.scored, the decision with its features (31 ms in all)
     Kafka->>Second: fraud.second_look, a transfer just under the cut-off
     Second->>Kafka: TabPFN's decision, about 0.3 s later
     Kafka->>Sink: every decision
-    Sink->>DB: the decision, its audit record and, for a hold, a case with its reason in words
-    DB->>Analyst: the held transfer appears in the queue (demo or CLI)
-    Analyst->>DB: block it or release it, or correct an earlier verdict
-    Analyst->>Redis: a block adds the payee to the confirmed fraud accounts; a withdrawn one takes it out
+    Sink->>DB: the decision, its audit record and, for a hold, a case with its reasons in words
+    DB->>Analyst: the held transfer appears in the queue (demo page or command line)
+    Analyst->>DB: block or release it, or fix an earlier decision
+    Analyst->>Redis: a block puts the payee's card into the confirmed fraud cards; a cancelled one takes it out
 """
 path = os.path.join(OUT, "pipeline_sequence.mmd")
 with open(path, "w", encoding="utf-8", newline="\n") as fh:
@@ -392,28 +392,28 @@ INK, MUTED, LINE = "#14202e", "#5b6b7f", "#c7d2e0"
 ACCENT, ALERT = "#1c63c4", "#b34310"
 FAMILY = ["Calibri", "DejaVu Sans"]
 
-ACTORS = ["Bank app", "Kafka", "Flink engine", "Redis", "Second look", "Sink writer",
+ACTORS = ["Bank app", "Kafka", "Flink job", "Redis", "Second look", "Sink writer",
           "ClickHouse", "Analyst"]
 X = {name: 9 + i * 20.2 for i, name in enumerate(ACTORS)}
 
 MESSAGES = [
-    ("Bank app", "Kafka", "the transfer, keyed by sender", "1.1 ms", False),
-    ("Kafka", "Flink engine", "the record, fetched and batched", "25 ms", False),
-    ("Flink engine", "Flink engine", "decode the record", "0.05 ms", False),
-    ("Flink engine", "Flink engine", "read the sender's state", "1.9 ms", False),
-    ("Flink engine", "Redis", "who paid this receiver? confirmed fraud accounts?", "", False),
-    ("Redis", "Flink engine", "counts for the hour, day, week; confirmed ones", "1.6 ms", True),
-    ("Flink engine", "Flink engine", "build 24 features, run the 10 hard rules", "0.65 ms", False),
-    ("Flink engine", "Flink engine", "score with the model", "0.40 ms", False),
-    ("Flink engine", "Flink engine", "decide: allow, hold, or ask the second look", "0.03 ms", False),
-    ("Flink engine", "Kafka", "scored, with its features", "31 ms in all", False),
+    ("Bank app", "Kafka", "the transfer, in order per sender", "1.1 ms", False),
+    ("Kafka", "Flink job", "the transfer, in batches", "25 ms", False),
+    ("Flink job", "Flink job", "read the transfer", "0.05 ms", False),
+    ("Flink job", "Flink job", "load the sender's history", "1.9 ms", False),
+    ("Flink job", "Redis", "who paid this card? confirmed fraud cards?", "", False),
+    ("Redis", "Flink job", "counts for the hour, day, week; confirmed cards", "1.6 ms", True),
+    ("Flink job", "Flink job", "compute 24 features, run the 10 rules", "0.65 ms", False),
+    ("Flink job", "Flink job", "score with the model", "0.40 ms", False),
+    ("Flink job", "Flink job", "decide: allow, hold, or ask the second look", "0.03 ms", False),
+    ("Flink job", "Kafka", "the decision, with its features", "31 ms in all", False),
     ("Kafka", "Second look", "a transfer just under the cut-off", "", False),
     ("Second look", "Kafka", "TabPFN's decision", "about 0.3 s", True),
     ("Kafka", "Sink writer", "every decision", "", False),
-    ("Sink writer", "ClickHouse", "the decision, its audit record, a case per hold", "", False),
+    ("Sink writer", "ClickHouse", "the decision, its audit record, a case for a hold", "", False),
     ("ClickHouse", "Analyst", "the held transfer, in the queue", "", False),
-    ("Analyst", "ClickHouse", "block, release, or correct a verdict", "", True),
-    ("Analyst", "Redis", "a block adds the payee; a withdrawn one takes it out", "", False),
+    ("Analyst", "ClickHouse", "block, release, or fix a decision", "", True),
+    ("Analyst", "Redis", "a block adds the payee's card; a cancelled one takes it out", "", False),
 ]
 
 fig, ax = plt.subplots(figsize=(16, 11))
@@ -424,8 +424,8 @@ fig.patch.set_facecolor("white")
 
 ax.text(0, 106, "One transfer through the system, step by step",
         fontsize=18, fontweight="bold", color=INK, family=FAMILY, va="bottom")
-ax.text(0, 102.8, "The same path as the diagram, read top to bottom. Times are averages over "
-                 "1,000 transfers at 10 a second, measured on the running stack on 5 October 2026, on battery.",
+ax.text(0, 102.8, "The same path as the diagram, read from top to bottom. Times are averages over "
+                 "1,000 transfers at 10 a second, measured on the running system on 5 October 2026, on battery.",
         fontsize=10.5, color=MUTED, family=FAMILY, va="bottom")
 
 top_y, step = 96, 4.6
@@ -464,8 +464,8 @@ for src, dst, text, when, dashed in MESSAGES:
             ax.text(mid, y - 2.4, when, ha="center", va="bottom", fontsize=8.5,
                     color=ACCENT, fontweight="bold", family=FAMILY, zorder=4)
 
-ax.text(0, 1.5, "An alert holds the transfer until a person blocks or releases it; nothing is "
-                "blocked automatically. 999 of 1000 transfers stop at the warehouse.",
+ax.text(0, 1.5, "An alert holds the transfer until a person blocks or releases it; the system "
+                "blocks nothing by itself. 999 of 1,000 transfers are simply allowed and saved.",
         fontsize=9, color=MUTED, family=FAMILY, va="bottom")
 
 for ext in ("png", "svg"):

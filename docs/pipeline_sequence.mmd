@@ -3,7 +3,7 @@ sequenceDiagram
     actor Customer
     participant App as Bank app
     participant Kafka as Kafka
-    participant Flink as Flink engine
+    participant Flink as Flink job
     participant Redis as Redis
     participant Second as Second look
     participant Sink as Sink writer
@@ -11,20 +11,20 @@ sequenceDiagram
     actor Analyst
 
     Customer->>App: confirms a transfer
-    App->>Kafka: transactions.raw, keyed by sender (1.1 ms)
-    Kafka->>Flink: the record, fetched and batched (25 ms)
-    Flink->>Flink: decode (0.05 ms)
-    Flink->>Flink: read this sender's state (1.9 ms)
-    Flink->>Redis: how many people paid this receiver? any confirmed fraud accounts?
-    Redis-->>Flink: counts for the hour, day and week, and the confirmed ones (1.6 ms)
-    Flink->>Flink: build 24 features, run the 10 hard rules (0.65 ms)
+    App->>Kafka: transactions.raw, in order per sender (1.1 ms)
+    Kafka->>Flink: the transfer, in batches (25 ms)
+    Flink->>Flink: read the transfer (0.05 ms)
+    Flink->>Flink: load this sender's history (1.9 ms)
+    Flink->>Redis: how many people paid this card? any confirmed fraud cards?
+    Redis-->>Flink: counts for the hour, day and week, and the confirmed cards (1.6 ms)
+    Flink->>Flink: compute 24 features, run the 10 rules (0.65 ms)
     Flink->>Flink: score with the model (0.40 ms)
     Flink->>Flink: decide: allow, hold, or ask the second look (0.03 ms)
-    Flink->>Kafka: transactions.scored, with the features (31 ms in all)
+    Flink->>Kafka: transactions.scored, the decision with its features (31 ms in all)
     Kafka->>Second: fraud.second_look, a transfer just under the cut-off
     Second->>Kafka: TabPFN's decision, about 0.3 s later
     Kafka->>Sink: every decision
-    Sink->>DB: the decision, its audit record and, for a hold, a case with its reason in words
-    DB->>Analyst: the held transfer appears in the queue (demo or CLI)
-    Analyst->>DB: block it or release it, or correct an earlier verdict
-    Analyst->>Redis: a block adds the payee to the confirmed fraud accounts; a withdrawn one takes it out
+    Sink->>DB: the decision, its audit record and, for a hold, a case with its reasons in words
+    DB->>Analyst: the held transfer appears in the queue (demo page or command line)
+    Analyst->>DB: block or release it, or fix an earlier decision
+    Analyst->>Redis: a block puts the payee's card into the confirmed fraud cards; a cancelled one takes it out

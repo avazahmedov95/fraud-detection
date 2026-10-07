@@ -10,7 +10,7 @@
         <bpmn:flowNodeRef>Create</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Publish</bpmn:flowNodeRef>
       </bpmn:lane>
-      <bpmn:lane id="Lane_flink" name="Apache Flink job">
+      <bpmn:lane id="Lane_flink" name="Flink job">
         <bpmn:flowNodeRef>Read</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Sender</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Receiver</bpmn:flowNodeRef>
@@ -44,13 +44,13 @@
         <bpmn:flowNodeRef>Store</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Recorded</bpmn:flowNodeRef>
       </bpmn:lane>
-      <bpmn:lane id="Lane_data" name="Data stores">
+      <bpmn:lane id="Lane_data" name="Stored data">
       </bpmn:lane>
       <bpmn:lane id="Lane_case" name="Cases (sink writer)">
         <bpmn:flowNodeRef>Case</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Opened</bpmn:flowNodeRef>
       </bpmn:lane>
-      <bpmn:lane id="Lane_analyst" name="Fraud analyst">
+      <bpmn:lane id="Lane_analyst" name="Analyst">
         <bpmn:flowNodeRef>Review</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Verdict</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Fraud</bpmn:flowNodeRef>
@@ -72,23 +72,23 @@
     <bpmn:startEvent id="Start" name="Transfer confirmed by the payer">
       <bpmn:outgoing>F_start</bpmn:outgoing>
     </bpmn:startEvent>
-    <bpmn:serviceTask id="Create" name="Create the transfer event&#10;[payment switch, simulated in Python]">
+    <bpmn:serviceTask id="Create" name="Create the transfer&#10;[payment switch; here our generator]">
       <bpmn:incoming>F_start</bpmn:incoming>
       <bpmn:outgoing>F_create</bpmn:outgoing>
     </bpmn:serviceTask>
-    <bpmn:sendTask id="Publish" name="Publish the event&#10;[Kafka: transactions.raw]">
+    <bpmn:sendTask id="Publish" name="Send it to the queue&#10;[Kafka: transactions.raw]">
       <bpmn:incoming>F_create</bpmn:incoming>
       <bpmn:outgoing>F_publish</bpmn:outgoing>
     </bpmn:sendTask>
-    <bpmn:serviceTask id="Read" name="Read and decode the event&#10;[Flink Kafka source]">
+    <bpmn:serviceTask id="Read" name="Read the transfer&#10;[Flink]">
       <bpmn:incoming>F_publish</bpmn:incoming>
       <bpmn:outgoing>F_read</bpmn:outgoing>
     </bpmn:serviceTask>
-    <bpmn:serviceTask id="Sender" name="Load the sender's history&#10;[Flink keyed state]">
+    <bpmn:serviceTask id="Sender" name="Load the sender's history&#10;[kept in Flink]">
       <bpmn:incoming>F_read</bpmn:incoming>
       <bpmn:outgoing>F_sender</bpmn:outgoing>
     </bpmn:serviceTask>
-    <bpmn:serviceTask id="Receiver" name="Read and update the receiver's recent payers, look up confirmed fraud accounts&#10;[Redis]">
+    <bpmn:serviceTask id="Receiver" name="Read and update who paid the payee; check confirmed fraud cards&#10;[Redis]">
       <bpmn:incoming>F_sender</bpmn:incoming>
       <bpmn:outgoing>F_receiver</bpmn:outgoing>
       <bpmn:property id="Property_Receiver" name="__targetRef_placeholder" />
@@ -100,7 +100,7 @@
         <bpmn:targetRef>Redis</bpmn:targetRef>
       </bpmn:dataOutputAssociation>
     </bpmn:serviceTask>
-    <bpmn:serviceTask id="Features" name="Compute the features&#10;[Python in Flink]">
+    <bpmn:serviceTask id="Features" name="Compute the 24 features&#10;[Python in Flink]">
       <bpmn:incoming>F_receiver</bpmn:incoming>
       <bpmn:outgoing>F_features</bpmn:outgoing>
     </bpmn:serviceTask>
@@ -109,11 +109,11 @@
       <bpmn:outgoing>F_to_rules</bpmn:outgoing>
       <bpmn:outgoing>F_to_model</bpmn:outgoing>
     </bpmn:parallelGateway>
-    <bpmn:businessRuleTask id="Rules" name="Check the hard rules, name the alert type&#10;[Python in Flink]">
+    <bpmn:businessRuleTask id="Rules" name="Run the 10 rules; name the alert type&#10;[Python in Flink]">
       <bpmn:incoming>F_to_rules</bpmn:incoming>
       <bpmn:outgoing>F_rules</bpmn:outgoing>
     </bpmn:businessRuleTask>
-    <bpmn:serviceTask id="Model" name="Score the risk&#10;[LightGBM via ONNX Runtime]">
+    <bpmn:serviceTask id="Model" name="Score the risk&#10;[LightGBM model]">
       <bpmn:incoming>F_to_model</bpmn:incoming>
       <bpmn:outgoing>F_model</bpmn:outgoing>
     </bpmn:serviceTask>
@@ -122,7 +122,7 @@
       <bpmn:incoming>F_model</bpmn:incoming>
       <bpmn:outgoing>F_join</bpmn:outgoing>
     </bpmn:parallelGateway>
-    <bpmn:businessRuleTask id="Decision" name="Decide from the model score and the rule results&#10;[Python in Flink]">
+    <bpmn:businessRuleTask id="Decision" name="Decide from the risk and the rules&#10;[Python in Flink]">
       <bpmn:incoming>F_join</bpmn:incoming>
       <bpmn:outgoing>F_decided</bpmn:outgoing>
     </bpmn:businessRuleTask>
@@ -141,16 +141,16 @@
       <bpmn:outgoing>F_allow</bpmn:outgoing>
       <bpmn:outgoing>F_second</bpmn:outgoing>
     </bpmn:exclusiveGateway>
-    <bpmn:sendTask id="AllowOut" name="Publish the decision ALLOW&#10;[Kafka: transactions.scored]">
+    <bpmn:sendTask id="AllowOut" name="Allow the transfer&#10;[Kafka: transactions.scored]">
       <bpmn:incoming>F_allow</bpmn:incoming>
       <bpmn:outgoing>F_allow_out</bpmn:outgoing>
     </bpmn:sendTask>
-    <bpmn:exclusiveGateway id="Answering" name="Second look answering?&#10;[flag in Redis]" default="F_answer_no">
+    <bpmn:exclusiveGateway id="Answering" name="Is the second look working?&#10;[flag in Redis]" default="F_answer_no">
       <bpmn:incoming>F_second</bpmn:incoming>
       <bpmn:outgoing>F_answer_yes</bpmn:outgoing>
       <bpmn:outgoing>F_answer_no</bpmn:outgoing>
     </bpmn:exclusiveGateway>
-    <bpmn:sendTask id="SecondOut" name="Hold it for a second look&#10;[Kafka: fraud.second_look]">
+    <bpmn:sendTask id="SecondOut" name="Send it to the second look&#10;[Kafka: fraud.second_look]">
       <bpmn:incoming>F_answer_yes</bpmn:incoming>
       <bpmn:outgoing>F_second_out</bpmn:outgoing>
     </bpmn:sendTask>
@@ -159,15 +159,15 @@
       <bpmn:outgoing>F_late_yes</bpmn:outgoing>
       <bpmn:outgoing>F_late_no</bpmn:outgoing>
     </bpmn:exclusiveGateway>
-    <bpmn:intermediateThrowEvent id="HeldLateOut" name="Held unscored: waited too long">
+    <bpmn:intermediateThrowEvent id="HeldLateOut" name="Held: no answer in time">
       <bpmn:incoming>F_late_yes</bpmn:incoming>
       <bpmn:linkEventDefinition id="Link_HeldLateOut" name="Held by the second look" />
     </bpmn:intermediateThrowEvent>
-    <bpmn:serviceTask id="Look" name="Score it with TabPFN, publish the decision&#10;[Python, TabPFN; answering flag in Redis]">
+    <bpmn:serviceTask id="Look" name="Check it with TabPFN, send the decision&#10;[TabPFN]">
       <bpmn:incoming>F_late_no</bpmn:incoming>
       <bpmn:outgoing>F_look</bpmn:outgoing>
     </bpmn:serviceTask>
-    <bpmn:exclusiveGateway id="TabCut" name="TabPFN at or above its cut-off?" default="F_letgo">
+    <bpmn:exclusiveGateway id="TabCut" name="Does TabPFN see fraud?" default="F_letgo">
       <bpmn:incoming>F_look</bpmn:incoming>
       <bpmn:outgoing>F_held</bpmn:outgoing>
       <bpmn:outgoing>F_letgo</bpmn:outgoing>
@@ -204,7 +204,7 @@
       <bpmn:outgoing>F_letgo_in</bpmn:outgoing>
       <bpmn:linkEventDefinition id="Link_LetGoIn" name="Let go by the second look" />
     </bpmn:intermediateCatchEvent>
-    <bpmn:serviceTask id="Store" name="Store the decision, its feature values and its audit record&#10;[Python → ClickHouse]">
+    <bpmn:serviceTask id="Store" name="Save the decision and its audit record&#10;[ClickHouse]">
       <bpmn:incoming>F_merge</bpmn:incoming>
       <bpmn:outgoing>F_store</bpmn:outgoing>
       <bpmn:dataOutputAssociation id="D_store">
@@ -225,11 +225,11 @@
       <bpmn:incoming>F_case</bpmn:incoming>
       <bpmn:outgoing>F_opened</bpmn:outgoing>
     </bpmn:intermediateThrowEvent>
-    <bpmn:userTask id="Review" name="Review the held transfer&#10;[analyst queue: demo page or CLI]">
+    <bpmn:userTask id="Review" name="Look at the held transfer&#10;[demo page or command line]">
       <bpmn:incoming>F_opened</bpmn:incoming>
       <bpmn:outgoing>F_review</bpmn:outgoing>
     </bpmn:userTask>
-    <bpmn:userTask id="Verdict" name="Block it or release it, or correct an earlier verdict&#10;[ClickHouse; the payee into or out of Redis]">
+    <bpmn:userTask id="Verdict" name="Block or release it, or fix an earlier decision&#10;[ClickHouse; the payee's card into or out of Redis]">
       <bpmn:incoming>F_review</bpmn:incoming>
       <bpmn:outgoing>F_verdict</bpmn:outgoing>
       <bpmn:dataOutputAssociation id="D_verdict">
@@ -254,7 +254,7 @@
       <bpmn:outgoing>F_report_in</bpmn:outgoing>
       <bpmn:messageEventDefinition id="Trigger_ReportIn" />
     </bpmn:startEvent>
-    <bpmn:userTask id="Report" name="Record the client's report: a case confirmed at once&#10;[demo page or CLI; the payee into Redis]">
+    <bpmn:userTask id="Report" name="Record the client's report: the case is confirmed at once&#10;[demo page or command line; the payee into Redis]">
       <bpmn:incoming>F_report_in</bpmn:incoming>
       <bpmn:outgoing>F_report</bpmn:outgoing>
       <bpmn:dataOutputAssociation id="D_report_case">
@@ -267,11 +267,11 @@
     <bpmn:endEvent id="Reported" name="Report recorded">
       <bpmn:incoming>F_report</bpmn:incoming>
     </bpmn:endEvent>
-    <bpmn:startEvent id="Daily" name="Every day: the retrainer service">
+    <bpmn:startEvent id="Daily" name="Every day: the retrainer">
       <bpmn:outgoing>F_daily</bpmn:outgoing>
       <bpmn:timerEventDefinition id="Trigger_Daily" />
     </bpmn:startEvent>
-    <bpmn:serviceTask id="Retrain" name="Retrain on the logged decisions, labelled by people; read the drift&#10;[retrainer: ml/retrain.py]">
+    <bpmn:serviceTask id="Retrain" name="Train a new model on the analysts' decisions; check what has changed&#10;[retrainer]">
       <bpmn:incoming>F_daily</bpmn:incoming>
       <bpmn:outgoing>F_retrain</bpmn:outgoing>
       <bpmn:property id="Property_Retrain" name="__targetRef_placeholder" />
@@ -284,23 +284,23 @@
         <bpmn:targetRef>Property_Retrain</bpmn:targetRef>
       </bpmn:dataInputAssociation>
     </bpmn:serviceTask>
-    <bpmn:exclusiveGateway id="Better" name="Better at the same workload?" default="F_kept">
+    <bpmn:exclusiveGateway id="Better" name="Better with as many alerts?" default="F_kept">
       <bpmn:incoming>F_retrain</bpmn:incoming>
       <bpmn:outgoing>F_promote</bpmn:outgoing>
       <bpmn:outgoing>F_kept</bpmn:outgoing>
     </bpmn:exclusiveGateway>
-    <bpmn:userTask id="Promote" name="A person promotes it&#10;[run.ps1 promote-model]">
+    <bpmn:userTask id="Promote" name="A person switches it on&#10;[run.ps1 promote-model]">
       <bpmn:incoming>F_promote</bpmn:incoming>
       <bpmn:outgoing>F_served</bpmn:outgoing>
     </bpmn:userTask>
-    <bpmn:endEvent id="Served" name="New model served">
+    <bpmn:endEvent id="Served" name="New model in use">
       <bpmn:incoming>F_served</bpmn:incoming>
     </bpmn:endEvent>
-    <bpmn:endEvent id="Kept" name="Served model kept">
+    <bpmn:endEvent id="Kept" name="Old model kept">
       <bpmn:incoming>F_kept</bpmn:incoming>
     </bpmn:endEvent>
-    <bpmn:dataStoreReference id="Redis" name="Redis: recent payers, confirmed fraud accounts" />
-    <bpmn:dataStoreReference id="Cases" name="ClickHouse: cases, verdicts, clients' reports" />
+    <bpmn:dataStoreReference id="Redis" name="Redis: who paid each card, confirmed fraud cards" />
+    <bpmn:dataStoreReference id="Cases" name="ClickHouse: cases, analysts' decisions, clients' reports" />
     <bpmn:dataStoreReference id="Warehouse" name="ClickHouse: decisions with their features, audit log" />
     <bpmn:sequenceFlow id="F_start" sourceRef="Start" targetRef="Create" />
     <bpmn:sequenceFlow id="F_create" sourceRef="Create" targetRef="Publish" />
@@ -350,7 +350,7 @@
     <bpmn:sequenceFlow id="F_served" sourceRef="Promote" targetRef="Served" />
     <bpmn:sequenceFlow id="F_kept" name="No" sourceRef="Better" targetRef="Kept" />
     <bpmn:textAnnotation id="Note_decision">
-      <bpmn:text>Hold (REVIEW) at or above the alert cut-off, or when a mandatory rule fired; just under it, ask the second look; otherwise allow</bpmn:text>
+      <bpmn:text>Hold if the risk is at or above the alert level, or a required rule fired; just under it, ask the second look; otherwise allow</bpmn:text>
     </bpmn:textAnnotation>
     <bpmn:association id="Note_decision_link" sourceRef="Decision" targetRef="Note_decision" />
   </bpmn:process>
