@@ -300,8 +300,8 @@
       <bpmn:incoming>F_kept</bpmn:incoming>
     </bpmn:endEvent>
     <bpmn:dataStoreReference id="Redis" name="Redis: who paid each card, confirmed fraud cards" />
-    <bpmn:dataStoreReference id="Cases" name="ClickHouse: cases, analysts' decisions, clients' reports" />
-    <bpmn:dataStoreReference id="Warehouse" name="ClickHouse: decisions with their features, audit log" />
+    <bpmn:dataStoreReference id="Cases" name="ClickHouse, table cases: analysts' decisions, clients' reports" />
+    <bpmn:dataStoreReference id="Warehouse" name="ClickHouse, tables of decisions (with their features) and the audit log" />
     <bpmn:sequenceFlow id="F_start" sourceRef="Start" targetRef="Create" />
     <bpmn:sequenceFlow id="F_create" sourceRef="Create" targetRef="Publish" />
     <bpmn:sequenceFlow id="F_publish" sourceRef="Publish" targetRef="Read" />

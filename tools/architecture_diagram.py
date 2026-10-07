@@ -205,13 +205,11 @@ arrow((107.6, 56), (114.6, 56))
 # ---------------------------------------------------------------- storage and cases
 gear(138, 56, 2.6, COLOUR["python"])
 text(138, 52.4, "Sink writer", "saves decisions;\na case per hold")
-database(153.5, 70, 5.5, 4, COLOUR["clickhouse"])
-text(153.5, 66.2, "ClickHouse", "decisions,\naudit log")
-database(153.5, 40, 5.5, 4, COLOUR["clickhouse"])
-text(153.5, 36.2, "ClickHouse", "cases,\nanalysts' decisions")
+# One database, three tables: the decisions, the audit log and the cases.
+database(152, 56, 5.5, 4, COLOUR["clickhouse"])
+text(152, 52.2, "ClickHouse", "decisions, audit\nlog, cases")
 arrow((127.4, 56), (134.6, 56))
-arrow((140.6, 58), (150.4, 68.4))
-arrow((140.6, 54), (150.4, 41.6), ALERT)
+arrow((140.8, 56), (148.9, 56))
 
 # ---------------------------------------------------------------- outcome
 screen(166, 70, 5, COLOUR["grafana"])
@@ -219,8 +217,8 @@ text(170.5, 72.4, "Dashboards", "Grafana charts", ha="left")
 person(166, 40, 5, ALERT)
 text(170.5, 42.4, "Analyst queue", "demo page or command\nline: block or release\n"
      "a transfer, record a\nclient's report", ha="left", colour=ALERT)
-arrow((156.6, 70), (162.6, 70))
-arrow((156.6, 40), (162.8, 40), ALERT, both=True)
+arrow((155.2, 58.6), (162.6, 69.2))
+arrow((155.6, 54.0), (162.8, 41.2), ALERT, both=True)
 # A confirmation: the payee's card joins the confirmed fraud accounts the job reads;
 # a withdrawn one takes it out.
 elbow([(166, 36.4), (166, 26.5), (72.2, 26.5), (72.2, 30.4)], ALERT)
@@ -254,7 +252,7 @@ arrow((93.1, 16.6), (93.1, 43), MUTED, dashed=True, label="used by the job",
 gear(136, 11, 2.6, COLOUR["python"])
 text(140.5, 13.6, "Retraining, every day", "a new model from analysts'\ndecisions; shows "
                                 "what has\nchanged in the data", ha="left")
-arrow((152.5, 30.2), (138.6, 13.8), MUTED, dashed=True)
+arrow((150.6, 46.4), (138.6, 13.8), MUTED, dashed=True)
 ax.text(149, 19.8, "from ClickHouse: decisions\nand analysts' marks",
         ha="left",
         va="center", fontsize=8.3, color=MUTED, family=FAMILY, zorder=6,

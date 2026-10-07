@@ -191,9 +191,9 @@ STORES = [
     # id, name, (x, y, w, h), label's box
     ("Redis", "Redis: who paid each card, confirmed fraud cards", (1035, 1055, 50, 50),
      (870, 1062, 150, 36)),
-    ("Cases", "ClickHouse: cases, analysts' decisions, clients' reports", (2350, 1055, 50, 50),
+    ("Cases", "ClickHouse, table cases: analysts' decisions, clients' reports", (2350, 1055, 50, 50),
      (2406, 1066, 130, 28)),
-    ("Warehouse", "ClickHouse: decisions with their features, audit log",
+    ("Warehouse", "ClickHouse, tables of decisions (with their features) and the audit log",
      (3080, 1055, 50, 50), (3040, 1110, 140, 28)),
 ]
 
