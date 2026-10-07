@@ -6,7 +6,9 @@ the test rows. The model is trained the way `ml/train.py` trains it, with the
 cut-off where F1 is highest on the rows just before the test. What a dataset does
 not have is switched off rather than faked (`harness.capability_profile`): no call
 state, no region, no session timing, no analysts' verdicts, so 18 of the 24
-features remain.
+features remain. On 7 October the analysts' verdicts were also played out from IBM
+AML's labels, the way a bank learns them, to measure the memory of confirmed
+accounts there: `thesis/results.md`.
 
 | File | What it does |
 |---|---|

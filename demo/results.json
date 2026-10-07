@@ -143,6 +143,20 @@
       ]
     },
     {
+      "key": "memory_ibm",
+      "title": {"ru": "Память на IBM AML", "en": "The memory on IBM AML"},
+      "note": {"ru": "Решения аналитиков разыграны по меткам IBM AML, как на наших данных: банк узнаёт о задержанных переводах через день, о половине пропущенных — через неделю. Среднее пяти запусков.", "en": "The analysts' decisions are played out from IBM AML's labels, as on our data: the bank learns about held transfers a day later and about half of the missed ones a week later. The mean of five runs."},
+      "head": {"ru": ["поймано мошенничества", "тревог — настоящие", "F1"], "en": ["fraud caught", "alerts that are fraud", "F1"]},
+      "rows": [
+        {"name": {"ru": "модель без памяти", "en": "the model alone"}, "values": ["44.9%", "77.2%", "56.8%"],
+         "quote": {"file": "thesis/results.md", "text": "| the model alone | 44.9% | 77.2% | 56.8% | 963 |"}},
+        {"name": {"ru": "с памятью, как узнаёт банк", "en": "with the memory, as a bank learns"}, "values": ["53.3%", "69.4%", "60.3%"], "now": true,
+         "quote": {"file": "thesis/results.md", "text": "| with the memory, as a bank learns | 53.3% | 69.4% | 60.3% | 1,272 |"}},
+        {"name": {"ru": "с памятью, если известно всё (предел)", "en": "with the memory, everything known (the ceiling)"}, "values": ["56.7%", "69.7%", "62.5%"],
+         "quote": {"file": "thesis/results.md", "text": "| with the memory, every laundering known (the ceiling) | 56.7% | 69.7% | 62.5% | 1,348 |"}}
+      ]
+    },
+    {
       "key": "budget",
       "title": {"ru": "Аналитик смотрит 2% самых рискованных переводов", "en": "An analyst checks the 2% riskiest transfers"},
       "note": {"ru": "Так свой результат сообщает опубликованная модель на PaySim. Поэтому здесь PaySim проверяется на всех операциях, как у неё.", "en": "This is how the published PaySim model reports its result, so here PaySim is scored on all its transactions, as that model was."},

@@ -114,6 +114,25 @@ only about 55% of frauds became known in time.
 These did not change: they have no analysts' decisions, so the memory of confirmed
 accounts is off there. PaySim is scored on its transfers between people.
 
+### The memory on IBM AML, as a bank learns
+
+On 7 October we played the analysts' decisions out from IBM AML's labels, the same
+way as on our data. Before the test part every laundering is known a day later: the
+bank's history. In the test part a laundering becomes known only if the model alone
+held it (an analyst confirms it a day later), or, if it was missed, for half of them
+a week later (the client reports it). Five runs with different seeds, the averages:
+
+| | recall | precision | F1 | alerts |
+|---|---|---|---|---|
+| the model alone | 44.9% | 77.2% | 56.8% | 963 |
+| with the memory, as a bank learns | 53.3% | 69.4% | 60.3% | 1,272 |
+| with the memory, every laundering known (the ceiling) | 56.7% | 69.7% | 62.5% | 1,348 |
+
+The memory raised F1 in all five runs, by 2.5 to 4.9 points. It is not only a longer
+queue: at the same 1,272 alerts the model alone catches 809 laundering, the memory
+881. The clients' reports come too late for the test part, so the gain comes from
+the history and from the analysts' confirmations.
+
 ## At a 2% alert budget
 
 Another way to read the same models: an analyst checks the 2% riskiest transfers of
@@ -150,5 +169,6 @@ model, which also uses PaySim's own transaction type.
   learn).
 - `raw/second_look_seeds.json`: the model alone, a lowered cut-off and the second
   look, for each of the 20 datasets.
+- `raw/ibm_memory.json`: the memory on IBM AML, each of the five runs.
 - The decisions of the speed runs are kept in `_warehouse_backup_2026-10-06/`
   (not in git). The last hash of its audit chain is recorded in commit `b2062f2`.
