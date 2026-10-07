@@ -29,6 +29,9 @@ warnings.filterwarnings("ignore", message="X does not have valid feature names")
 #: Median legitimate amount on this project's own data, in UZS: foreign amounts are
 #: rescaled onto it, a unit conversion rather than a tuning.
 OUR_MEDIAN_UZS = 138_740.0
+#: The share of the riskiest transfers an analyst reviews in the budget reading; the
+#: published PaySim baseline reports its recall at 2%.
+ALERT_BUDGET = 0.02
 
 
 def scale_factor(amounts, our_median_uzs=OUR_MEDIAN_UZS):
@@ -106,18 +109,23 @@ def cached_matrix(cache, build):
 
 def fit_and_score(X, y, fit, cut, seed=0):
     """train.py's recipe: fitted on [:fit], the F1-peak cut-off chosen on [fit:cut],
-    the rows from `cut` on scored at it."""
+    the rows from `cut` on scored at it, and at ALERT_BUDGET."""
     model = T.make_model(T.class_weight(int(y[:fit].sum()), int((y[:fit] == 0).sum())),
                          random_state=seed)
     model.fit(X[:fit], y[:fit])
     threshold = T.choose_review_cutoff(y[fit:cut], model.predict_proba(X[fit:cut])[:, 1])
-    alert = model.predict_proba(X[cut:])[:, 1] >= threshold
+    score = model.predict_proba(X[cut:])[:, 1]
+    alert = score >= threshold
     yte = y[cut:]
     caught, alerts, frauds = int(yte[alert].sum()), int(alert.sum()), int(yte.sum())
     recall, precision = caught / max(frauds, 1), caught / max(alerts, 1)
+    top = np.argsort(-score, kind="stable")[:max(1, round(len(score) * ALERT_BUDGET))]
+    in_budget = int(yte[top].sum())
     return {"frauds": frauds, "alerts": alerts, "caught": caught, "recall": recall,
             "precision": precision,
-            "f1": 2 * precision * recall / max(precision + recall, 1e-12)}
+            "f1": 2 * precision * recall / max(precision + recall, 1e-12),
+            "budget_alerts": len(top), "budget_caught": in_budget,
+            "budget_recall": in_budget / max(frauds, 1), "budget_precision": in_budget / len(top)}
 
 
 def print_scores(s):
@@ -125,3 +133,6 @@ def print_scores(s):
     print(f"  recall     {s['recall']:.1%}   ({s['caught']:,} caught)")
     print(f"  precision  {s['precision']:.1%}   ({s['alerts']:,} alerts)")
     print(f"  F1         {s['f1']:.1%}")
+    print(f"at a {ALERT_BUDGET:.0%} alert budget, the {s['budget_alerts']:,} riskiest transfers:")
+    print(f"  recall     {s['budget_recall']:.1%}   ({s['budget_caught']:,} caught)")
+    print(f"  precision  {s['budget_precision']:.1%}")

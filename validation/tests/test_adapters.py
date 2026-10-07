@@ -83,6 +83,8 @@ def test_extraction_and_scoring_run_end_to_end(paysim_df, foreign_profile, tmp_p
     s = RP.fit_and_score(Xk, yk, fit=int(n * 0.6), cut=int(n * 0.8))
     assert s["frauds"] == int(yk[int(n * 0.8):].sum())
     assert 0 <= s["recall"] <= 1 and 0 <= s["precision"] <= 1 and 0 <= s["f1"] <= 1
+    assert s["budget_alerts"] == round((n - int(n * 0.8)) * RP.ALERT_BUDGET) or s["budget_alerts"] == 1
+    assert 0 <= s["budget_recall"] <= 1 and s["budget_caught"] <= s["frauds"]
 
 
 def test_a_cache_of_other_columns_is_refused(tmp_path, foreign_profile):

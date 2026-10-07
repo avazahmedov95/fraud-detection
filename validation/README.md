@@ -20,8 +20,14 @@ first run of each adapter builds a feature cache beside it (`*_features.npz`).
 
 ```bash
 python paysim_adapter.py --file PS_20174392719_1491204439457_log.csv
+python paysim_adapter.py --file PS_20174392719_1491204439457_log.csv --all-types
 python ibm_aml_adapter.py --file HI-Small_Trans.csv
 ```
+
+Each also prints how much of the fraud is among the 2% riskiest test transfers (the
+2% alert budget), the way the published PaySim model reports its result.
+`--all-types` scores every PaySim transaction, as that model did, not only the
+transfers between people.
 
 ## Results, 2026-10-03
 
@@ -33,3 +39,18 @@ python ibm_aml_adapter.py --file HI-Small_Trans.csv
 PaySim's clock counts hours, so the features over minutes see nothing there. IBM's
 accounts include banks and companies, not only people, so it is reported for
 information only.
+
+## At a 2% alert budget, 2026-10-07
+
+An analyst checks the 2% riskiest transfers of the test part; how much of the fraud
+is among them.
+
+| dataset | alerts | fraud caught | alerts that are fraud |
+|---|---|---|---|
+| PaySim, all transactions (`--all-types`) | 3,229 | 46.0% (846 of 1,840) | 26.2% |
+| the published PaySim model (CatBoost, `ris3abh/aml-p2p-fraud-detection`) | - | 49.4% (916 of 1,854) | - |
+| IBM AML HI-Small | 17,949 | 78.9% (1,305 of 1,653) | 7.3% |
+
+On PaySim our 18 features come close to the published model, which also uses
+PaySim's own transaction type. On all PaySim transactions the F1-peak reading is
+32.2% caught, 45.3% of alerts fraud, F1 37.7%.

@@ -112,7 +112,25 @@ only about 55% of frauds became known in time.
 | IBM AML (for information) | 44.3% | 79.2% | 56.8% |
 
 These did not change: they have no analysts' decisions, so the memory of confirmed
-accounts is off there.
+accounts is off there. PaySim is scored on its transfers between people.
+
+## At a 2% alert budget
+
+Another way to read the same models: an analyst checks the 2% riskiest transfers of
+the test part, and we count how much of the fraud is among them. The published
+PaySim model reports its result this way, so here PaySim is scored on all its
+transactions, as that model was.
+
+| data | alerts | fraud caught | alerts that are fraud |
+|---|---|---|---|
+| our data (the last six days) | 2,000 | 98.3% (173 of 176) | 8.6% |
+| PaySim, all transactions | 3,229 | 46.0% (846 of 1,840) | 26.2% |
+| the published PaySim model | - | 49.4% (916 of 1,854) | - |
+| IBM AML (for information) | 17,949 | 78.9% (1,305 of 1,653) | 7.3% |
+
+On our data 2% is far more alerts than there are frauds (2,000 against 176), so
+almost all fraud is inside. On PaySim our features come close to the published
+model, which also uses PaySim's own transaction type.
 
 ## Honest notes
 
