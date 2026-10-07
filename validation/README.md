@@ -25,9 +25,10 @@ python ibm_aml_adapter.py --file HI-Small_Trans.csv
 ```
 
 Each also prints how much of the fraud is among the 2% riskiest test transfers (the
-2% alert budget), the way the published PaySim model reports its result.
-`--all-types` scores every PaySim transaction, as that model did, not only the
-transfers between people.
+2% alert budget), the way the published PaySim model reports its result. That
+reading needs no cut-off, so its model learns on all the rows before the test (on
+PaySim all 24 training days), as that model did. `--all-types` scores every PaySim
+transaction, as that model did, not only the transfers between people.
 
 ## Results, 2026-10-03
 
@@ -47,9 +48,9 @@ is among them.
 
 | dataset | alerts | fraud caught | alerts that are fraud |
 |---|---|---|---|
-| PaySim, all transactions (`--all-types`) | 3,229 | 46.0% (846 of 1,840) | 26.2% |
+| PaySim, all transactions (`--all-types`) | 3,229 | 48.4% (890 of 1,840) | 27.6% |
 | the published PaySim model (CatBoost, `ris3abh/aml-p2p-fraud-detection`) | - | 49.4% (916 of 1,854) | - |
-| IBM AML HI-Small | 17,949 | 78.9% (1,305 of 1,653) | 7.3% |
+| IBM AML HI-Small | 17,949 | 81.6% (1,349 of 1,653) | 7.5% |
 
 On PaySim our 18 features come close to the published model, which also uses
 PaySim's own transaction type. On all PaySim transactions the F1-peak reading is

@@ -109,16 +109,20 @@ def cached_matrix(cache, build):
 
 def fit_and_score(X, y, fit, cut, seed=0):
     """train.py's recipe: fitted on [:fit], the F1-peak cut-off chosen on [fit:cut],
-    the rows from `cut` on scored at it, and at ALERT_BUDGET."""
-    model = T.make_model(T.class_weight(int(y[:fit].sum()), int((y[:fit] == 0).sum())),
-                         random_state=seed)
-    model.fit(X[:fit], y[:fit])
+    the rows from `cut` on scored at it. The ALERT_BUDGET reading needs no cut-off,
+    so its model learns on all of [:cut], as the published PaySim model did."""
+    def fitted(rows):
+        model = T.make_model(T.class_weight(int(y[:rows].sum()), int((y[:rows] == 0).sum())),
+                             random_state=seed)
+        return model.fit(X[:rows], y[:rows])
+
+    model = fitted(fit)
     threshold = T.choose_review_cutoff(y[fit:cut], model.predict_proba(X[fit:cut])[:, 1])
-    score = model.predict_proba(X[cut:])[:, 1]
-    alert = score >= threshold
+    alert = model.predict_proba(X[cut:])[:, 1] >= threshold
     yte = y[cut:]
     caught, alerts, frauds = int(yte[alert].sum()), int(alert.sum()), int(yte.sum())
     recall, precision = caught / max(frauds, 1), caught / max(alerts, 1)
+    score = fitted(cut).predict_proba(X[cut:])[:, 1]
     top = np.argsort(-score, kind="stable")[:max(1, round(len(score) * ALERT_BUDGET))]
     in_budget = int(yte[top].sum())
     return {"frauds": frauds, "alerts": alerts, "caught": caught, "recall": recall,

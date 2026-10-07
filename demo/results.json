@@ -150,12 +150,12 @@
       "rows": [
         {"name": {"ru": "наши данные", "en": "our data"}, "values": ["2,000", "98.3%", "8.6%"], "now": true,
          "quote": {"file": "thesis/results.md", "text": "| our data (the last six days) | 2,000 | 98.3% (173 of 176) | 8.6% |"}},
-        {"name": {"ru": "PaySim, все операции", "en": "PaySim, all transactions"}, "values": ["3,229", "46.0%", "26.2%"], "now": true,
-         "quote": {"file": "thesis/results.md", "text": "| PaySim, all transactions | 3,229 | 46.0% (846 of 1,840) | 26.2% |"}},
+        {"name": {"ru": "PaySim, все операции", "en": "PaySim, all transactions"}, "values": ["3,229", "48.4%", "27.6%"], "now": true,
+         "quote": {"file": "thesis/results.md", "text": "| PaySim, all transactions | 3,229 | 48.4% (890 of 1,840) | 27.6% |"}},
         {"name": {"ru": "опубликованная модель на PaySim", "en": "the published PaySim model"}, "values": [null, "49.4%", null],
          "quote": {"file": "thesis/results.md", "text": "| the published PaySim model | - | 49.4% (916 of 1,854) | - |"}},
-        {"name": {"ru": "IBM AML", "en": "IBM AML"}, "values": ["17,949", "78.9%", "7.3%"], "now": true,
-         "quote": {"file": "thesis/results.md", "text": "| IBM AML (for information) | 17,949 | 78.9% (1,305 of 1,653) | 7.3% |"}}
+        {"name": {"ru": "IBM AML", "en": "IBM AML"}, "values": ["17,949", "81.6%", "7.5%"], "now": true,
+         "quote": {"file": "thesis/results.md", "text": "| IBM AML (for information) | 17,949 | 81.6% (1,349 of 1,653) | 7.5% |"}}
       ]
     }
   ]

@@ -119,14 +119,16 @@ accounts is off there. PaySim is scored on its transfers between people.
 Another way to read the same models: an analyst checks the 2% riskiest transfers of
 the test part, and we count how much of the fraud is among them. The published
 PaySim model reports its result this way, so here PaySim is scored on all its
-transactions, as that model was.
+transactions, as that model was. This reading needs no alert level, so on the
+public datasets the model learns on the whole training part, as that model did (on
+PaySim all 24 days). On our data it is the model the system runs.
 
 | data | alerts | fraud caught | alerts that are fraud |
 |---|---|---|---|
 | our data (the last six days) | 2,000 | 98.3% (173 of 176) | 8.6% |
-| PaySim, all transactions | 3,229 | 46.0% (846 of 1,840) | 26.2% |
+| PaySim, all transactions | 3,229 | 48.4% (890 of 1,840) | 27.6% |
 | the published PaySim model | - | 49.4% (916 of 1,854) | - |
-| IBM AML (for information) | 17,949 | 78.9% (1,305 of 1,653) | 7.3% |
+| IBM AML (for information) | 17,949 | 81.6% (1,349 of 1,653) | 7.5% |
 
 On our data 2% is far more alerts than there are frauds (2,000 against 176), so
 almost all fraud is inside. On PaySim our features come close to the published
