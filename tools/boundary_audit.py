@@ -546,6 +546,13 @@ def b_demo_results_quote_their_sources():
         for q in ds.get("quotes", []):
             if q["text"] not in _read(*q["file"].split("/")):
                 problems.append(f"{ds['key']}: {q['file']} no longer says {q['text'][:60]!r}")
+    for table in quoted["research"]:
+        for row in table["rows"]:
+            q = row["quote"]
+            if q["text"] not in _read(*q["file"].split("/")):
+                problems.append(f"{table['key']}: {q['file']} no longer says {q['text'][:60]!r}")
+            problems += [f"{table['key']}: {v!r} is not in {q['text'][:60]!r}"
+                         for v in row["values"] if v is not None and v not in q["text"]]
     return "; ".join(problems) or None
 
 

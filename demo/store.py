@@ -118,7 +118,7 @@ class CaseStore:
         self._confirm(transfer["receiver_card"])
         return True
 
-    def _redis_client(self):
+    def redis_client(self):
         if self._redis is None:
             import redis
             self._redis = redis.Redis(host=os.getenv("REDIS_HOST", "redis"),
@@ -130,7 +130,7 @@ class CaseStore:
         """The payee joins the confirmed accounts. Redis down costs the mark, not the
         verdict, which is already stored."""
         try:
-            self._redis_client().sadd(CONFIRMED_KEY, card)
+            self.redis_client().sadd(CONFIRMED_KEY, card)
         except Exception as exc:                       # noqa: BLE001
             log.error("confirmed %s, but could not add it to %s: %s", card, CONFIRMED_KEY, exc)
 
@@ -142,7 +142,7 @@ class CaseStore:
         if self._client.query(q, parameters={"card": card}).result_rows[0][0]:
             return
         try:
-            r = self._redis_client()
+            r = self.redis_client()
             if not r.sismember(HISTORY_KEY, card):
                 r.srem(CONFIRMED_KEY, card)
         except Exception as exc:                       # noqa: BLE001

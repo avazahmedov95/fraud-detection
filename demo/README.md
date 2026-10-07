@@ -12,7 +12,8 @@ comes from them.
 | `queue_cli.py` | the same queue on the command line: `list`, `show`, `resolve`, `report`, `stats` |
 | `index.html` | the page |
 | `about.js` | the "About the project" tab |
-| `results.json` | the figures the results tab quotes, each with the line of the document it came from |
+| `show.html` | the page for an audience, http://localhost:8090/show |
+| `results.json` | the figures both pages quote, each with the line of the document it came from |
 | `tests/` | `python -m pytest demo -q` |
 
 Tabs:
@@ -27,6 +28,18 @@ Tabs:
 - **Data & results** - the live stage times and verdicts, the retrainer's latest
   run, the model's figures from `ml/models/metrics.json`, the second look, and the two
   public datasets.
+
+The page for an audience (`/show`) hides the technical parts and has two tabs:
+
+- **Live show** - is everything ready (the system, the second look, the stream; one
+  button starts the stream), the main figures in large type, and one money-mule case
+  from the part of the data the model never saw, told in five steps: the usual stream,
+  transfers to the mule one by one until one is held, the reasons, the analyst's
+  block, and the next transfer to the same card held because of the memory. Every
+  card in the case gets a new number, so it can be shown again.
+- **Research results** - before and after on our data and on twenty datasets, the
+  speed, retraining on a new scheme, the public datasets and the 2% alert budget, all
+  quoted from `thesis/results.md`.
 
 A verdict is the analyst's: CONFIRMED_FRAUD blocks the held transfer and puts the
 payee's card into the confirmed fraud accounts the job reads (Redis,

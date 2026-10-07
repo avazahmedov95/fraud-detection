@@ -1,6 +1,7 @@
 """Live demo: one page showing the running system decide - the stream, fraud
 episodes replayed on demand with their decisions and reasons, the analyst's queue,
-and where the decision time goes. It adds no detection logic, and until Kafka,
+and where the decision time goes - and /show, the same system told to an audience
+as one case, step by step. It adds no detection logic, and until Kafka,
 ClickHouse, the Flink job and the dataset are all there it shows only what is
 missing. It runs in the stack, on the containers' clock the stage times use.
 
@@ -53,6 +54,11 @@ KINDS = ("NORMAL", "APP", "ATO", "MULE", "STRUCTURING")
 STAGES = ("kafka", "handoff", "decode", "state", "redis", "rules", "model", "decide")
 LIVE_WINDOW = 1000      # how many of the latest decisions the time figures cover
 PAGE = 20               # rows the stream and the queue show before "show more"
+STORY_PAYERS = 4        # people paying the show's mule, sent one by one
+#: Renewed by the second look while it answers (second-look/config.py ALIVE_KEY).
+SECOND_LOOK_ALIVE = "second-look:alive"
+PAGES = {"/": "index.html", "/index.html": "index.html", "/about.js": "about.js",
+         "/show": "show.html"}
 
 KAFKA = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
 FLINK = os.getenv("FLINK_REST", "http://jobmanager:8081")
@@ -181,6 +187,23 @@ def _second_cut():
             return float(json.load(fh)["cut"])
     except (OSError, KeyError, TypeError, ValueError):
         return None
+
+
+def _feature_names():
+    try:
+        with open(os.path.join(MODELS, "feature_names.json"), encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return []
+
+
+def marks(rec, names):
+    """What the job read of the confirmed fraud accounts for this transfer; None for
+    a decision without features."""
+    if not rec.get("features"):
+        return None
+    f = dict(zip(names, rec["features"]))
+    return {"payee": bool(f.get("payee_flagged")), "sender": bool(f.get("sender_flagged"))}
 
 
 def _second(rec):
@@ -368,22 +391,37 @@ class Episodes:
                     if mule in (self.sender[j], self.receiver[j])]
         return self._with_history([j for j in near if self.sender[j] == self.sender[i]])
 
+    def pick_story(self, rng=random):
+        """A mule episode in which at least STORY_PAYERS people pay the mule."""
+        for _ in range(200):
+            items = self.pick("MULE", rng)
+            if max(Counter(row["receiver_card"] for row, _ in items).values()) >= STORY_PAYERS:
+                return items
+        raise LookupError("no mule paid by enough people in the held-out slice")
 
-def replay_messages(items, now, rng=random):
+
+def replay_messages(items, now, rng=random, fresh=False):
     """The rows as kafka_producer sends them: senders get new PINFLs and cards of the
-    same bank, receivers keep theirs, and the times shift to end at `now`."""
-    keep = {row["receiver_card"] for row, _ in items}
+    same bank, receivers keep theirs unless `fresh` (every card new, so that a case
+    can be shown again), and the times shift to end at `now`."""
+    keep = set() if fresh else {row["receiver_card"] for row, _ in items}
     cards, pinfls = {}, {}
+
+    def new(card):
+        if card not in cards:
+            cards[card] = card[:6] + _digits(rng, len(card) - 6)
+            pinfls[card] = _digits(rng, 14)
+        return cards[card]
+
     last = _epoch(items[-1][0])
     out = []
     for row, role in items:
         r = dict(row)
         card = row["sender_card"]
         if card not in keep:
-            if card not in cards:
-                cards[card] = card[:6] + _digits(rng, len(card) - 6)
-                pinfls[card] = _digits(rng, 14)
-            r["sender_card"], r["sender_pinfl"] = cards[card], pinfls[card]
+            r["sender_card"], r["sender_pinfl"] = new(card), pinfls[card]
+        if fresh:
+            r["receiver_card"] = new(row["receiver_card"])
         offset = _epoch(row) - last
         r["transaction_id"] = str(uuid.uuid4())
         r["event_time"] = _utc_iso(now + offset)
@@ -520,6 +558,7 @@ class App:
         self.decisions, self.background, self.sender = Decisions(), Background(), Sender()
         self.runs, self.started = OrderedDict(), time.time()
         self.grafana, self.cut, self.second_cut = _dashboard_url(), _review_cut(), _second_cut()
+        self.names = _feature_names()
         self._store, self._warehouse, self._explainer = None, None, None
         try:
             self.library, self.library_error = Episodes(csv_path), ""
@@ -550,8 +589,14 @@ class App:
                 "background": {"on": self.background.running()},
                 "counts": counts, "median_ms": _quantile(ms, 0.5), "p99_ms": _quantile(ms, 0.99),
                 "last_decision": d.last_at, "model": d.model, "cut": self.cut,
-                "second_cut": self.second_cut,
+                "second_cut": self.second_cut, "second_look": self.second_look_alive(),
                 "grafana": self.grafana}
+
+    def second_look_alive(self):
+        try:
+            return bool(self.store().redis_client().exists(SECOND_LOOK_ALIVE))
+        except Exception:                              # noqa: BLE001 - shown as not answering
+            return False
 
     def stream(self, flt=None, limit=PAGE):
         """The latest `limit` decisions passing the filter, newest first, with an
@@ -576,11 +621,9 @@ class App:
     def start_background(self):
         self.background.start(self.library.replay_start())
 
-    def start_run(self, kind):
-        if kind not in KINDS:
-            raise ValueError(f"unknown scenario {kind!r}")
-        msgs = replay_messages(self.library.pick(kind), time.time())
+    def _new_run(self, kind, msgs):
         run = {"id": uuid.uuid4().hex[:10], "kind": kind, "started": time.time(), "error": "",
+               "sent": 0, "_msgs": msgs,
                "rows": [{"id": m["message"]["transaction_id"], "role": m["role"],
                          "truth": m["kind"], "offset_s": m["offset_s"],
                          "amount": m["message"]["amount_uzs"],
@@ -589,26 +632,48 @@ class App:
         self.runs[run["id"]] = run
         while len(self.runs) > 30:
             self.runs.popitem(last=False)
+        return run
+
+    def start_run(self, kind):
+        if kind not in KINDS:
+            raise ValueError(f"unknown scenario {kind!r}")
+        run = self._new_run(kind, replay_messages(self.library.pick(kind), time.time()))
+        run["sent"] = len(run["_msgs"])
 
         def go():
             try:
-                self.sender.send(msgs)
+                self.sender.send(run["_msgs"])
             except Exception as exc:                   # noqa: BLE001 - shown on the page
                 run["error"] = str(exc)[:300]
         threading.Thread(target=go, daemon=True).start()
         return {"id": run["id"]}
 
+    def start_story(self):
+        """The show's case, kept to be sent a row at a time (send_next)."""
+        msgs = replay_messages(self.library.pick_story(), time.time(), fresh=True)
+        return {"id": self._new_run("MULE", msgs)["id"]}
+
+    def send_next(self, run_id):
+        """The story's next row, sent now; ok is False once none is left."""
+        run = self.runs.get(run_id)
+        if run is None or run["sent"] >= len(run["_msgs"]):
+            return {"ok": False}
+        run["sent"] += 1
+        self.sender.send([run["_msgs"][run["sent"] - 1]], gap_s=0)
+        return {"ok": True}
+
     def run(self, run_id):
+        """A run's rows: what was sent, and each decision with its reasons."""
         run = self.runs.get(run_id)
         if run is None:
             return None
         rows = []
-        for row in run["rows"]:
-            r, rec = dict(row), self.decisions.by_id.get(row["id"])
+        for k, row in enumerate(run["rows"]):
+            r, rec = dict(row, sent=k < run["sent"]), self.decisions.by_id.get(row["id"])
             if rec is not None:
-                r.update(decision=rec.get("decision"), score=rec.get("final_score"))
+                r.update(view(rec), why=self._why(rec), marks=marks(rec, self.names))
             rows.append(r)
-        return {**run, "rows": rows}
+        return {**{k: v for k, v in run.items() if not k.startswith("_")}, "rows": rows}
 
     def results(self):
         """The model's test figures (metrics.json), when it was trained, the test
@@ -631,7 +696,7 @@ class App:
         with open(os.path.join(HERE, "results.json"), encoding="utf-8") as fh:
             quoted = json.load(fh)
         own["second"] = quoted["own"]["second"]
-        return {"own": own, "public": quoted["datasets"]}
+        return {"own": own, "public": quoted["datasets"], "research": quoted["research"]}
 
     def store(self):
         if self._store is None:
@@ -741,8 +806,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path, _, query = self.path.partition("?")
         q = parse_qs(query)
-        if path in ("/", "/index.html", "/about.js"):
-            name = path.strip("/") or "index.html"
+        if path in PAGES:
+            name = PAGES[path]
             with open(os.path.join(HERE, name), "rb") as fh:
                 self._send(fh.read(), "text/javascript; charset=utf-8" if name.endswith(".js")
                            else "text/html; charset=utf-8")
@@ -778,6 +843,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"on": APP.background.running()})
             elif self.path == "/api/episode":
                 self._json(APP.start_run(data.get("kind", "")))
+            elif self.path == "/api/story":
+                self._json(APP.start_story())
+            elif self.path.startswith("/api/episode/") and self.path.endswith("/next"):
+                self._json(APP.send_next(self.path.split("/")[3]))
             elif self.path.startswith("/api/cases/") and self.path.endswith("/resolve"):
                 self._json(APP.resolve(self.path.split("/")[3], data.get("disposition", "")))
             elif self.path == "/api/report":

@@ -75,15 +75,78 @@ def test_replay_gives_the_sender_a_new_card_and_keeps_everything_else(tmp_path):
     assert "label_is_fraud" not in msgs[-1] and out[-1]["kind"] == "APP"
 
 
-def test_a_mule_keeps_its_card_on_both_sides_of_the_episode(tmp_path):
-    fan_in = [_row(k, 20 * 1440 + 3 * k, f"98600300000000{k:02d}", MULE, "MULE") for k in range(6)]
+def _mule_library(tmp_path, payers=6):
+    """`payers` people pay the mule within minutes, then the mule pays out twice."""
+    fan_in = [_row(k, 20 * 1440 + 3 * k, f"98600300000000{k:02d}", MULE, "MULE") for k in range(payers)]
     out_rows = [_row(50 + k, 20 * 1440 + 30 + k, MULE, f"86003300000055{k}", "MULE") for k in range(2)]
-    items = _library(tmp_path, _filler(10) + fan_in + out_rows).pick("MULE", random.Random(3))
+    return _library(tmp_path, _filler(10) + fan_in + out_rows)
+
+
+def test_a_mule_keeps_its_card_on_both_sides_of_the_episode(tmp_path):
+    items = _mule_library(tmp_path).pick("MULE", random.Random(3))
     assert len(items) == 8
     msgs = [o["message"] for o in S.replay_messages(items, 1_800_000_000.0, random.Random(2))]
     assert [m["receiver_card"] for m in msgs[:6]] == [MULE] * 6
     assert [m["sender_card"] for m in msgs[6:]] == [MULE] * 2
-    assert not {m["sender_card"] for m in msgs[:6]} & {r["sender_card"] for r in fan_in}
+    assert not {m["sender_card"] for m in msgs[:6]} & {row["sender_card"] for row, _ in items}
+
+
+def test_the_show_picks_a_mule_paid_by_several_people(tmp_path):
+    items = _mule_library(tmp_path).pick_story(random.Random(3))
+    assert sum(row["receiver_card"] == MULE for row, _ in items) >= S.STORY_PAYERS
+    with pytest.raises(LookupError):
+        _mule_library(tmp_path, payers=S.STORY_PAYERS - 1).pick_story(random.Random(3))
+
+
+def test_the_shows_replay_gives_every_card_a_new_number_the_same_on_both_sides(tmp_path):
+    """So the case can be shown again: the mule is new to the system each time."""
+    items = _mule_library(tmp_path).pick_story(random.Random(3))
+    msgs = [o["message"] for o in S.replay_messages(items, 1_800_000_000.0, random.Random(2), fresh=True)]
+    mule = msgs[0]["receiver_card"]
+    assert mule != MULE and mule[:6] == MULE[:6] and len(mule) == len(MULE)
+    assert [m["receiver_card"] for m in msgs[:6]] == [mule] * 6
+    assert [m["sender_card"] for m in msgs[6:]] == [mule] * 2
+    original = {row[k] for row, _ in items for k in ("sender_card", "receiver_card")}
+    assert not original & {m[k] for m in msgs for k in ("sender_card", "receiver_card")}
+
+
+class _Sent:
+    def __init__(self):
+        self.messages = []
+
+    def send(self, messages, gap_s=0.15):
+        self.messages += [m["message"] for m in messages]
+
+
+def test_the_show_sends_its_case_one_transfer_at_a_time(tmp_path):
+    from collections import OrderedDict
+    app = S.App.__new__(S.App)
+    app.library, app.sender, app.decisions, app.runs = _mule_library(tmp_path), _Sent(), S.Decisions(), OrderedDict()
+    app.names, app._why = ["payee_flagged", "sender_flagged"], lambda rec: None
+    run_id = app.start_story()["id"]
+    assert app.sender.messages == []
+    assert app.send_next(run_id) == {"ok": True}
+    first = app.sender.messages[0]
+    app.decisions.add({"transaction_id": first["transaction_id"], "decision": "REVIEW", "features": [1, 0]})
+    run = app.run(run_id)
+    assert [r["sent"] for r in run["rows"][:2]] == [True, False]
+    assert run["rows"][0]["decision"] == "REVIEW"
+    assert run["rows"][0]["marks"] == {"payee": True, "sender": False}
+    assert "decision" not in run["rows"][1] and "_msgs" not in run
+    while app.send_next(run_id)["ok"]:
+        pass
+    assert len(app.sender.messages) == len(run["rows"])
+
+
+def test_the_memory_marks_are_what_the_job_read():
+    names = ["log_amount", "payee_flagged", "sender_flagged"]
+    assert S.marks({"features": [9.1, 1.0, 0.0]}, names) == {"payee": True, "sender": False}
+    assert S.marks({"features": None}, names) is None
+
+
+def test_the_show_reads_the_key_the_second_look_renews():
+    config = _repo("second-look", "config.py")
+    assert re.search(r'^ALIVE_KEY = "([^"]+)"', config, re.M).group(1) == S.SECOND_LOOK_ALIVE
 
 
 def test_an_ordinary_scenario_is_a_legitimate_transfer_with_history(tmp_path):
@@ -386,6 +449,13 @@ def test_the_results_file_says_everything_in_both_languages():
         for field in ("name", "what", "ours"):
             assert set(ds[field]) == {"ru", "en"}, (ds["key"], field)
     assert quoted["own"]["quotes"] and set(quoted["own"]["second"]) == {"ru", "en"}
+    for table in quoted["research"]:
+        for field in ("title", "note", "head"):
+            assert set(table[field]) == {"ru", "en"}, (table["key"], field)
+        width = len(table["head"]["en"])
+        assert len(table["head"]["ru"]) == width, table["key"]
+        for row in table["rows"]:
+            assert set(row["name"]) == {"ru", "en"} and len(row["values"]) == width, table["key"]
 
 
 def test_a_transfer_decided_twice_keeps_its_row_and_counts_once():

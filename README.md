@@ -18,7 +18,7 @@ second-look/       TabPFN for the transfers just under the cut-off
 sink-writer/       every decision into ClickHouse, the audit chain, a case for each hold
                    with its reasons in words
 demo/              one page over the running system, and the analyst's queue on it and
-                   on the command line
+                   on the command line; /show, the same system for an audience
 validation/        the model on the public datasets PaySim and IBM AML
 infra/             Docker images, Kafka, ClickHouse schema, Redis, Grafana
 tools/             boundary_audit.py and the diagram generators
@@ -52,7 +52,8 @@ cd ml; python train.py; cd ..
 .\run.ps1 submit-job                 # the Flink job
 ```
 
-Then the demo at http://localhost:8090. `.\run.ps1 help` lists every target;
+Then the demo at http://localhost:8090 (for an audience: http://localhost:8090/show).
+`.\run.ps1 help` lists every target;
 `.\run.ps1 status` checks the whole path.
 
 | Service | Address |

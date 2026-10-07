@@ -1,5 +1,5 @@
 {
-  "_about": "What the demo's results tab says beside the live figures: the second look on our own data and this project's model on two public datasets. Every figure carries the exact line of the document it came from, and tools/boundary_audit.py fails when that line is gone.",
+  "_about": "What the demo's results tab says beside the live figures: the second look on our own data and this project's model on two public datasets; and the show page's research tables. Every figure carries the exact line of the document it came from, and tools/boundary_audit.py fails when that line is gone or no longer holds the figure.",
   "own": {
     "key": "own",
     "second": {
@@ -66,6 +66,96 @@
           "file": "validation/README.md",
           "text": "| IBM AML HI-Small | 4.49M transfers between bank accounts over 17 days, 5,166 laundering | 60/20/20 by time; 1,653 laundering in test | 44.3% | 79.2% | 56.8% |"
         }
+      ]
+    }
+  ],
+  "research": [
+    {
+      "key": "quality",
+      "title": {"ru": "Качество на наших данных", "en": "Quality on our data"},
+      "note": {"ru": "Последние шесть дней данных, которых модель не видела при обучении.", "en": "The last six days of the data, which the model never saw while learning."},
+      "head": {"ru": ["поймано мошенничества", "тревог — настоящие", "F1"], "en": ["fraud caught", "alerts that are fraud", "F1"]},
+      "rows": [
+        {"name": {"ru": "до, 30 сентября", "en": "before, 30 September"}, "values": ["67.0%", "63.4%", "65.2%"],
+         "quote": {"file": "thesis/results.md", "text": "| before: model, 21 features | 67.0% | 63.4% | 65.2% | 186 | 118 |"}},
+        {"name": {"ru": "после: модель", "en": "after: the model"}, "values": ["70.5%", "72.1%", "71.3%"], "now": true,
+         "quote": {"file": "thesis/results.md", "text": "| after: model, 24 features | 70.5% | 72.1% | 71.3% | 172 | 124 |"}},
+        {"name": {"ru": "после: модель и вторая проверка", "en": "after: the model and the second look"}, "values": ["78.4%", "67.6%", "72.6%"], "now": true,
+         "quote": {"file": "thesis/results.md", "text": "| after: model + second look | 78.4% | 67.6% | 72.6% | 204 | 138 |"}}
+      ]
+    },
+    {
+      "key": "seeds",
+      "title": {"ru": "Двадцать наборов данных", "en": "Twenty datasets"},
+      "note": {"ru": "Один тест мал, поэтому мы повторили его на двадцати наборах, сделанных генератором с разными seed. Это более честная картина.", "en": "One test is small, so we repeated it on twenty datasets made by the generator with different seeds. This is the fairer picture."},
+      "head": {"ru": ["поймано мошенничества", "тревог — настоящие", "F1"], "en": ["fraud caught", "alerts that are fraud", "F1"]},
+      "rows": [
+        {"name": {"ru": "до", "en": "before"}, "values": ["54.4%", "70.5%", "60.8%"],
+         "quote": {"file": "thesis/results.md", "text": "| before: model | 54.4% | 70.5% | 60.8% |"}},
+        {"name": {"ru": "после: модель", "en": "after: the model"}, "values": ["61.0%", "73.0%", "66.0%"], "now": true,
+         "quote": {"file": "thesis/results.md", "text": "| after: model | 61.0% | 73.0% | 66.0% |"}},
+        {"name": {"ru": "после: модель и вторая проверка", "en": "after: the model and the second look"}, "values": ["68.8%", "65.1%", "66.4%"], "now": true,
+         "quote": {"file": "thesis/results.md", "text": "| after: model + second look | 68.8% | 65.1% | 66.4% |"}}
+      ]
+    },
+    {
+      "key": "speed",
+      "title": {"ru": "Время от прихода перевода до решения", "en": "Time from a transfer's arrival to the decision"},
+      "note": {"ru": "Цель — 300 мс. Замерено на работающей системе, на ноутбуке от батареи.", "en": "The target is 300 ms. Measured on the running system, on a laptop on battery."},
+      "head": {"ru": ["среднее, мс", "95% быстрее, мс", "99% быстрее, мс"], "en": ["mean, ms", "95% within, ms", "99% within, ms"]},
+      "rows": [
+        {"name": {"ru": "10 переводов в секунду, до", "en": "10 transfers a second, before"}, "values": ["97", "162", "219"],
+         "quote": {"file": "thesis/results.md", "text": "| 10 | before (30 September) | 97 | 162 | 219 |"}},
+        {"name": {"ru": "10 переводов в секунду, после", "en": "10 transfers a second, after"}, "values": ["31", "34", "48"], "now": true,
+         "quote": {"file": "thesis/results.md", "text": "| 10 | after (5 October) | 31 | 34 | 48 |"}},
+        {"name": {"ru": "50 переводов в секунду, до", "en": "50 transfers a second, before"}, "values": ["180", "290", "359"],
+         "quote": {"file": "thesis/results.md", "text": "| 50 | before (30 September) | 180 | 290 | 359 |"}},
+        {"name": {"ru": "50 переводов в секунду, после", "en": "50 transfers a second, after"}, "values": ["32", "58", "75"], "now": true,
+         "quote": {"file": "thesis/results.md", "text": "| 50 | after (5 October) | 32 | 58 | 75 |"}}
+      ]
+    },
+    {
+      "key": "retrain",
+      "title": {"ru": "Мошенники сменили схему: переобучение", "en": "Fraudsters change the scheme: retraining"},
+      "note": {"ru": "В истории банка нет ни одного случая этой схемы. О новых случаях банк узнаёт только от аналитика или от клиента. Модели сравниваются при одинаковом числе тревог.", "en": "The bank's history has no case of this scheme. The bank learns about new cases only from an analyst or a client. The models are compared at the same number of alerts."},
+      "head": {"ru": ["поймано старой моделью", "после переобучения", "всего случаев схемы"], "en": ["caught by the old model", "after retraining", "cases of the scheme"]},
+      "rows": [
+        {"name": {"ru": "дроп-счета", "en": "money mules"}, "values": ["25", "47", "238"],
+         "quote": {"file": "thesis/results.md", "text": "| mules | 0.616 | 0.702 | 0.735 | 25 -> 47 of 238 |"}},
+        {"name": {"ru": "мошенник по телефону", "en": "phone scam"}, "values": ["28", "50", "367"],
+         "quote": {"file": "thesis/results.md", "text": "| APP | 0.590 | 0.669 | 0.717 | 28 -> 50 of 367 |"}},
+        {"name": {"ru": "захват аккаунта", "en": "account takeover"}, "values": ["70", "120", "273"],
+         "quote": {"file": "thesis/results.md", "text": "| account takeover | 0.579 | 0.674 | 0.723 | 70 -> 120 of 273 |"}},
+        {"name": {"ru": "дробление сумм", "en": "structuring"}, "values": ["64", "113", "262"],
+         "quote": {"file": "thesis/results.md", "text": "| structuring | 0.577 | 0.672 | 0.717 | 64 -> 113 of 262 |"}}
+      ]
+    },
+    {
+      "key": "public",
+      "title": {"ru": "Открытые наборы данных", "en": "Public datasets"},
+      "note": {"ru": "Та же модель и тот же код признаков. Части системы, которым нужны решения аналитиков, там выключены. В IBM AML среди счетов есть банки и компании, поэтому он только для информации.", "en": "The same model and the same feature code. The parts that need analysts' decisions are off there. IBM AML's accounts include banks and companies, so it is for information only."},
+      "head": {"ru": ["поймано мошенничества", "тревог — настоящие", "F1"], "en": ["fraud caught", "alerts that are fraud", "F1"]},
+      "rows": [
+        {"name": {"ru": "PaySim, переводы между людьми", "en": "PaySim, transfers between people"}, "values": ["27.6%", "63.8%", "38.5%"], "now": true,
+         "quote": {"file": "thesis/results.md", "text": "| PaySim | 27.6% | 63.8% | 38.5% |"}},
+        {"name": {"ru": "IBM AML", "en": "IBM AML"}, "values": ["44.3%", "79.2%", "56.8%"], "now": true,
+         "quote": {"file": "thesis/results.md", "text": "| IBM AML (for information) | 44.3% | 79.2% | 56.8% |"}}
+      ]
+    },
+    {
+      "key": "budget",
+      "title": {"ru": "Аналитик смотрит 2% самых рискованных переводов", "en": "An analyst checks the 2% riskiest transfers"},
+      "note": {"ru": "Так свой результат сообщает опубликованная модель на PaySim. Поэтому здесь PaySim проверяется на всех операциях, как у неё.", "en": "This is how the published PaySim model reports its result, so here PaySim is scored on all its transactions, as that model was."},
+      "head": {"ru": ["тревог", "поймано мошенничества", "тревог — настоящие"], "en": ["alerts", "fraud caught", "alerts that are fraud"]},
+      "rows": [
+        {"name": {"ru": "наши данные", "en": "our data"}, "values": ["2,000", "98.3%", "8.6%"], "now": true,
+         "quote": {"file": "thesis/results.md", "text": "| our data (the last six days) | 2,000 | 98.3% (173 of 176) | 8.6% |"}},
+        {"name": {"ru": "PaySim, все операции", "en": "PaySim, all transactions"}, "values": ["3,229", "46.0%", "26.2%"], "now": true,
+         "quote": {"file": "thesis/results.md", "text": "| PaySim, all transactions | 3,229 | 46.0% (846 of 1,840) | 26.2% |"}},
+        {"name": {"ru": "опубликованная модель на PaySim", "en": "the published PaySim model"}, "values": [null, "49.4%", null],
+         "quote": {"file": "thesis/results.md", "text": "| the published PaySim model | - | 49.4% (916 of 1,854) | - |"}},
+        {"name": {"ru": "IBM AML", "en": "IBM AML"}, "values": ["17,949", "78.9%", "7.3%"], "now": true,
+         "quote": {"file": "thesis/results.md", "text": "| IBM AML (for information) | 17,949 | 78.9% (1,305 of 1,653) | 7.3% |"}}
       ]
     }
   ]

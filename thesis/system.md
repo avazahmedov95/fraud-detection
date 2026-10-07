@@ -54,7 +54,7 @@ The system never blocks a transfer by itself. A person does.
 | second look | a second model for transfers just under the cut-off | Python, TabPFN |
 | sink writer | stores decisions, the audit chain and the cases | Python, ClickHouse |
 | ClickHouse | the warehouse: decisions, audit log, cases | ClickHouse |
-| demo page | the live system, the analyst's queue, the results | Python, HTML |
+| demo pages | the live system, the analyst's queue, the results; and a page for an audience that tells one fraud case step by step | Python, HTML |
 | retrainer | a new model every day, switched on by a person | Python, LightGBM |
 | Grafana | dashboards over ClickHouse | Grafana |
 
