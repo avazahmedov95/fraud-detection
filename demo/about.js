@@ -108,7 +108,7 @@ ru: {
       "Читает решения из Kafka и пачками записывает их в ClickHouse; на каждое задержание открывает дело для аналитика.",
       "Если база недоступна, продолжает работать и считает, сколько записей потеряно."]],
     ch: ["ClickHouse", "ClickHouse", "хранилище", [
-      "Каждое решение со временем всех этапов и значениями признаков — по ним строится вкладка «Данные и результаты» и переобучается модель.",
+      "Каждое решение со временем всех этапов и значениями признаков — по ним строится Grafana и переобучается модель.",
       "Цепочка аудита: каждая запись связана с предыдущей хешем, поэтому незаметно изменить историю нельзя.",
       "Дела аналитика и его отметки."]],
     cases: ["Очередь аналитика", "Python", "демо · командная строка", [
@@ -118,7 +118,7 @@ ru: {
       "Заблокированный перевод система запоминает сразу: карта получателя попадает в список подтверждённых мошенников, и модель видит это на следующих переводах с этой карты и на неё. Снятое подтверждение убирает карту из списка.",
       "Дела можно отобрать по тому, кто задержал перевод: основная модель, жёсткое правило или вторая проверка."]],
     dash: ["Мониторинг", "Grafana · демо", "что видит банк", [
-      "Grafana показывает число переводов и тревог, типы, распределение риска, регионы.",
+      "Grafana показывает систему вживую: сколько переводов проверено и задержано, время решения рядом с целью 300 мс и на что оно уходит, кто задержал переводы, решения аналитика и деньги, оставшиеся у клиентов, и вторую проверку.",
       "Это демо показывает те же решения вживую."]]
   },
   walk_title: "Путь настоящего перевода",
@@ -255,7 +255,7 @@ en: {
       "Reads the decisions from Kafka and writes them to ClickHouse in batches; opens a case for the analyst on every hold.",
       "When a database is down it keeps running and counts how many records were lost."]],
     ch: ["ClickHouse", "ClickHouse", "the warehouse", [
-      "Every decision with the time of each stage and its feature values — the Data & results tab is built from them, and the model is retrained on them.",
+      "Every decision with the time of each stage and its feature values — Grafana is built from them, and the model is retrained on them.",
       "An audit chain: each record is linked to the one before by a hash, so the history cannot be changed unnoticed.",
       "The analyst's cases and verdicts."]],
     cases: ["Analyst's queue", "Python", "demo · command line", [
@@ -265,7 +265,7 @@ en: {
       "A blocked transfer teaches the system at once: the payee's card joins the list of confirmed fraud accounts, and the model sees it on the next transfers from or to that card. A withdrawn confirmation takes the card off the list.",
       "Cases can be filtered by what held the transfer: the model, a hard rule or the second look."]],
     dash: ["Monitoring", "Grafana · demo", "what the bank watches", [
-      "Grafana shows transfer and alert counts, types, the risk distribution, regions.",
+      "Grafana shows the system live: transfers checked and held, the decision time against the 300 ms target and where it goes, what held the transfers, the analyst's verdicts and the money kept with the clients, and the second look.",
       "This demo shows the same decisions live."]]
   },
   walk_title: "The path of a real transfer",
@@ -354,14 +354,12 @@ en: {
 }};
 
 const ab = k => (ABOUT[lang][k] ?? ABOUT.en[k] ?? k);
-const walk = {pool: [], rec: null, choice: "alert", idx: -1, timer: null, timing: null};
+const walk = {pool: [], rec: null, choice: "alert", idx: -1, timer: null};
 
 async function renderAbout() {
   drawAbout();
   try {
-    const [s, live] = await Promise.all([api("/api/stream?limit=400"), api("/api/live")]);
-    walk.pool = s.rows || [];
-    walk.timing = live.timing || null;
+    walk.pool = (await api("/api/stream?limit=400")).rows || [];
   } catch (e) { /* the gate screen covers a stack that stopped answering */ }
   if (!walk.rec) walk.rec = candidates()[walk.choice] || null;
   drawAbout();
@@ -386,7 +384,8 @@ function drawAbout() {
     return `<button type="button" class="comp ${c.store ? "store" : ""} ${c.ml ? "ml" : ""}" data-comp="${c.id}">` +
       `<span class="kind">${esc(kind)}</span><span class="name">${esc(name)}</span><span class="sub">${esc(sub)}</span></button>`;
   };
-  const modelMs = (((walk.timing || {}).stages || []).find(s => s.name === "model") || {}).ms;
+  const modelTimes = walk.pool.filter(byJob).map(r => Number((r.stages || {}).model)).filter(Number.isFinite);
+  const modelMs = modelTimes.length ? modelTimes.reduce((a, b) => a + b, 0) / modelTimes.length : null;
   const features = FEATURE_GROUPS.reduce((n, [, names]) => n + names.length, 0);
   const cut = status && status.cut;
   $("#about").innerHTML = `
@@ -421,7 +420,12 @@ function drawAbout() {
           <button type="button" data-rules>${esc(fill(ab("rules_btn"), {n: Object.keys(RULE_FACTS).length}))}</button></div>
         <p class="panel-sub">${esc(ab("rules_intro"))}</p>
       </div>
-    </div>`;
+    </div>
+    <div class="panel">
+      <div class="panel-h"><h2>${esc(t("retrain_title"))}</h2></div>
+      <p class="panel-sub">${esc(retrainText(results && results.retrain))}</p>
+    </div>
+    ${resultsHtml()}`;
   paintWalk();
 }
 

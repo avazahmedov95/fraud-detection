@@ -48,9 +48,6 @@ HELD_OUT_FROM = 0.80    # ml/train.py's cut: the model never trained past it
 HISTORY_ROWS = 8        # the sender's own transfers replayed before the episode
 EPISODE_HOURS = 6       # how far around the picked row the episode's rows are sought
 KINDS = ("NORMAL", "APP", "ATO", "MULE", "STRUCTURING")
-#: The job's decision path (stream-processor/fraud_job.py STAGES), each stored by
-#: sink-writer as stage_<name>_ms.
-STAGES = ("kafka", "handoff", "decode", "state", "redis", "rules", "model", "decide")
 LIVE_WINDOW = 1000      # how many of the latest decisions the time figures cover
 PAGE = 20               # rows the stream and the queue show before "show more"
 
@@ -155,14 +152,13 @@ def mask(card):
 
 
 def _dashboard_url():
-    """The overview dashboard in kiosk mode, reaching back to the dataset's own
-    times, which the background replay keeps."""
+    """The overview dashboard in kiosk mode, on its own time range."""
     try:
         with open(DASHBOARD, encoding="utf-8") as fh:
             uid = json.load(fh)["uid"]
     except (OSError, KeyError, ValueError):
         return ""
-    return f"{GRAFANA}/d/{uid}?orgId=1&kiosk&refresh=10s&from=now-2y&to=now"
+    return f"{GRAFANA}/d/{uid}?orgId=1&kiosk"
 
 
 def _review_cut():
@@ -229,17 +225,6 @@ def job_running(overview):
     """Whether Flink's /jobs/overview lists the fraud job as RUNNING."""
     return any(j.get("name") == JOB_NAME and j.get("state") == "RUNNING"
                for j in (overview or {}).get("jobs", []))
-
-
-def stage_summary(row):
-    """(count, an average per stage, median, p99) as the page draws it; the averages
-    add up to the mean time from arrival to decision."""
-    n = int(row[0] or 0)
-    values = [_finite(v) for v in row[1:]] if n else [None] * (len(STAGES) + 2)
-    avgs, (median, p99) = values[:len(STAGES)], values[len(STAGES):]
-    return {"n": n, "stages": [{"name": s, "ms": a} for s, a in zip(STAGES, avgs)],
-            "total_ms": sum(a for a in avgs if a is not None) if n else None,
-            "median_ms": median, "p99_ms": p99}
 
 
 def retrain_status():
@@ -520,7 +505,7 @@ class App:
         self.decisions, self.background, self.sender = Decisions(), Background(), Sender()
         self.runs, self.started = OrderedDict(), time.time()
         self.grafana, self.cut, self.second_cut = _dashboard_url(), _review_cut(), _second_cut()
-        self._store, self._warehouse, self._explainer = None, None, None
+        self._store, self._explainer = None, None
         try:
             self.library, self.library_error = Episodes(csv_path), ""
         except (OSError, KeyError, ValueError) as exc:
@@ -631,7 +616,7 @@ class App:
         with open(os.path.join(HERE, "results.json"), encoding="utf-8") as fh:
             quoted = json.load(fh)
         own["second"] = quoted["own"]["second"]
-        return {"own": own, "public": quoted["datasets"]}
+        return {"own": own, "public": quoted["datasets"], "retrain": retrain_status()}
 
     def store(self):
         if self._store is None:
@@ -639,32 +624,6 @@ class App:
             s.open()
             self._store = s
         return self._store
-
-    def warehouse(self):
-        if self._warehouse is None:
-            import clickhouse_connect
-            self._warehouse = clickhouse_connect.get_client(**CLICKHOUSE)
-        return self._warehouse
-
-    def live(self):
-        """Each stage's average and arrival to decision over the latest decisions,
-        the verdicts, the holds and the retrainer's last run."""
-        cols = [f"stage_{s}_ms" for s in STAGES]
-        q = (f"SELECT count(), {', '.join(f'avg({c})' for c in cols)}, "
-             f"quantileExact(0.5)(total), quantileExact(0.99)(total) FROM ("
-             f"SELECT {', '.join(cols)}, toUnixTimestamp64Milli(scored_at_job)"
-             f" - toUnixTimestamp64Milli(ingested_at) AS total"
-             f" FROM transactions_scored WHERE stage_decide_ms IS NOT NULL"
-             f" AND toUnixTimestamp64Milli(ingested_at) > 0"
-             f" ORDER BY scored_at_job DESC LIMIT {LIVE_WINDOW})")
-        try:
-            timing = stage_summary(self.warehouse().query(q).result_rows[0])
-        except Exception as exc:                       # noqa: BLE001 - shown on the page
-            self._warehouse = None
-            timing = {"error": str(exc)[:300]}
-        queue = self.cases()
-        return {"timing": timing, "verdicts": queue["stats"], "holds": queue["holds"],
-                "retrain": retrain_status()}
 
     def cases(self, new_only=False, limit=PAGE, flt=None):
         """The queue's first `limit` cases passing the filter, and how many pass.
@@ -676,10 +635,9 @@ class App:
                 raise RuntimeError("the case store cannot reach ClickHouse; see docker logs demo")
             items = s.open_cases(limit=500, since=self.started if new_only else None)
             done = s.resolved_cases(since=self.started, limit=PAGE) if new_only else []
-            stats, holds = s.stats(), s.holds()
+            stats = s.stats()
         except Exception as exc:                       # noqa: BLE001 - shown on the page
-            return {"error": str(exc)[:300], "cases": [], "done": [], "total": 0,
-                    "stats": {}, "holds": {}}
+            return {"error": str(exc)[:300], "cases": [], "done": [], "total": 0, "stats": {}}
         now = time.time()
         if flt:
             items = [c for c in items if passes(
@@ -702,8 +660,7 @@ class App:
                           "held": c["decision"] == "REVIEW"}
                          for c in done],
                 "stats": {k: v for k, v in stats.items()
-                          if k in ("NEW", "CONFIRMED_FRAUD", "FALSE_POSITIVE", "_precision")},
-                "holds": holds}
+                          if k in ("NEW", "CONFIRMED_FRAUD", "FALSE_POSITIVE", "_precision")}}
 
     def resolve(self, case_id, disposition):
         """Block the held transfer (CONFIRMED_FRAUD) or release it (FALSE_POSITIVE);
@@ -755,8 +712,6 @@ class Handler(BaseHTTPRequestHandler):
         elif path.startswith("/api/episode/"):
             run = APP.run(path.rsplit("/", 1)[1])
             self._json(run if run else {"error": "unknown run"}, 200 if run else 404)
-        elif path == "/api/live":
-            self._json(APP.live())
         elif path == "/api/results":
             self._json(APP.results())
         elif path == "/api/cases":

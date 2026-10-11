@@ -162,25 +162,6 @@ button.on-filter{border-color:var(--accent);background:var(--accent-soft)}
 .modal-card h3{margin:2px 0 0;font-size:1.1rem}.modal-card ul{margin:12px 0 0;padding-left:18px;display:grid;gap:6px;font-size:.9rem}
 .modal-card .kind{font:500 .7rem var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .modal-close{float:right}
-.timing{max-width:860px;margin-bottom:14px}
-.live{font-size:.7rem;font-weight:600;color:var(--ok);background:var(--ok-soft);border-radius:999px;padding:2px 9px}
-.lead{margin:-4px 14px 12px;color:var(--muted);font-size:.88rem;max-width:70ch}
-.stages{list-style:none;margin:0;padding:0;counter-reset:stage}
-.stages li{counter-increment:stage;display:grid;grid-template-columns:26px minmax(0,1fr) minmax(70px,180px) 84px;gap:4px 12px;align-items:center;padding:9px 14px;border-top:1px solid var(--line)}
-.stages li::before{content:counter(stage);font:600 .78rem var(--mono);color:var(--muted)}
-.stages .name{font-weight:600;font-size:.9rem}.stages .desc{display:block;color:var(--muted);font-size:.78rem;font-weight:400}
-.stages .sbar{height:8px;border-radius:4px;background:var(--panel-2);position:relative}
-.stages .sbar i{position:absolute;inset:0 auto 0 0;border-radius:4px;background:var(--accent);min-width:2px}
-.stages li.model .sbar i{background:var(--alert-bar)}
-.stages .v{font:500 .88rem var(--mono);text-align:right;white-space:nowrap}
-@media (max-width:560px){.stages li{grid-template-columns:22px minmax(0,1fr) 70px}.stages .sbar{display:none}}
-.total{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;padding:12px 14px;border-top:2px solid var(--ink)}
-.total span{font-weight:600}.total b{font:600 1.2rem var(--mono);margin-left:auto}
-.fine{color:var(--muted);font-size:.8rem;margin:0;padding:0 14px 14px;max-width:75ch}
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;padding:0 14px 14px}
-.tile{background:var(--panel-2);border-radius:10px;padding:10px 14px}
-.tile span{color:var(--muted);font-size:.78rem}.tile b{display:block;font:600 1.25rem var(--mono)}
-.tile small{display:block;color:var(--muted);font-size:.74rem;margin-top:2px}
 .part-title{font-size:1.05rem;margin:26px 0 4px}
 .cmp-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin-bottom:10px}
 .cmp{min-width:720px}.cmp th{padding-top:10px}
@@ -213,7 +194,6 @@ button.on-filter{border-color:var(--accent);background:var(--accent-soft)}
       <button type="button" data-tab="desk" data-t="tab_desk"></button>
       <button type="button" data-tab="about" data-t="tab_about"></button>
       <button type="button" data-tab="grafana" data-t="tab_grafana"></button>
-      <button type="button" data-tab="results" data-t="tab_results"></button>
     </nav>
     <div id="banner" class="banner" hidden></div>
 
@@ -270,31 +250,6 @@ button.on-filter{border-color:var(--accent);background:var(--accent-soft)}
       <iframe id="grafana-frame" class="frame" title="Grafana"></iframe>
     </section>
 
-    <section id="results" hidden>
-      <div class="panel timing">
-        <div class="panel-h"><h2 data-t="time_title"></h2><span class="grow"></span><span class="live" data-t="live_tag"></span></div>
-        <p class="lead" data-t="time_lead"></p>
-        <ol class="stages" id="stages"></ol>
-        <div class="total" id="total"></div>
-        <p class="fine" id="time-fine"></p>
-      </div>
-      <div class="panel timing">
-        <div class="panel-h"><h2 data-t="verdicts_title"></h2><span class="grow"></span><span class="live" data-t="live_tag"></span></div>
-        <p class="lead" data-t="verdicts_hint"></p>
-        <div class="tiles" id="verdicts"></div>
-      </div>
-      <div class="panel timing">
-        <div class="panel-h"><h2 data-t="retrain_title"></h2><span class="grow"></span><span class="live" data-t="live_tag"></span></div>
-        <p class="lead" id="retrain"></p>
-      </div>
-      <h2 class="part-title" id="trained-title"></h2>
-      <p class="hint" data-t="trained_hint"></p>
-      <div class="cmp-wrap"><table class="cmp">
-        <thead><tr><th data-t="c_data"></th><th data-t="c_what"></th><th data-t="c_ours"></th></tr></thead>
-        <tbody id="cmp"></tbody>
-      </table></div>
-    </section>
-
     <div class="modal" id="modal" hidden><div class="modal-card" id="modal-card" role="dialog" aria-modal="true"></div></div>
   </div>
 </div>
@@ -303,7 +258,7 @@ button.on-filter{border-color:var(--accent);background:var(--accent-soft)}
 const T = {
 ru: {
   title: "Обнаружение мошенничества в P2P-переводах", subtitle: "· живое демо",
-  tab_desk: "Рабочее место", tab_about: "О проекте", tab_grafana: "Grafana", tab_results: "Данные и результаты",
+  tab_desk: "Рабочее место", tab_about: "О проекте", tab_grafana: "Grafana",
   shown_of: "Показано {n} из {total}", more: "Показать ещё {step}", less: "Свернуть",
   part: {kafka: "Kafka — очередь сообщений", clickhouse: "ClickHouse — база данных",
     job: "Задача Flink — принимает решения", data: "Данные генератора"},
@@ -362,20 +317,6 @@ ru: {
   reported: "Записано", report_wait: "Перевода ещё нет в хранилище — попробуйте через несколько секунд",
   grafana_hint: "Панель мониторинга Grafana из этого же стека: те же решения, собранные в базе, — число переводов и тревог, типы, распределение риска, регионы, последние тревоги с причинами. Если в рамке появится вход: логин admin, пароль из файла .env.",
   grafana_open: "Открыть Grafana в отдельной вкладке",
-  live_tag: "живые данные из базы",
-  time_title: "Сколько времени занимает каждый этап",
-  time_lead: "Путь одного перевода от прихода до решения. Каждое число — среднее по последним решениям в базе, и этапы складываются в общее время.",
-  stage: {kafka: ["Во входную очередь", "Перевод записывается в Kafka."],
-    handoff: ["Передача на обработку", "Flink читает очередь и передаёт переводы дальше небольшими пачками: пачка уходит через 50 мс или когда в ней 100 переводов."],
-    decode: ["Чтение сообщения", "Перевод распаковывается."],
-    state: ["История отправителя", "Что этот отправитель делал раньше; хранится во Flink."],
-    redis: ["Сторона получателя", "Последние платежи этому получателю, из Redis."],
-    rules: ["Признаки и правила", "24 признака, 10 правил."],
-    model: ["Модель", "Один прогноз модели LightGBM."],
-    decide: ["Решение", "Пропустить или задержать, название тревоги, запись результата."]},
-  total_avg: "От прихода до решения, в среднем",
-  time_fine: "Среднее по последним {n} решениям в базе. Половина из них принята быстрее {median}, 99% — быстрее {p99}. Решения попадают в базу примерно через полминуты.",
-  time_empty: "В базе ещё нет решений со временем этапов. Запустите поток или покажите случай — через полминуты они появятся здесь.",
   retrain_title: "Переобучение модели",
   rt_never: "Служба переобучения ещё не запускалась.",
   rt_on: "Включено, раз в {h} ч. Последний запуск: {when}.",
@@ -385,10 +326,7 @@ ru: {
   rt_not: "Новая модель не лучше ({a} против {b}): оставлена прежняя.",
   rt_failed: "Запуск не удался: {e}",
   rt_moved: "Сильнее всего изменились признаки: {f}.",
-  verdicts_title: "Задержанные переводы и решения аналитика", verdicts_hint: "Все дела в базе, включая прошлые показы.",
-  v_open: "Задержаны сейчас", v_conf: "Заблокировано: мошенничество", v_fp: "Отпущено: ложные тревоги", v_prec: "Точность по разобранным",
-  v_open_sub: "дольше всех: {t}", v_conf_sub: "{amount} сум остались у отправителей",
-  v_fp_sub: "ждали: в среднем {median}, дольше всех {max}", sec: "с", min: "мин", hour: "ч",
+  sec: "с", min: "мин", hour: "ч",
   trained_title: "Измерено при обучении модели, {date}",
   trained_hint: "Эти цифры не живые: их посчитали один раз, при обучении, на данных, которых модель не видела. Меняются только при переобучении.",
   c_data: "Данные", c_what: "Из чего состоят", c_ours: "Наш результат",
@@ -431,7 +369,7 @@ ru: {
 },
 en: {
   title: "P2P transfer fraud detection", subtitle: "· live demo",
-  tab_desk: "Desk", tab_about: "About the project", tab_grafana: "Grafana", tab_results: "Data & results",
+  tab_desk: "Desk", tab_about: "About the project", tab_grafana: "Grafana",
   shown_of: "Showing {n} of {total}", more: "Show {step} more", less: "Show fewer",
   part: {kafka: "Kafka — the message queue", clickhouse: "ClickHouse — the database",
     job: "Flink job — makes the decisions", data: "The generator's data"},
@@ -490,20 +428,6 @@ en: {
   reported: "Recorded", report_wait: "Not in the warehouse yet — try again in a few seconds",
   grafana_hint: "The Grafana dashboard from the same stack: the same decisions as stored in the database — transfer and alert counts, types, the risk distribution, regions, the latest alerts with their reasons. If a login appears in the frame: user admin, password from the .env file.",
   grafana_open: "Open Grafana in its own tab",
-  live_tag: "live, from the database",
-  time_title: "How long each stage takes",
-  time_lead: "One transfer's path from arrival to decision. Each figure is the average over the latest decisions in the database, and the stages add up to the total.",
-  stage: {kafka: ["Into the incoming queue", "The transfer is written to Kafka."],
-    handoff: ["Handed to the processing step", "Flink reads the queue and passes transfers on in small batches: a batch leaves after 50 ms or at 100 transfers."],
-    decode: ["Reading the message", "The transfer is unpacked."],
-    state: ["The sender's history", "What this sender did before, kept in Flink."],
-    redis: ["The receiver's side", "Recent payments to this receiver, from Redis."],
-    rules: ["Features and rules", "24 features computed, 10 rules checked."],
-    model: ["The model", "One prediction by the LightGBM model."],
-    decide: ["The decision", "Allow or hold, the alert named, the record written."]},
-  total_avg: "From arrival to decision, on average",
-  time_fine: "Average over the latest {n} decisions in the database. Half of them were decided within {median}, 99% within {p99}. Decisions reach the database about half a minute after they are made.",
-  time_empty: "The database holds no decision with stage times yet. Start the stream or show a case: they appear here within half a minute.",
   retrain_title: "Model retraining",
   rt_never: "The retraining service has not run yet.",
   rt_on: "On, every {h} h. Last run: {when}.",
@@ -513,10 +437,7 @@ en: {
   rt_not: "The new model is not better ({a} against {b}): the current one stays.",
   rt_failed: "The run failed: {e}",
   rt_moved: "Most moved features: {f}.",
-  verdicts_title: "Held transfers and the analyst's verdicts", verdicts_hint: "Every case in the database, earlier demos included.",
-  v_open: "Held now", v_conf: "Blocked: fraud", v_fp: "Released: false alarms", v_prec: "Precision on resolved",
-  v_open_sub: "the longest: {t}", v_conf_sub: "{amount} UZS kept with the senders",
-  v_fp_sub: "waited {median} at the median, {max} at the longest", sec: "s", min: "min", hour: "h",
+  sec: "s", min: "min", hour: "h",
   trained_title: "Measured when the model was trained, {date}",
   trained_hint: "These figures are not live: they were computed once, at training, on data the model never saw. They change only when the model is retrained.",
   c_data: "Data", c_what: "What it holds", c_ours: "Our result",
@@ -583,7 +504,7 @@ function applyLang() {
   document.documentElement.lang = lang;
   document.querySelectorAll("[data-t]").forEach(el => el.textContent = t(el.dataset.t));
   document.querySelectorAll("[data-lang]").forEach(b => b.classList.toggle("on", b.dataset.lang === lang));
-  renderScenarios(); renderStatus(); renderStream(); renderQueue(); renderDetail(); renderResults();
+  renderScenarios(); renderStatus(); renderStream(); renderQueue(); renderDetail();
   renderFilterButtons();
   if (tab === "about") renderAbout();
 }
@@ -859,36 +780,6 @@ function showGrafana() {
   if (url && !$("#grafana-frame").getAttribute("src")) $("#grafana-frame").src = url;
 }
 
-let live = null;
-async function refreshLive() { live = await api("/api/live"); renderLive(); }
-
-function renderLive() {
-  if (!live) return;
-  const tm = live.timing || {};
-  if (tm.error) { $("#stages").innerHTML = ""; $("#total").innerHTML = ""; $("#time-fine").textContent = tm.error; }
-  else {
-    const scale = tm.total_ms || 1;
-    $("#stages").innerHTML = (tm.stages || []).map(s => {
-      const [name, desc] = t("stage")[s.name] || [s.name, ""];
-      return `<li class="${s.name === "model" ? "model" : ""}"><span class="name">${esc(name)}<span class="desc">${esc(desc)}</span></span>` +
-        `<span class="sbar">${s.ms == null ? "" : `<i style="width:${100 * s.ms / scale}%"></i>`}</span><span class="v">${fmtMs(s.ms)}</span></li>`;
-    }).join("");
-    $("#total").innerHTML = `<span>${t("total_avg")}</span><b>${fmtMs(tm.total_ms)}</b>`;
-    $("#time-fine").textContent = tm.n ? fill(t("time_fine"), {n: fmtInt(tm.n), median: fmtMs(tm.median_ms), p99: fmtMs(tm.p99_ms)}) : t("time_empty");
-  }
-  const v = live.verdicts || {}, h = live.holds || {};
-  const held = h.NEW || {}, kept = h.CONFIRMED_FRAUD || {}, freed = h.FALSE_POSITIVE || {};
-  $("#verdicts").innerHTML = [
-    ["v_open", fmtInt(v.NEW || 0), held.n ? fill(t("v_open_sub"), {t: fmtDur(held.max_s)}) : ""],
-    ["v_conf", fmtInt(v.CONFIRMED_FRAUD || 0), kept.n ? fill(t("v_conf_sub"), {amount: fmtInt(kept.amount)}) : ""],
-    ["v_fp", fmtInt(v.FALSE_POSITIVE || 0),
-     freed.n ? fill(t("v_fp_sub"), {median: fmtDur(freed.median_s), max: fmtDur(freed.max_s)}) : ""],
-    ["v_prec", v._precision == null ? "—" : pct(v._precision), ""]]
-    .map(([k, val, sub]) => `<div class="tile"><span>${t(k)}</span><b>${val}</b>` +
-      `${sub ? `<small>${esc(sub)}</small>` : ""}</div>`).join("");
-  $("#retrain").textContent = retrainText(live.retrain);
-}
-
 // The retrainer's latest run (ml/retrain.py), in words.
 function retrainText(s) {
   if (!s) return t("rt_never");
@@ -909,18 +800,19 @@ function retrainText(s) {
 // What the second look adds on our own data, as results.json quotes it.
 const secondLine = d => d.second ? `<br><small>${esc(d.second[lang])}</small>` : "";
 
-function renderResults() {
-  renderLive();
-  if (!results) return;
+// The model's figures from its training and on the public datasets, for the About tab.
+function resultsHtml() {
+  if (!results) return "";
   const o = results.own || {};
   const date = o.trained_at ? new Date(o.trained_at).toLocaleDateString(locale(), {day: "numeric", month: "long", year: "numeric"}) : "—";
-  $("#trained-title").textContent = fill(t("trained_title"), {date});
   const own = o.error ? `<tr><td>${t("own_name")}</td><td colspan="2">${esc(o.error)}</td></tr>`
     : `<tr><td>${t("own_name")}</td>` +
       `<td>${fill(t("own_what"), {rows: fmtInt(o.rows), share: dec(o.fraud_share * 100, 2) + "%", types: o.types, test: fmtInt(o.test), tf: fmtInt(o.test_fraud)})}</td>` +
       `<td class="ours">${fill(t("own_ours"), {rec: pct(o.recall), prec: pct(o.precision), f1: pct(o.f1)})}${secondLine(o)}</td></tr>`;
-  $("#cmp").innerHTML = own + (results.public || []).map(d => `<tr><td>${esc(d.name[lang])}</td>` +
-    `<td>${esc(d.what[lang])}</td><td class="ours">${esc(d.ours[lang])}</td></tr>`).join("");
+  return `<h2 class="part-title">${esc(fill(t("trained_title"), {date}))}</h2><p class="hint">${esc(t("trained_hint"))}</p>` +
+    `<div class="cmp-wrap"><table class="cmp"><thead><tr><th>${t("c_data")}</th><th>${t("c_what")}</th><th>${t("c_ours")}</th></tr></thead>` +
+    `<tbody>${own}${(results.public || []).map(d => `<tr><td>${esc(d.name[lang])}</td>` +
+      `<td>${esc(d.what[lang])}</td><td class="ours">${esc(d.ours[lang])}</td></tr>`).join("")}</tbody></table></div>`;
 }
 
 async function openTab(name) {
@@ -928,9 +820,9 @@ async function openTab(name) {
   document.querySelectorAll("#app section").forEach(s => s.hidden = s.id !== tab);
   document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
   if (tab === "grafana") showGrafana();
-  if (tab === "results" || tab === "about") {
+  if (tab === "about") {
     if (!results) results = await api("/api/results");
-    if (tab === "results") { renderResults(); refreshLive(); } else renderAbout();
+    renderAbout();
   }
 }
 
@@ -991,7 +883,6 @@ tick(); refreshCases().catch(() => {});
 setInterval(tick, 1000);
 setInterval(() => { if (ready() && tab === "desk") refreshCases().catch(() => {}); }, 3000);
 setInterval(() => { if (ready() && runId) refreshRun().catch(() => {}); }, 700);
-setInterval(() => { if (ready() && tab === "results") refreshLive().catch(() => {}); }, 5000);
 </script>
 <script src="about.js"></script>
 </body>

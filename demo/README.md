@@ -12,7 +12,7 @@ comes from them.
 | `queue_cli.py` | the same queue on the command line: `list`, `show`, `resolve`, `report`, `stats` |
 | `index.html` | the page |
 | `about.js` | the "About the project" tab |
-| `results.json` | the figures the results tab quotes, each with the line of the document it came from |
+| `results.json` | the figures the About tab quotes, each with the line of the document it came from |
 | `tests/` | `python -m pytest demo -q` |
 
 Tabs:
@@ -22,11 +22,12 @@ Tabs:
   release, the verdicts given, each of which can be changed, and on an allowed
   transfer the client's report that it was fraud.
 - **About the project** - every component, the path of one real decision with its
-  stage times, the 24 features and the 10 rules.
-- **Grafana** - the dashboard (Grafana asks for its login).
-- **Data & results** - the live stage times and verdicts, the retrainer's latest
-  run, the model's figures from `ml/models/metrics.json`, the second look, and the two
-  public datasets.
+  stage times, the 24 features and the 10 rules, the retrainer's latest run, the
+  model's figures from `ml/models/metrics.json`, the second look, and the two public
+  datasets.
+- **Grafana** - the system live: transfers checked and held, the decision time against
+  the 300 ms target and where it goes, what held the transfers, the analyst's verdicts
+  and the money kept, the second look (Grafana asks for its login).
 
 A verdict is the analyst's: CONFIRMED_FRAUD blocks the held transfer and puts the
 payee's card into the confirmed fraud accounts the job reads (Redis,

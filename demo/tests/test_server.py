@@ -116,9 +116,6 @@ def test_the_case_queue_reads_only_what_a_case_stores():
         def stats(self):
             return {}
 
-        def holds(self):
-            return {}
-
     app = SimpleNamespace(started=0, store=Store)
     assert len(S.App.cases(app)["cases"]) == 1
 
@@ -158,9 +155,6 @@ def test_the_verdicts_of_this_showing_come_with_the_queue():
             return [row]
 
         def stats(self):
-            return {}
-
-        def holds(self):
             return {}
 
     out = S.App.cases(SimpleNamespace(started=0, store=Store), new_only=True)
@@ -207,25 +201,16 @@ def test_decision_time_runs_from_arrival_to_decision():
     assert S.decision_ms({"scored_at_job": 100.0}) is None      # a producer that stamps nothing
 
 
-def test_the_stage_averages_add_up_and_an_empty_window_says_so():
-    row = [1000, 1.2, 71.5, 0.02, 1.58, 0.84, 0.32, 0.21, 0.01, 84, 197]
-    out = S.stage_summary(row)
-    assert [s["name"] for s in out["stages"]] == list(S.STAGES)
-    assert out["total_ms"] == pytest.approx(sum(row[1:9]))
-    assert (out["median_ms"], out["p99_ms"]) == (84, 197)
-    empty = S.stage_summary([0] + [float("nan")] * 8 + [0, 0])
-    assert empty["total_ms"] is None and empty["median_ms"] is None
-    assert all(s["ms"] is None for s in empty["stages"])
-
-
-def test_the_demo_names_the_same_stages_as_the_job():
+def test_the_about_tab_names_the_same_stages_as_the_job():
+    """The path of a decision reads each stage's time by the job's own names."""
     import ast
     import os
     job = os.path.join(os.path.dirname(S.__file__), "..", "stream-processor", "fraud_job.py")
     tree = ast.parse(open(job, encoding="utf-8").read())
     stages = next(n.value for n in tree.body if isinstance(n, ast.Assign)
                   and getattr(n.targets[0], "id", "") == "STAGES")
-    assert ast.literal_eval(stages) == S.STAGES
+    walk = _repo("demo", "about.js").split("const WALK = [", 1)[1].split("];", 1)[0]
+    assert re.findall(r'stage: "(\w+)"', walk) == list(ast.literal_eval(stages))
 
 
 def _repo(*parts):
@@ -291,9 +276,6 @@ def test_the_queue_sends_a_page_and_says_how_many_are_open():
             return rows
 
         def stats(self):
-            return {}
-
-        def holds(self):
             return {}
 
     out = S.App.cases(SimpleNamespace(started=0, store=Store), limit=S.PAGE)
@@ -365,9 +347,6 @@ def test_the_queue_filter_finds_what_held_each_transfer():
             return rows
 
         def stats(self):
-            return {}
-
-        def holds(self):
             return {}
 
     app = SimpleNamespace(started=0, store=Store, cut=0.1)
