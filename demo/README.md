@@ -25,9 +25,10 @@ Tabs:
   stage times, the 24 features and the 10 rules, the retrainer's latest run, the
   model's figures from `ml/models/metrics.json`, the second look, and the two public
   datasets.
-- **Grafana** - the system live: transfers checked and held, the decision time against
-  the 300 ms target and where it goes, what held the transfers, the analyst's verdicts
-  and the money kept, the second look (Grafana asks for its login).
+- **Grafana** - the system live, over the last hour: transfers checked and held, the
+  decision time against the 300 ms target and where it goes, what held the transfers,
+  the analyst's verdicts and the money kept, the second look (Grafana asks for its
+  login).
 
 A verdict is the analyst's: CONFIRMED_FRAUD blocks the held transfer and puts the
 payee's card into the confirmed fraud accounts the job reads (Redis,

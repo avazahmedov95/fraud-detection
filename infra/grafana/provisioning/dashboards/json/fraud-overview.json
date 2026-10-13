@@ -7,11 +7,11 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "editable": true,
   "refresh": "10s",
   "time": {
-    "from": "now-24h",
+    "from": "now-1h",
     "to": "now"
   },
   "templating": {
@@ -33,7 +33,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "**The fraud detection system, live.** Every figure comes from the system's own decisions in ClickHouse, over the time range at the top right. The transfers come from the project's generator, not from a real bank."
+        "content": "**The fraud detection system, live.** Every figure comes from the system's own decisions in ClickHouse over the last hour. The transfers come from the project's generator, not from a real bank."
       }
     },
     {
@@ -44,7 +44,7 @@
         "x": 0,
         "y": 2,
         "w": 5,
-        "h": 4
+        "h": 3
       },
       "datasource": {
         "type": "grafana-clickhouse-datasource",
@@ -59,12 +59,14 @@
           "editorType": "sql",
           "rawSql": "SELECT uniqExact(transaction_id) AS value\nFROM fraud.transactions_scored\nWHERE $__timeFilter(scored_at_job)",
           "queryType": "table",
+          "format": 1,
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {},
+          "noValue": "—",
           "unit": "short"
         },
         "overrides": []
@@ -88,7 +90,7 @@
         "x": 5,
         "y": 2,
         "w": 5,
-        "h": 4
+        "h": 3
       },
       "datasource": {
         "type": "grafana-clickhouse-datasource",
@@ -103,12 +105,14 @@
           "editorType": "sql",
           "rawSql": "SELECT countIf(decision = 'REVIEW') AS value\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY scored_at DESC LIMIT 1 BY transaction_id)",
           "queryType": "table",
+          "format": 1,
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {},
+          "noValue": "—",
           "unit": "short"
         },
         "overrides": []
@@ -132,7 +136,7 @@
         "x": 10,
         "y": 2,
         "w": 4,
-        "h": 4
+        "h": 3
       },
       "datasource": {
         "type": "grafana-clickhouse-datasource",
@@ -147,13 +151,16 @@
           "editorType": "sql",
           "rawSql": "SELECT 100.0 * countIf(decision = 'REVIEW') / count() AS value\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY scored_at DESC LIMIT 1 BY transaction_id)",
           "queryType": "table",
+          "format": 1,
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {},
-          "unit": "percent"
+          "noValue": "—",
+          "unit": "percent",
+          "decimals": 2
         },
         "overrides": []
       },
@@ -171,14 +178,14 @@
     {
       "id": 5,
       "type": "stat",
-      "title": "Decision time, half within",
+      "title": "Median decision time",
       "gridPos": {
         "x": 14,
         "y": 2,
         "w": 5,
-        "h": 4
+        "h": 3
       },
-      "description": "From the transfer's arrival to the decision. The target is 300 ms.",
+      "description": "Half of the decisions take less than this, from the transfer's arrival. The target is 300 ms.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -192,12 +199,14 @@
           "editorType": "sql",
           "rawSql": "SELECT quantile(0.5)(toUnixTimestamp64Milli(scored_at_job) - toUnixTimestamp64Milli(ingested_at)) AS value\nFROM fraud.transactions_scored\nWHERE $__timeFilter(scored_at_job) AND toUnixTimestamp64Milli(ingested_at) > 0\n  AND NOT startsWith(model_version, 'second-look')",
           "queryType": "table",
+          "format": 1,
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {},
+          "noValue": "—",
           "unit": "ms",
           "thresholds": {
             "mode": "absolute",
@@ -229,14 +238,14 @@
     {
       "id": 6,
       "type": "stat",
-      "title": "Decision time, 99% within",
+      "title": "99% of decisions faster than",
       "gridPos": {
         "x": 19,
         "y": 2,
         "w": 5,
-        "h": 4
+        "h": 3
       },
-      "description": "99 of 100 decisions are faster than this. The target is 300 ms.",
+      "description": "The target is 300 ms.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -250,12 +259,14 @@
           "editorType": "sql",
           "rawSql": "SELECT quantile(0.99)(toUnixTimestamp64Milli(scored_at_job) - toUnixTimestamp64Milli(ingested_at)) AS value\nFROM fraud.transactions_scored\nWHERE $__timeFilter(scored_at_job) AND toUnixTimestamp64Milli(ingested_at) > 0\n  AND NOT startsWith(model_version, 'second-look')",
           "queryType": "table",
+          "format": 1,
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {},
+          "noValue": "—",
           "unit": "ms",
           "thresholds": {
             "mode": "absolute",
@@ -291,7 +302,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 6,
+        "y": 5,
         "w": 24,
         "h": 1
       },
@@ -299,14 +310,15 @@
     },
     {
       "id": 8,
-      "type": "timeseries",
-      "title": "Decision time (ms) against the 300 ms target",
+      "type": "table",
+      "title": "How fast the decisions were",
       "gridPos": {
         "x": 0,
-        "y": 7,
-        "w": 16,
+        "y": 6,
+        "w": 12,
         "h": 8
       },
+      "description": "The share of transfers decided within each time, from arrival to decision. The target is 300 ms, so the last bar should stay empty.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -318,95 +330,148 @@
             "uid": "clickhouse"
           },
           "editorType": "sql",
-          "rawSql": "SELECT $__timeInterval(scored_at_job) AS time,\n       quantile(0.5)(toUnixTimestamp64Milli(scored_at_job) - toUnixTimestamp64Milli(ingested_at)) AS median,\n       quantile(0.99)(toUnixTimestamp64Milli(scored_at_job) - toUnixTimestamp64Milli(ingested_at)) AS `99%`\nFROM fraud.transactions_scored\nWHERE $__timeFilter(scored_at_job) AND toUnixTimestamp64Milli(ingested_at) > 0\n  AND NOT startsWith(model_version, 'second-look')\nGROUP BY time\nORDER BY time",
-          "queryType": "timeseries",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "thresholdsStyle": {
-              "mode": "line"
-            }
-          },
-          "unit": "ms",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 300
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      }
-    },
-    {
-      "id": 9,
-      "type": "barchart",
-      "title": "Where the time goes (ms, average)",
-      "gridPos": {
-        "x": 16,
-        "y": 7,
-        "w": 8,
-        "h": 8
-      },
-      "datasource": {
-        "type": "grafana-clickhouse-datasource",
-        "uid": "clickhouse"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "grafana-clickhouse-datasource",
-            "uid": "clickhouse"
-          },
-          "editorType": "sql",
-          "rawSql": "SELECT stage, round(ms, 2) AS ms\nFROM (\n  SELECT avg(stage_kafka_ms) AS a1, avg(stage_handoff_ms) AS a2, avg(stage_decode_ms) AS a3,\n         avg(stage_state_ms) AS a4, avg(stage_redis_ms) AS a5, avg(stage_rules_ms) AS a6,\n         avg(stage_model_ms) AS a7, avg(stage_decide_ms) AS a8\n  FROM fraud.transactions_scored\n  WHERE $__timeFilter(scored_at_job) AND stage_decide_ms IS NOT NULL)\nARRAY JOIN\n  ['into Kafka', 'handed to Python', 'read', 'sender history', 'payee side (Redis)',\n   'features and rules', 'model', 'decision'] AS stage,\n  [a1, a2, a3, a4, a5, a6, a7, a8] AS ms",
+          "rawSql": "SELECT label, round(100.0 * n / nullIf(total, 0), 1) AS share\nFROM (SELECT count() AS total, countIf(ms < 25) AS c1, countIf(ms >= 25 AND ms < 50) AS c2,\n             countIf(ms >= 50 AND ms < 100) AS c3, countIf(ms >= 100 AND ms < 300) AS c4,\n             countIf(ms >= 300) AS c5\n      FROM (SELECT toUnixTimestamp64Milli(scored_at_job) - toUnixTimestamp64Milli(ingested_at) AS ms FROM fraud.transactions_scored\n            WHERE $__timeFilter(scored_at_job) AND toUnixTimestamp64Milli(ingested_at) > 0\n  AND NOT startsWith(model_version, 'second-look')))\nARRAY JOIN ['under 25 ms', '25 to 50 ms', '50 to 100 ms', '100 to 300 ms', 'over 300 ms'] AS label,\n           [c1, c2, c3, c4, c5] AS n",
           "queryType": "table",
+          "format": 1,
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {},
-          "unit": "ms"
+          "noValue": "—"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "share"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3274D9"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              }
+            ]
+          }
+        ]
       },
       "options": {
-        "orientation": "horizontal",
-        "xField": "stage",
-        "showValue": "always",
-        "legend": {
-          "showLegend": false
+        "showHeader": false,
+        "cellHeight": "md"
+      }
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Where a decision's time goes, by service (average)",
+      "gridPos": {
+        "x": 12,
+        "y": 6,
+        "w": 12,
+        "h": 8
+      },
+      "description": "Kafka keeps the transfer until Flink takes it in a small batch: almost all of the time. Flink then reads the sender's history from its own memory and the payee's side from Redis, computes the features, checks the rules, runs the model and decides.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "rawSql": "SELECT part, round(ms, 2) AS ms\nFROM (SELECT avg(stage_kafka_ms) AS k, avg(stage_handoff_ms) AS h, avg(stage_state_ms) AS s,\n             avg(stage_redis_ms) AS r, avg(stage_rules_ms) AS f, avg(stage_model_ms) AS m,\n             avg(stage_decode_ms + stage_decide_ms) AS d\n      FROM fraud.transactions_scored\n      WHERE $__timeFilter(scored_at_job) AND stage_decide_ms IS NOT NULL)\nARRAY JOIN ['Kafka: into the queue', 'Kafka to Flink: waiting for a batch',\n            'Flink: the sender''s history', 'Redis: the payee''s side',\n            'Flink: features and rules', 'Flink: the model (ONNX)',\n            'Flink: reading and deciding'] AS part,\n           [k, h, s, r, f, m, d] AS ms",
+          "queryType": "table",
+          "format": 1,
+          "refId": "A"
         }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "noValue": "—"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ms"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#3274D9"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": false,
+        "cellHeight": "md"
       }
     },
     {
       "id": 10,
       "type": "row",
-      "title": "Held transfers",
+      "title": "Transfers",
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 15,
+        "y": 14,
         "w": 24,
         "h": 1
       },
@@ -415,13 +480,14 @@
     {
       "id": 11,
       "type": "timeseries",
-      "title": "Transfers held",
+      "title": "Transfers checked and held",
       "gridPos": {
         "x": 0,
-        "y": 16,
+        "y": 15,
         "w": 16,
         "h": 8
       },
+      "description": "Checked: the left axis. Held for the analyst: the right axis.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -433,17 +499,43 @@
             "uid": "clickhouse"
           },
           "editorType": "sql",
-          "rawSql": "SELECT $__timeInterval(scored_at_job) AS time, countIf(decision = 'REVIEW') AS held\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY scored_at DESC LIMIT 1 BY transaction_id)\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT $__timeInterval(scored_at_job) AS time, count() AS checked,\n       countIf(decision = 'REVIEW') AS held\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY scored_at DESC LIMIT 1 BY transaction_id)\nGROUP BY time\nORDER BY time",
           "queryType": "timeseries",
+          "format": 0,
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {},
-          "unit": "short"
+          "noValue": "—",
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#3274D9"
+          }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "held"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF780A"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -457,15 +549,15 @@
     },
     {
       "id": 12,
-      "type": "piechart",
-      "title": "What held them",
+      "type": "table",
+      "title": "Who held the transfers",
       "gridPos": {
         "x": 16,
-        "y": 16,
+        "y": 15,
         "w": 8,
         "h": 8
       },
-      "description": "The fraud type the rules named, the model alone when no rule named it, or the second look.",
+      "description": "The rules name the fraud type; the model can hold a transfer no rule named; the second look checks the transfers just under the alert level.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -477,34 +569,58 @@
             "uid": "clickhouse"
           },
           "editorType": "sql",
-          "rawSql": "SELECT multiIf(startsWith(model_version, 'second-look'), 'second look (TabPFN)',\n        predicted_type = '', 'the model, no name',\n        transform(toString(predicted_type), ['APP', 'ATO', 'MULE', 'STRUCTURING'],\n                  ['phone scam', 'account takeover', 'money mule', 'split amounts'],\n                  toString(predicted_type))) AS held_by, count() AS held\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY scored_at DESC LIMIT 1 BY transaction_id)\nWHERE decision = 'REVIEW'\nGROUP BY held_by\nORDER BY held DESC",
+          "rawSql": "SELECT multiIf(startsWith(model_version, 'second-look'), 'the second look (TabPFN)',\n        predicted_type = '', 'the model, no fraud type named',\n        concat('the rules: ', transform(toString(predicted_type),\n               ['APP', 'ATO', 'MULE', 'STRUCTURING'],\n               ['phone scam', 'account takeover', 'money mule', 'split amounts'],\n               toString(predicted_type)))) AS held_by, count() AS held\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY scored_at DESC LIMIT 1 BY transaction_id)\nWHERE decision = 'REVIEW'\nGROUP BY held_by\nORDER BY held DESC",
           "queryType": "table",
+          "format": 1,
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": {}
+          "custom": {},
+          "noValue": "—"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "held"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF780A"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              }
+            ]
+          }
+        ]
       },
       "options": {
-        "reduceOptions": {
-          "values": true,
-          "calcs": [],
-          "fields": ""
-        },
-        "pieType": "pie",
-        "displayLabels": [
-          "value"
-        ],
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "values": [
-            "value"
-          ]
-        }
+        "showHeader": false,
+        "cellHeight": "md"
       }
     },
     {
@@ -514,7 +630,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 24,
+        "y": 23,
         "w": 24,
         "h": 1
       },
@@ -526,9 +642,9 @@
       "title": "Waiting for the analyst now",
       "gridPos": {
         "x": 0,
-        "y": 25,
+        "y": 24,
         "w": 4,
-        "h": 4
+        "h": 3
       },
       "datasource": {
         "type": "grafana-clickhouse-datasource",
@@ -543,12 +659,14 @@
           "editorType": "sql",
           "rawSql": "SELECT count() AS value\nFROM fraud.cases FINAL WHERE decision = 'REVIEW' AND disposition = 'NEW'",
           "queryType": "table",
+          "format": 1,
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {},
+          "noValue": "—",
           "unit": "short"
         },
         "overrides": []
@@ -567,12 +685,12 @@
     {
       "id": 15,
       "type": "stat",
-      "title": "Blocked: fraud",
+      "title": "Blocked as fraud",
       "gridPos": {
         "x": 4,
-        "y": 25,
+        "y": 24,
         "w": 3,
-        "h": 4
+        "h": 3
       },
       "datasource": {
         "type": "grafana-clickhouse-datasource",
@@ -587,12 +705,14 @@
           "editorType": "sql",
           "rawSql": "SELECT count() AS value\nFROM fraud.cases FINAL WHERE decision = 'REVIEW' AND disposition = 'CONFIRMED_FRAUD'\n  AND $__timeFilter(resolved_at)",
           "queryType": "table",
+          "format": 1,
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {},
+          "noValue": "—",
           "unit": "short"
         },
         "overrides": []
@@ -611,12 +731,12 @@
     {
       "id": 16,
       "type": "stat",
-      "title": "Released: false alarms",
+      "title": "Released as false alarms",
       "gridPos": {
         "x": 7,
-        "y": 25,
+        "y": 24,
         "w": 3,
-        "h": 4
+        "h": 3
       },
       "datasource": {
         "type": "grafana-clickhouse-datasource",
@@ -631,12 +751,14 @@
           "editorType": "sql",
           "rawSql": "SELECT count() AS value\nFROM fraud.cases FINAL WHERE decision = 'REVIEW' AND disposition = 'FALSE_POSITIVE'\n  AND $__timeFilter(resolved_at)",
           "queryType": "table",
+          "format": 1,
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {},
+          "noValue": "—",
           "unit": "short"
         },
         "overrides": []
@@ -658,11 +780,11 @@
       "title": "Holds that were fraud",
       "gridPos": {
         "x": 10,
-        "y": 25,
+        "y": 24,
         "w": 4,
-        "h": 4
+        "h": 3
       },
-      "description": "Of the holds the analyst decided.",
+      "description": "Of the holds the analyst has decided.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -676,13 +798,16 @@
           "editorType": "sql",
           "rawSql": "SELECT 100.0 * countIf(disposition = 'CONFIRMED_FRAUD') / count() AS value\nFROM fraud.cases FINAL WHERE decision = 'REVIEW' AND disposition != 'NEW'\n  AND $__timeFilter(resolved_at)",
           "queryType": "table",
+          "format": 1,
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {},
-          "unit": "percent"
+          "noValue": "—",
+          "unit": "percent",
+          "decimals": 1
         },
         "overrides": []
       },
@@ -700,12 +825,12 @@
     {
       "id": 18,
       "type": "stat",
-      "title": "Money kept with the senders, UZS",
+      "title": "Money kept with the clients, UZS",
       "gridPos": {
         "x": 14,
-        "y": 25,
+        "y": 24,
         "w": 4,
-        "h": 4
+        "h": 3
       },
       "datasource": {
         "type": "grafana-clickhouse-datasource",
@@ -720,12 +845,14 @@
           "editorType": "sql",
           "rawSql": "SELECT sum(amount_uzs) AS value\nFROM fraud.cases FINAL WHERE decision = 'REVIEW' AND disposition = 'CONFIRMED_FRAUD'\n  AND $__timeFilter(resolved_at)",
           "queryType": "table",
+          "format": 1,
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {},
+          "noValue": "—",
           "unit": "short"
         },
         "overrides": []
@@ -744,12 +871,12 @@
     {
       "id": 19,
       "type": "stat",
-      "title": "Time held, half within",
+      "title": "Median wait for a verdict",
       "gridPos": {
         "x": 18,
-        "y": 25,
+        "y": 24,
         "w": 3,
-        "h": 4
+        "h": 3
       },
       "description": "From the hold to the analyst's verdict.",
       "datasource": {
@@ -765,12 +892,14 @@
           "editorType": "sql",
           "rawSql": "SELECT quantile(0.5)(dateDiff('second', opened_at, resolved_at)) AS value\nFROM fraud.cases FINAL WHERE decision = 'REVIEW' AND disposition != 'NEW'\n  AND $__timeFilter(resolved_at)",
           "queryType": "table",
+          "format": 1,
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {},
+          "noValue": "—",
           "unit": "s"
         },
         "overrides": []
@@ -789,14 +918,14 @@
     {
       "id": 20,
       "type": "stat",
-      "title": "Missed, reported by clients",
+      "title": "Missed fraud reported by clients",
       "gridPos": {
         "x": 21,
-        "y": 25,
+        "y": 24,
         "w": 3,
-        "h": 4
+        "h": 3
       },
-      "description": "Transfers the system let go that a client later reported as fraud.",
+      "description": "Transfers the system let through that a client later reported as fraud.",
       "datasource": {
         "type": "grafana-clickhouse-datasource",
         "uid": "clickhouse"
@@ -810,12 +939,14 @@
           "editorType": "sql",
           "rawSql": "SELECT count() AS value\nFROM fraud.cases FINAL\nWHERE decision = 'ALLOW' AND disposition = 'CONFIRMED_FRAUD'\n  AND $__timeFilter(resolved_at)",
           "queryType": "table",
+          "format": 1,
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {},
+          "noValue": "—",
           "unit": "short"
         },
         "overrides": []
@@ -834,10 +965,10 @@
     {
       "id": 21,
       "type": "table",
-      "title": "Latest holds, their reasons and the verdict",
+      "title": "Latest held transfers, their reasons and the verdict",
       "gridPos": {
         "x": 0,
-        "y": 29,
+        "y": 27,
         "w": 24,
         "h": 10
       },
@@ -852,14 +983,16 @@
             "uid": "clickhouse"
           },
           "editorType": "sql",
-          "rawSql": "SELECT opened_at AS held_at,\n       concat(substring(receiver_card, 1, 4), ' ', substring(receiver_card, 5, 2),\n              '** **** ', substring(receiver_card, -4)) AS to_card,\n       amount_uzs AS amount_UZS,\n       multiIf(startsWith(model_version, 'second-look'), 'second look (TabPFN)',\n        predicted_type = '', 'the model, no name',\n        transform(toString(predicted_type), ['APP', 'ATO', 'MULE', 'STRUCTURING'],\n                  ['phone scam', 'account takeover', 'money mule', 'split amounts'],\n                  toString(predicted_type))) AS held_by,\n       arrayStringConcat(explanation, '; ') AS reasons,\n       transform(toString(disposition), ['NEW', 'CONFIRMED_FRAUD', 'FALSE_POSITIVE'],\n                 ['waiting', 'blocked: fraud', 'released: false alarm'],\n                 toString(disposition)) AS verdict\nFROM fraud.cases FINAL WHERE decision = 'REVIEW'\nORDER BY opened_at DESC\nLIMIT 50",
+          "rawSql": "SELECT opened_at AS held_at,\n       concat(substring(receiver_card, 1, 4), ' ', substring(receiver_card, 5, 2),\n              '** **** ', substring(receiver_card, -4)) AS to_card,\n       amount_uzs AS amount_UZS,\n       multiIf(startsWith(model_version, 'second-look'), 'the second look (TabPFN)',\n        predicted_type = '', 'the model, no fraud type named',\n        concat('the rules: ', transform(toString(predicted_type),\n               ['APP', 'ATO', 'MULE', 'STRUCTURING'],\n               ['phone scam', 'account takeover', 'money mule', 'split amounts'],\n               toString(predicted_type)))) AS held_by,\n       arrayStringConcat(explanation, '; ') AS reasons,\n       transform(toString(disposition), ['NEW', 'CONFIRMED_FRAUD', 'FALSE_POSITIVE'],\n                 ['waiting', 'blocked: fraud', 'released: false alarm'],\n                 toString(disposition)) AS verdict\nFROM fraud.cases FINAL WHERE decision = 'REVIEW'\nORDER BY opened_at DESC\nLIMIT 50",
           "queryType": "table",
+          "format": 1,
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": {}
+          "custom": {},
+          "noValue": "—"
         },
         "overrides": [
           {
@@ -887,7 +1020,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 39,
+        "y": 37,
         "w": 24,
         "h": 1
       },
@@ -899,9 +1032,9 @@
       "title": "Sent for a second look",
       "gridPos": {
         "x": 0,
-        "y": 40,
+        "y": 38,
         "w": 8,
-        "h": 4
+        "h": 3
       },
       "description": "Transfers whose risk was just under the alert level.",
       "datasource": {
@@ -917,12 +1050,14 @@
           "editorType": "sql",
           "rawSql": "SELECT uniqExactIf(transaction_id, decision = 'SECOND_LOOK') AS value\nFROM fraud.transactions_scored\nWHERE $__timeFilter(scored_at_job)",
           "queryType": "table",
+          "format": 1,
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {},
+          "noValue": "—",
           "unit": "short"
         },
         "overrides": []
@@ -944,9 +1079,9 @@
       "title": "Held by the second look",
       "gridPos": {
         "x": 8,
-        "y": 40,
+        "y": 38,
         "w": 8,
-        "h": 4
+        "h": 3
       },
       "datasource": {
         "type": "grafana-clickhouse-datasource",
@@ -961,12 +1096,14 @@
           "editorType": "sql",
           "rawSql": "SELECT countIf(decision = 'REVIEW' AND startsWith(model_version, 'second-look')) AS value\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY scored_at DESC LIMIT 1 BY transaction_id)",
           "queryType": "table",
+          "format": 1,
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {},
+          "noValue": "—",
           "unit": "short"
         },
         "overrides": []
@@ -988,9 +1125,9 @@
       "title": "No answer in time, held anyway",
       "gridPos": {
         "x": 16,
-        "y": 40,
+        "y": 38,
         "w": 8,
-        "h": 4
+        "h": 3
       },
       "description": "The second look did not answer within 5 seconds.",
       "datasource": {
@@ -1006,12 +1143,14 @@
           "editorType": "sql",
           "rawSql": "SELECT countIf(endsWith(model_version, ':unscored')) AS value\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY scored_at DESC LIMIT 1 BY transaction_id)",
           "queryType": "table",
+          "format": 1,
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "custom": {},
+          "noValue": "—",
           "unit": "short"
         },
         "overrides": []

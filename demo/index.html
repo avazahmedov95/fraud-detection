@@ -101,6 +101,8 @@ td.num,th.num{text-align:right}
 .queue .amt{font:600 .95rem var(--mono)}.queue .kind{color:var(--muted);font-size:.76rem}
 .queue .acts{display:flex;gap:6px;flex-wrap:wrap}.queue .acts button{padding:5px 9px;font-size:.76rem}
 .queue li[data-done]{cursor:default}
+.verdicts-btn{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;font-size:.9rem}
+.verdicts-btn b{flex:1;text-align:left}
 .count{font-family:var(--mono);color:var(--muted)}
 .more{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 14px;border-top:1px solid var(--line);font-size:.8rem;color:var(--muted)}
 .more:empty{display:none}
@@ -220,6 +222,7 @@ button.on-filter{border-color:var(--accent);background:var(--accent-soft)}
             <p class="panel-sub" data-t="cases_hint"></p>
             <div class="scen" id="scen"></div>
           </div>
+          <button type="button" class="verdicts-btn" id="done-btn"></button>
         </div>
         <div class="col">
           <div class="panel">
@@ -232,11 +235,6 @@ button.on-filter{border-color:var(--accent);background:var(--accent-soft)}
             <p class="panel-sub" data-t="queue_hint"></p>
             <ul class="queue" id="queue"></ul>
             <div class="more" id="queue-more"></div>
-          </div>
-          <div class="panel">
-            <div class="panel-h"><h2 data-t="done_title"></h2></div>
-            <p class="panel-sub" data-t="done_hint"></p>
-            <ul class="queue" id="done"></ul>
           </div>
         </div>
       </div>
@@ -315,7 +313,7 @@ ru: {
   report: "Клиент сообщил: это мошенничество",
   report_note: "Перевод уже ушёл. Сообщение клиента становится меткой для переобучения модели, а счёт получателя сразу попадает в память подтверждённых мошенников.",
   reported: "Записано", report_wait: "Перевода ещё нет в хранилище — попробуйте через несколько секунд",
-  grafana_hint: "Панель мониторинга Grafana из этого же стека: те же решения, собранные в базе, — число переводов и тревог, типы, распределение риска, регионы, последние тревоги с причинами. Если в рамке появится вход: логин admin, пароль из файла .env.",
+  grafana_hint: "Панель Grafana из этого же стека, по тем же решениям в базе за последний час: сколько переводов проверено и задержано, как быстро принимаются решения и на что уходит время, кто задержал переводы, решения аналитика и вторая проверка. Если в рамке появится вход: логин admin, пароль из файла .env.",
   grafana_open: "Открыть Grafana в отдельной вкладке",
   retrain_title: "Переобучение модели",
   rt_never: "Служба переобучения ещё не запускалась.",
@@ -426,7 +424,7 @@ en: {
   report: "Client reported: this was fraud",
   report_note: "The transfer has gone. The client's report becomes a label the model is retrained on, and the payee's account joins the confirmed fraud accounts at once.",
   reported: "Recorded", report_wait: "Not in the warehouse yet — try again in a few seconds",
-  grafana_hint: "The Grafana dashboard from the same stack: the same decisions as stored in the database — transfer and alert counts, types, the risk distribution, regions, the latest alerts with their reasons. If a login appears in the frame: user admin, password from the .env file.",
+  grafana_hint: "The Grafana dashboard from the same stack, over the last hour of the same decisions in the database: transfers checked and held, how fast the decisions are and where the time goes, what held the transfers, the analyst's verdicts and the second look. If a login appears in the frame: user admin, password from the .env file.",
   grafana_open: "Open Grafana in its own tab",
   retrain_title: "Model retraining",
   rt_never: "The retraining service has not run yet.",
@@ -759,13 +757,25 @@ function renderQueue() {
     : `<p class="empty">${t(filterCount("queue") ? "empty_filtered" : "empty_cases")}</p>`;
 }
 
-function renderDone() {
+function doneList() {
   const ds = (lastCases && lastCases.done) || [], conf = c => c.verdict === "CONFIRMED_FRAUD";
   const what = c => c.held ? (conf(c) ? "done_conf" : "done_fp") : (conf(c) ? "done_rep" : "done_rep_off");
-  $("#done").innerHTML = ds.length ? ds.map(c => `<li data-done="${esc(c.id)}">` +
+  return ds.length ? ds.map(c => `<li data-done="${esc(c.id)}">` +
     `<div><div class="amt">${fmtInt(c.amount)} ${t("sum")}</div><div class="kind">${esc(c.type ? kindName(c.type) : t("type_none"))} · ${t(what(c))}</div></div>` +
     `<div class="acts"><button type="button" data-res="${conf(c) ? "FALSE_POSITIVE" : "CONFIRMED_FRAUD"}">${t(conf(c) ? (c.held ? "to_fp" : "to_not") : "to_conf")}</button></div></li>`).join("")
     : `<p class="empty">${t("empty_done")}</p>`;
+}
+
+// The verdicts sit behind a button; open, their list follows each refresh.
+function renderDone() {
+  const n = ((lastCases && lastCases.done) || []).length;
+  $("#done-btn").innerHTML = `<b>${esc(t("done_title"))}</b><span class="count">${n >= PAGE ? PAGE + "+" : n}</span>`;
+  if ($("#done")) $("#done").innerHTML = doneList();
+}
+
+function openDone() {
+  openModal(`<h3>${esc(t("done_title"))}</h3><p class="small-note">${esc(t("done_hint"))}</p>` +
+    `<ul class="queue" id="done">${doneList()}</ul>`);
 }
 
 async function refreshCases() {
@@ -827,7 +837,7 @@ async function openTab(name) {
 }
 
 document.addEventListener("click", async e => {
-  const el = e.target.closest("[data-tab],[data-lang],[data-play],[data-row],[data-res],[data-report],[data-case],[data-more],[data-less],[data-filter],[data-filter-reset],[data-close],#modal,#bg-btn");
+  const el = e.target.closest("[data-tab],[data-lang],[data-play],[data-row],[data-res],[data-report],[data-case],[data-more],[data-less],[data-filter],[data-filter-reset],[data-close],#modal,#bg-btn,#done-btn");
   if (!el) return;
   if (el.id === "modal") { if (e.target === el) closeModal(); }
   else if (el.hasAttribute("data-close")) closeModal();
@@ -857,6 +867,7 @@ document.addEventListener("click", async e => {
     refreshCases();
   }
   else if (el.dataset.case) { selected = {src: "case", id: el.dataset.case}; renderStream(); renderQueue(); renderDetail(); }
+  else if (el.id === "done-btn") openDone();
   else if (el.id === "bg-btn") {
     await api("/api/background", {on: !(status && status.background.on)});
     refreshStatus();

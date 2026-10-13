@@ -9,25 +9,27 @@ Auto-provisions on `make up`:
 
 ## Dashboard: Fraud Detection — Overview
 
-Open Grafana at http://localhost:3000 (`admin` / `.env` password). Panels over
-`fraud.transactions_scored` and `fraud.audit_log`:
+Open Grafana at http://localhost:3000 (`admin` / `.env` password). It shows the
+last hour and refreshes every 10 seconds; every figure comes from
+`fraud.transactions_scored` and `fraud.cases`:
 
-- **Stat tiles** — total transactions, alert rate %, new-payee share %.
-- **Alerts over time** — REVIEW counts bucketed by the dashboard interval.
-- **Alerts by predicted type** — APP / ATO / MULE / STRUCTURING split.
-- **Risk score distribution** — histogram of `final_score`.
-- **Alerts by sender region**.
-- **Recent alerts** — latest flagged transactions with their CEP reason codes
-  (`rule_hits`) from the WORM audit log.
+- **Top row** — transfers checked, held for the analyst, the share held, the
+  median decision time and the time 99% of decisions stay under (red from the
+  300 ms target).
+- **Speed** — the share of decisions under 25, 50, 100 and 300 ms, and where a
+  decision's time goes, by service.
+- **Transfers** — checked and held over time, and who held them: the rules
+  (named by fraud type), the model or the second look.
+- **The analyst** — holds waiting now, blocked, released, the share of holds that
+  were fraud, the money kept with the clients, the median wait for a verdict,
+  missed fraud reported by clients, and the latest 50 holds with their reasons.
+- **Second look (TabPFN)** — transfers sent to it, held by it, and held because
+  it did not answer within 5 seconds.
 
-Every panel query was validated against the real schema with an embedded
-ClickHouse engine. The default time range is `now-1y` so synthetic data shows
-regardless of when it was generated — narrow it once live.
-
-> The `grafana-clickhouse-datasource` query schema has shifted across plugin
-> versions. If a provisioned panel shows a datasource/query error, re-pick the
-> ClickHouse datasource on the panel (the SQL itself is correct); see the note in
-> `datasources/clickhouse.yml`.
+Each query names its format: 1 for a table or a number, 0 for the time chart.
+Without it the ClickHouse plugin reads every result as a time series and shows
+nothing for a table sorted newest first; the reason is only in
+`docker logs grafana`.
 
 ## Embedded in the demo
 

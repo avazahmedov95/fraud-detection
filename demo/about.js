@@ -138,7 +138,7 @@ ru: {
     rules: ["Признаки и правила", "Посчитано 24 признака и проверены 10 правил. {rules}"],
     model: ["Модель", "Модель взвесила все 24 признака и оценила риск: {score}."],
     decide: ["Решение", "{decision}. {why}"],
-    stored: ["Записан в базу", "Решение ушло в Kafka{alert} и записано в ClickHouse вместе со временем каждого этапа."],
+    stored: ["Записан в базу", "Решение ушло в Kafka и записано в ClickHouse вместе со временем каждого этапа."],
     analyst: ["У аналитика", "Открыто дело с причинами словами. Перевод задержан, пока аналитик его не заблокирует или не отпустит."],
     analyst_allow: ["Аналитик не нужен", "Тревоги нет, поэтому перевод прошёл, а аналитик его не увидит."]
   },
@@ -146,7 +146,6 @@ ru: {
   why_must: "Сработало обязательное правило регулятора — такой перевод всегда задерживается для аналитика.",
   why_review: "Риск {score} выше уровня тревоги {cut}.",
   why_allow: "Риск {score} ниже уровня тревоги {cut}, и ни одно правило не требует проверки.",
-  alert_too: ", а тревога — ещё и в очередь тревог",
   model_title: "Модель",
   model_lines: [
     "Пять моделей LightGBM — градиентный бустинг на деревьях решений; их ответы усредняются.",
@@ -285,7 +284,7 @@ en: {
     rules: ["Features and rules", "24 features are computed and 10 rules checked. {rules}"],
     model: ["The model", "The model weighs all 24 features and scores the risk: {score}."],
     decide: ["The decision", "{decision}. {why}"],
-    stored: ["Written down", "The decision went to Kafka{alert} and was written to ClickHouse with the time of every stage."],
+    stored: ["Written down", "The decision went to Kafka and was written to ClickHouse with the time of every stage."],
     analyst: ["With the analyst", "A case opened with its reasons in words. The transfer is held until the analyst blocks or releases it."],
     analyst_allow: ["No analyst needed", "There is no alert, so the transfer went through and no analyst sees it."]
   },
@@ -293,7 +292,6 @@ en: {
   why_must: "A rule the regulator requires fired, and such a transfer is always held for the analyst.",
   why_review: "The risk {score} is past the alert level {cut}.",
   why_allow: "The risk {score} is under the alert level {cut}, and no rule asked for a review.",
-  alert_too: ", and the alert to the alert queue as well",
   model_title: "The model",
   model_lines: [
     "Five LightGBM models — gradient boosting on decision trees; their answers are averaged.",
@@ -475,8 +473,7 @@ function stepText(step, r) {
     rules: rules.length ? fill(ab("fired"), {list: rules.map(x => t("rules")[x] || x).join(", ")}) : ab("none_fired"),
     score: dec(r.score, 2), decision: t("dec")[r.decision] || r.decision,
     why: rules.some(x => MUST.has(x)) ? ab("why_must")
-      : fill(ab(alert ? "why_review" : "why_allow"), {score: dec(r.score, 2), cut: dec(cut, 2)}),
-    alert: alert ? ab("alert_too") : ""})];
+      : fill(ab(alert ? "why_review" : "why_allow"), {score: dec(r.score, 2), cut: dec(cut, 2)})})];
 }
 
 function paintWalk() {
