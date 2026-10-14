@@ -61,11 +61,11 @@ On the public datasets, with the 22 of the 28 features they can supply:
   empty: transfers F1 38.5% -> 38.7%, all transactions at a 2% budget 890 -> 891 of
   1,840.
 
-The features add one Redis read; the payee's side is now read in one round trip
-instead of three. Timed from the host on the same 5,000 transfers, the job's Python
-work took 5.5-7.2 ms a transfer against 9.6-9.9 ms before. The running system was
-not timed again: on battery the laptop slowed every step, even the model, so those
-runs could not be compared.
+Speed, measured on 14 October on mains power the same way as on 5 October: 99 of
+100 decisions stay under 300 ms up to 150 transfers a second (p99 297 ms), against
+200 a second before; at 50 a second the mean is 50 ms. The work per transfer is
+still about 4 ms, as the payee's side is now read from Redis in one round trip
+instead of three, so the difference is in the wait between Kafka and Python.
 
 ## Quality on our main dataset
 

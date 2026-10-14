@@ -67,7 +67,7 @@ def bottom(b):
 ax.text(0, 87, "Real-time fraud detection: one transfer, end to end",
         fontsize=19, fontweight="bold", color=INK, family=FAMILY, va="bottom")
 ax.text(0, 83.6, "Each part of the system, what it does, and how long each step takes. "
-                 "Measured on 5 October 2026 on the running system, on battery.",
+                 "Measured on 14 October 2026 on the running system, on mains power.",
         fontsize=10.5, color=MUTED, family=FAMILY, va="bottom")
 
 # --- row 1: into the engine ------------------------------------------------
@@ -79,15 +79,15 @@ ax.add_patch(FancyBboxPatch((56, 57.5), 104, 23, boxstyle="round,pad=0,rounding_
 ax.text(58, 78.6, "Flink job: three copies side by side, each with its own senders",
         fontsize=10, fontweight="bold", color=ACCENT, family=FAMILY, va="top")
 
-dec = box(58, 61, 18, 12, "Read", "read the message,\ndecrypt if needed", "0.05 ms")
-fea = box(79, 61, 18, 12, "Sender's history", "this sender's past,\nkept in Flink", "1.9 ms")
-rul = box(100, 61, 18, 12, "Features, rules", "28 features,\n10 rules", "0.65 ms")
-mod = box(121, 61, 18, 12, "Model", "LightGBM: a risk\nfrom 0 to 1", "0.40 ms",
+dec = box(58, 61, 18, 12, "Read", "read the message,\ndecrypt if needed", "0.06 ms")
+fea = box(79, 61, 18, 12, "Sender's history", "this sender's past,\nkept in Flink", "1.2 ms")
+rul = box(100, 61, 18, 12, "Features, rules", "28 features,\n10 rules", "0.91 ms")
+mod = box(121, 61, 18, 12, "Model", "LightGBM: a risk\nfrom 0 to 1", "0.49 ms",
           fill=ACCENT_SOFT, edge=ACCENT)
-dcd = box(142, 61, 16, 12, "Decision", "allow, or hold\nfor the analyst", "0.03 ms")
+dcd = box(142, 61, 16, 12, "Decision", "allow, or hold\nfor the analyst", "0.05 ms")
 
 arrow(right(app), left(raw), label="1.1 ms")
-arrow(right(raw), (58, 67), label="25 ms")
+arrow(right(raw), (58, 67), label="28 ms")
 for a, b in ((dec, fea), (fea, rul), (rul, mod), (mod, dcd)):
     arrow(right(a), left(b))
 
@@ -95,7 +95,7 @@ red = box(79, 40, 18, 12, "Redis", "who paid this card,\nconfirmed fraud cards",
           fill=STORE_FILL)
 arrow(top(red), bottom(fea), style="<|-|>", color=MUTED, lw=1.3)
 
-ax.text(36, 45, "The work itself takes 4.6 ms.\nFor the other 26 ms the transfer waits\n"
+ax.text(36, 45, "The work itself takes 4.3 ms.\nFor the other 29 ms the transfer waits\n"
                 "between Kafka and Python, in batches.",
         fontsize=9.5, color=MUTED, family=FAMILY, va="center",
         bbox=dict(boxstyle="round,pad=0.6", facecolor="white", edgecolor=LINE))
@@ -139,8 +139,8 @@ trn = box(0, 42, 32, 18, "Training (ml/)", "uses the same feature code;\ntrains 
           sub_size=8.5)
 arrow(right(trn), (56, 62), dashed=True, color=MUTED, label="model.onnx", label_dy=0.8)
 
-ax.text(0, 1.2, "Times are averages over 1,000 transfers at 10 a second, 31 ms together. 99 of 100 decisions "
-                "take under 0.05 s (the target is 0.3 s), and stay under 0.3 s up to 200 transfers a second. "
+ax.text(0, 1.2, "Times are averages over 1,000 transfers at 10 a second, 33 ms together. 99 of 100 decisions "
+                "take under 0.08 s (the target is 0.3 s), and stay under 0.3 s up to 150 transfers a second. "
                 "A transfer just under the cut-off waits about 0.3 s more for the second look.",
         fontsize=9, color=MUTED, family=FAMILY, va="bottom")
 

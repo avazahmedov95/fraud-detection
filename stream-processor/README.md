@@ -64,12 +64,21 @@ inside Docker, measured on 5 October 2026 on battery - mains power is faster:
 | 250 | 3,771 / 6,375 / 6,885 | 313 / 1,054 / 1,371 |
 
 The work itself is 4-5 ms a transfer; the rest is the wait between Kafka and
-Python. These figures are the 24-feature job's. The 28-feature job reads the
-payee's side in one Redis round trip instead of three; timed from the host on the
-same 5,000 transfers, its Python work took 5.5-7.2 ms a transfer against 9.6-9.9 ms
-for the old code. One copy could not keep up at 100 a second; three hold the 300 ms target
-to 200. Past that, 50 ms bundles do better (three copies at 250: p99 408), and four
+Python. One copy could not keep up at 100 a second; three held the 300 ms target
+to 200. Past that, 50 ms bundles did better (three copies at 250: p99 408), and four
 copies contended for this laptop's cores.
+
+The same way on 14 October, with the 28 features, on mains power, three copies and
+20 ms bundles (mean / p95 / p99, ms):
+
+| transfers a second | 10 | 50 | 100 | 150 | 200 | 250 |
+|---|---|---|---|---|---|---|
+| 28 features | 33 / 51 / 71 | 50 / 80 / 101 | 55 / 89 / 103 | 85 / 196 / 297 | 153 / 479 / 715 | 225 / 547 / 715 |
+
+The target now holds to 150 a second. The work is still about 4 ms a transfer: the
+payee's side is read in one Redis round trip instead of three. The difference is in
+the wait, and the laptop ran other programs beside it. A torrent client on two
+cores made an earlier run slow at every step, the model included.
 
 ## Run
 

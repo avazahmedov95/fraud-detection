@@ -361,15 +361,15 @@ MERMAID = """sequenceDiagram
 
     Customer->>App: confirms a transfer
     App->>Kafka: transactions.raw, in order per sender (1.1 ms)
-    Kafka->>Flink: the transfer, in batches (25 ms)
-    Flink->>Flink: read the transfer (0.05 ms)
-    Flink->>Flink: load this sender's history (1.9 ms)
+    Kafka->>Flink: the transfer, in batches (28 ms)
+    Flink->>Flink: read the transfer (0.06 ms)
+    Flink->>Flink: load this sender's history (1.2 ms)
     Flink->>Redis: how many people paid this card? any confirmed fraud cards?
-    Redis-->>Flink: counts for the hour, day and week, and the confirmed cards (1.6 ms)
-    Flink->>Flink: compute 28 features, run the 10 rules (0.65 ms)
-    Flink->>Flink: score with the model (0.40 ms)
-    Flink->>Flink: decide: allow, hold, or ask the second look (0.03 ms)
-    Flink->>Kafka: transactions.scored, the decision with its features (31 ms in all)
+    Redis-->>Flink: counts for the hour, day, week and month, and the confirmed cards (1.6 ms)
+    Flink->>Flink: compute 28 features, run the 10 rules (0.91 ms)
+    Flink->>Flink: score with the model (0.49 ms)
+    Flink->>Flink: decide: allow, hold, or ask the second look (0.05 ms)
+    Flink->>Kafka: transactions.scored, the decision with its features (33 ms in all)
     Kafka->>Second: fraud.second_look, a transfer just under the cut-off
     Second->>Kafka: TabPFN's decision, about 0.3 s later
     Kafka->>Sink: every decision
@@ -398,15 +398,15 @@ X = {name: 9 + i * 20.2 for i, name in enumerate(ACTORS)}
 
 MESSAGES = [
     ("Bank app", "Kafka", "the transfer, in order per sender", "1.1 ms", False),
-    ("Kafka", "Flink job", "the transfer, in batches", "25 ms", False),
-    ("Flink job", "Flink job", "read the transfer", "0.05 ms", False),
-    ("Flink job", "Flink job", "load the sender's history", "1.9 ms", False),
+    ("Kafka", "Flink job", "the transfer, in batches", "28 ms", False),
+    ("Flink job", "Flink job", "read the transfer", "0.06 ms", False),
+    ("Flink job", "Flink job", "load the sender's history", "1.2 ms", False),
     ("Flink job", "Redis", "who paid this card? confirmed fraud cards?", "", False),
-    ("Redis", "Flink job", "counts for the hour, day, week; confirmed cards", "1.6 ms", True),
-    ("Flink job", "Flink job", "compute 28 features, run the 10 rules", "0.65 ms", False),
-    ("Flink job", "Flink job", "score with the model", "0.40 ms", False),
-    ("Flink job", "Flink job", "decide: allow, hold, or ask the second look", "0.03 ms", False),
-    ("Flink job", "Kafka", "the decision, with its features", "31 ms in all", False),
+    ("Redis", "Flink job", "counts for the hour, day, week, month; confirmed cards", "1.6 ms", True),
+    ("Flink job", "Flink job", "compute 28 features, run the 10 rules", "0.91 ms", False),
+    ("Flink job", "Flink job", "score with the model", "0.49 ms", False),
+    ("Flink job", "Flink job", "decide: allow, hold, or ask the second look", "0.05 ms", False),
+    ("Flink job", "Kafka", "the decision, with its features", "33 ms in all", False),
     ("Kafka", "Second look", "a transfer just under the cut-off", "", False),
     ("Second look", "Kafka", "TabPFN's decision", "about 0.3 s", True),
     ("Kafka", "Sink writer", "every decision", "", False),
