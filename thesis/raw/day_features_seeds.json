@@ -1,0 +1,607 @@
+{
+ "_about": "13 October 2026: the same 20 generated datasets (seeds 42 and 1-19, 3,480 test frauds), read with the 24 features of 5 October and with the 28. The system's own recipe on each: five LightGBM models fitted on the first 64%, the cut-off where F1 is highest and the second look's band chosen on the next 16%, TabPFN's context and cut-off as ml/second_look.py chooses them, the last 20% read once. Each system is [frauds caught, alerts]: the model alone, the model with its cut-off lowered to as many alerts as the second look raises, and the model with the second look.",
+ "features_24": {
+  "42": {
+   "frauds": 176,
+   "model": [
+    124,
+    172
+   ],
+   "lowered": [
+    133,
+    204
+   ],
+   "second": [
+    138,
+    204
+   ]
+  },
+  "1": {
+   "frauds": 207,
+   "model": [
+    120,
+    140
+   ],
+   "lowered": [
+    152,
+    239
+   ],
+   "second": [
+    159,
+    239
+   ]
+  },
+  "2": {
+   "frauds": 205,
+   "model": [
+    153,
+    189
+   ],
+   "lowered": [
+    161,
+    230
+   ],
+   "second": [
+    164,
+    230
+   ]
+  },
+  "3": {
+   "frauds": 177,
+   "model": [
+    115,
+    157
+   ],
+   "lowered": [
+    117,
+    160
+   ],
+   "second": [
+    117,
+    160
+   ]
+  },
+  "4": {
+   "frauds": 181,
+   "model": [
+    125,
+    156
+   ],
+   "lowered": [
+    132,
+    194
+   ],
+   "second": [
+    139,
+    194
+   ]
+  },
+  "5": {
+   "frauds": 194,
+   "model": [
+    125,
+    139
+   ],
+   "lowered": [
+    137,
+    177
+   ],
+   "second": [
+    141,
+    177
+   ]
+  },
+  "6": {
+   "frauds": 189,
+   "model": [
+    122,
+    152
+   ],
+   "lowered": [
+    138,
+    215
+   ],
+   "second": [
+    139,
+    215
+   ]
+  },
+  "7": {
+   "frauds": 154,
+   "model": [
+    90,
+    118
+   ],
+   "lowered": [
+    100,
+    139
+   ],
+   "second": [
+    99,
+    139
+   ]
+  },
+  "8": {
+   "frauds": 151,
+   "model": [
+    98,
+    178
+   ],
+   "lowered": [
+    100,
+    184
+   ],
+   "second": [
+    100,
+    184
+   ]
+  },
+  "9": {
+   "frauds": 161,
+   "model": [
+    87,
+    133
+   ],
+   "lowered": [
+    109,
+    216
+   ],
+   "second": [
+    105,
+    216
+   ]
+  },
+  "10": {
+   "frauds": 185,
+   "model": [
+    120,
+    154
+   ],
+   "lowered": [
+    138,
+    206
+   ],
+   "second": [
+    144,
+    206
+   ]
+  },
+  "11": {
+   "frauds": 157,
+   "model": [
+    64,
+    87
+   ],
+   "lowered": [
+    90,
+    132
+   ],
+   "second": [
+    91,
+    132
+   ]
+  },
+  "12": {
+   "frauds": 170,
+   "model": [
+    102,
+    133
+   ],
+   "lowered": [
+    127,
+    189
+   ],
+   "second": [
+    124,
+    189
+   ]
+  },
+  "13": {
+   "frauds": 119,
+   "model": [
+    73,
+    119
+   ],
+   "lowered": [
+    78,
+    141
+   ],
+   "second": [
+    78,
+    141
+   ]
+  },
+  "14": {
+   "frauds": 155,
+   "model": [
+    98,
+    152
+   ],
+   "lowered": [
+    108,
+    197
+   ],
+   "second": [
+    108,
+    197
+   ]
+  },
+  "15": {
+   "frauds": 150,
+   "model": [
+    99,
+    122
+   ],
+   "lowered": [
+    106,
+    140
+   ],
+   "second": [
+    107,
+    140
+   ]
+  },
+  "16": {
+   "frauds": 220,
+   "model": [
+    149,
+    190
+   ],
+   "lowered": [
+    168,
+    249
+   ],
+   "second": [
+    172,
+    249
+   ]
+  },
+  "17": {
+   "frauds": 202,
+   "model": [
+    120,
+    167
+   ],
+   "lowered": [
+    131,
+    218
+   ],
+   "second": [
+    133,
+    218
+   ]
+  },
+  "18": {
+   "frauds": 154,
+   "model": [
+    116,
+    184
+   ],
+   "lowered": [
+    122,
+    203
+   ],
+   "second": [
+    120,
+    203
+   ]
+  },
+  "19": {
+   "frauds": 173,
+   "model": [
+    88,
+    121
+   ],
+   "lowered": [
+    98,
+    151
+   ],
+   "second": [
+    101,
+    151
+   ]
+  }
+ },
+ "features_28": {
+  "42": {
+   "frauds": 176,
+   "model": [
+    123,
+    164
+   ],
+   "lowered": [
+    130,
+    185
+   ],
+   "second": [
+    137,
+    185
+   ]
+  },
+  "1": {
+   "frauds": 207,
+   "model": [
+    134,
+    167
+   ],
+   "lowered": [
+    160,
+    246
+   ],
+   "second": [
+    163,
+    246
+   ]
+  },
+  "2": {
+   "frauds": 205,
+   "model": [
+    162,
+    193
+   ],
+   "lowered": [
+    170,
+    257
+   ],
+   "second": [
+    172,
+    257
+   ]
+  },
+  "3": {
+   "frauds": 177,
+   "model": [
+    132,
+    186
+   ],
+   "lowered": [
+    136,
+    207
+   ],
+   "second": [
+    138,
+    207
+   ]
+  },
+  "4": {
+   "frauds": 181,
+   "model": [
+    127,
+    160
+   ],
+   "lowered": [
+    131,
+    192
+   ],
+   "second": [
+    137,
+    192
+   ]
+  },
+  "5": {
+   "frauds": 194,
+   "model": [
+    141,
+    171
+   ],
+   "lowered": [
+    152,
+    199
+   ],
+   "second": [
+    154,
+    199
+   ]
+  },
+  "6": {
+   "frauds": 189,
+   "model": [
+    137,
+    190
+   ],
+   "lowered": [
+    140,
+    213
+   ],
+   "second": [
+    143,
+    213
+   ]
+  },
+  "7": {
+   "frauds": 154,
+   "model": [
+    86,
+    103
+   ],
+   "lowered": [
+    95,
+    122
+   ],
+   "second": [
+    98,
+    122
+   ]
+  },
+  "8": {
+   "frauds": 151,
+   "model": [
+    100,
+    172
+   ],
+   "lowered": [
+    102,
+    181
+   ],
+   "second": [
+    103,
+    181
+   ]
+  },
+  "9": {
+   "frauds": 161,
+   "model": [
+    90,
+    131
+   ],
+   "lowered": [
+    98,
+    156
+   ],
+   "second": [
+    97,
+    156
+   ]
+  },
+  "10": {
+   "frauds": 185,
+   "model": [
+    135,
+    177
+   ],
+   "lowered": [
+    150,
+    245
+   ],
+   "second": [
+    153,
+    245
+   ]
+  },
+  "11": {
+   "frauds": 157,
+   "model": [
+    74,
+    97
+   ],
+   "lowered": [
+    95,
+    133
+   ],
+   "second": [
+    97,
+    133
+   ]
+  },
+  "12": {
+   "frauds": 170,
+   "model": [
+    111,
+    140
+   ],
+   "lowered": [
+    130,
+    180
+   ],
+   "second": [
+    126,
+    180
+   ]
+  },
+  "13": {
+   "frauds": 119,
+   "model": [
+    78,
+    125
+   ],
+   "lowered": [
+    82,
+    134
+   ],
+   "second": [
+    79,
+    134
+   ]
+  },
+  "14": {
+   "frauds": 155,
+   "model": [
+    101,
+    156
+   ],
+   "lowered": [
+    115,
+    201
+   ],
+   "second": [
+    117,
+    201
+   ]
+  },
+  "15": {
+   "frauds": 150,
+   "model": [
+    109,
+    135
+   ],
+   "lowered": [
+    116,
+    157
+   ],
+   "second": [
+    118,
+    157
+   ]
+  },
+  "16": {
+   "frauds": 220,
+   "model": [
+    149,
+    178
+   ],
+   "lowered": [
+    163,
+    215
+   ],
+   "second": [
+    168,
+    215
+   ]
+  },
+  "17": {
+   "frauds": 202,
+   "model": [
+    117,
+    149
+   ],
+   "lowered": [
+    132,
+    202
+   ],
+   "second": [
+    136,
+    202
+   ]
+  },
+  "18": {
+   "frauds": 154,
+   "model": [
+    119,
+    176
+   ],
+   "lowered": [
+    123,
+    202
+   ],
+   "second": [
+    126,
+    202
+   ]
+  },
+  "19": {
+   "frauds": 173,
+   "model": [
+    98,
+    139
+   ],
+   "lowered": [
+    107,
+    167
+   ],
+   "second": [
+    112,
+    167
+   ]
+  }
+ }
+}

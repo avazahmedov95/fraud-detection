@@ -100,7 +100,7 @@
         <bpmn:targetRef>Redis</bpmn:targetRef>
       </bpmn:dataOutputAssociation>
     </bpmn:serviceTask>
-    <bpmn:serviceTask id="Features" name="Compute the 24 features&#10;[Python in Flink]">
+    <bpmn:serviceTask id="Features" name="Compute the 28 features&#10;[Python in Flink]">
       <bpmn:incoming>F_receiver</bpmn:incoming>
       <bpmn:outgoing>F_features</bpmn:outgoing>
     </bpmn:serviceTask>

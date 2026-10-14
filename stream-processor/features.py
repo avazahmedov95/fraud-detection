@@ -137,12 +137,13 @@ def extract(event: dict, state, now: float, receiver_state=None,
     amount_z = ((amount - mean) / std) if std > 0 else 0.0
 
     # Fan-in on the payee: distinct senders, since ten from one person is a habit.
-    rcv_senders, rcv_inflow = 0, 0.0
+    me = event.get("sender_pinfl", "")
+    rcv_senders, rcv_inflow, day_inflow = 0, 0.0, 0.0
     if receiver_state is not None:
-        recent = [e for e in receiver_state.inbound
-                  if now - e[0] <= C.RECEIVER_WINDOW_S]
-        rcv_senders = len({e[1] for e in recent} | {event.get("sender_pinfl", "")})
+        recent = _within(receiver_state.inbound, now, C.RECEIVER_WINDOW_S)
+        rcv_senders = len({e[1] for e in recent} | {me})
         rcv_inflow = sum(e[2] for e in recent) + amount
+        day_inflow = sum(e[2] for e in _within(receiver_state.inbound, now, C.LINK_DAY_S)) + amount
 
     # Counterparties over a day and a week on both sides, and the time since the
     # sender was last paid: a mule collects over days and passes the money on.
@@ -160,11 +161,17 @@ def extract(event: dict, state, now: float, receiver_state=None,
                     day += 1
         return day + 1, week + 1
 
-    payee_payers_24h = payee_payers_7d = 0
+    payee_payers_24h = payee_payers_7d = payee_new_payers_24h = 0
     if receiver_state is not None:
-        payee_payers_24h, payee_payers_7d = _windows(
-            receiver_state.payers, event.get("sender_pinfl", ""))
+        payee_payers_24h, payee_payers_7d = _windows(receiver_state.payers, me)
+        # Payers who had not paid this payee for a month; this one included.
+        payee_new_payers_24h = (sum(1 for t in receiver_state.new_payers.values()
+                                    if now - t <= C.LINK_DAY_S)
+                                + (not _known_payer(receiver_state, me, now)))
     sender_payees_24h, sender_payees_7d = _windows(state.payee_times, payee)
+    # The sender's payees paid for the first time within a day, and the money sent them.
+    first = payee not in state.seen_payees
+    to_new = [e[1] for e in state.new_payees if now - e[0] <= C.LINK_DAY_S]
     # Capped, never NaN: "never paid" and "Redis down" read alike.
     secs_since_sender_inbound = float(C.LINK_WEEK_S)
     if sender_inbound_ts:
@@ -192,7 +199,7 @@ def extract(event: dict, state, now: float, receiver_state=None,
         "log_amount": math.log1p(amount),
         "amount_to_mean": amount_to_mean,
         "amount_z": amount_z,
-        "is_new_payee": 0 if payee in state.seen_payees else 1,
+        "is_new_payee": int(first),
         "rcv_distinct_senders_1h": rcv_senders,
         "rcv_inflow_1h": math.log1p(rcv_inflow),
         "payee_payers_24h": payee_payers_24h,
@@ -200,6 +207,10 @@ def extract(event: dict, state, now: float, receiver_state=None,
         "sender_payees_24h": sender_payees_24h,
         "sender_payees_7d": sender_payees_7d,
         "secs_since_sender_inbound": secs_since_sender_inbound,
+        "payee_inflow_24h": math.log1p(day_inflow),
+        "payee_new_payers_24h": payee_new_payers_24h,
+        "sender_new_payees_24h": len(to_new) + first,
+        "sender_new_payee_sum_24h": math.log1p(sum(to_new) + (amount if first else 0.0)),
         "payee_flagged": int(payee in confirmed),
         "sender_flagged": int(sender_key(event) in confirmed),
         "payee_flagged_contacts": flagged_contacts,
@@ -228,11 +239,26 @@ def to_vector(feat: dict) -> list:
     return [float(feat[name]) for name in FEATURE_NAMES]
 
 
-def _prune_links(times: dict, now: float) -> None:
-    """Drop counterparties older than a week (memory only: extract filters by time)."""
+def _within(entries, now: float, window: float) -> list:
+    """The entries of a time-ordered deque no older than `window`, newest first."""
+    out = []
+    for e in reversed(entries):
+        if now - e[0] > window:
+            break
+        out.append(e)
+    return out
+
+
+def _known_payer(receiver_state, payer: str, now: float) -> bool:
+    """Whether `payer` paid this payee within the last month."""
+    return now - receiver_state.payers.get(payer, -math.inf) <= C.LINK_MONTH_S
+
+
+def _prune_links(times: dict, now: float, keep: float = C.LINK_WEEK_S) -> None:
+    """Drop entries older than `keep` (memory only: extract filters by time)."""
     if len(times) <= C.LINK_PRUNE_AT:
         return
-    cutoff = now - C.LINK_WEEK_S
+    cutoff = now - keep
     for k, t in list(times.items()):
         if t < cutoff:
             del times[k]
@@ -251,14 +277,17 @@ def update_receiver_state(receiver_state, event: dict, now: float) -> None:
     """Advance the payee's inbound history (call AFTER extract)."""
     if receiver_state is None:
         return
-    receiver_state.inbound.append(
-        (now, event.get("sender_pinfl", ""), float(event["amount_uzs"])))
-    receiver_state.payers[event.get("sender_pinfl", "")] = now
+    me = event.get("sender_pinfl", "")
+    receiver_state.inbound.append((now, me, float(event["amount_uzs"])))
+    if not _known_payer(receiver_state, me, now):
+        receiver_state.new_payers[me] = now
+    receiver_state.payers[me] = now
     receiver_state.last_inbound_ts = now
-    _prune_links(receiver_state.payers, now)
+    _prune_links(receiver_state.payers, now, C.LINK_MONTH_S)
+    _prune_links(receiver_state.new_payers, now, C.LINK_DAY_S)
     add_contact(receiver_state, sender_key(event), now)
     while (receiver_state.inbound
-           and now - receiver_state.inbound[0][0] > C.RECEIVER_WINDOW_S):
+           and now - receiver_state.inbound[0][0] > C.LINK_DAY_S):
         receiver_state.inbound.popleft()
 
 
@@ -266,6 +295,10 @@ def update_state(state, event: dict, now: float) -> None:
     """Advance per-sender state with the current event (call AFTER extract)."""
     amount = float(event["amount_uzs"])
     payee = payee_key(event)
+    if payee not in state.seen_payees:
+        state.new_payees.append((now, amount))
+    while state.new_payees and now - state.new_payees[0][0] > C.LINK_DAY_S:
+        state.new_payees.popleft()
     state.seen_payees.add(payee)
     state.payee_times[payee] = now
     _prune_links(state.payee_times, now)

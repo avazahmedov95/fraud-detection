@@ -10,8 +10,62 @@ to 5 October:
 - retraining on people's decisions;
 - a faster stream.
 
+On 13 October four day-level features followed, 28 instead of 24; their before and
+after comes first, in the next section.
+
 All data comes from our generator (`data.md`), so these are design targets, not
 results from a real bank.
+
+## 13 October: four day-level features
+
+The model now reads 28 features instead of 24. The four new ones look at the last
+day: how much money came into the payee, how many of its payers had not paid it for
+a month, how many payees the sender paid for the first time, and how much went to
+them. A mule collects from new people within a day; a taken-over card is drained to
+new payees.
+
+They were built after a check fixed before the run passed on all 20 generated
+datasets. Here they are measured the way the system runs: five LightGBM models, the
+cut-off where F1 is highest, and the second look. The same 20 datasets, 3,480 test
+frauds:
+
+| | recall | precision | F1 | alerts | fraud caught |
+|---|---|---|---|---|---|
+| model, 24 features | 62.6% | 74.0% | 67.4% | 2,963 | 2,188 |
+| model, 28 features | 66.5% | 74.7% | 70.0% | 3,109 | 2,323 |
+| model + second look, 24 features | 70.8% | 65.8% | 67.9% | 3,784 | 2,479 |
+| model + second look, 28 features | 73.5% | 68.1% | 70.4% | 3,794 | 2,574 |
+
+The model's F1 rose on all 20 datasets, by 2.6 points on average (95% interval 2.0
+to 3.2). With the second look the system catches 95 more frauds for the same number
+of alerts.
+
+On the main dataset's last six days (176 frauds):
+
+| | recall | precision | F1 | alerts | fraud caught |
+|---|---|---|---|---|---|
+| model, 24 features | 70.5% | 72.1% | 71.3% | 172 | 124 |
+| model, 28 features | 69.9% | 75.0% | 72.4% | 164 | 123 |
+| model + second look, 24 features | 78.4% | 67.6% | 72.6% | 204 | 138 |
+| model + second look, 28 features | 77.8% | 74.1% | 75.9% | 185 | 137 |
+
+Here the system catches about the same fraud with 19 fewer alerts. One test of 176
+frauds moves by a case or two either way (mules 62.9% -> 60.0%, structuring 82.8% ->
+86.2%), so the 20 datasets above are the fairer picture.
+
+On the public datasets, with the 22 of the 28 features they can supply:
+
+- IBM AML (for information): F1 56.8% -> 58.3%; at a 2% alert budget 1,349 -> 1,367
+  of the 1,653 laundering.
+- PaySim: no change. Each sender appears there once, so a sender's day is always
+  empty: transfers F1 38.5% -> 38.7%, all transactions at a 2% budget 890 -> 891 of
+  1,840.
+
+The features add one Redis read; the payee's side is now read in one round trip
+instead of three. Timed from the host on the same 5,000 transfers, the job's Python
+work took 5.5-7.2 ms a transfer against 9.6-9.9 ms before. The running system was
+not timed again: on battery the laptop slowed every step, even the model, so those
+runs could not be compared.
 
 ## Quality on our main dataset
 
@@ -104,7 +158,7 @@ same workload it caught about 1.8 times as many frauds of the new scheme (330
 against 187). The gap to "all fraud known" is the cost of labels a bank never gets:
 only about 55% of frauds became known in time.
 
-## Public datasets
+## Public datasets, 5 October
 
 | dataset | recall | precision | F1 |
 |---|---|---|---|
@@ -140,14 +194,15 @@ the test part, and we count how much of the fraud is among them. The published
 PaySim model reports its result this way, so here PaySim is scored on all its
 transactions, as that model was. This reading needs no alert level, so on the
 public datasets the model learns on the whole training part, as that model did (on
-PaySim all 24 days). On our data it is the model the system runs.
+PaySim all 24 days). On our data it is the model the system runs. All three are read
+with the 28 features of 13 October.
 
 | data | alerts | fraud caught | alerts that are fraud |
 |---|---|---|---|
-| our data (the last six days) | 2,000 | 98.3% (173 of 176) | 8.6% |
-| PaySim, all transactions | 3,229 | 48.4% (890 of 1,840) | 27.6% |
+| our data (the last six days) | 2,000 | 98.9% (174 of 176) | 8.7% |
+| PaySim, all transactions | 3,229 | 48.4% (891 of 1,840) | 27.6% |
 | the published PaySim model | - | 49.4% (916 of 1,854) | - |
-| IBM AML (for information) | 17,949 | 81.6% (1,349 of 1,653) | 7.5% |
+| IBM AML (for information) | 17,949 | 82.7% (1,367 of 1,653) | 7.6% |
 
 On our data 2% is far more alerts than there are frauds (2,000 against 176), so
 almost all fraud is inside. On PaySim our features come close to the published
@@ -159,6 +214,8 @@ model, which also uses PaySim's own transaction type.
   learns only from analysts and clients knows fewer (148 of the 176 in the test
   days), which costs about half a point of F1.
 - Over 20 datasets the second look raises recall but lowers precision.
+- The retraining test (5 October) and the memory on IBM AML (7 October) were
+  measured with 24 features.
 - Speed was measured on battery; on mains power the system is faster, so the
   figures are a safe lower bound.
 
@@ -170,5 +227,7 @@ model, which also uses PaySim's own transaction type.
 - `raw/second_look_seeds.json`: the model alone, a lowered cut-off and the second
   look, for each of the 20 datasets.
 - `raw/ibm_memory.json`: the memory on IBM AML, each of the five runs.
+- `raw/day_features_seeds.json`: the 24 and the 28 features on the same 20
+  datasets.
 - The decisions of the speed runs are kept in `_warehouse_backup_2026-10-06/`
   (not in git). The last hash of its audit chain is recorded in commit `b2062f2`.

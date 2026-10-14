@@ -35,7 +35,7 @@ NODES = [
     ("Receiver", "serviceTask",
      "Read and update who paid the payee; check confirmed fraud cards\n[Redis]",
      1, (970, 350, 180, 100), None),
-    ("Features", "serviceTask", "Compute the 24 features\n[Python in Flink]",
+    ("Features", "serviceTask", "Compute the 28 features\n[Python in Flink]",
      1, (1190, 350, 180, 100), None),
     ("Split", "parallelGateway", "", 1, (1410, 375, 50, 50), None),
     ("Rules", "businessRuleTask", "Run the 10 rules; name the alert type\n[Python in Flink]",
@@ -366,7 +366,7 @@ MERMAID = """sequenceDiagram
     Flink->>Flink: load this sender's history (1.9 ms)
     Flink->>Redis: how many people paid this card? any confirmed fraud cards?
     Redis-->>Flink: counts for the hour, day and week, and the confirmed cards (1.6 ms)
-    Flink->>Flink: compute 24 features, run the 10 rules (0.65 ms)
+    Flink->>Flink: compute 28 features, run the 10 rules (0.65 ms)
     Flink->>Flink: score with the model (0.40 ms)
     Flink->>Flink: decide: allow, hold, or ask the second look (0.03 ms)
     Flink->>Kafka: transactions.scored, the decision with its features (31 ms in all)
@@ -403,7 +403,7 @@ MESSAGES = [
     ("Flink job", "Flink job", "load the sender's history", "1.9 ms", False),
     ("Flink job", "Redis", "who paid this card? confirmed fraud cards?", "", False),
     ("Redis", "Flink job", "counts for the hour, day, week; confirmed cards", "1.6 ms", True),
-    ("Flink job", "Flink job", "compute 24 features, run the 10 rules", "0.65 ms", False),
+    ("Flink job", "Flink job", "compute 28 features, run the 10 rules", "0.65 ms", False),
     ("Flink job", "Flink job", "score with the model", "0.40 ms", False),
     ("Flink job", "Flink job", "decide: allow, hold, or ask the second look", "0.03 ms", False),
     ("Flink job", "Kafka", "the decision, with its features", "31 ms in all", False),

@@ -61,9 +61,12 @@ REGISTRY = (
     ),
     Capability(
         key="counterparty_history",
-        requires="who paid each card over a week, and when the sender was last paid (Redis)",
+        requires="who paid each card over a month and how much over a day, and when the "
+                 "sender was last paid (Redis)",
         features=("payee_payers_24h", "payee_payers_7d", "sender_payees_24h",
-                  "sender_payees_7d", "secs_since_sender_inbound"),
+                  "sender_payees_7d", "secs_since_sender_inbound",
+                  "payee_inflow_24h", "payee_new_payers_24h",
+                  "sender_new_payees_24h", "sender_new_payee_sum_24h"),
         rules=(),
     ),
     Capability(

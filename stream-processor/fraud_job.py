@@ -177,7 +177,7 @@ class FraudDetector(KeyedProcessFunction):
         result = evaluate(event, state, event_epoch, receiver_state,
                           sender_inbound_ts=sender_inbound, confirmed=confirmed)
         self._state.update(state)
-        self._receivers.record(event, event_epoch)
+        self._receivers.record(event, event_epoch, receiver_state)
         mark = _lap(stages, "rules", mark)
 
         cep_score = result["cep_score"]

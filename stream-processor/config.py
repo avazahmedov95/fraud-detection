@@ -65,9 +65,11 @@ MIN_TRAVEL_DISTANCE_KM = 100.0      # each region is one point (geo.py)
 RECEIVER_WINDOW_S = 3600
 MULE_FAN_IN_MIN_SENDERS = 6
 
-# counterparty_history: a day and a week, the longest window 30-day data supports.
+# counterparty_history: a day and a week; a payer unseen for a month counts as new,
+# the longest window 30-day data supports.
 LINK_DAY_S = 86400
 LINK_WEEK_S = 604800
+LINK_MONTH_S = 30 * 86400
 LINK_PRUNE_AT = 256                 # memory only: the features filter by time anyway
 
 # confirmed_cases: the confirmed fraud accounts (Redis), added to by verdicts and

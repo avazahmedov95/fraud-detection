@@ -3,6 +3,8 @@ the interval since the sender's own account was last paid. The windows are what 
 CBU's internal-control rules count over, shortened to what
 a 30-day dataset can carry."""
 
+import math
+
 import pytest
 
 import capabilities as CAP
@@ -38,15 +40,14 @@ def _f(event, state=None, now=1_000_000.0, receiver_state=None, sender_inbound_t
 def test_columns_are_absent_until_the_capability_is_on(on):
     names = CAP.feature_names()
     block = ["payee_payers_24h", "payee_payers_7d", "sender_payees_24h",
-             "sender_payees_7d", "secs_since_sender_inbound"]
+             "sender_payees_7d", "secs_since_sender_inbound", "payee_inflow_24h",
+             "payee_new_payers_24h", "sender_new_payees_24h", "sender_new_payee_sum_24h"]
     later = CAP.REGISTRY[CAP.REGISTRY.index(CAP.BY_KEY["counterparty_history"]) + 1:]
     assert names[names.index(block[0]):] == block + [
         f for cap in later if CAP.enabled(cap.key) for f in cap.features], \
         "the capability must append to the vector, not shift trained columns"
     CAP.MODES["counterparty_history"] = "off"
-    assert not [n for n in CAP.feature_names() if n.startswith(("payee_payers",
-                                                                "sender_payees",
-                                                                "secs_since_sender"))]
+    assert not set(block) & set(CAP.feature_names())
 
 
 # --- the payee's payers ----------------------------------------------------
@@ -73,6 +74,39 @@ def test_a_store_that_is_down_reads_as_nothing_seen(on):
     """Fail open exactly like the fan-in features: a missing store is not a count."""
     f = _f(_ev(), receiver_state=None)
     assert f["payee_payers_24h"] == 0 and f["payee_payers_7d"] == 0
+    assert f["payee_inflow_24h"] == 0 and f["payee_new_payers_24h"] == 0
+
+
+# --- the payee's day: money in, and payers new to it -----------------------
+
+def test_inflow_is_the_money_paid_in_over_a_day(on):
+    now = 1_000_000.0
+    rs = ReceiverState()
+    F.update_receiver_state(rs, _ev(sender="S1", amount=300_000), now - 2 * C.LINK_DAY_S)
+    F.update_receiver_state(rs, _ev(sender="S2", amount=200_000), now - 5 * 3600)
+    f = _f(_ev(sender="S3", amount=100_000), receiver_state=rs, now=now)
+    assert f["payee_inflow_24h"] == pytest.approx(math.log1p(300_000)), \
+        "S2's and this transfer; S1's is two days old"
+
+
+def test_a_new_payer_is_one_who_had_not_paid_for_a_month(on):
+    now = 1_000_000.0 + 60 * 86400
+    rs = ReceiverState()
+    rs.payers = {"old": now - 40 * 86400, "known": now - 3 * 86400, "c": now - 3600}
+    rs.new_payers = {"c": now - 3600, "d": now - 2 * C.LINK_DAY_S}
+    assert _f(_ev(sender="old"), receiver_state=rs, now=now)["payee_new_payers_24h"] == 2, \
+        "c, new an hour ago, and this payer, unseen for forty days; d is two days old"
+    assert _f(_ev(sender="known"), receiver_state=rs, now=now)["payee_new_payers_24h"] == 1
+
+
+def test_a_payer_stays_new_for_a_day_then_returns_new_after_a_month(on):
+    t0 = 1_000_000.0
+    rs = ReceiverState()
+    F.update_receiver_state(rs, _ev(sender="S1"), t0)
+    F.update_receiver_state(rs, _ev(sender="S1"), t0 + 3600)
+    assert rs.new_payers == {"S1": t0}, "the second payment keeps the first one's time"
+    F.update_receiver_state(rs, _ev(sender="S1"), t0 + 3600 + C.LINK_MONTH_S + 1)
+    assert rs.new_payers["S1"] == t0 + 3600 + C.LINK_MONTH_S + 1
 
 
 # --- the sender's payees ---------------------------------------------------
@@ -89,11 +123,24 @@ def test_sender_payees_count_distinct_payees_in_each_window(on):
 
 
 def test_sender_payees_need_no_store(on):
-    """Sender-keyed state is Flink's own, so these two columns survive a Redis outage."""
+    """Sender-keyed state is Flink's own, so these columns survive a Redis outage."""
     st = SenderState()
     F.update_state(st, _ev(payee="p1"), 1_000_000.0 - 60)
     f = _f(_ev(payee="p2"), state=st, receiver_state=None, now=1_000_000.0)
-    assert f["sender_payees_24h"] == 2
+    assert f["sender_payees_24h"] == 2 and f["sender_new_payees_24h"] == 2
+
+
+def test_first_time_payees_and_their_money_over_a_day(on):
+    now = 1_000_000.0
+    st = SenderState()
+    F.update_state(st, _ev(payee="p1", amount=400_000), now - 2 * C.LINK_DAY_S)
+    F.update_state(st, _ev(payee="p2", amount=300_000), now - 3600)
+    F.update_state(st, _ev(payee="p1", amount=900_000), now - 1800)
+    f = _f(_ev(payee="p3", amount=100_000), state=st, now=now)
+    assert f["sender_new_payees_24h"] == 2, "p2 and p3; p1 was first paid two days ago"
+    assert f["sender_new_payee_sum_24h"] == pytest.approx(math.log1p(400_000))
+    again = _f(_ev(payee="p2", amount=100_000), state=st, now=now)
+    assert again["sender_new_payees_24h"] == 1 and again["is_new_payee"] == 0
 
 
 # --- money in, money straight out ------------------------------------------
@@ -126,7 +173,7 @@ def test_pruning_cannot_change_a_count(on):
     rs = ReceiverState()
     for i in range(C.LINK_PRUNE_AT + 10):
         F.update_receiver_state(rs, _ev(sender=f"S{i}"), now - 60)
-    assert len(rs.payers) == C.LINK_PRUNE_AT + 10, "nothing here is older than a week"
+    assert len(rs.payers) == C.LINK_PRUNE_AT + 10, "nothing here is older than a month"
     f = _f(_ev(sender="S0"), receiver_state=rs, now=now)
     assert f["payee_payers_24h"] == C.LINK_PRUNE_AT + 10
 

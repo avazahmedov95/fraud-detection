@@ -363,13 +363,15 @@ def b_receiver_store_round_trips():
     written = {}
 
     class Pipe:
+        def __init__(self): self.reads = []
         def zadd(self, key, mapping): written.setdefault(key, {}).update(mapping)
         def zremrangebyscore(self, *a): pass
         def expire(self, *a): pass
-        def execute(self): pass
+        def zrangebyscore(self, *a, **k): self.reads.append((a, k))
+        def execute(self): return [Fake().zrangebyscore(*a, **k) for a, k in self.reads]
 
     class Fake:
-        def pipeline(self): return Pipe()
+        def pipeline(self, transaction=True): return Pipe()
 
         def zrangebyscore(self, key, lo, hi, withscores=False):
             rows = sorted(written.get(key, {}).items(), key=lambda kv: kv[1])
@@ -383,7 +385,9 @@ def b_receiver_store_round_trips():
     store._redis = Fake()
     ev = {"transaction_id": "t1", "sender_pinfl": "S1", "amount_uzs": 500_000,
           "receiver_card": "8600330000000002", "receiver_pinfl": "R1"}
-    store.record(ev, now=1000.0)
+    evaluated = pkg("stream-processor", "rules").ReceiverState()
+    F.update_receiver_state(evaluated, ev, 1000.0)
+    store.record(ev, now=1000.0, receiver_state=evaluated)
     state = store.load(F.payee_key(ev), now=1000.0)
     if state is None or len(state.inbound) != 1:
         return f"a member written by record() was not read back by load(): {written}"
@@ -395,6 +399,8 @@ def b_receiver_store_round_trips():
     if CAP.enabled("counterparty_history"):
         if state.payers != {"S1": 1000.0}:
             return f"counterparty map read back as {state.payers}, expected S1 at 1000"
+        if state.new_payers != {"S1": 1000.0}:
+            return f"the new payer read back as {state.new_payers}, expected S1 at 1000"
         if store.last_inbound(F.payee_key(ev), now=1000.0) != 1000.0:
             return "last_inbound did not read back the time the payee was paid"
     return None

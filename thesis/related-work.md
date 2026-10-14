@@ -92,7 +92,7 @@ say "payments".
   Datasets*. Tree models stay very strong on tables. This agrees with our
   comparison: the tree models were ahead of SVM and logistic regression.
 - **arXiv:2410.17758**, *A Neural Network Alternative to Tree-based Models*. Built
-  for gene data with thousands of columns; our data has 24. Read, not tried.
+  for gene data with thousands of columns; our data has 28. Read, not tried.
 - **ACM Computing Surveys (2026)**, *A Survey on Tabular Data: From Tree-based
   Methods to Tabular Deep Learning*, doi 10.1145/3807777. Background only.
 

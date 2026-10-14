@@ -22,7 +22,7 @@ Tabs:
   release, the verdicts given, each of which can be changed, and on an allowed
   transfer the client's report that it was fraud.
 - **About the project** - every component, the path of one real decision with its
-  stage times, the 24 features and the 10 rules, the retrainer's latest run, the
+  stage times, the 28 features and the 10 rules, the retrainer's latest run, the
   model's figures from `ml/models/metrics.json`, the second look, and the two public
   datasets.
 - **Grafana** - the system live, over the last hour: transfers checked and held, the

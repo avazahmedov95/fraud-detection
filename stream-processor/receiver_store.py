@@ -1,6 +1,7 @@
-"""The payee's side in Redis: recent payers, counterparties, contacts and the
-confirmed fraud accounts. Not in Flink state: the stream is keyed by sender, so one
-payee's transfers reach every copy of the job. Fails open."""
+"""The payee's side in Redis: its transfers of the day, its payers of the month and
+who is new among them, contacts and the confirmed fraud accounts. Not in Flink state:
+the stream is keyed by sender, so one payee's transfers reach every copy of the job.
+Fails open."""
 
 import logging
 import time
@@ -40,33 +41,31 @@ class ReceiverStore:
         self._down_until = time.monotonic() + C.REDIS_RETRY_AFTER_S
 
     def load(self, payee, now):
-        """The payee's side, or None while Redis is unavailable."""
+        """The payee's side in one round trip, or None while Redis is unavailable."""
         if not self._up() or not payee:
             return None
-        state = ReceiverState()
+        counters, cases = CAP.enabled("counterparty_history"), CAP.enabled("confirmed_cases")
         try:
-            members = self._redis.zrangebyscore(
-                f"rcv:{payee}", now - C.RECEIVER_WINDOW_S, now)
+            pipe = self._redis.pipeline(transaction=False)
+            pipe.zrangebyscore(f"rcv:{payee}", now - C.LINK_DAY_S, now)
+            if counters:
+                pipe.zrangebyscore(f"cp:in:{payee}", now - C.LINK_MONTH_S, now, withscores=True)
+                pipe.zrangebyscore(f"cp:new:{payee}", now - C.LINK_DAY_S, now, withscores=True)
+            if cases:
+                pipe.zrangebyscore(f"cp:card:{payee}", now - C.LINK_WEEK_S, now, withscores=True)
+            replies = iter(pipe.execute())
         except Exception as exc:                       # noqa: BLE001
-            self._failed("fan-in lookup", exc)
+            self._failed("payee lookup", exc)
             return None
-        if CAP.enabled("counterparty_history"):
-            try:
-                for member, score in self._redis.zrangebyscore(
-                        f"cp:in:{payee}", now - C.LINK_WEEK_S, now,
-                        withscores=True):
-                    state.payers[member] = float(score)
-                    state.last_inbound_ts = max(state.last_inbound_ts,
-                                                float(score))
-            except Exception as exc:                   # noqa: BLE001
-                self._failed("counterparty lookup", exc)
-        if CAP.enabled("confirmed_cases"):
-            try:
-                for member, score in self._redis.zrangebyscore(
-                        f"cp:card:{payee}", now - C.LINK_WEEK_S, now, withscores=True):
-                    state.contacts[member] = float(score)
-            except Exception as exc:                   # noqa: BLE001
-                self._failed("contacts lookup", exc)
+        state = ReceiverState()
+        members = next(replies)
+        if counters:
+            for member, score in next(replies):
+                state.payers[member] = float(score)
+                state.last_inbound_ts = max(state.last_inbound_ts, float(score))
+            state.new_payers = {m: float(s) for m, s in next(replies)}
+        if cases:
+            state.contacts = {m: float(s) for m, s in next(replies)}
         for m in members:
             try:
                 parts = m.split("|", 3)
@@ -78,29 +77,35 @@ class ReceiverStore:
                 continue
         return state
 
-    def record(self, event, now):
-        """Append this transfer to the payee's window and prune what expired."""
+    def record(self, event, now, receiver_state=None):
+        """Append this transfer to the payee's window and prune what expired;
+        `receiver_state`, as evaluate left it, says whether the payer is new."""
         if not self._up():
             return
         payee = F.payee_key(event)
         if not payee:
             return
         key = f"rcv:{payee}"
+        payer = event.get("sender_pinfl", "")
         # The id: a replay rewrites its member, and two equal transfers stay two.
         txid = event.get("transaction_id") or ""
-        member = (f"{now}|{event.get('sender_pinfl', '')}|"
-                  f"{float(event['amount_uzs'])}|{txid}")
+        member = f"{now}|{payer}|{float(event['amount_uzs'])}|{txid}"
         try:
             pipe = self._redis.pipeline()
             pipe.zadd(key, {member: now})
-            pipe.zremrangebyscore(key, "-inf", now - C.RECEIVER_WINDOW_S)
-            pipe.expire(key, int(C.RECEIVER_WINDOW_S * 2))
+            pipe.zremrangebyscore(key, "-inf", now - C.LINK_DAY_S)
+            pipe.expire(key, int(C.LINK_DAY_S * 2))
             if CAP.enabled("counterparty_history"):
                 # One member per payer, scored with their last payment.
                 ckey = f"cp:in:{payee}"
-                pipe.zadd(ckey, {event.get("sender_pinfl", ""): now})
-                pipe.zremrangebyscore(ckey, "-inf", now - C.LINK_WEEK_S)
-                pipe.expire(ckey, int(C.LINK_WEEK_S * 2))
+                pipe.zadd(ckey, {payer: now})
+                pipe.zremrangebyscore(ckey, "-inf", now - C.LINK_MONTH_S)
+                pipe.expire(ckey, int(C.LINK_MONTH_S * 2))
+                if receiver_state is not None and receiver_state.new_payers.get(payer) == now:
+                    nkey = f"cp:new:{payee}"
+                    pipe.zadd(nkey, {payer: now})
+                    pipe.zremrangebyscore(nkey, "-inf", now - C.LINK_DAY_S)
+                    pipe.expire(nkey, int(C.LINK_DAY_S * 2))
             sender = F.sender_key(event)
             if CAP.enabled("confirmed_cases") and sender:
                 # Each end files the other, as features.add_contact does.

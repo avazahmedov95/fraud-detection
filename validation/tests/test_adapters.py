@@ -54,7 +54,7 @@ def test_the_profile_drops_exactly_what_the_dataset_cannot_supply(foreign_profil
     for gone in ("geo_is_anomaly", "active_call", "secs_login_z", "payee_flagged"):
         assert gone not in names
     assert "rcv_distinct_senders_1h" in names and "payee_payers_7d" in names
-    assert len(idx) == len(names) == 18
+    assert len(idx) == len(names) == 22
     assert CAP.MODES["payee_identity"] == "pinfl"
 
 
@@ -76,7 +76,7 @@ def test_extraction_and_scoring_run_end_to_end(paysim_df, foreign_profile, tmp_p
     assert (np.diff(ts) >= 0).all()
     cache = str(tmp_path / "m.npz")
     Xk, yk = RP.cached_matrix(cache, lambda: (X, y))
-    assert Xk.shape[1] == 18
+    assert Xk.shape[1] == 22
     Xc, _ = RP.cached_matrix(cache, lambda: pytest.fail("the cache was not read"))
     assert np.array_equal(Xk, Xc)
     n = len(yk)

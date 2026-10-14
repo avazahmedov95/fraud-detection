@@ -9,10 +9,10 @@
 2. **The Flink job** (`stream-processor/`) reads it. Three copies of the job run
    side by side, each with its own senders.
    - It reads the sender's history from Flink's own memory.
-   - It reads the payee's side from Redis: who paid this card in the last hour, day
-     and week, which cards it dealt with, and whether any of them belong to
-     confirmed frauds.
-   - It computes 24 features (numbers that describe the transfer and its context)
+   - It reads the payee's side from Redis: who paid this card in the last hour, day,
+     week and month, how much came in over a day, which cards it dealt with, and
+     whether any of them belong to confirmed frauds.
+   - It computes 28 features (numbers that describe the transfer and its context)
      and runs 10 hard rules.
    - The model gives a risk score from 0 to 1. It is five LightGBM models averaged
      into one, run inside Flink as an ONNX file.
@@ -21,7 +21,7 @@
        the regulator requires fired (STRUCTURING, DAILY_LIMIT_BREACH);
      - **second look** when the risk is just under the cut-off;
      - otherwise **allow**.
-   - Every decision goes to the topic `transactions.scored`, with its 24 feature
+   - Every decision goes to the topic `transactions.scored`, with its 28 feature
      values and the time each step took.
 3. **The second look** (`second-look/`). Transfers just under the cut-off, about 1
    in 1,000, go to a second model, TabPFN. It answers in about 0.3 seconds. If it
@@ -58,7 +58,7 @@ The system never blocks a transfer by itself. A person does.
 | retrainer | a new model every day, switched on by a person | Python, LightGBM |
 | Grafana | dashboards over ClickHouse | Grafana |
 
-## The 24 features
+## The 28 features
 
 - **The sender's own history (11):** the amount; the amount against the sender's
   usual amount and spread; whether the payee is new; transfers in the last 10
@@ -70,9 +70,11 @@ The system never blocks a transfer by itself. A person does.
 - **Region (1):** whether the sender is away from their usual region.
 - **App session (2):** whether there was a call during confirmation, and how long the
   confirmation took against the person's own usual time.
-- **Counterparties over a day and a week (5):** how many people paid the payee, how
+- **Counterparties over a day and a week (9):** how many people paid the payee, how
   many people the sender paid, and how long ago the sender's own account was last
-  paid (money in, then money out is the mule pattern).
+  paid (money in, then money out is the mule pattern); over the last day, how much
+  money came into the payee, how many of its payers had not paid it for a month,
+  how many payees the sender paid for the first time, and how much went to them.
 - **Confirmed fraud accounts (3):** whether the payee or the sender was in a
   confirmed fraud, and how many of the payee's contacts of the last week were.
 

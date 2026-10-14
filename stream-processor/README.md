@@ -2,7 +2,7 @@
 
 The PyFlink job that decides every transfer before it settles. It reads
 `transactions.raw`, keeps each sender's history in Flink state and each payee's side
-in Redis, computes 24 features, runs 10 hard rules, scores the model (ONNX) and
+in Redis, computes 28 features, runs 10 hard rules, scores the model (ONNX) and
 decides: ALLOW, REVIEW - held for the analyst - or SECOND_LOOK, just under the
 cut-off, sent to TabPFN (`second-look/`). Every decision goes to
 `transactions.scored` with its feature values, where the sink writer opens a case
@@ -11,11 +11,11 @@ for each hold.
 | File | What it does |
 |---|---|
 | `fraud_job.py` | the job: read, state, Redis, features, rules, model, decision, stage times |
-| `features.py` | the 24 features; training replays the same code (`ml/dataset.py`) |
+| `features.py` | the 28 features; training replays the same code (`ml/dataset.py`) |
 | `rules.py` | the 10 hard rules and the sender and payee state they read |
 | `fusion.py` | the decision from the model's score and the rules, and the alert's type |
 | `capabilities.py` | what the bank can observe, and so which features and rules are on |
-| `receiver_store.py` | the payee's side in Redis: recent payers, counterparties, contacts, confirmed fraud accounts |
+| `receiver_store.py` | the payee's side in Redis: its transfers of the day, its payers of the month and who is new among them, contacts, confirmed fraud accounts |
 | `geo.py` | region coordinates and distances for GEO_ANOMALY and IMPOSSIBLE_TRAVEL |
 | `payload_crypto.py` | AES-256-GCM payloads, when `PAYLOAD_KEY_HEX` is set; the generator encrypts with it |
 | `config.py` | windows, thresholds, topics, Redis keys |
@@ -64,7 +64,10 @@ inside Docker, measured on 5 October 2026 on battery - mains power is faster:
 | 250 | 3,771 / 6,375 / 6,885 | 313 / 1,054 / 1,371 |
 
 The work itself is 4-5 ms a transfer; the rest is the wait between Kafka and
-Python. One copy could not keep up at 100 a second; three hold the 300 ms target
+Python. These figures are the 24-feature job's. The 28-feature job reads the
+payee's side in one Redis round trip instead of three; timed from the host on the
+same 5,000 transfers, its Python work took 5.5-7.2 ms a transfer against 9.6-9.9 ms
+for the old code. One copy could not keep up at 100 a second; three hold the 300 ms target
 to 200. Past that, 50 ms bundles do better (three copies at 250: p99 408), and four
 copies contended for this laptop's cores.
 

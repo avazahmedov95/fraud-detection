@@ -43,40 +43,44 @@ from it.
 | metric | model | rules only |
 |---|---|---|
 | ROC-AUC | 0.998 | - |
-| PR-AUC | 0.714 | - |
-| precision at REVIEW | 0.721 | 0.011 |
-| recall at REVIEW | 0.705 | 0.142 |
-| F1 at REVIEW | 0.713 | - |
+| PR-AUC | 0.733 | - |
+| precision at REVIEW | 0.750 | 0.011 |
+| recall at REVIEW | 0.699 | 0.142 |
+| F1 at REVIEW | 0.724 | - |
 
-Recall by fraud type (at REVIEW): STRUCTURING 82.8%, APP 55.6%, ATO 87.8%, MULE 62.9%.
-This run: cut at REVIEW = 0.1690.
+Recall by fraud type (at REVIEW): STRUCTURING 86.2%, APP 55.6%, ATO 85.7%, MULE 60.0%.
+This run: cut at REVIEW = 0.1803.
 
-The model reads 24 features (`stream-processor/capabilities.py`); three of them come
-from the memory of confirmed fraud accounts. In this test every fraud's payee counts
+The model reads 28 features (`stream-processor/capabilities.py`); three of them come
+from the memory of confirmed fraud accounts, and four look at the last day: money
+into the payee, payers new to it, and the sender's first-time payees and the money
+sent to them. On twenty generated datasets those four raised the model's F1 from 67.4% to
+70.0%, on every one of them (`thesis/results.md`); on these held-out days, from
+0.713 to 0.724. In this test every fraud's payee counts
 as confirmed a day after the fraud. A real bank learns fewer, which costs about half
 a point of F1. The data is generated, so these are design targets, not results from
 a real bank.
 
 ## The second look
 
-`second_look.py` takes the 100 highest risk scores just under the cut-off (0.0503 to
-0.1690) as the band, and chooses TabPFN's own cut-off inside it (0.8989). TabPFN
+`second_look.py` takes the 100 highest risk scores just under the cut-off (0.0504 to
+0.1803) as the band, and chooses TabPFN's own cut-off inside it (0.9092). TabPFN
 learns from two parts of the training data. Measured once on the held-out days: the
-band holds 110 transfers and 21 of the frauds the model misses; the second look holds
-32 of them, 14 of them fraud. Lowering the cut-off to give the same 32 alerts would
-catch 9 -
-**recall 70.5% -> 78.4% for alerts 172 -> 204**.
+band holds 107 transfers and 26 of the frauds the model misses; the second look holds
+21 of them, 14 of them fraud. Lowering the cut-off to give the same 21 alerts would
+catch 7 -
+**recall 69.9% -> 77.8% for alerts 164 -> 185**.
 
-Over twenty generated datasets, 3,497 test frauds, averages with 95% intervals:
+Over twenty generated datasets, 3,480 test frauds, averages with 95% intervals:
 
 | system | recall | precision | F1 | alerts | caught |
 |---|---|---|---|---|---|
-| the model alone | 61.0% ± 3.5 | 73.0% ± 4.3 | 66.0% ± 2.9 | 2,938 | 2,139 |
-| a cut-off lowered to as many alerts | 67.8% ± 3.0 | 64.2% ± 4.2 | 65.4% ± 2.5 | 3,746 | 2,378 |
-| **the second look** | **68.8% ± 3.0** | 65.1% ± 4.3 | **66.4% ± 2.6** | 3,746 | **2,416** |
+| the model alone | 66.5% ± 3.6 | 74.7% ± 3.3 | 70.0% ± 2.7 | 3,109 | 2,323 |
+| a cut-off lowered to as many alerts | 72.3% ± 3.1 | 66.9% ± 2.7 | 69.2% ± 2.1 | 3,794 | 2,527 |
+| **the second look** | **73.5% ± 3.2** | 68.1% ± 3.0 | **70.4% ± 2.2** | 3,794 | **2,574** |
 
-The second look beats a lowered cut-off on 13 of 20 datasets, F1 +1.0 [+0.3, +1.6].
-Against the model alone it gives about eight points of recall for eight points of
+The second look beats a lowered cut-off on 17 of 20 datasets, F1 +1.2 [+0.5, +1.9].
+Against the model alone it gives about seven points of recall for seven points of
 precision.
 
 ## Retraining on people's decisions

@@ -82,8 +82,9 @@ def test_missing_receiver_state_fails_open():
 
 
 def test_receiver_state_is_pruned_to_the_window():
-    """Unbounded growth would be a memory leak in the shared store."""
+    """Unbounded growth would be a memory leak in the shared store: a day is kept,
+    the longest window a payee-side feature reads."""
     rs = ReceiverState()
-    _fan_in(5, rs, spacing_s=C.RECEIVER_WINDOW_S // 2)
-    assert all(rs.inbound[-1][0] - ts <= C.RECEIVER_WINDOW_S
-               for ts, _, _ in rs.inbound)
+    _fan_in(5, rs, spacing_s=C.LINK_DAY_S // 2)
+    assert len(rs.inbound) == 3
+    assert all(rs.inbound[-1][0] - ts <= C.LINK_DAY_S for ts, _, _ in rs.inbound)

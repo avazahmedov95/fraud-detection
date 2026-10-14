@@ -12,8 +12,9 @@ import capabilities as CAP
 @dataclass
 class ReceiverState:
     """One payee's side, kept in Redis (receiver_store.py)."""
-    inbound: deque = field(default_factory=deque)     # (ts, sender_pinfl, amount)
-    payers: dict = field(default_factory=dict)        # payer -> last paid, a week
+    inbound: deque = field(default_factory=deque)     # (ts, sender_pinfl, amount), a day
+    payers: dict = field(default_factory=dict)        # payer -> last paid, a month
+    new_payers: dict = field(default_factory=dict)    # payer -> paid, unseen a month before; a day
     last_inbound_ts: float = 0.0
     contacts: dict = field(default_factory=dict)      # card -> last dealt with, a week
 
@@ -22,6 +23,7 @@ class ReceiverState:
 class SenderState:
     seen_payees: set = field(default_factory=set)
     payee_times: dict = field(default_factory=dict)     # payee -> last paid
+    new_payees: deque = field(default_factory=deque)    # (ts, amount) to a first-time payee, a day
     events: deque = field(default_factory=deque)        # (ts, amount, payee)
     region_counts: Counter = field(default_factory=Counter)
     last_region: str = ""

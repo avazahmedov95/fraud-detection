@@ -58,7 +58,9 @@ neutral. The whole system runs on Apache Flink.
 2. **Money flowing into a mule is invisible from the sender's side.** The stream is
    split by sender, so each sender sees one ordinary transfer. 80% of mule
    transfers are of this kind. Keeping the payee's side in Redis raised the share
-   of mule fraud caught from 55.7% to 83.4%.
+   of mule fraud caught from 55.7% to 83.4%. Counting, over the last day, the payee's payers
+   who are new to it and the sender's first-time payees raised F1 by another 2.6
+   points over 20 generated datasets (`results.md`).
 3. **The sending bank usually does not know who owns the receiving card.** Only
    6.85% of transfers go to a client of the same bank. So the payee's account age,
    a popular fraud signal, is unknown for 93% of transfers, and we removed it. This

@@ -1,12 +1,12 @@
 {
-  "exported_at": "2026-10-04T15:13:00+00:00",
-  "commit": "f8dfb15c4de82fd5e589db166434423807aa160e",
+  "exported_at": "2026-10-13T16:51:49+00:00",
+  "commit": "faf67662526b1bd5246cccd3445f9bf713ea74d4",
   "artefacts": {
-    "model.onnx": "2702743509b732b1157f1dea2103579644d226a7ec4d16a4ca0bf6e2c51a83a3",
-    "model.txt": "e44c46d52fa6ae642e24025cafdf4450d3f5b78439a6ec3f268e1f16cd6fc5eb",
-    "model.joblib": "1582d8cf2ec59f75b5834a5f133b5798b23a75034b147e39e4a7b0fbfac34cf9",
-    "feature_names.json": "e15d69db32644cf853a17a7131b082b2a93fa69818d1a781726887c085bf3c88",
-    "thresholds.json": "823380067fdb4c9b801607721d3178abd6f0b8a259e98d7dab5863ce59264a23"
+    "model.onnx": "140f91ba7ef3367a2d72d0d4c53c94e3a8445cb05225d291e3bffbe9846b3738",
+    "model.txt": "4e67b3bbeed1c3ae0e2b37ba8f9c5953e22fed9403a7feb9bcdf37933ba7062a",
+    "model.joblib": "3ab0cc05dbec6751b1999a2c868be44e6d4bcca958112e1261d3a7fbbf1623b1",
+    "feature_names.json": "52a877f61c96fe3caf8e0de2295cb177822400846f6779aab3c0d08bfe4486ff",
+    "thresholds.json": "e029555835576b14bd6b9f996a36f2e6fcbc92fbc39da1c383c418feb51f7a65"
   },
   "dataset": {
     "transactions.csv": {
@@ -41,11 +41,15 @@
       "sender_payees_24h",
       "sender_payees_7d",
       "secs_since_sender_inbound",
+      "payee_inflow_24h",
+      "payee_new_payers_24h",
+      "sender_new_payees_24h",
+      "sender_new_payee_sum_24h",
       "payee_flagged",
       "sender_flagged",
       "payee_flagged_contacts"
     ],
-    "features_sha256": "a3af25868730201204edb5dc4446ee4e7935895b111ea59e1d4e40ccc78fb9d4",
+    "features_sha256": "d4ca8a9839385472c45a67f93c83eff313382a07f722acbf5464b8e76564c842",
     "capability_profile": {
       "core_history": "on",
       "receiver_velocity": "on",
@@ -57,7 +61,7 @@
     }
   },
   "metrics": {
-    "roc_auc": 0.9982006399444842,
-    "pr_auc": 0.7141007645951365
+    "roc_auc": 0.998360523612467,
+    "pr_auc": 0.7334799586133948
   }
 }

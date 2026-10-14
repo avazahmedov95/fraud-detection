@@ -17,7 +17,7 @@ sequenceDiagram
     Flink->>Flink: load this sender's history (1.9 ms)
     Flink->>Redis: how many people paid this card? any confirmed fraud cards?
     Redis-->>Flink: counts for the hour, day and week, and the confirmed cards (1.6 ms)
-    Flink->>Flink: compute 24 features, run the 10 rules (0.65 ms)
+    Flink->>Flink: compute 28 features, run the 10 rules (0.65 ms)
     Flink->>Flink: score with the model (0.40 ms)
     Flink->>Flink: decide: allow, hold, or ask the second look (0.03 ms)
     Flink->>Kafka: transactions.scored, the decision with its features (31 ms in all)

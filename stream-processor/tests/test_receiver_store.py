@@ -23,7 +23,7 @@ class FakeRedis:
     def smismember(self, key, members):
         return [int(m in self.members.get(key, set())) for m in members]
 
-    def pipeline(self):
+    def pipeline(self, transaction=True):
         return FakePipeline(self)
 
     def zrangebyscore(self, key, lo, hi, withscores=False):
@@ -53,8 +53,13 @@ class FakePipeline:
     def expire(self, key, ttl):
         self._ops.append(("expire", key, ttl)); return self
 
+    def zrangebyscore(self, key, lo, hi, withscores=False):
+        self._ops.append(("zrange", key, lo, hi, withscores)); return self
+
     def execute(self):
+        replies = []
         for op in self._ops:
+            replies.append(self._r.zrangebyscore(*op[1:]) if op[0] == "zrange" else None)
             if op[0] == "zadd":
                 self._r.sets.setdefault(op[1], {}).update(op[2])
             elif op[0] == "zrem":
@@ -65,6 +70,7 @@ class FakePipeline:
             elif op[0] == "expire":
                 self._r.expiries[op[1]] = op[2]
         self._ops = []
+        return replies
 
 
 @pytest.fixture
@@ -115,9 +121,10 @@ def test_distinct_senders_are_counted_separately(store):
 
 
 def test_entries_outside_the_window_are_dropped(store):
+    """A day is kept: the fan-in features read its last hour, the inflow all of it."""
     store.record(_ev("tx-old"), now=1000)
-    store.record(_ev("tx-new"), now=1000 + C.RECEIVER_WINDOW_S + 10)
-    state = store.load(_payee(), now=1000 + C.RECEIVER_WINDOW_S + 10)
+    store.record(_ev("tx-new"), now=1000 + C.LINK_DAY_S + 10)
+    state = store.load(_payee(), now=1000 + C.LINK_DAY_S + 10)
     assert len(state.inbound) == 1
 
 
@@ -139,7 +146,7 @@ def test_a_failing_redis_is_left_alone_for_a_while(store):
     calls = []
 
     class Down:
-        def zrangebyscore(self, *a, **k):
+        def pipeline(self, *a, **k):
             calls.append(a)
             raise ConnectionError("unreachable")
 
@@ -187,6 +194,22 @@ def test_load_reads_back_the_payers_and_the_last_inbound(store, counters_on):
     state = store.load(F.payee_key(_ev("t1")), 2000)
     assert state.payers == {"S1": 1000.0, "S2": 1500.0}
     assert state.last_inbound_ts == 1500.0
+
+
+def test_a_new_payer_is_filed_only_when_evaluate_found_one(store, counters_on):
+    """The job evaluates the loaded state, then records: the state says who is new."""
+    from rules import ReceiverState
+    pk = F.payee_key(_ev("t1"))
+    first = store.load(pk, 1000)
+    F.update_receiver_state(first, _ev("t1", sender="S1"), 1000)
+    store.record(_ev("t1", sender="S1"), 1000, first)
+    again = store.load(pk, 2000)
+    F.update_receiver_state(again, _ev("t2", sender="S1"), 2000)
+    store.record(_ev("t2", sender="S1"), 2000, again)
+    assert store._redis.sets[f"cp:new:{pk}"] == {"S1": 1000}
+    assert store.load(pk, 3000).new_payers == {"S1": 1000.0}
+    store.record(_ev("t3", sender="S2"), 3000, ReceiverState())
+    assert "S2" not in store._redis.sets[f"cp:new:{pk}"], "no state, no claim"
 
 
 def test_last_inbound_is_the_newest_payment_to_that_account(store, counters_on):
@@ -244,7 +267,8 @@ def test_the_store_path_and_the_in_process_replay_agree(store, counters_on):
             sender_inbound_ts=store.last_inbound(sk, ts),
             confirmed=store.confirmed_among(ev, state, ts))))
         F.update_state(senders_b[ev["sender_pinfl"]], ev, ts)
-        store.record(ev, ts)
+        F.update_receiver_state(state, ev, ts)
+        store.record(ev, ts, state)
 
     assert rows_a == rows_b
     assert any(r[F.FEATURE_NAMES.index("payee_flagged_contacts")] for r in rows_a)

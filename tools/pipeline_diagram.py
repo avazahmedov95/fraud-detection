@@ -81,7 +81,7 @@ ax.text(58, 78.6, "Flink job: three copies side by side, each with its own sende
 
 dec = box(58, 61, 18, 12, "Read", "read the message,\ndecrypt if needed", "0.05 ms")
 fea = box(79, 61, 18, 12, "Sender's history", "this sender's past,\nkept in Flink", "1.9 ms")
-rul = box(100, 61, 18, 12, "Features, rules", "24 features,\n10 rules", "0.65 ms")
+rul = box(100, 61, 18, 12, "Features, rules", "28 features,\n10 rules", "0.65 ms")
 mod = box(121, 61, 18, 12, "Model", "LightGBM: a risk\nfrom 0 to 1", "0.40 ms",
           fill=ACCENT_SOFT, edge=ACCENT)
 dcd = box(142, 61, 16, 12, "Decision", "allow, or hold\nfor the analyst", "0.03 ms")
