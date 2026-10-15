@@ -209,5 +209,80 @@
    2.74,
    0.38
   ]
- ]
+ ],
+ "versions": {
+  "_about": "The same day, the job in four versions, each from empty state on its own unused rows (100,000, 150,000, 200,000 and 250,000 on), three repeats each: p99 in ms per repeat, checkpoints over 150 ms, and the job's rules-and-memory step in ms.",
+  "keeps every sender, aligned": {
+   "p99_150": [
+    147,
+    141,
+    107
+   ],
+   "p99_200": [
+    654,
+    391,
+    157
+   ],
+   "slow_saves": 12,
+   "slowest_save_ms": 626,
+   "rules_ms": [
+    0.51,
+    0.81
+   ]
+  },
+  "state TTL, aligned": {
+   "p99_150": [
+    348,
+    257,
+    144
+   ],
+   "p99_200": [
+    1044,
+    243,
+    191
+   ],
+   "slow_saves": 12,
+   "slowest_save_ms": 984,
+   "rules_ms": [
+    2.33,
+    4.44
+   ]
+  },
+  "state TTL, unaligned": {
+   "p99_150": [
+    184,
+    132,
+    242
+   ],
+   "p99_200": [
+    207,
+    183,
+    337
+   ],
+   "slow_saves": 1,
+   "slowest_save_ms": 237,
+   "rules_ms": [
+    2.31,
+    4.03
+   ]
+  },
+  "daily timer, unaligned": {
+   "p99_150": [
+    173,
+    128,
+    136
+   ],
+   "p99_200": [
+    264,
+    268,
+    155
+   ],
+   "slow_saves": 3,
+   "slowest_save_ms": 510,
+   "rules_ms": [
+    0.59,
+    0.74
+   ]
+  }
+ }
 }

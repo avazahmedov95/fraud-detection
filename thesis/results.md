@@ -81,9 +81,26 @@ second 99 of 100 decisions stay under 300 ms in all three:
 
 Not confirmed: one repeat at 150 a second reached 425 ms. For 16 seconds it stayed
 near 48 ms; then for 4 seconds decisions took 0.2-0.65 s, while two saves of the
-job's state took 200 and 370 ms instead of about 20. The job saved all its state
-(40 MB then) every 2 seconds, and a busy disk holds the stream up. At 200 a second all
-three repeats stayed under 300 ms, so the capacity is there; the risk is the save.
+job's state took 200 and 370 ms instead of about 20. At 200 a second all three
+repeats stayed under 300 ms, so the capacity was there.
+
+To find the cause we ran the job in four versions, each from empty state on its own
+unused rows, three repeats each (p99 in ms; "rules and memory" is the job's step that
+also writes the sender's history):
+
+| version of the job | p99, 150 a second | p99, 200 a second | saves over 150 ms | rules and memory, ms |
+|---|---|---|---|---|
+| keeps every sender; saves wait for all three copies | 107-147 | 157-654 | 12 | 0.5-0.8 |
+| forgets through Flink's state TTL; saves wait | 144-348 | 191-1044 | 12 | 2.3-4.4 |
+| state TTL; saves do not wait (unaligned) | 132-242 | 183-337 | 1 | 2.3-4.0 |
+| forgets through a daily timer; saves do not wait | 128-173 | 155-268 | 3 | 0.6-0.7 |
+
+The state's size was not the cause: 11 MB in all four. The stalls came from the saves
+waiting until all three copies of the job reached them, which a busy copy delays;
+unaligned saves do not wait. Forgetting through Flink's state TTL cost 2-3 ms a
+transfer; a timer per sender, moved at most once a day, costs nothing measurable. The
+job now runs the last version: 99 of 100 decisions under 300 ms at 150 and at 200
+transfers a second in all three repeats.
 
 ## 14-15 October: a month through the running system
 
@@ -343,10 +360,10 @@ model, which also uses PaySim's own transaction type.
   one is slower and sometimes wrong.
 - The retraining test (5 October) and the memory on IBM AML (7 October) were
   measured with 24 features; on 15 October both were repeated with the 28.
-- Until 15 October the job kept every sender who ever paid (40 MB by then). Now it
-  forgets a sender silent for 90 days, longer than any window a feature reads. It
-  still saves all its state every 2 seconds; for a bank's millions of customers it
-  would have to save only what changed.
+- Until 15 October the job kept every sender who ever paid. Now a timer clears a
+  sender silent for 90 days, longer than any window a feature reads. It still saves
+  all its state every 2 seconds; for a bank's millions of customers it would have to
+  save only what changed.
 - Speed was measured on battery; on mains power the system is faster, so the
   figures are a safe lower bound.
 
