@@ -228,7 +228,7 @@ def _ddl_columns(sql, table):
     cols = []
     for line in body.splitlines():
         line = line.split("--", 1)[0].strip()
-        m = re.match(r"^([a-z_]+)\s+[A-Za-z]", line)
+        m = re.match(r"^([a-z_][a-z0-9_]*)\s+[A-Za-z]", line)
         if m:
             cols.append(m.group(1))
     return cols
@@ -252,6 +252,15 @@ def b_case_row_matches_the_schema():
     declared = _ddl_columns(sql, "fraud.cases")
     if declared != C.CASE_COLUMNS:
         return f"fraud.cases DDL {declared} != CASE_COLUMNS {C.CASE_COLUMNS}"
+    return None
+
+
+def b_retrain_run_matches_the_schema():
+    R = pkg("ml", "retrain")
+    sql = _read("infra", "clickhouse", "init", "03-retrain.sql")
+    declared = _ddl_columns(sql, "fraud.retrain_runs")
+    if declared != R.RUN_COLUMNS:
+        return f"fraud.retrain_runs DDL {declared} != RUN_COLUMNS {R.RUN_COLUMNS}"
     return None
 
 
@@ -568,6 +577,7 @@ CHECKS = [
     ("analyst verdict -> confirmed accounts the job reads", b_a_verdict_reaches_the_job),
     ("scored_row -> ClickHouse 01-schema", b_scored_row_matches_the_schema),
     ("case_row -> ClickHouse 02-cases", b_case_row_matches_the_schema),
+    ("retrain run -> ClickHouse 03-retrain", b_retrain_run_matches_the_schema),
     ("fraud_job imports -> run.ps1 AND Makefile", b_job_modules_cover_every_import),
     ("config artefacts -> run.ps1 serve-prep", b_serve_prep_ships_every_artefact),
     ("no data path derived from __file__", b_no_artefact_path_derived_from_file),

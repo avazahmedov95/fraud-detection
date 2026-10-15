@@ -35,12 +35,13 @@
    and a client's report of a fraud the system let go can be recorded. A confirmed
    fraud puts the payee's card on the list of confirmed fraud accounts in Redis, and
    the model sees it on the next transfers from or to that card.
-6. **Retraining** (`ml/retrain.py`, the retrainer service). Every day it trains a new
+6. **Retraining** (`ml/retrain.py`, the retrainer service). Every week it trains a new
    model on the logged decisions, with the labels the analysts and clients gave. It
-   compares the new model with the current one at the same number of alerts, on
-   decisions at least a week old, when clients' reports have come in, and
-   reports which features have changed since training (drift). A person decides
-   whether to switch the new model on.
+   sets the new model's alert level for as many alerts as the current one and
+   compares the two by F1 on decisions at least a week old, when clients' reports
+   have come in, and reports which features have changed since training (drift).
+   Each run shows in Grafana; a person reads it there and decides whether to switch
+   the new model on.
 
 The system never blocks a transfer by itself. A person does.
 
@@ -54,9 +55,9 @@ The system never blocks a transfer by itself. A person does.
 | Redis | the payee's side and the confirmed fraud accounts | Redis |
 | second look | a second model for transfers just under the cut-off | Python, TabPFN |
 | sink writer | stores decisions, the audit chain and the cases | Python, ClickHouse |
-| ClickHouse | the warehouse: decisions, audit log, cases | ClickHouse |
+| ClickHouse | the warehouse: decisions, audit log, cases, retraining runs | ClickHouse |
 | demo page | the live system, the analyst's queue, the results | Python, HTML |
-| retrainer | a new model every day, switched on by a person | Python, LightGBM |
+| retrainer | a new model every week, switched on by a person | Python, LightGBM |
 | Grafana | dashboards over ClickHouse | Grafana |
 
 ## The 28 features

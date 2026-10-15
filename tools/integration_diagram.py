@@ -95,11 +95,12 @@ topic(101, 131, "transactions.scored", "6 parts: every decision")
 topic(101, 103, "fraud.second_look", "3 parts: just under the cut-off")
 node(136, 131, "sink-writer", "decisions, audit,\na case per hold")
 node(136, 103, "second-look", "TabPFN on the\ntransfers just under")
-store(172, 117, "ClickHouse", "transactions_scored,\naudit_log, cases", WAY["sql"], w=22)
+store(172, 117, "ClickHouse", "transactions_scored,\naudit_log, cases,\nretrain_runs", WAY["sql"],
+      w=22)
 node(192, 96, "Grafana", "charts", w=14, h=8)
 node(110, 83, "demo server", "the page's API, the live stream,\nthe analyst's queue (store.py)", w=26)
 node(150, 83, "Analyst's browser", "the demo page,\nGrafana", w=22)
-node(22, 96, "ml/ and the retrainer", "trains the model; the retrainer\nmakes a new one every day", w=28)
+node(22, 96, "ml/ and the retrainer", "trains the model; the retrainer\nmakes a new one every week", w=28)
 node(70, 136, "Operator: run.ps1, make", "", w=30, h=5)
 
 # ------------------------------------------------------------------ Kafka
@@ -184,16 +185,16 @@ ROWS = [
      "/api/cases, /api/results, /api/episode/{id}; POST /api/episode, /api/background, "
      "/api/cases/{id}/resolve, /api/report"),
     (17, "http", "browser -> Grafana", ":3000, also shown inside the demo page; its own login"),
-    (18, "sql", "Grafana -> ClickHouse", "port 9000: SELECT ... FROM transactions_scored "
-     "for eight charts"),
+    (18, "sql", "Grafana -> ClickHouse", "port 9000: SELECT ... FROM transactions_scored, "
+     "cases and retrain_runs for the dashboard"),
     (19, "file", "ml/ -> the services", "model.onnx, thresholds.json, second_look.json "
      "copied next to the job (run.ps1 serve-prep); ml/models shared with the sink writer "
      "(model.txt explains the cases), second-look and the demo"),
     (20, "redis", "ml/seed_confirmed.py -> Redis", "SADD confirmed:accounts and "
      "confirmed:history: the confirmed fraud cards from the history"),
-    (21, "sql", "retrainer -> ClickHouse", "every day: SELECT transaction_id, features FROM "
+    (21, "sql", "retrainer -> ClickHouse", "every week: SELECT transaction_id, features FROM "
      "transactions_scored; SELECT transaction_id FROM cases FINAL WHERE disposition = "
-     "'CONFIRMED_FRAUD'"),
+     "'CONFIRMED_FRAUD'; INSERT INTO retrain_runs, the comparison"),
     (22, "http", "Operator -> Flink", "GET /jobs/overview, GET /taskmanagers, PATCH "
      "/jobs/{id}?mode=cancel on :8081; flink run -s <checkpoint> in the jobmanager"),
 ]

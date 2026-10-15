@@ -61,7 +61,7 @@
         <bpmn:flowNodeRef>Reported</bpmn:flowNodeRef>
       </bpmn:lane>
       <bpmn:lane id="Lane_model" name="Model owner">
-        <bpmn:flowNodeRef>Daily</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Weekly</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Retrain</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Better</bpmn:flowNodeRef>
         <bpmn:flowNodeRef>Promote</bpmn:flowNodeRef>
@@ -267,12 +267,12 @@
     <bpmn:endEvent id="Reported" name="Report recorded">
       <bpmn:incoming>F_report</bpmn:incoming>
     </bpmn:endEvent>
-    <bpmn:startEvent id="Daily" name="Every day: the retrainer">
-      <bpmn:outgoing>F_daily</bpmn:outgoing>
-      <bpmn:timerEventDefinition id="Trigger_Daily" />
+    <bpmn:startEvent id="Weekly" name="Every week: the retrainer">
+      <bpmn:outgoing>F_weekly</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="Trigger_Weekly" />
     </bpmn:startEvent>
-    <bpmn:serviceTask id="Retrain" name="Train a new model on the analysts' decisions; check what has changed&#10;[retrainer]">
-      <bpmn:incoming>F_daily</bpmn:incoming>
+    <bpmn:serviceTask id="Retrain" name="Train a new model on the analysts' decisions; compare it with the current one&#10;[retrainer, to Grafana]">
+      <bpmn:incoming>F_weekly</bpmn:incoming>
       <bpmn:outgoing>F_retrain</bpmn:outgoing>
       <bpmn:property id="Property_Retrain" name="__targetRef_placeholder" />
       <bpmn:dataInputAssociation id="D_retrain_verdicts">
@@ -289,7 +289,7 @@
       <bpmn:outgoing>F_promote</bpmn:outgoing>
       <bpmn:outgoing>F_kept</bpmn:outgoing>
     </bpmn:exclusiveGateway>
-    <bpmn:userTask id="Promote" name="A person switches it on&#10;[run.ps1 promote-model]">
+    <bpmn:userTask id="Promote" name="A person reads it in Grafana and switches it on&#10;[run.ps1 promote-model]">
       <bpmn:incoming>F_promote</bpmn:incoming>
       <bpmn:outgoing>F_served</bpmn:outgoing>
     </bpmn:userTask>
@@ -344,7 +344,7 @@
     <bpmn:sequenceFlow id="F_release" name="No" sourceRef="Fraud" targetRef="Released" />
     <bpmn:sequenceFlow id="F_report_in" sourceRef="ReportIn" targetRef="Report" />
     <bpmn:sequenceFlow id="F_report" sourceRef="Report" targetRef="Reported" />
-    <bpmn:sequenceFlow id="F_daily" sourceRef="Daily" targetRef="Retrain" />
+    <bpmn:sequenceFlow id="F_weekly" sourceRef="Weekly" targetRef="Retrain" />
     <bpmn:sequenceFlow id="F_retrain" sourceRef="Retrain" targetRef="Better" />
     <bpmn:sequenceFlow id="F_promote" name="Yes" sourceRef="Better" targetRef="Promote" />
     <bpmn:sequenceFlow id="F_served" sourceRef="Promote" targetRef="Served" />
@@ -524,7 +524,7 @@
         <dc:Bounds x="2000" y="1367" width="36" height="36" />
         <bpmndi:BPMNLabel><dc:Bounds x="1975" y="1407" width="86" height="20" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Daily_di" bpmnElement="Daily">
+      <bpmndi:BPMNShape id="Weekly_di" bpmnElement="Weekly">
         <dc:Bounds x="2560" y="1522" width="36" height="36" />
         <bpmndi:BPMNLabel><dc:Bounds x="2515" y="1562" width="126" height="28" /></bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
@@ -752,7 +752,7 @@
         <di:waypoint x="1960" y="1385" />
         <di:waypoint x="2000" y="1385" />
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="F_daily_di" bpmnElement="F_daily">
+      <bpmndi:BPMNEdge id="F_weekly_di" bpmnElement="F_weekly">
         <di:waypoint x="2596" y="1540" />
         <di:waypoint x="2640" y="1540" />
       </bpmndi:BPMNEdge>

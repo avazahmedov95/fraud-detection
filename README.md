@@ -33,7 +33,7 @@ bank app -> Kafka transactions.raw -> Flink job (Redis: payee side, confirmed ac
             -> Grafana, demo; analyst (demo or CLI; a block puts the payee into Redis)
          -> fraud.second_look -> second-look (TabPFN) -> transactions.scored
 ClickHouse (decisions with features, verdicts, clients' reports) -> the retrainer
-         (ml/retrain.py, every day) -> a candidate model, served once a person promotes it
+         (ml/retrain.py, every week) -> a candidate model, served once a person promotes it
 ```
 
 ## Run

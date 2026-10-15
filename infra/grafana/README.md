@@ -11,7 +11,7 @@ Auto-provisions on `make up`:
 
 Open Grafana at http://localhost:3000 (`admin` / `.env` password). It shows the
 last hour and refreshes every 10 seconds; every figure comes from
-`fraud.transactions_scored` and `fraud.cases`:
+`fraud.transactions_scored`, `fraud.cases` and `fraud.retrain_runs`:
 
 - **Top row** — transfers checked, held for the analyst, the share held, the
   median decision time and the time 99% of decisions stay under (red from the
@@ -25,6 +25,10 @@ last hour and refreshes every 10 seconds; every figure comes from
   missed fraud reported by clients, and the latest 50 holds with their reasons.
 - **Second look (TabPFN)** — transfers sent to it, held by it, and held because
   it did not answer within 5 seconds.
+- **Retraining (weekly)** — the retrainer's last ten runs from `fraud.retrain_runs`,
+  whatever the time range: the current model against the retrained one (alerts,
+  frauds caught, F1), and the features that moved. A person reads it and switches a
+  better model on with `run.ps1 promote-model`.
 
 Each query names its format: 1 for a table or a number, 0 for the time chart.
 Without it the ClickHouse plugin reads every result as a time series and shows

@@ -226,7 +226,7 @@ services:
     networks: [fraudnet]
     restart: unless-stopped
 
-  # Retrains the model daily on the logged decisions and the verdicts (ml/retrain.py);
+  # Retrains the model weekly on the logged decisions and the verdicts (ml/retrain.py);
   # a person promotes a better one (run.ps1 promote-model).
   retrainer:
     build:
@@ -235,7 +235,7 @@ services:
     image: fraud-ml:latest
     container_name: retrainer
     command: ["python", "retrain.py", "--cache", "models_matrix.npz",
-              "--every-hours", "${RETRAIN_EVERY_HOURS:-24}"]
+              "--every-hours", "${RETRAIN_EVERY_HOURS:-168}"]
     environment:
       CLICKHOUSE_HOST: clickhouse
       CLICKHOUSE_HTTP_PORT: "8123"

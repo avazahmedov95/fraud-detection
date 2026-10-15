@@ -123,7 +123,7 @@ def page(x, y, s, colour):
 ax.text(0, 98, "Real-time fraud detection: how it works", fontsize=19, fontweight="bold",
         color=INK, family=FAMILY, va="top")
 ax.text(0, 94.4, "From the payer's confirmation to the analyst's decision. The model is "
-                 "trained in advance, retrained every day on people's decisions, and used "
+                 "trained in advance, retrained every week on people's decisions, and used "
                  "inside the Flink job.",
         fontsize=10.5, color=MUTED, family=FAMILY, va="top")
 
@@ -205,9 +205,9 @@ arrow((107.6, 56), (114.6, 56))
 # ---------------------------------------------------------------- storage and cases
 gear(138, 56, 2.6, COLOUR["python"])
 text(138, 52.4, "Sink writer", "saves decisions;\na case per hold")
-# One database, three tables: the decisions, the audit log and the cases.
+# One database, four tables: the decisions, the audit log, the cases and the retraining runs.
 database(152, 56, 5.5, 4, COLOUR["clickhouse"])
-text(152, 52.2, "ClickHouse", "decisions, audit\nlog, cases")
+text(152, 52.2, "ClickHouse", "decisions, audit\nlog, cases,\nretraining runs")
 arrow((127.4, 56), (134.6, 56))
 arrow((140.8, 56), (148.9, 56))
 
@@ -247,13 +247,14 @@ text(92.5, 13.6, "model.onnx", "and the\nalert level", ha="left")
 arrow((93.1, 16.6), (93.1, 43), MUTED, dashed=True, label="used by the job",
       at=(93.1, 33))
 
-# Retraining: the logged decisions and people's verdicts make a candidate, which a
-# person promotes (ml/retrain.py).
+# Retraining: the logged decisions and people's verdicts make a candidate; its comparison
+# goes back to ClickHouse for Grafana, and a person promotes it (ml/retrain.py).
 gear(136, 11, 2.6, COLOUR["python"])
-text(140.5, 13.6, "Retraining, every day", "a new model from analysts'\ndecisions; shows "
-                                "what has\nchanged in the data", ha="left")
-arrow((150.6, 46.4), (138.6, 13.8), MUTED, dashed=True)
-ax.text(149, 19.8, "from ClickHouse: decisions\nand analysts' marks",
+text(140.5, 13.6, "Retraining, every week", "a new model from analysts'\ndecisions; the "
+                                "comparison\nshows in Grafana", ha="left")
+arrow((149.8, 44.2), (138.6, 13.8), MUTED, dashed=True, both=True)
+ax.text(149, 19.8, "from ClickHouse: decisions\nand analysts' marks; back:\n"
+                  "each run's comparison",
         ha="left",
         va="center", fontsize=8.3, color=MUTED, family=FAMILY, zorder=6,
         bbox=dict(boxstyle="round,pad=0.2", facecolor="white", edgecolor="none"))

@@ -117,12 +117,12 @@ snk = box(104, 24, 24, 12, "Sink writer", "saves every decision and\nits audit r
           sub_size=8.5)
 arrow(left(sco), right(snk))
 
-chs = box(68, 24, 28, 12, "ClickHouse", "every decision,\naudit chain, cases",
+chs = box(68, 24, 28, 12, "ClickHouse", "every decision,\naudit chain, cases,\nretraining runs",
           fill=STORE_FILL)
 arrow(left(snk), right(chs))
 
 dash = box(20, 24, 40, 12, "Grafana and the demo page",
-           "charts of transfers and alerts;\nthe decisions live, in two languages",
+           "charts of transfers, alerts and retraining;\nthe decisions live, in two languages",
            fill=STORE_FILL, sub_size=8.5)
 arrow(left(chs), right(dash), dashed=True, color=MUTED, label="read only")
 
@@ -135,7 +135,7 @@ arrow(bottom(chs), left(ana), color=ALERT, label="the queue: demo or command lin
 ax.text(0, 61.4, "Done in advance, not during a transfer", fontsize=10, fontweight="bold",
         color=INK, family=FAMILY, va="center")
 trn = box(0, 42, 32, 18, "Training (ml/)", "uses the same feature code;\ntrains five models, averaged;\n"
-                                           "saves the model and alert level;\nretrains every day",
+                                           "saves the model and alert level;\nretrains every week",
           sub_size=8.5)
 arrow(right(trn), (56, 62), dashed=True, color=MUTED, label="model.onnx", label_dy=0.8)
 

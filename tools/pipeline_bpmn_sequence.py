@@ -103,14 +103,14 @@ NODES = [
     ("Report", "userTask", "Record the client's report: the case is confirmed at once\n"
      "[demo page or command line; the payee into Redis]", 6, (1780, 1335, 180, 100), None),
     ("Reported", "endEvent", "Report recorded", 6, (2000, 1367, 36, 36), (1975, 1407, 86, 20)),
-    ("Daily", "startEvent", "Every day: the retrainer", 7,
+    ("Weekly", "startEvent", "Every week: the retrainer", 7,
      (2560, 1522, 36, 36), (2515, 1562, 126, 28)),
     ("Retrain", "serviceTask", "Train a new model on the analysts' decisions; "
-     "check what has changed\n[retrainer]", 7, (2640, 1490, 180, 100), None),
+     "compare it with the current one\n[retrainer, to Grafana]", 7, (2640, 1490, 180, 100), None),
     ("Better", "exclusiveGateway", "Better with as many alerts?", 7, (2860, 1515, 50, 50),
      (2805, 1482, 160, 14)),
-    ("Promote", "userTask", "A person switches it on\n[run.ps1 promote-model]", 7,
-     (2960, 1490, 180, 100), None),
+    ("Promote", "userTask", "A person reads it in Grafana and switches it on\n"
+     "[run.ps1 promote-model]", 7, (2960, 1490, 180, 100), None),
     ("Served", "endEvent", "New model in use", 7, (3180, 1522, 36, 36), (3224, 1530, 100, 20)),
     ("Kept", "endEvent", "Old model kept", 7, (3000, 1592, 36, 36), (3044, 1600, 110, 20)),
 ]
@@ -167,7 +167,7 @@ FLOWS = [
      (2943, 1423, 18, 14)),
     ("F_report_in", "ReportIn", "Report", "", [(1736, 1385), (1780, 1385)], None),
     ("F_report", "Report", "Reported", "", [(1960, 1385), (2000, 1385)], None),
-    ("F_daily", "Daily", "Retrain", "", [(2596, 1540), (2640, 1540)], None),
+    ("F_weekly", "Weekly", "Retrain", "", [(2596, 1540), (2640, 1540)], None),
     ("F_retrain", "Retrain", "Better", "", [(2820, 1540), (2860, 1540)], None),
     ("F_promote", "Better", "Promote", "Yes", [(2910, 1540), (2960, 1540)],
      (2916, 1521, 20, 14)),
@@ -185,7 +185,7 @@ LINKS = {"HeldOut": "Held by the second look", "HeldLateOut": "Held by the secon
          "HeldIn": "Held by the second look",
          "LetGoOut": "Let go by the second look", "LetGoIn": "Let go by the second look"}
 #: What starts the two paths that begin outside the transfer: a client's call, a timer.
-TRIGGERS = {"ReportIn": "messageEventDefinition", "Daily": "timerEventDefinition"}
+TRIGGERS = {"ReportIn": "messageEventDefinition", "Weekly": "timerEventDefinition"}
 
 STORES = [
     # id, name, (x, y, w, h), label's box

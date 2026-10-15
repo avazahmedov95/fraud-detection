@@ -18,6 +18,19 @@ def test_every_run_leaves_its_outcome_for_the_page(tmp_path, monkeypatch):
     assert s["at"] > 0
 
 
+def test_a_run_is_recorded_whole_or_with_zeros_for_what_it_did_not_reach():
+    full = {"outcome": "better", "logged": 10, "known_fraud": 3, "settling": 2,
+            "deciding_fraud": 1, "moved": ["amount_z"],
+            "served": {"alerts": 5, "caught": 1, "f1": 0.5},
+            "retrained": {"alerts": 4, "caught": 1, "f1": 0.6}}
+    row = dict(zip(R.RUN_COLUMNS, R.run_row(full, 0.0)))
+    assert (row["outcome"], row["served_caught"], row["new_f1"], row["moved"]) == \
+        ("better", 1, 0.6, ["amount_z"])
+    short = dict(zip(R.RUN_COLUMNS, R.run_row({"outcome": "too_few_rows", "logged": 7}, 0.0)))
+    assert (short["logged"], short["new_alerts"], short["error"]) == (7, 0, "")
+    assert len(R.run_row({}, 0.0)) == len(R.RUN_COLUMNS)
+
+
 def test_the_logged_rows_split_as_train_py_splits_its_data():
     assert R.split(1000) == (640, 800)
 

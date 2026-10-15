@@ -94,7 +94,7 @@ separately for fraud and for normal transfers:
 - a feature nobody can control changes (fan-in, travel): probably a **broken data
   feed**.
 
-The retrainer reports every day which features have moved since training.
+The retrainer reports every week which features have moved since training.
 
 Prevention can remove a signal before an attacker does. CBU resolution 3759 (21
 January 2026) requires the bank app to block use during calls, so "a call during
@@ -109,7 +109,7 @@ not take credit for what prevention removes.
 | forged messages on `transactions.raw` | certificates on both sides (mutual TLS) and message encryption, available but off by default |
 | changing a decision afterwards | the audit chain shows any change, deletion or reordering |
 | probing the model | the customer sees only "allowed" or "held" |
-| poisoning the training data | retraining runs every day by itself, and clients' reports become labels, so false reports could teach the model wrong things; a person must switch on each new model after reading its comparison |
+| poisoning the training data | retraining runs every week by itself, and clients' reports become labels, so false reports could teach the model wrong things; a person must switch on each new model after reading its comparison |
 
 ## What remains
 

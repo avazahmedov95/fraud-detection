@@ -13,7 +13,7 @@ from exactly the numbers it will see in the live system.
 | `manifest.py` | records what the served model was built from: data, features, files |
 | `second_look.py` | chooses the second look's band and the examples TabPFN learns from |
 | `seed_confirmed.py` | loads the confirmed fraud accounts from the history into Redis |
-| `retrain.py` | trains a new model on the logged decisions and people's verdicts, compares it with the current one and reports drift; the retrainer service runs it every day |
+| `retrain.py` | trains a new model on the logged decisions and people's verdicts, compares it with the current one and reports drift; the retrainer service runs it every week |
 | `tests/` | `python -m pytest ml -q` |
 
 ## Run
@@ -23,7 +23,7 @@ python train.py          # model.joblib, thresholds.json, feature_names.json, me
 ..\run.ps1 export-model  # export_onnx.py in a container: model.txt, model.onnx, manifest.json
 python second_look.py --cache models_matrix.npz --tabpfn-model <checkpoint>
 python seed_confirmed.py # with the stack up
-..\run.ps1 retrain       # once, by hand; the retrainer service runs it every day
+..\run.ps1 retrain       # once, by hand; the retrainer service runs it every week
 ..\run.ps1 promote-model # switch the new model on
 ```
 
@@ -87,8 +87,8 @@ precision.
 
 Every decision is stored with its feature values (`features` in
 `fraud.transactions_scored`), and every verdict and client's report in
-`fraud.cases`. Every day the retrainer service runs `retrain.py`
-(`RETRAIN_EVERY_HOURS`, 24 by default; `run.ps1 retrain` runs it once):
+`fraud.cases`. Every week the retrainer service runs `retrain.py`
+(`RETRAIN_EVERY_HOURS`, 168 by default; `run.ps1 retrain` runs it once):
 
 1. It reports drift: for each feature, how far it has moved since training (the
    population stability index; over 0.25 means it has moved).
@@ -96,15 +96,16 @@ Every decision is stored with its feature values (`features` in
    the logged decisions, where fraud means a person confirmed it.
 3. It sets the new model's cut-off so that it raises as many alerts as the current
    one.
-4. It compares the two on decisions at least a week old, when clients have had time
-   to report the frauds the system let go: the latest fifth of those, which neither
-   model learned from. On newer decisions the known frauds would be mostly the ones
-   the current model held, and the comparison would favour it.
+4. It compares the two by F1 on decisions at least a week old, when clients have had
+   time to report the frauds the system let go: the latest fifth of those, which
+   neither model learned from. On newer decisions the known frauds would be mostly
+   the ones the current model held, and the comparison would favour it.
 
 It saves the new model in `models/candidate/` and changes nothing else. A person
 reads the comparison and switches the new model on with `run.ps1 promote-model`.
 Each run's outcome goes to `models/retrain_status.json`, which the demo shows on the
-About the project tab.
+About the project tab, and to the table `fraud.retrain_runs`, which Grafana shows in
+its Retraining row: the person deciding reads it there.
 
 Whether retraining helps was tested once, offline, on six generated datasets (the
 main one and seeds 1-5). In each, the bank's history (the first 40%) has no examples

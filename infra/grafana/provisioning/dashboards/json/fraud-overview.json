@@ -1165,6 +1165,71 @@
         "graphMode": "none",
         "textMode": "value"
       }
+    },
+    {
+      "id": 26,
+      "type": "row",
+      "title": "Retraining (weekly)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 41,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 27,
+      "type": "table",
+      "title": "The current model against the retrained one, each weekly run",
+      "gridPos": {
+        "x": 0,
+        "y": 42,
+        "w": 24,
+        "h": 8
+      },
+      "description": "Once a week the retrainer trains a new model on the analysts' verdicts and clients' reports. Its alert level is set for as many alerts as the current model raises; the two are then compared on decisions at least a week old, when clients' reports are in, and the higher F1 is better. A person reads this and switches a better model on with .\\run.ps1 promote-model. Features that moved: past the drift line since training.",
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "clickhouse"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "clickhouse"
+          },
+          "editorType": "sql",
+          "rawSql": "SELECT run_at AS run,\n       transform(toString(outcome), ['better', 'not_better', 'too_few_fraud', 'too_few_rows', 'failed'],\n                 ['the new model is better', 'the current model stays', 'too few known frauds to compare',\n                  'too few decisions to compare', 'the run failed'], toString(outcome)) AS result,\n       deciding_fraud AS `known frauds compared`,\n       served_alerts AS `current: alerts`, served_caught AS `current: caught`,\n       round(100 * served_f1, 1) AS `current: F1 %`,\n       new_alerts AS `new: alerts`, new_caught AS `new: caught`, round(100 * new_f1, 1) AS `new: F1 %`,\n       arrayStringConcat(moved, ', ') AS `features that moved`\nFROM fraud.retrain_runs\nORDER BY run_at DESC\nLIMIT 10",
+          "queryType": "table",
+          "format": 1,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "noValue": "—"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "features that moved"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 380
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      }
     }
   ]
 }

@@ -317,11 +317,11 @@ ru: {
   grafana_open: "Открыть Grafana в отдельной вкладке",
   retrain_title: "Переобучение модели",
   rt_never: "Служба переобучения ещё не запускалась.",
-  rt_on: "Включено, раз в {h} ч. Последний запуск: {when}.",
+  rt_on: "Включено. Последний запуск: {when}, следующий: {next}.",
   rt_rows: "Мало решений для сравнения: {n} свежих из нужных {need}. Модель не менялась.",
   rt_fraud: "Мало подтверждённого мошенничества среди сравниваемых переводов: {n} из нужных {need}. Модель не менялась — подтверждайте случаи в очереди.",
-  rt_better: "Новая модель лучше: при том же числе тревог ловит {a} против {b}. Включает её человек: .\\run.ps1 promote-model.",
-  rt_not: "Новая модель не лучше ({a} против {b}): оставлена прежняя.",
+  rt_better: "Новая модель лучше по F1: {fa} против {fb} (тревог — {na} против {nb}, поймано — {a} против {b}). Включает её человек: .\\run.ps1 promote-model.",
+  rt_not: "Новая модель не лучше по F1: {fa} против {fb} (тревог — {na} против {nb}, поймано — {a} против {b}). Оставлена прежняя.",
   rt_failed: "Запуск не удался: {e}",
   rt_moved: "Сильнее всего изменились признаки: {f}.",
   sec: "с", min: "мин", hour: "ч",
@@ -430,11 +430,11 @@ en: {
   grafana_open: "Open Grafana in its own tab",
   retrain_title: "Model retraining",
   rt_never: "The retraining service has not run yet.",
-  rt_on: "On, every {h} h. Last run: {when}.",
+  rt_on: "On. Last run: {when}, next: {next}.",
   rt_rows: "Too few decisions to compare: {n} recent of the {need} needed. The model is unchanged.",
   rt_fraud: "Too little confirmed fraud among the transfers compared: {n} of the {need} needed. The model is unchanged — confirm cases in the queue.",
-  rt_better: "The new model is better: at the same number of alerts it catches {a} against {b}. A person switches it on: .\\run.ps1 promote-model.",
-  rt_not: "The new model is not better ({a} against {b}): the current one stays.",
+  rt_better: "The new model is better by F1: {fa} against {fb} (alerts {na} against {nb}, caught {a} against {b}). A person switches it on: .\\run.ps1 promote-model.",
+  rt_not: "The new model is not better by F1: {fa} against {fb} (alerts {na} against {nb}, caught {a} against {b}). The current one stays.",
   rt_failed: "The run failed: {e}",
   rt_moved: "Most moved features: {f}.",
   sec: "s", min: "min", hour: "h",
@@ -795,18 +795,21 @@ function showGrafana() {
 // The retrainer's latest run (ml/retrain.py), in words.
 function retrainText(s) {
   if (!s) return t("rt_never");
-  const when = new Date(s.at * 1000).toLocaleString(locale(), {day: "numeric", month: "long", hour: "2-digit", minute: "2-digit"});
+  const at = sec => new Date(sec * 1000).toLocaleString(locale(), {day: "numeric", month: "long", hour: "2-digit", minute: "2-digit"});
+  const when = at(s.at), next = s.every_hours ? at(s.at + s.every_hours * 3600) : "—";
   const need = s.needed || {};
+  const vs = () => ({fa: pct(s.retrained.f1), fb: pct(s.served.f1), na: fmtInt(s.retrained.alerts),
+                     nb: fmtInt(s.served.alerts), a: fmtInt(s.retrained.caught), b: fmtInt(s.served.caught)});
   const body = {
     too_few_rows: () => fill(t("rt_rows"), {n: fmtInt(s.recent || 0), need: fmtInt(need.rows)}),
     too_few_fraud: () => fill(t("rt_fraud"), {n: fmtInt(s.deciding_fraud || 0), need: fmtInt(need.fraud)}),
-    better: () => fill(t("rt_better"), {a: fmtInt(s.retrained.caught), b: fmtInt(s.served.caught)}),
-    not_better: () => fill(t("rt_not"), {a: fmtInt(s.retrained.caught), b: fmtInt(s.served.caught)}),
+    better: () => fill(t("rt_better"), vs()),
+    not_better: () => fill(t("rt_not"), vs()),
     failed: () => fill(t("rt_failed"), {e: s.error || ""}),
   }[s.outcome];
   const name = n => (lang === "ru" && T.ru.feat[n]) || n.replace(/_/g, " ");
   const moved = s.moved && s.moved.length ? " " + fill(t("rt_moved"), {f: s.moved.slice(0, 3).map(name).join("; ")}) : "";
-  return fill(t("rt_on"), {h: s.every_hours || "—", when}) + " " + (body ? body() : s.outcome) + moved;
+  return fill(t("rt_on"), {when, next}) + " " + (body ? body() : s.outcome) + moved;
 }
 
 // What the second look adds on our own data, as results.json quotes it.

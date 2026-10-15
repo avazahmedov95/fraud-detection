@@ -1,6 +1,6 @@
 """Retrains the model on what the running system served and what people decided, and
 says whether the new model should replace the served one. The retrainer service runs
-it daily; nothing changes until a person promotes it (.\\run.ps1 promote-model).
+it every week; nothing changes until a person promotes it (.\\run.ps1 promote-model).
 
 Rows: the job's logged decisions with their features (fraud.transactions_scored),
 added to the served model's training rows. Labels: fraud where an analyst confirmed
@@ -8,15 +8,17 @@ it or a client reported it (fraud.cases). Drift is read on all of them. The rest
 uses the decisions a week old or more, whose clients have had time to report a
 missed fraud; split as in train.py: the earliest 64% train, the next 16% set the
 cut-off at the served model's number of alerts, the last 20% decide between the two.
-The outcome goes to models/retrain_status.json for the demo page.
+The outcome goes to models/retrain_status.json for the demo page and to
+fraud.retrain_runs for Grafana.
 
-    python retrain.py [--cache models_matrix.npz] [--every-hours 24]
+    python retrain.py [--cache models_matrix.npz] [--every-hours 168]
 """
 import argparse
 import json
 import os
 import time
 import traceback
+from datetime import datetime, timezone
 
 import joblib
 import numpy as np
@@ -199,6 +201,30 @@ def write_status(status, every_hours):
         json.dump(dict(status, at=time.time(), every_hours=every_hours), fh, indent=2)
 
 
+RUN_COLUMNS = ["run_at", "outcome", "logged", "known_fraud", "settling", "deciding_fraud",
+               "served_alerts", "served_caught", "served_f1", "new_alerts", "new_caught",
+               "new_f1", "moved", "error"]
+
+
+def run_row(status, at):
+    """A run as a row of fraud.retrain_runs; what a short run did not reach is 0."""
+    s, n = status.get("served") or {}, status.get("retrained") or {}
+    return [datetime.fromtimestamp(at, timezone.utc), status.get("outcome", ""),
+            status.get("logged", 0), status.get("known_fraud", 0), status.get("settling", 0),
+            status.get("deciding_fraud", 0), s.get("alerts", 0), s.get("caught", 0),
+            s.get("f1", 0.0), n.get("alerts", 0), n.get("caught", 0), n.get("f1", 0.0),
+            status.get("moved", []), status.get("error", "")]
+
+
+def record_run(status):
+    """The run into fraud.retrain_runs, which Grafana shows; a failed write costs the row."""
+    try:
+        warehouse().insert("retrain_runs", [run_row(status, time.time())],
+                           column_names=RUN_COLUMNS)
+    except Exception as exc:                           # noqa: BLE001 - the schedule goes on
+        print(f"the run was not recorded in ClickHouse: {exc}")
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -213,6 +239,7 @@ if __name__ == "__main__":
             traceback.print_exc()
             outcome = {"outcome": "failed", "error": f"{type(exc).__name__}: {exc}"[:300]}
         write_status(outcome, a.every_hours)
+        record_run(outcome)
         if not a.every_hours:
             break
         print(f"next retrain in {a.every_hours:g} h", flush=True)
