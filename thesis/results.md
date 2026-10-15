@@ -10,11 +10,80 @@ to 5 October:
 - retraining on people's decisions;
 - a faster stream.
 
-On 13 October four day-level features followed, 28 instead of 24, and on 14-15
-October a generated month went through the running system. The newest comes first.
+On 13 October four day-level features followed, 28 instead of 24; on 14-15 October
+a generated month went through the running system; on 15 October every measurement
+was repeated on fresh data. The newest comes first.
 
 All data comes from our generator (`data.md`), so these are design targets, not
 results from a real bank.
+
+## 15 October: every measurement again, on fresh data
+
+The earlier figures came from data we also looked at while building the system. On
+15 October we repeated the measurements on datasets made with new seeds (201 and
+up), and wrote down before each run what would count as confirmed.
+
+**Quality on 20 fresh datasets** (seeds 201-220, 3,901 test frauds). Confirmed if the
+model's F1 falls in 67.3-72.7%, the 13 October interval, and the second look beats a
+lowered cut-off on most datasets:
+
+| | recall | precision | F1 | alerts | fraud caught |
+|---|---|---|---|---|---|
+| model | 64.5% ± 2.5 | 78.3% ± 3.6 | 70.3% ± 1.7 | 3,238 | 2,515 |
+| cut-off lowered to as many alerts | 70.7% ± 1.9 | 69.6% ± 3.5 | 69.8% ± 2.1 | 3,988 | 2,756 |
+| model + second look | 72.9% ± 1.8 | 71.8% ± 3.5 | 72.0% ± 2.1 | 3,988 | 2,842 |
+
+Confirmed. The second look beat the lowered cut-off on 17 datasets and tied on 3:
+F1 +2.2 [+1.6, +2.8], more than the +1.2 of 13 October.
+
+**Retraining when fraud changes, on 6 fresh datasets** (seeds 201-206, the 28
+features, the retrainer as it is now). Confirmed if the retrained model's PR-AUC
+beats the old one's in most of the 30 runs and it catches more frauds of the new
+schemes:
+
+| new scheme | known to the bank | PR-AUC, old | retrained | all known | its frauds caught: old -> retrained (all known) |
+|---|---|---|---|---|---|
+| none | 67% | 0.678 | 0.732 | 0.746 | - |
+| mules | 54% | 0.540 | 0.644 | 0.710 | 10 -> 24 of 337 (59) |
+| APP | 55% | 0.620 | 0.682 | 0.727 | 46 -> 72 of 401 (94) |
+| account takeover | 56% | 0.596 | 0.694 | 0.741 | 45 -> 91 of 234 (160) |
+| structuring | 55% | 0.574 | 0.687 | 0.737 | 45 -> 123 of 273 (186) |
+
+Confirmed: better in all 30 runs. It caught 310 frauds of a new scheme against 146
+(2.1 times; 1.8 on 5 October), and 499 if every fraud were known.
+
+**The memory on IBM AML** (22 of the 28 features plus the memory, seeds 10-14).
+Confirmed if the memory, as a bank learns, raises F1 in most runs:
+
+| | recall | precision | F1 | alerts |
+|---|---|---|---|---|
+| the model alone | 44.7% | 82.6% | 58.0% | 894 |
+| with the memory, as a bank learns | 54.8% | 70.9% | 61.8% | 1,278 |
+| with the memory, every laundering known | 58.2% | 71.0% | 63.9% | 1,356 |
+
+Confirmed in all five runs, by 3.4 to 4.2 points. At the same 1,278 alerts the model
+alone catches 836 laundering, the memory 905.
+
+**Public datasets:** PaySim and IBM AML gave exactly the 13 October figures (F1 38.7%
+and 58.3%; at a 2% alert budget 891 of 1,840 and 1,367 of 1,653). Each model there
+is trained on the dataset itself, and the recipe has not changed.
+
+**Speed, three repeats** on mains power, in milliseconds. Confirmed if at 150 a
+second 99 of 100 decisions stay under 300 ms in all three:
+
+| transfers a second | mean | p99 |
+|---|---|---|
+| 10 | 26-31 | 46-50 |
+| 50 | 27-34 | 58-71 |
+| 100 | 42-43 | 86-90 |
+| 150 | 51-80 | 112, 141, 425 |
+| 200 | 62-79 | 143-255 |
+
+Not confirmed: one repeat at 150 a second reached 425 ms. For 16 seconds it stayed
+near 48 ms; then for 4 seconds decisions took 0.2-0.65 s, while two saves of the
+job's state took 200 and 370 ms instead of about 20. The job saves all its state
+(40 MB now) every 2 seconds, and a busy disk holds the stream up. At 200 a second all
+three repeats stayed under 300 ms, so the capacity is there; the risk is the save.
 
 ## 14-15 October: a month through the running system
 
@@ -273,7 +342,10 @@ model, which also uses PaySim's own transaction type.
 - The analyst of the month test never errs and always answers within a day; a real
   one is slower and sometimes wrong.
 - The retraining test (5 October) and the memory on IBM AML (7 October) were
-  measured with 24 features.
+  measured with 24 features; on 15 October both were repeated with the 28.
+- The job keeps each sender's history with no time limit and saves all of it every
+  2 seconds. For a bank's millions of customers it would have to save only what
+  changed and forget senders who stopped.
 - Speed was measured on battery; on mains power the system is faster, so the
   figures are a safe lower bound.
 
@@ -287,6 +359,8 @@ model, which also uses PaySim's own transaction type.
 - `raw/ibm_memory.json`: the memory on IBM AML, each of the five runs.
 - `raw/day_features_seeds.json`: the 24 and the 28 features on the same 20
   datasets.
+- `raw/fresh_seeds.json`, `raw/retrain_fresh.json`, `raw/ibm_memory_28.json`,
+  `raw/speed_repeats.json`: the repeat on fresh data of 15 October, each run.
 - The decisions of the speed runs are kept in `_warehouse_backup_2026-10-06/`
   (not in git). The last hash of its audit chain is recorded in commit `b2062f2`.
 - The month test of 14-15 October was deleted from ClickHouse and Redis after it was

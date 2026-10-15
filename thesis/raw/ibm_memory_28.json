@@ -1,0 +1,236 @@
+{
+ "_about": "15 October 2026: the memory of confirmed accounts on IBM AML HI-Small as a bank learns, with 22 of the 28 features plus the three memory columns, seeds 10-14. Columns as in ibm_memory.json; 'model_same_alerts' is the model alone at the 'bank' model's number of alerts.",
+ "frauds": 1653,
+ "runs": [
+  {
+   "seed": 10,
+   "model": {
+    "alerts": 889,
+    "caught": 736,
+    "recall": 0.4452510586811857,
+    "precision": 0.8278965129358831,
+    "f1": 0.5790715971675845
+   },
+   "known": {
+    "bank": 1190,
+    "analysts": 736
+   },
+   "every": {
+    "alerts": 1376,
+    "caught": 970,
+    "recall": 0.5868118572292801,
+    "precision": 0.7049418604651163,
+    "f1": 0.6404754044239024
+   },
+   "history": {
+    "alerts": 1218,
+    "caught": 844,
+    "recall": 0.5105868118572293,
+    "precision": 0.6929392446633826,
+    "f1": 0.5879484500174157
+   },
+   "bank": {
+    "alerts": 1295,
+    "caught": 914,
+    "recall": 0.5529340592861464,
+    "precision": 0.7057915057915058,
+    "f1": 0.6200814111261872
+   },
+   "analysts": {
+    "alerts": 1295,
+    "caught": 914,
+    "recall": 0.5529340592861464,
+    "precision": 0.7057915057915058,
+    "f1": 0.6200814111261872
+   },
+   "model_same_alerts": {
+    "alerts": 1295,
+    "caught": 840
+   }
+  },
+  {
+   "seed": 11,
+   "model": {
+    "alerts": 913,
+    "caught": 744,
+    "recall": 0.4500907441016334,
+    "precision": 0.8148959474260679,
+    "f1": 0.5798908807482464
+   },
+   "known": {
+    "bank": 1213,
+    "analysts": 744
+   },
+   "every": {
+    "alerts": 1407,
+    "caught": 975,
+    "recall": 0.5898366606170599,
+    "precision": 0.6929637526652452,
+    "f1": 0.6372549019607843
+   },
+   "history": {
+    "alerts": 1259,
+    "caught": 859,
+    "recall": 0.5196612220205686,
+    "precision": 0.6822875297855441,
+    "f1": 0.5899725274725274
+   },
+   "bank": {
+    "alerts": 1333,
+    "caught": 923,
+    "recall": 0.55837870538415,
+    "precision": 0.6924231057764441,
+    "f1": 0.6182183523107836
+   },
+   "analysts": {
+    "alerts": 1333,
+    "caught": 923,
+    "recall": 0.55837870538415,
+    "precision": 0.6924231057764441,
+    "f1": 0.6182183523107836
+   },
+   "model_same_alerts": {
+    "alerts": 1333,
+    "caught": 848
+   }
+  },
+  {
+   "seed": 12,
+   "model": {
+    "alerts": 889,
+    "caught": 737,
+    "recall": 0.4458560193587417,
+    "precision": 0.829021372328459,
+    "f1": 0.5798583792289536
+   },
+   "known": {
+    "bank": 1201,
+    "analysts": 737
+   },
+   "every": {
+    "alerts": 1295,
+    "caught": 952,
+    "recall": 0.5759225650332729,
+    "precision": 0.7351351351351352,
+    "f1": 0.6458616010854817
+   },
+   "history": {
+    "alerts": 1140,
+    "caught": 822,
+    "recall": 0.49727767695099817,
+    "precision": 0.7210526315789474,
+    "f1": 0.5886143931256713
+   },
+   "bank": {
+    "alerts": 1218,
+    "caught": 892,
+    "recall": 0.5396249243799153,
+    "precision": 0.7323481116584565,
+    "f1": 0.6213862765586903
+   },
+   "analysts": {
+    "alerts": 1218,
+    "caught": 892,
+    "recall": 0.5396249243799153,
+    "precision": 0.7323481116584565,
+    "f1": 0.6213862765586903
+   },
+   "model_same_alerts": {
+    "alerts": 1218,
+    "caught": 833
+   }
+  },
+  {
+   "seed": 13,
+   "model": {
+    "alerts": 896,
+    "caught": 742,
+    "recall": 0.44888082274652147,
+    "precision": 0.828125,
+    "f1": 0.5821890937622597
+   },
+   "known": {
+    "bank": 1204,
+    "analysts": 742
+   },
+   "every": {
+    "alerts": 1342,
+    "caught": 955,
+    "recall": 0.5777374470659408,
+    "precision": 0.7116244411326379,
+    "f1": 0.6377295492487479
+   },
+   "history": {
+    "alerts": 1189,
+    "caught": 834,
+    "recall": 0.5045372050816697,
+    "precision": 0.7014297729184188,
+    "f1": 0.5869106263194933
+   },
+   "bank": {
+    "alerts": 1264,
+    "caught": 900,
+    "recall": 0.5444646098003629,
+    "precision": 0.7120253164556962,
+    "f1": 0.6170723345903325
+   },
+   "analysts": {
+    "alerts": 1264,
+    "caught": 900,
+    "recall": 0.5444646098003629,
+    "precision": 0.7120253164556962,
+    "f1": 0.6170723345903325
+   },
+   "model_same_alerts": {
+    "alerts": 1264,
+    "caught": 828
+   }
+  },
+  {
+   "seed": 14,
+   "model": {
+    "alerts": 882,
+    "caught": 733,
+    "recall": 0.44343617664851787,
+    "precision": 0.8310657596371882,
+    "f1": 0.5783037475345167
+   },
+   "known": {
+    "bank": 1189,
+    "analysts": 733
+   },
+   "every": {
+    "alerts": 1359,
+    "caught": 957,
+    "recall": 0.5789473684210527,
+    "precision": 0.7041942604856513,
+    "f1": 0.6354581673306773
+   },
+   "history": {
+    "alerts": 1204,
+    "caught": 832,
+    "recall": 0.5033272837265578,
+    "precision": 0.6910299003322259,
+    "f1": 0.5824291214560727
+   },
+   "bank": {
+    "alerts": 1279,
+    "caught": 897,
+    "recall": 0.542649727767695,
+    "precision": 0.7013291634089132,
+    "f1": 0.6118690313778989
+   },
+   "analysts": {
+    "alerts": 1279,
+    "caught": 897,
+    "recall": 0.542649727767695,
+    "precision": 0.7013291634089132,
+    "f1": 0.6118690313778989
+   },
+   "model_same_alerts": {
+    "alerts": 1279,
+    "caught": 832
+   }
+  }
+ ]
+}

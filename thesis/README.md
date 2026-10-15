@@ -11,7 +11,7 @@ system as it is now. Nothing in the running system reads them.
 | `results.md` | quality and speed before and after the latest changes |
 | `threats.md` | who attacks, what the system can see, what it cannot |
 | `related-work.md` | the papers and sources we used |
-| `raw/` | the numbers behind the twenty-dataset tables in `results.md` |
+| `raw/` | the numbers behind the tables in `results.md`, run by run |
 
 The longer notes these replace, with the history of every experiment, are in git:
 `git show b2062f2:thesis/<file>`.

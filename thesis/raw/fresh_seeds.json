@@ -1,0 +1,305 @@
+{
+ "_about": "15 October 2026: the twenty-dataset test again on fresh seeds 201-220 (3,901 test frauds), the 28 features, read as day_features_seeds.json: five LightGBM models on the first 64%, the cut-off and the second look's band on the next 16%, the last 20% read once. Each system is [frauds caught, alerts].",
+ "seeds": {
+  "201": {
+   "frauds": 199,
+   "model": [
+    124,
+    159
+   ],
+   "lowered": [
+    132,
+    183
+   ],
+   "second": [
+    137,
+    183
+   ]
+  },
+  "202": {
+   "frauds": 193,
+   "model": [
+    112,
+    126
+   ],
+   "lowered": [
+    142,
+    209
+   ],
+   "second": [
+    149,
+    209
+   ]
+  },
+  "203": {
+   "frauds": 204,
+   "model": [
+    126,
+    147
+   ],
+   "lowered": [
+    149,
+    215
+   ],
+   "second": [
+    156,
+    215
+   ]
+  },
+  "204": {
+   "frauds": 236,
+   "model": [
+    139,
+    161
+   ],
+   "lowered": [
+    158,
+    204
+   ],
+   "second": [
+    166,
+    204
+   ]
+  },
+  "205": {
+   "frauds": 207,
+   "model": [
+    147,
+    182
+   ],
+   "lowered": [
+    158,
+    205
+   ],
+   "second": [
+    160,
+    205
+   ]
+  },
+  "206": {
+   "frauds": 206,
+   "model": [
+    139,
+    160
+   ],
+   "lowered": [
+    154,
+    200
+   ],
+   "second": [
+    156,
+    200
+   ]
+  },
+  "207": {
+   "frauds": 180,
+   "model": [
+    104,
+    145
+   ],
+   "lowered": [
+    108,
+    155
+   ],
+   "second": [
+    112,
+    155
+   ]
+  },
+  "208": {
+   "frauds": 186,
+   "model": [
+    131,
+    184
+   ],
+   "lowered": [
+    138,
+    210
+   ],
+   "second": [
+    139,
+    210
+   ]
+  },
+  "209": {
+   "frauds": 179,
+   "model": [
+    130,
+    177
+   ],
+   "lowered": [
+    131,
+    189
+   ],
+   "second": [
+    133,
+    189
+   ]
+  },
+  "210": {
+   "frauds": 162,
+   "model": [
+    101,
+    134
+   ],
+   "lowered": [
+    113,
+    184
+   ],
+   "second": [
+    120,
+    184
+   ]
+  },
+  "211": {
+   "frauds": 172,
+   "model": [
+    117,
+    166
+   ],
+   "lowered": [
+    129,
+    205
+   ],
+   "second": [
+    135,
+    205
+   ]
+  },
+  "212": {
+   "frauds": 227,
+   "model": [
+    147,
+    183
+   ],
+   "lowered": [
+    160,
+    216
+   ],
+   "second": [
+    166,
+    216
+   ]
+  },
+  "213": {
+   "frauds": 202,
+   "model": [
+    143,
+    183
+   ],
+   "lowered": [
+    152,
+    205
+   ],
+   "second": [
+    154,
+    205
+   ]
+  },
+  "214": {
+   "frauds": 165,
+   "model": [
+    96,
+    123
+   ],
+   "lowered": [
+    110,
+    169
+   ],
+   "second": [
+    115,
+    169
+   ]
+  },
+  "215": {
+   "frauds": 187,
+   "model": [
+    100,
+    111
+   ],
+   "lowered": [
+    121,
+    170
+   ],
+   "second": [
+    128,
+    170
+   ]
+  },
+  "216": {
+   "frauds": 179,
+   "model": [
+    126,
+    166
+   ],
+   "lowered": [
+    132,
+    185
+   ],
+   "second": [
+    132,
+    185
+   ]
+  },
+  "217": {
+   "frauds": 226,
+   "model": [
+    132,
+    166
+   ],
+   "lowered": [
+    150,
+    233
+   ],
+   "second": [
+    159,
+    233
+   ]
+  },
+  "218": {
+   "frauds": 162,
+   "model": [
+    113,
+    206
+   ],
+   "lowered": [
+    122,
+    271
+   ],
+   "second": [
+    122,
+    271
+   ]
+  },
+  "219": {
+   "frauds": 197,
+   "model": [
+    132,
+    175
+   ],
+   "lowered": [
+    137,
+    189
+   ],
+   "second": [
+    143,
+    189
+   ]
+  },
+  "220": {
+   "frauds": 232,
+   "model": [
+    156,
+    184
+   ],
+   "lowered": [
+    160,
+    191
+   ],
+   "second": [
+    160,
+    191
+   ]
+  }
+ }
+}
