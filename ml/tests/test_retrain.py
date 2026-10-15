@@ -22,6 +22,13 @@ def test_the_logged_rows_split_as_train_py_splits_its_data():
     assert R.split(1000) == (640, 800)
 
 
+def test_only_decisions_a_week_old_are_compared():
+    """Newer ones know mostly the frauds the served model held: clients report later."""
+    day = 86_400
+    t = np.array([0, day, 6 * day, 7 * day + 1, 8 * day])
+    assert R.settled(t).tolist() == [True, True, False, False, False]
+
+
 def test_the_new_cut_off_raises_as_many_alerts_as_the_served_one():
     old = np.array([0.9, 0.8, 0.1, 0.05, 0.01])
     new = np.array([0.2, 0.7, 0.6, 0.3, 0.1])

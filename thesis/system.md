@@ -37,7 +37,8 @@
    the model sees it on the next transfers from or to that card.
 6. **Retraining** (`ml/retrain.py`, the retrainer service). Every day it trains a new
    model on the logged decisions, with the labels the analysts and clients gave. It
-   compares the new model with the current one at the same number of alerts, and
+   compares the new model with the current one at the same number of alerts, on
+   decisions at least a week old, when clients' reports have come in, and
    reports which features have changed since training (drift). A person decides
    whether to switch the new model on.
 

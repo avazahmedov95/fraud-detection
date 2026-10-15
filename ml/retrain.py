@@ -4,10 +4,11 @@ it daily; nothing changes until a person promotes it (.\\run.ps1 promote-model).
 
 Rows: the job's logged decisions with their features (fraud.transactions_scored),
 added to the served model's training rows. Labels: fraud where an analyst confirmed
-it or a client reported it (fraud.cases). The logged rows split as in train.py: the
-earliest 64% train, the next 16% set the cut-off at the served model's number of
-alerts, the last 20% decide between the two. Drift is read first; the outcome goes to
-models/retrain_status.json for the demo page.
+it or a client reported it (fraud.cases). Drift is read on all of them. The rest
+uses the decisions a week old or more, whose clients have had time to report a
+missed fraud; split as in train.py: the earliest 64% train, the next 16% set the
+cut-off at the served model's number of alerts, the last 20% decide between the two.
+The outcome goes to models/retrain_status.json for the demo page.
 
     python retrain.py [--cache models_matrix.npz] [--every-hours 24]
 """
@@ -34,6 +35,9 @@ PSI_MOVED = 0.25
 MIN_DRIFT_ROWS = 1000
 #: The newest decisions read, so memory stays bounded.
 MAX_ROWS = 1_000_000
+#: A client reports a missed fraud within about a week. Newer decisions know mostly
+#: the frauds the served model held, which would favour it.
+REPORT_DELAY_S = 7 * 86400
 
 
 def warehouse():
@@ -47,11 +51,11 @@ def warehouse():
 
 def logged(client):
     """The newest decisions with a whole feature vector, one per transfer, in the
-    job's order, labelled by what people called fraud."""
+    job's order, labelled by what people called fraud, with their event times."""
     n = len(D.FEATURE_NAMES)
     rows = client.query(
-        "SELECT transaction_id, features FROM ("
-        "SELECT transaction_id, features, scored_at_job FROM transactions_scored "
+        "SELECT transaction_id, features, toUnixTimestamp(event_time) FROM ("
+        "SELECT transaction_id, features, event_time, scored_at_job FROM transactions_scored "
         "WHERE length(features) = %(n)s "
         "ORDER BY scored_at_job DESC LIMIT 1 BY transaction_id LIMIT %(cap)s) "
         "ORDER BY scored_at_job", parameters={"n": n, "cap": MAX_ROWS}).result_rows
@@ -60,7 +64,12 @@ def logged(client):
         "WHERE disposition = 'CONFIRMED_FRAUD'").result_rows}
     X = np.array([r[1] for r in rows], dtype="float32").reshape(-1, n)
     y = np.array([r[0] in fraud for r in rows], dtype="int8")
-    return X, y
+    return X, y, np.array([r[2] for r in rows], dtype="int64")
+
+
+def settled(t):
+    """The decisions at least REPORT_DELAY_S older than the newest one."""
+    return t <= t.max() - REPORT_DELAY_S
 
 
 def split(n):
@@ -117,7 +126,7 @@ def run(cache):
     Xh, yh = D.cached_matrix(T.CSV, cache)
     # The rows the served model was fitted and tuned on; its test slice is left out.
     Xh, yh = Xh[:T.cut_index(len(yh))], yh[:T.cut_index(len(yh))]
-    X, y = logged(warehouse())
+    X, y, t = logged(warehouse())
     fit, cut = split(len(y))
     status = {"logged": int(len(y)), "known_fraud": int(y.sum()),
               "needed": {"rows": MIN_DRIFT_ROWS, "fraud": MIN_FRAUD}}
@@ -139,6 +148,12 @@ def run(cache):
     status.update(recent=int(len(y) - fit), alert_rate={"then": rate_then, "now": rate_now},
                   moved=[n for n, v in moved.items() if v > PSI_MOVED])
 
+    old_enough = settled(t)
+    X, y = X[old_enough], y[old_enough]
+    fit, cut = split(len(y))
+    status.update(settling=int((~old_enough).sum()))
+    print(f"\nthe last week's {status['settling']:,} decisions wait for clients' reports; "
+          f"the {len(y):,} before them are compared")
     known = int(y[cut:].sum())
     if known < MIN_FRAUD:
         print(f"\nThe deciding rows hold {known} known frauds, under the {MIN_FRAUD} a "

@@ -96,13 +96,15 @@ Every decision is stored with its feature values (`features` in
    the logged decisions, where fraud means a person confirmed it.
 3. It sets the new model's cut-off so that it raises as many alerts as the current
    one.
-4. It compares the two on the latest fifth of the logged decisions, which neither
-   model learned from.
+4. It compares the two on decisions at least a week old, when clients have had time
+   to report the frauds the system let go: the latest fifth of those, which neither
+   model learned from. On newer decisions the known frauds would be mostly the ones
+   the current model held, and the comparison would favour it.
 
 It saves the new model in `models/candidate/` and changes nothing else. A person
 reads the comparison and switches the new model on with `run.ps1 promote-model`.
 Each run's outcome goes to `models/retrain_status.json`, which the demo shows on the
-Data & results tab.
+About the project tab.
 
 Whether retraining helps was tested once, offline, on six generated datasets (the
 main one and seeds 1-5). In each, the bank's history (the first 40%) has no examples
