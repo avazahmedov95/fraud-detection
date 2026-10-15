@@ -299,6 +299,9 @@ def main():
     chk = env.get_checkpoint_config()
     chk.set_checkpoint_storage_dir(C.CHECKPOINT_DIR)
     chk.set_externalized_checkpoint_cleanup(ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION)
+    # Aligned, a checkpoint held the three copies until each reached it, and a busy
+    # one stalled the others for up to a second; unaligned, none waits.
+    chk.enable_unaligned_checkpoints()
     _tune_for_latency(env)
 
     raw = env.from_source(
