@@ -1,8 +1,8 @@
 # stream-processor
 
 The PyFlink job that decides every transfer before it settles. It reads
-`transactions.raw`, keeps each sender's history in Flink state and each payee's side
-in Redis, computes 28 features, runs 10 hard rules, scores the model (ONNX) and
+`transactions.raw`, keeps each sender's history in Flink state (forgotten after 90
+days of silence, `SENDER_STATE_TTL_DAYS`) and each payee's side in Redis, computes 28 features, runs 10 hard rules, scores the model (ONNX) and
 decides: ALLOW, REVIEW - held for the analyst - or SECOND_LOOK, just under the
 cut-off, sent to TabPFN (`second-look/`). Every decision goes to
 `transactions.scored` with its feature values, where the sink writer opens a case

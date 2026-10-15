@@ -110,6 +110,10 @@ BUFFER_TIMEOUT_MS = int(os.getenv("BUFFER_TIMEOUT_MS", "5"))
 KAFKA_FETCH_MAX_WAIT_MS = int(os.getenv("KAFKA_FETCH_MAX_WAIT_MS", "20"))
 # The Kafka sinks flush at checkpoints, so this also bounds the warehouse delay.
 CHECKPOINT_INTERVAL_MS = int(os.getenv("CHECKPOINT_INTERVAL_MS", "2000"))
+# A sender silent this long is forgotten, and their next transfer reads as a new
+# customer's. Without it the state, and every checkpoint, keeps everyone who ever paid.
+# Longer than any window a feature reads and than the month the model is trained on.
+SENDER_STATE_TTL_DAYS = int(os.getenv("SENDER_STATE_TTL_DAYS", "90"))
 
 # Restart after a crash; the window bounds a crash loop.
 RESTART_ATTEMPTS = int(os.getenv("RESTART_ATTEMPTS", "10"))

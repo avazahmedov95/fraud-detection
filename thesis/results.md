@@ -81,8 +81,8 @@ second 99 of 100 decisions stay under 300 ms in all three:
 
 Not confirmed: one repeat at 150 a second reached 425 ms. For 16 seconds it stayed
 near 48 ms; then for 4 seconds decisions took 0.2-0.65 s, while two saves of the
-job's state took 200 and 370 ms instead of about 20. The job saves all its state
-(40 MB now) every 2 seconds, and a busy disk holds the stream up. At 200 a second all
+job's state took 200 and 370 ms instead of about 20. The job saved all its state
+(40 MB then) every 2 seconds, and a busy disk holds the stream up. At 200 a second all
 three repeats stayed under 300 ms, so the capacity is there; the risk is the save.
 
 ## 14-15 October: a month through the running system
@@ -343,9 +343,10 @@ model, which also uses PaySim's own transaction type.
   one is slower and sometimes wrong.
 - The retraining test (5 October) and the memory on IBM AML (7 October) were
   measured with 24 features; on 15 October both were repeated with the 28.
-- The job keeps each sender's history with no time limit and saves all of it every
-  2 seconds. For a bank's millions of customers it would have to save only what
-  changed and forget senders who stopped.
+- Until 15 October the job kept every sender who ever paid (40 MB by then). Now it
+  forgets a sender silent for 90 days, longer than any window a feature reads. It
+  still saves all its state every 2 seconds; for a bank's millions of customers it
+  would have to save only what changed.
 - Speed was measured on battery; on mains power the system is faster, so the
   figures are a safe lower bound.
 
