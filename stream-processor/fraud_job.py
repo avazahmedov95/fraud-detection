@@ -14,12 +14,11 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from pyflink.common import Configuration, Types
-from pyflink.common.time import Time
 from pyflink.common.serialization import SimpleStringSchema
 from pyflink.common.watermark_strategy import WatermarkStrategy
 from pyflink.datastream import StreamExecutionEnvironment, KeyedProcessFunction, RuntimeContext
 from pyflink.datastream.checkpoint_config import ExternalizedCheckpointCleanup
-from pyflink.datastream.state import StateTtlConfig, ValueStateDescriptor
+from pyflink.datastream.state import ValueStateDescriptor
 from pyflink.datastream.connectors.kafka import (
     KafkaSource, KafkaOffsetsInitializer, KafkaSink, KafkaRecordSerializationSchema,
     DeliveryGuarantee, KafkaOffsetResetStrategy,
@@ -85,20 +84,17 @@ def _positive_proba(outputs) -> float:
     raise RuntimeError("no [1, 2] probability tensor in the ONNX output")
 
 
+#: A sender's timer is moved at most once a day, so it costs nothing per transfer;
+#: Flink's own state TTL checked every access and cost 2-3 ms a transfer.
+FORGET_BUCKET_MS = 86_400_000
+
+
 class FraudDetector(KeyedProcessFunction):
     """Per-sender CEP and the ONNX model, fused into one decision."""
 
     def open(self, ctx: RuntimeContext):
-        state = ValueStateDescriptor("sender_state", Types.PICKLED_BYTE_ARRAY())
-        # Processing time, the only kind Flink offers: in a replay nothing expires.
-        state.enable_time_to_live(
-            StateTtlConfig.new_builder(Time.days(C.SENDER_STATE_TTL_DAYS))
-            .set_update_type(StateTtlConfig.UpdateType.OnCreateAndWrite)
-            .set_state_visibility(StateTtlConfig.StateVisibility.NeverReturnExpired)
-            .cleanup_full_snapshot()
-            .cleanup_incrementally(10, False)
-            .build())
-        self._state = ctx.get_state(state)
+        self._state = ctx.get_state(
+            ValueStateDescriptor("sender_state", Types.PICKLED_BYTE_ARRAY()))
         # The payee's side lives in Redis: the stream is keyed by sender.
         self._receivers = ReceiverStore(C.REDIS_HOST, C.REDIS_PORT)
         self._receivers.open()
@@ -155,6 +151,25 @@ class FraudDetector(KeyedProcessFunction):
         x = np.asarray([feature_vector], dtype=np.float32)
         return _positive_proba(self._sess.run(None, {self._in_name: x}))
 
+    def _forget_later(self, state, ctx):
+        """Clear this sender SENDER_STATE_TTL_DAYS after today ends, unless they pay
+        again (processing time: in a replay nothing expires)."""
+        now = ctx.timer_service().current_processing_time()
+        at = ((now // FORGET_BUCKET_MS + 1) * FORGET_BUCKET_MS
+              + C.SENDER_STATE_TTL_DAYS * 86_400_000)
+        old = getattr(state, "forget_at", 0)
+        if at != old:
+            if old:
+                ctx.timer_service().delete_processing_time_timer(old)
+            ctx.timer_service().register_processing_time_timer(at)
+            state.forget_at = at
+
+    def on_timer(self, timestamp, ctx):
+        state = self._state.value()
+        if state is not None and getattr(state, "forget_at", 0) <= timestamp:
+            self._state.clear()
+        return []
+
     def process_element(self, value, ctx):
         scoring_started = time.time()
         stages = {}
@@ -185,6 +200,7 @@ class FraudDetector(KeyedProcessFunction):
 
         result = evaluate(event, state, event_epoch, receiver_state,
                           sender_inbound_ts=sender_inbound, confirmed=confirmed)
+        self._forget_later(state, ctx)
         self._state.update(state)
         self._receivers.record(event, event_epoch, receiver_state)
         mark = _lap(stages, "rules", mark)

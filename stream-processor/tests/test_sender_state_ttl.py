@@ -10,7 +10,8 @@ def test_the_sender_state_expires():
         encoding="utf-8")
     calls = {n.func.attr for n in ast.walk(ast.parse(src))
              if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
-    assert "enable_time_to_live" in calls and "C.SENDER_STATE_TTL_DAYS" in src
+    assert {"register_processing_time_timer", "delete_processing_time_timer"} <= calls
+    assert "def on_timer" in src and "C.SENDER_STATE_TTL_DAYS" in src
 
 
 def test_it_outlasts_every_window_a_feature_reads():
