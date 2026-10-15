@@ -289,12 +289,17 @@ switch ($Target.ToLower()) {
     }
 
     "promote-model" {
-        # The steps after train.py, for retrain.py's candidate: export, the second
-        # look's band under the new cut-off, then everything that reads the model.
+        # The steps after train.py, for retrain.py's candidate: its figures on the
+        # held-out days, export, the second look's band under the new cut-off, then
+        # everything that reads the model.
         if (-not (Test-Path "ml/models/candidate/model.joblib")) {
             throw "no candidate in ml/models/candidate: run .\run.ps1 retrain first"
         }
-        Copy-Item "ml/models/candidate/*" "ml/models/" -Force
+        foreach ($f in "model.joblib", "thresholds.json", "feature_names.json") {
+            Copy-Item "ml/models/candidate/$f" "ml/models/" -Force
+        }
+        Push-Location ml
+        try { python train.py --served } finally { Pop-Location }
         & $PSCommandPath export-model
         $tabpfn = Join-Path (Split-Path (Get-Location).Path) ".venv-models\Scripts\python.exe"
         if ((Test-Path $tabpfn) -and $DotEnv.TABPFN_CHECKPOINT) {
@@ -304,6 +309,13 @@ switch ($Target.ToLower()) {
         } else {
             Write-Host "The second look's band was not re-chosen (it needs ..\.venv-models and TABPFN_CHECKPOINT): the second look stays off under the new cut-off." -ForegroundColor Yellow
         }
+        # The job loads the model when it starts: cancel it (its last checkpoint is
+        # kept), and resume-job brings it back with the new one.
+        foreach ($job in @(Get-ActiveJobs)) {
+            Invoke-RestMethod -Method Patch -Uri "http://localhost:8081/jobs/$($job.jid)?mode=cancel" | Out-Null
+        }
+        $deadline = (Get-Date).AddSeconds(60)
+        while (@(Get-ActiveJobs).Count -gt 0 -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 1 }
         & $PSCommandPath resume-job
         docker compose restart sink-writer second-look demo
     }

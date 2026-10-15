@@ -1,5 +1,6 @@
 """committee.merge: the one booster the job serves is the members' mean, and its
-tree contributions still add up to its own score."""
+tree contributions still add up to its own score; float32_thresholds changes no
+decision."""
 
 import lightgbm as lgb
 import numpy as np
@@ -31,6 +32,17 @@ def test_the_merged_contributions_add_up_to_its_score():
     merged = committee.merge(boosters)
     contrib = merged.predict(X, pred_contrib=True)
     assert np.allclose(contrib.sum(axis=1), merged.predict(X, raw_score=True), atol=1e-9)
+
+
+def test_thresholds_move_to_float32_and_no_decision_changes():
+    X, boosters = _fits()
+    X = X.astype("float32")
+    merged = committee.merge(boosters)
+    moved = committee.float32_thresholds(merged)
+    t = np.array([float(v) for line in moved.model_to_string().splitlines()
+                  if line.startswith("threshold=") for v in line[len("threshold="):].split()])
+    assert len(t) and (t.astype(np.float32).astype(np.float64) == t).all()
+    assert np.array_equal(moved.predict(X, raw_score=True), merged.predict(X, raw_score=True))
 
 
 def test_check_refuses_a_model_that_is_not_the_mean():

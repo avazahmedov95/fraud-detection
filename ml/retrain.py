@@ -3,7 +3,8 @@ says whether the new model should replace the served one. The retrainer service 
 it every week; nothing changes until a person promotes it (.\\run.ps1 promote-model).
 
 Rows: the job's logged decisions with their features (fraud.transactions_scored),
-added to the served model's training rows. Labels: fraud where an analyst confirmed
+added to the rows the served model was fitted on; the rows that set its cut-off stay
+unseen, as second_look.py chooses the band there. Labels: fraud where an analyst confirmed
 it or a client reported it (fraud.cases). Drift is read on all of them. The rest
 uses the decisions a week old or more, whose clients have had time to report a
 missed fraud; split as in train.py: the earliest 64% train, the next 16% set the
@@ -161,7 +162,9 @@ def run(cache):
         print(f"\nThe deciding rows hold {known} known frauds, under the {MIN_FRAUD} a "
               f"comparison needs: no candidate. Keep the served model.")
         return dict(status, outcome="too_few_fraud", deciding_fraud=known)
-    model, _ = T.fit_committee(np.vstack([Xh, X[:fit]]), np.concatenate([yh, y[:fit]]))
+    hfit = int(len(yh) * T.FIT_SHARE)
+    model, _ = T.fit_committee(np.vstack([Xh[:hfit], X[:fit]]),
+                               np.concatenate([yh[:hfit], y[:fit]]))
     new_cut = same_workload_cut(model.predict(X[fit:cut]), served.predict(X[fit:cut]),
                                 served_cut)
     old = read(y[cut:], served.predict(X[cut:]), served_cut)

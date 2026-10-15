@@ -7,7 +7,7 @@ from exactly the numbers it will see in the live system.
 | File | What it does |
 |---|---|
 | `dataset.py` | runs the data through the job's features and rules: the training table |
-| `train.py` | trains five LightGBM models on the earliest 64% of rows, sets the REVIEW cut-off where F1 is highest on the next 16%, and measures on the last 20% |
+| `train.py` | trains five LightGBM models on the earliest 64% of rows, sets the REVIEW cut-off where F1 is highest on the next 16%, and measures on the last 20%; `--served` measures a promoted model there |
 | `committee.py` | merges the five models into the one the job uses |
 | `export_onnx.py` | saves that model as ONNX for Flink and checks that it gives the same answers |
 | `manifest.py` | records what the served model was built from: data, features, files |
@@ -29,7 +29,9 @@ python seed_confirmed.py # with the stack up
 
 `export_onnx.py` runs in a container (`infra/ml/Dockerfile`, with the versions
 pinned in `requirements.txt`), because Windows Smart App Control blocks a library
-that onnx needs. `second_look.py` runs in `.venv-models`, where TabPFN is
+that onnx needs. It moves every split threshold to the float32 at or below it, as
+ONNX keeps them: the features are float32 too, so no decision changes, and the ONNX
+model agrees with the trained one. `second_look.py` runs in `.venv-models`, where TabPFN is
 installed. Then `run.ps1 resume-job` makes the job use the new model, cut-off and
 band.
 
@@ -92,8 +94,10 @@ Every decision is stored with its feature values (`features` in
 
 1. It reports drift: for each feature, how far it has moved since training (the
    population stability index; over 0.25 means it has moved).
-2. It trains the same five-model committee on the current model's training data plus
-   the logged decisions, where fraud means a person confirmed it.
+2. It trains the same five-model committee on the rows the current model was fitted
+   on plus the logged decisions, where fraud means a person confirmed it. The rows
+   that set the cut-off stay unseen: after a promotion the second look's band is
+   chosen on them.
 3. It sets the new model's cut-off so that it raises as many alerts as the current
    one.
 4. It compares the two by F1 on decisions at least a week old, when clients have had
@@ -102,7 +106,9 @@ Every decision is stored with its feature values (`features` in
    the ones the current model held, and the comparison would favour it.
 
 It saves the new model in `models/candidate/` and changes nothing else. A person
-reads the comparison and switches the new model on with `run.ps1 promote-model`.
+reads the comparison and switches the new model on with `run.ps1 promote-model`: it
+measures the model on the held-out days (`train.py --served`, the figures above then
+change), exports it, chooses the second look's band again and restarts the job.
 Each run's outcome goes to `models/retrain_status.json`, which the demo shows on the
 About the project tab, and to the table `fraud.retrain_runs`, which Grafana shows in
 its Retraining row: the person deciding reads it there.

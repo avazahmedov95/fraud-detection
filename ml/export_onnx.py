@@ -1,5 +1,7 @@
 """Exports the trained committee to ONNX for serving inside Flink, plus model.txt
 for the sink writer's explanations, and checks the ONNX against the native model.
+Both are written with the split thresholds moved to float32, as ONNX keeps them
+(committee.float32_thresholds): no decision changes.
 """
 
 import argparse
@@ -12,6 +14,7 @@ import onnxruntime as ort
 from onnxmltools import convert_lightgbm
 from onnxmltools.convert.common.data_types import FloatTensorType
 
+import committee
 import dataset as D
 
 MODELS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
@@ -35,7 +38,8 @@ def _onnx_positive_proba(outputs):
 
 
 def main():
-    model = joblib.load(os.path.join(MODELS_DIR, "model.joblib"))
+    measured = joblib.load(os.path.join(MODELS_DIR, "model.joblib"))
+    model = committee.float32_thresholds(measured)
     feats = json.load(open(os.path.join(MODELS_DIR, "feature_names.json")))
     n = len(feats)
 
@@ -56,7 +60,7 @@ def main():
     df = D.build_matrix(CSV, nrows=PARITY_ROWS)
     sample = df.iloc[int(len(df) * 0.80):][feats].astype("float32").values[:2000]
 
-    native = model.predict(sample)          # a merged lgb.Booster (committee.py)
+    native = measured.predict(sample)       # the merged booster train.py measured
     sess = ort.InferenceSession(ONNX_PATH, providers=["CPUExecutionProvider"])
     onnx_proba = _onnx_positive_proba(sess.run(None, {sess.get_inputs()[0].name: sample}))
 

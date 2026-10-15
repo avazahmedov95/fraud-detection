@@ -1,6 +1,7 @@
 """Trains the scoring committee on a time-ordered split and writes the model, the
 cut-off the job decides with, and metrics.json: the earliest 64% of rows fit, the
-next 16% choose the REVIEW cut-off, the last 20% measure."""
+next 16% choose the REVIEW cut-off, the last 20% measure. With --served it measures the
+model already in models/ (one promote-model switched on) and rewrites only metrics.json."""
 
 import argparse
 import json
@@ -99,7 +100,7 @@ def _calibration(y, proba, review_thr):
     )
 
 
-def main():
+def main(served=False):
     os.makedirs(MODELS_DIR, exist_ok=True)
     print("building feature matrix ...")
     df = D.build_matrix(CSV)
@@ -110,25 +111,27 @@ def main():
     y = df["label"].values
     test, Xte, yte = df.iloc[cut:], X[cut:], y[cut:]
 
-    pos, neg = int(y[:fit].sum()), int((y[:fit] == 0).sum())
-    spw = class_weight(pos, neg)
-    print(f"fit {fit:,} (pos={pos}, {pos / (pos + neg):.3%}) | cutoffs {cut - fit:,} "
-          f"(pos={int(y[fit:cut].sum())}) | test {len(yte):,} (pos={int(yte.sum())}) "
-          f"| scale_pos_weight={spw:.1f}")
-
-    model, members = fit_committee(X[:fit], y[:fit])
-    committee.check(model, members, Xte[:5000])
-
-    review = choose_review_cutoff(y[fit:cut], model.predict(X[fit:cut]))
+    if served:
+        model, members = joblib.load(os.path.join(MODELS_DIR, "model.joblib")), []
+        with open(os.path.join(MODELS_DIR, "thresholds.json"), encoding="utf-8") as fh:
+            review = json.load(fh)["review"]
+    else:
+        pos, neg = int(y[:fit].sum()), int((y[:fit] == 0).sum())
+        spw = class_weight(pos, neg)
+        print(f"fit {fit:,} (pos={pos}, {pos / (pos + neg):.3%}) | cutoffs {cut - fit:,} "
+              f"(pos={int(y[fit:cut].sum())}) | test {len(yte):,} (pos={int(yte.sum())}) "
+              f"| scale_pos_weight={spw:.1f}")
+        model, members = fit_committee(X[:fit], y[:fit])
+        committee.check(model, members, Xte[:5000])
+        review = choose_review_cutoff(y[fit:cut], model.predict(X[fit:cut]))
     proba = model.predict(Xte)
     auc = roc_auc_score(yte, proba)
     ap = average_precision_score(yte, proba)
     member_ap = [float(average_precision_score(yte, b.predict(Xte))) for b in members]
 
-    print(f"\n=== committee of {len(members)} on the held-out (later) test slice "
-          f"- DESIGN TARGETS ===")
-    print(f"ROC-AUC: {auc:.3f}   PR-AUC (avg precision): {ap:.3f}   "
-          f"(one fit alone: {min(member_ap):.3f}-{max(member_ap):.3f})")
+    print("\n=== the model on the held-out (later) test slice - DESIGN TARGETS ===")
+    print(f"ROC-AUC: {auc:.3f}   PR-AUC (avg precision): {ap:.3f}"
+          + (f"   (one fit alone: {min(member_ap):.3f}-{max(member_ap):.3f})" if members else ""))
     mr = _metrics(yte, proba, review)
     print(f"REVIEW at {review:.4f}  precision={mr['precision']:.3f}  "
           f"recall={mr['recall']:.3f}  f1={mr['f1']:.3f}  "
@@ -160,13 +163,14 @@ def main():
                           "caught": int(grp["pred"].sum()), "n": int(len(grp))}
         print(f"  {ftype:<12} {grp['pred'].mean():.1%}  (n={len(grp)})")
 
-    joblib.dump(model, os.path.join(MODELS_DIR, "model.joblib"))
-    with open(os.path.join(MODELS_DIR, "feature_names.json"), "w") as fh:
-        json.dump(feats, fh, indent=2)
-    with open(os.path.join(MODELS_DIR, "thresholds.json"), "w") as fh:
-        json.dump(dict(review=review,
-                       chosen_on=dict(rows=cut - fit, fraud=int(y[fit:cut].sum())),
-                       committee=len(members)), fh, indent=2)
+    if not served:
+        joblib.dump(model, os.path.join(MODELS_DIR, "model.joblib"))
+        with open(os.path.join(MODELS_DIR, "feature_names.json"), "w") as fh:
+            json.dump(feats, fh, indent=2)
+        with open(os.path.join(MODELS_DIR, "thresholds.json"), "w") as fh:
+            json.dump(dict(review=review,
+                           chosen_on=dict(rows=cut - fit, fraud=int(y[fit:cut].sum())),
+                           committee=len(members)), fh, indent=2)
     with open(os.path.join(MODELS_DIR, "metrics.json"), "w") as fh:
         json.dump(dict(roc_auc=auc, pr_auc=ap, thresholds=dict(review=review),
                        at_review=mr, cep_only=cep, calibration=cal,
@@ -174,11 +178,14 @@ def main():
                        committee=dict(seeds=list(COMMITTEE_SEEDS),
                                       member_pr_auc=member_ap)),
                   fh, indent=2)
-    print(f"\nsaved model + thresholds + feature_names + metrics to {MODELS_DIR}/")
+    print(f"\nsaved {'metrics' if served else 'model + thresholds + feature_names + metrics'}"
+          f" to {MODELS_DIR}/")
     print("NOTE: metrics are design targets on synthetic data, not validated findings.")
 
 
 if __name__ == "__main__":
     # Refuses unknown flags: a mistyped one would otherwise retrain the model.
-    argparse.ArgumentParser(description=__doc__).parse_args()
-    main()
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--served", action="store_true",
+                    help="measure the model in models/ instead of training one")
+    main(ap.parse_args().served)

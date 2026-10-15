@@ -10,11 +10,67 @@ to 5 October:
 - retraining on people's decisions;
 - a faster stream.
 
-On 13 October four day-level features followed, 28 instead of 24; their before and
-after comes first, in the next section.
+On 13 October four day-level features followed, 28 instead of 24, and on 14-15
+October a generated month went through the running system. The newest comes first.
 
 All data comes from our generator (`data.md`), so these are design targets, not
 results from a real bank.
+
+## 14-15 October: a month through the running system
+
+We generated a new month with another seed: 500,000 transfers, 929 of them fraud,
+from people and cards the system had never seen. It went through the running system
+at 100 transfers a second (83 minutes). A script played the analyst: a day after
+each hold it gave the true verdict. Half of the clients reported a fraud the system
+let go, a week after it. Both went through the demo's own code, so a confirmed
+fraud's payee joined the memory at once.
+
+| days | frauds caught | holds | holds that were fraud |
+|---|---|---|---|
+| 1-10 | 211 of 320 (66%) | 460 | 46% |
+| 11-20 | 248 of 327 (76%) | 371 | 67% |
+| 21-31 | 202 of 282 (72%) | 300 | 67% |
+| the month | 661 of 929 (71%) | 1,131 | 58% |
+
+At first every sender and payee is new. As their history and the memory of confirmed
+fraud accounts grow, the false holds fall from 249 in the first ten days to 98 in the
+last eleven. By type: structuring 93%, account takeover 85%, mules 62%, APP 56%. The
+second look made 232 of the holds, 63 of them fraud. The bank learned of 721 of the
+929 frauds (78%): the analyst confirmed 652, clients reported 69.
+
+The retrainer then trained a new model on these labels. This showed two faults, both
+fixed:
+
+- It compared the models on the newest decisions. There the bank knows mostly the
+  frauds the current model held itself, so the comparison favours it: the retrainer
+  said "not better" while on the true answers the new model caught more (139 against
+  134 of 199 at the same 175 alerts). It now compares on decisions a week old or
+  more, when clients' reports are in.
+- The new model also learned from the rows where the current model's cut-off was set.
+  After a switch the second look chooses its band on those rows; read on rows the
+  model had learned, the band held all 100 of its transfers on the test days. The new
+  model now learns from the current model's fitting rows and the logged decisions.
+
+With both fixes, on the 76,793 decisions a week old or more:
+
+| | model of 13 October | retrained |
+|---|---|---|
+| F1 on what the bank knows (108 frauds) | 78.3% | 77.8% |
+| F1 on the true answers (130 frauds) | 71.4% | 72.4% |
+| alerts | 122 | 113 |
+| frauds caught at 122 alerts (true answers) | 90 | 90 |
+| the main dataset's last six days: F1, caught | 72.4%, 123 of 176 | 73.8%, 124 of 176 |
+
+The retrainer says "not better", and the other readings agree the two are about the
+same: a month of the fraud types the model already knows adds little. The model of
+13 October stays. The large gain came on 5 October, with a scheme the bank had not
+seen (1.8 times as many caught, below).
+
+One more fault came out while switching: ONNX keeps split thresholds as float32, so
+the served model would have given 3 transfers in 2,000 a different risk (by up to
+0.0075). The export now moves every threshold to the float32 at or below it. The
+features are float32 too, so no decision changes, and the ONNX model and the trained
+one now agree within 0.0000002.
 
 ## 13 October: four day-level features
 
@@ -214,6 +270,8 @@ model, which also uses PaySim's own transaction type.
   learns only from analysts and clients knows fewer (148 of the 176 in the test
   days), which costs about half a point of F1.
 - Over 20 datasets the second look raises recall but lowers precision.
+- The analyst of the month test never errs and always answers within a day; a real
+  one is slower and sometimes wrong.
 - The retraining test (5 October) and the memory on IBM AML (7 October) were
   measured with 24 features.
 - Speed was measured on battery; on mains power the system is faster, so the

@@ -1,9 +1,9 @@
 {
-  "exported_at": "2026-10-13T16:51:49+00:00",
-  "commit": "faf67662526b1bd5246cccd3445f9bf713ea74d4",
+  "exported_at": "2026-10-15T06:00:11+00:00",
+  "commit": "abcdd49f2037ae4d9f9cc76d55e152125c1e4e1f",
   "artefacts": {
-    "model.onnx": "140f91ba7ef3367a2d72d0d4c53c94e3a8445cb05225d291e3bffbe9846b3738",
-    "model.txt": "4e67b3bbeed1c3ae0e2b37ba8f9c5953e22fed9403a7feb9bcdf37933ba7062a",
+    "model.onnx": "2fbf187458d2b040e069446933dd4ee30868f0065efee635c2c25d13e57d71fc",
+    "model.txt": "a305fd6ff593414f2573c9831ea9c2266c58e87ae495af6ae48136817bef4a92",
     "model.joblib": "3ab0cc05dbec6751b1999a2c868be44e6d4bcca958112e1261d3a7fbbf1623b1",
     "feature_names.json": "52a877f61c96fe3caf8e0de2295cb177822400846f6779aab3c0d08bfe4486ff",
     "thresholds.json": "e029555835576b14bd6b9f996a36f2e6fcbc92fbc39da1c383c418feb51f7a65"

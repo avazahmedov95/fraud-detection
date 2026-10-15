@@ -4,7 +4,7 @@ Averaging several fits' log-odds takes the noise out of one fit to rare fraud
 (ml/README.md). A boosted model's raw score is the sum of its trees' outputs, so
 the mean of K models is one model holding every member's trees with every value
 divided by K: merge() writes it, and the ONNX export, model.txt and the tree
-contributions all see a single booster.
+contributions all see a single booster. float32_thresholds() readies it for ONNX.
 """
 import re
 
@@ -12,6 +12,7 @@ import lightgbm as lgb
 import numpy as np
 
 _VALUES = re.compile(r"^(leaf_value|internal_value)=(.*)$", re.M)
+_THRESHOLDS = re.compile(r"^threshold=(.*)$", re.M)
 
 
 def _parts(text):
@@ -29,16 +30,34 @@ def _scaled(block, k, index):
     return _VALUES.sub(scale, block)
 
 
+def _joined(head, blocks, tail):
+    """A booster from a model string's parts, its tree_sizes counted again."""
+    sizes = " ".join(str(len(b.encode())) for b in blocks)
+    head = re.sub(r"^tree_sizes=.*$", "tree_sizes=" + sizes, head, count=1, flags=re.M)
+    return lgb.Booster(model_str=head + "\n" + "".join(blocks) + "end of trees" + tail)
+
+
 def merge(boosters):
     """One booster whose raw score is the mean of `boosters`' raw scores."""
     k = len(boosters)
     parts = [_parts(b.model_to_string()) for b in boosters]
     blocks = [_scaled(block, k, i) for i, block in
               enumerate(b for _, blocks, _ in parts for b in blocks)]
-    sizes = " ".join(str(len(b.encode())) for b in blocks)
-    head = re.sub(r"^tree_sizes=.*$", "tree_sizes=" + sizes, parts[0][0],
-                  count=1, flags=re.M)
-    return lgb.Booster(model_str=head + "\n" + "".join(blocks) + "end of trees" + parts[0][2])
+    return _joined(parts[0][0], blocks, parts[0][2])
+
+
+def float32_thresholds(booster):
+    """The booster with each split threshold moved down to the float32 at or below it.
+    The features are float32, and for a float32 x `x <= t` and `x <= that float32`
+    agree, so no decision changes. ONNX keeps thresholds as float32: one rounded up
+    onto a feature value would send that value the other way."""
+    def floor(m):
+        t = np.array(m.group(1).split(), dtype=np.float64)
+        f = t.astype(np.float32)
+        f = np.where(f > t, np.nextafter(f, np.float32(-np.inf)), f)
+        return "threshold=" + " ".join(repr(float(v)) for v in f)
+    head, blocks, tail = _parts(booster.model_to_string())
+    return _joined(head, [_THRESHOLDS.sub(floor, b) for b in blocks], tail)
 
 
 def check(merged, boosters, X, tol=1e-6):

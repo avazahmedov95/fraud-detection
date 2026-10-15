@@ -7,7 +7,7 @@ GEN_DIR = data-generator
 -include .env
 export
 
-.PHONY: help up down clean ps logs topics generate produce produce-stream no-active-job fresh-taskmanager export-model seed-confirmed retrain promote-model serve-prep submit-job resume-job sink-logs verify-audit query-scored
+.PHONY: help up down clean ps logs topics generate produce produce-stream no-active-job fresh-taskmanager export-model seed-confirmed retrain promote-model cancel-job serve-prep submit-job resume-job sink-logs verify-audit query-scored
 
 help: ## show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -53,9 +53,19 @@ retrain: ## a new model from the logged decisions and people's verdicts, against
 # (ml/second_look.py); until then it stays off under the new cut-off.
 promote-model: ## serve the retrained model (after reading retrain's comparison)
 	test -f ml/models/candidate/model.joblib
-	cp ml/models/candidate/* ml/models/
-	$(MAKE) export-model resume-job
+	cd ml/models/candidate && cp model.joblib thresholds.json feature_names.json ..
+	cd ml && python train.py --served
+	$(MAKE) export-model cancel-job resume-job
 	$(COMPOSE) restart sink-writer second-look demo
+
+# The job loads the model when it starts: cancel it (its last checkpoint is kept) so
+# resume-job brings it back with a new one.
+cancel-job:
+	@for j in $$(curl -s --max-time 10 http://localhost:8081/jobs/overview | python -c \
+	  "import json, sys; print(*(j['jid'] for j in json.load(sys.stdin)['jobs'] if j['state'] not in ('FAILED', 'CANCELED', 'FINISHED')))"); do \
+	  curl -s -X PATCH "http://localhost:8081/jobs/$$j?mode=cancel" > /dev/null; \
+	  until curl -s --max-time 10 "http://localhost:8081/jobs/$$j" | grep -q '"state":"CANCELED"'; do sleep 1; done; \
+	done
 
 serve-prep: ## copy the trained ONNX model, its cutoff and the second look's band next to the Flink job
 	cp ml/models/model.onnx ml/models/thresholds.json stream-processor/
