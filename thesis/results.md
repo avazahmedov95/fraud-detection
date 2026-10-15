@@ -289,3 +289,5 @@ model, which also uses PaySim's own transaction type.
   datasets.
 - The decisions of the speed runs are kept in `_warehouse_backup_2026-10-06/`
   (not in git). The last hash of its audit chain is recorded in commit `b2062f2`.
+- The month test of 14-15 October was deleted from ClickHouse and Redis after it was
+  read; its figures are kept only here.
