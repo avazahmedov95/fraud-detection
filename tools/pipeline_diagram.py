@@ -140,7 +140,7 @@ trn = box(0, 42, 32, 18, "Training (ml/)", "uses the same feature code;\ntrains 
 arrow(right(trn), (56, 62), dashed=True, color=MUTED, label="model.onnx", label_dy=0.8)
 
 ax.text(0, 1.2, "Times are averages over 1,000 transfers at 10 a second, 33 ms together. 99 of 100 decisions "
-                "take under 0.08 s (the target is 0.3 s), and stay under 0.3 s up to 150 transfers a second. "
+                "take under 0.08 s (the target is 0.3 s), and stay under 0.3 s up to 200 a second (15 October). "
                 "A transfer just under the cut-off waits about 0.3 s more for the second look.",
         fontsize=9, color=MUTED, family=FAMILY, va="bottom")
 

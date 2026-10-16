@@ -26,7 +26,8 @@ class ClickHouseWriter:
         self._rows = {table: [] for table in COLUMNS}
         self._lost = dict.fromkeys(COLUMNS, 0)
         self._explainer = Explainer()
-        # The audit chain follows arrival order, not storage order.
+        # The stored chain's tail: the audit records are linked onto it at the insert,
+        # so a failed insert leaves no gap, and it moves only when they are stored.
         self._seq, self._prev_hash = 0, integrity.GENESIS
         self._last_attempt = 0.0
 
@@ -58,10 +59,7 @@ class ClickHouseWriter:
     def add(self, event: dict):
         self._rows["transactions_scored"].append(R.scored_row(event))
         if self._audit_all or R.is_alert(event):
-            core = R.audit_core(event)
-            rh = integrity.record_hash(self._prev_hash, self._seq, R.audit_signed_values(core))
-            self._rows["audit_log"].append(core + [self._seq, self._prev_hash, rh])
-            self._seq, self._prev_hash = self._seq + 1, rh
+            self._rows["audit_log"].append(R.audit_core(event))
         if R.is_alert(event):
             status, lines = self._explainer.explain(event.get("features"), event.get("ml_score"))
             self._rows["cases"].append(CASE.case_row(event, lines, status))
@@ -76,6 +74,15 @@ class ClickHouseWriter:
             rows.clear()
         log.error("ClickHouse %s - rows lost this run: %s", reason, self._lost)
 
+    def _chained(self, cores):
+        """The pending audit records linked onto the stored chain's tail."""
+        rows, seq, prev = [], self._seq, self._prev_hash
+        for core in cores:
+            rh = integrity.record_hash(prev, seq, R.audit_signed_values(core))
+            rows.append(core + [seq, prev, rh])
+            seq, prev = seq + 1, rh
+        return rows
+
     def flush(self):
         reconnected = self._client is not None or (
             time.time() - self._last_attempt >= RECONNECT_INTERVAL_S and self.open())
@@ -83,13 +90,18 @@ class ClickHouseWriter:
             if any(self._rows.values()):
                 self._lose("down")
             return
+        audit = self._chained(self._rows["audit_log"])
         try:
             for table, rows in self._rows.items():
+                rows = audit if table == "audit_log" else rows
                 if rows:
                     self._client.insert(f"{self._db}.{table}", rows, column_names=COLUMNS[table])
+                    if table == "audit_log":
+                        self._seq, self._prev_hash = rows[-1][-3] + 1, rows[-1][-1]
+                    self._rows[table].clear()
         except Exception as exc:                       # noqa: BLE001
             self._lose(f"insert failed: {exc}")
-            self._client = None                        # the next flush reconnects
+            self._client = None                        # the reconnect re-reads the tail
         for rows in self._rows.values():
             rows.clear()
 

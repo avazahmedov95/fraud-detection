@@ -75,10 +75,14 @@ The same way on 14 October, with the 28 features, on mains power, three copies a
 |---|---|---|---|---|---|---|
 | 28 features | 33 / 51 / 71 | 50 / 80 / 101 | 55 / 89 / 103 | 85 / 196 / 297 | 153 / 479 / 715 | 225 / 547 / 715 |
 
-The target now holds to 150 a second. The work is still about 4 ms a transfer: the
+The target then held to 150 a second. The work is still about 4 ms a transfer: the
 payee's side is read in one Redis round trip instead of three. The difference is in
 the wait, and the laptop ran other programs beside it. A torrent client on two
 cores made an earlier run slow at every step, the model included.
+
+On 15 October the job's checkpoints became unaligned and a silent sender is forgotten
+by a daily timer (`fraud_job.py`). In three repeats each, p99 was 128-173 ms at 150
+a second and 155-268 ms at 200: the target now holds to 200 (`thesis/results.md`).
 
 ## Run
 

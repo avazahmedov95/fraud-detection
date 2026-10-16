@@ -136,11 +136,13 @@ class ReceiverStore:
         return frozenset(c for c, hit in zip(cards, hits) if hit)
 
     def last_inbound(self, account, now):
-        """When this account was last paid, or None when that is not computed."""
+        """When this account was last paid up to `now`, or None when that is not
+        computed."""
         if not self._up() or not account or not CAP.enabled("counterparty_history"):
             return None
         try:
-            top = self._redis.zrevrange(f"cp:in:{account}", 0, 0, withscores=True)
+            top = self._redis.zrevrangebyscore(f"cp:in:{account}", now, "-inf", start=0, num=1,
+                                               withscores=True)
         except Exception as exc:                       # noqa: BLE001
             self._failed("last-inbound lookup", exc)
             return None

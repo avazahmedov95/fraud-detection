@@ -89,6 +89,51 @@ def test_a_hold_opens_a_case_with_its_reasons_and_a_release_none():
     assert (case["explanation_status"], case["explanation"]) == ("OK", ["amount: 9 000 000 UZS (+1.20)"])
 
 
+class _Store:
+    """A warehouse that keeps the audit records and can fail one insert."""
+    def __init__(self):
+        self.audit, self.fail = [], None
+
+    def insert(self, table, rows, column_names=None):
+        if self.fail == table:
+            self.fail = None
+            raise ConnectionError("gone")
+        if table.endswith("audit_log"):
+            self.audit += [dict(zip(column_names, r)) for r in rows]
+
+    def query(self, sql):
+        class _Result:
+            result_rows = ([(self.audit[-1]["seq"], self.audit[-1]["record_hash"])]
+                           if self.audit else [])
+        return _Result()
+
+    def close(self):
+        pass
+
+
+def test_a_failed_insert_leaves_the_stored_audit_chain_whole():
+    from verify_audit import verify
+    store, w = _Store(), _writer()
+    w._client = store
+
+    def reconnect():
+        w._client = store
+        w._resume_chain()
+        return True
+    w.open, w._last_attempt = reconnect, 0.0
+    for i in range(3):
+        w.add(dict(SCORED, transaction_id=f"a{i}"))
+    w.flush()
+    store.fail = "fraud.audit_log"
+    w.add(dict(SCORED, transaction_id="lost"))
+    w.flush()                                          # lost, and said so
+    for i in range(2):
+        w.add(dict(SCORED, transaction_id=f"b{i}"))
+    w.flush()
+    assert [r["seq"] for r in store.audit] == [0, 1, 2, 3, 4]
+    assert verify(store.audit) == []
+
+
 def test_rows_lost_to_a_down_warehouse_are_counted_aloud(caplog):
     w = _writer()
     w._client, w._last_attempt = None, 1e18           # down, and no reconnect due

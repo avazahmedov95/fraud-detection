@@ -103,16 +103,21 @@ def extract(event: dict, state, now: float, receiver_state=None,
     mean = state.mean_amt
     std = math.sqrt(state.m2_amt / n_hist) if n_hist > 0 else 0.0
 
+    # Only events at or before this one: a replay started earlier in time than the last
+    # one leaves later events in the state, which no window may count.
+    def past(window):
+        return [e for e in ev if 0 <= now - e[0] <= window]
+
     def win_count(window):                      # this transfer included
-        return sum(1 for e in ev if now - e[0] <= window) + 1
+        return len(past(window)) + 1
 
     band_low = C.STRUCTURING_BAND_LOW * C.STRUCTURING_THRESHOLD
-    sub = sum(1 for e in ev
-              if now - e[0] <= C.STRUCTURING_WINDOW_S and band_low <= e[1] < C.STRUCTURING_THRESHOLD)
+    sub = sum(1 for e in past(C.STRUCTURING_WINDOW_S)
+              if band_low <= e[1] < C.STRUCTURING_THRESHOLD)
     if band_low <= amount < C.STRUCTURING_THRESHOLD:
         sub += 1
 
-    distinct = {e[2] for e in ev if now - e[0] <= C.DISTINCT_PAYEE_WINDOW_S} | {payee}
+    distinct = {e[2] for e in past(C.DISTINCT_PAYEE_WINDOW_S)} | {payee}
 
     geo_is_anomaly = 0
     if state.region_counts:
@@ -123,15 +128,17 @@ def extract(event: dict, state, now: float, receiver_state=None,
     # For the IMPOSSIBLE_TRAVEL rule only, not the model.
     travel_kmh = 0.0
     travel_distance_km = 0.0
-    if state.last_region and region and region != state.last_region:
+    if state.last_region and region and region != state.last_region \
+            and now >= state.last_region_ts:
         d = G.region_distance_km(state.last_region, region)
         if d is not None:
             travel_distance_km = d
             travel_kmh = G.implied_speed_kmh(
                 state.last_region, region, now - state.last_region_ts)
 
-    secs_since_last = (now - ev[-1][0]) if ev else float(C.RECENT_RETENTION_S)
-    daily_sum = sum(e[1] for e in ev if now - e[0] <= C.DAILY_WINDOW_S) + amount
+    earlier = [e[0] for e in ev if e[0] <= now]
+    secs_since_last = (now - max(earlier)) if earlier else float(C.RECENT_RETENTION_S)
+    daily_sum = sum(e[1] for e in past(C.DAILY_WINDOW_S)) + amount
 
     amount_to_mean = (amount / mean) if mean > 0 else float(C.NEW_PAYEE_AMOUNT_FACTOR + 1)
     amount_z = ((amount - mean) / std) if std > 0 else 0.0
@@ -155,7 +162,7 @@ def extract(event: dict, state, now: float, receiver_state=None,
             if other == self_key:
                 continue
             age = now - t
-            if age <= C.LINK_WEEK_S:
+            if 0 <= age <= C.LINK_WEEK_S:
                 week += 1
                 if age <= C.LINK_DAY_S:
                     day += 1
@@ -171,7 +178,7 @@ def extract(event: dict, state, now: float, receiver_state=None,
     sender_payees_24h, sender_payees_7d = _windows(state.payee_times, payee)
     # The sender's payees paid for the first time within a day, and the money sent them.
     first = payee not in state.seen_payees
-    to_new = [e[1] for e in state.new_payees if now - e[0] <= C.LINK_DAY_S]
+    to_new = [e[1] for e in state.new_payees if 0 <= now - e[0] <= C.LINK_DAY_S]
     # Capped, never NaN: "never paid" and "Redis down" read alike.
     secs_since_sender_inbound = float(C.LINK_WEEK_S)
     if sender_inbound_ts:
@@ -245,7 +252,8 @@ def _within(entries, now: float, window: float) -> list:
     for e in reversed(entries):
         if now - e[0] > window:
             break
-        out.append(e)
+        if e[0] <= now:
+            out.append(e)
     return out
 
 
@@ -307,8 +315,8 @@ def update_state(state, event: dict, now: float) -> None:
         state.events.popleft()
     region = event.get("sender_region", "")
     state.region_counts[region] += 1
-    # Only a located event moves the origin of the next journey.
-    if region:
+    # Only a located event moves the origin of the next journey, and not back in time.
+    if region and now >= state.last_region_ts:
         state.last_region = region
         state.last_region_ts = now
     # Running mean and variance (Welford): the whole history in constant memory.

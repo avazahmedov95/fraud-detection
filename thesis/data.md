@@ -76,7 +76,7 @@ last 20%: the last six days, 100,000 transfers, 176 of them fraud.
 
 We run the same feature code on two public datasets (`validation/`). What a
 dataset does not have is switched off, not faked. These datasets have no call
-state, no region, no session timing and no analysts' decisions, so 18 of the 24
+state, no region, no session timing and no analysts' decisions, so 22 of the 28
 features remain.
 
 - **PaySim:** 6.36 million simulated mobile-money transactions over 31 days. We use

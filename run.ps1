@@ -295,17 +295,23 @@ switch ($Target.ToLower()) {
         if (-not (Test-Path "ml/models/candidate/model.joblib")) {
             throw "no candidate in ml/models/candidate: run .\run.ps1 retrain first"
         }
+        # Every step stops the promotion when it fails: on 15 October a failed export
+        # went on to restart the job with a model that did not match.
         foreach ($f in "model.joblib", "thresholds.json", "feature_names.json") {
             Copy-Item "ml/models/candidate/$f" "ml/models/" -Force
         }
-        Push-Location ml
-        try { python train.py --served } finally { Pop-Location }
-        & $PSCommandPath export-model
+        Invoke-Step "measuring it on the held-out days" {
+            Push-Location ml
+            try { python train.py --served } finally { Pop-Location }
+        }
+        Invoke-Step "exporting it" { & $PSCommandPath export-model }
         $tabpfn = Join-Path (Split-Path (Get-Location).Path) ".venv-models\Scripts\python.exe"
         if ((Test-Path $tabpfn) -and $DotEnv.TABPFN_CHECKPOINT) {
             $ckpt = (Resolve-Path $DotEnv.TABPFN_CHECKPOINT).Path
-            Push-Location ml
-            try { & $tabpfn second_look.py --cache models_matrix.npz --tabpfn-model $ckpt } finally { Pop-Location }
+            Invoke-Step "choosing the second look's band" {
+                Push-Location ml
+                try { & $tabpfn second_look.py --cache models_matrix.npz --tabpfn-model $ckpt } finally { Pop-Location }
+            }
         } else {
             Write-Host "The second look's band was not re-chosen (it needs ..\.venv-models and TABPFN_CHECKPOINT): the second look stays off under the new cut-off." -ForegroundColor Yellow
         }
@@ -316,7 +322,7 @@ switch ($Target.ToLower()) {
         }
         $deadline = (Get-Date).AddSeconds(60)
         while (@(Get-ActiveJobs).Count -gt 0 -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 1 }
-        & $PSCommandPath resume-job
+        Invoke-Step "restarting the job" { & $PSCommandPath resume-job }
         docker compose restart sink-writer second-look demo
     }
 

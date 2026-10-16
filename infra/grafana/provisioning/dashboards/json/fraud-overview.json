@@ -103,7 +103,7 @@
             "uid": "clickhouse"
           },
           "editorType": "sql",
-          "rawSql": "SELECT countIf(decision = 'REVIEW') AS value\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY scored_at DESC LIMIT 1 BY transaction_id)",
+          "rawSql": "SELECT countIf(decision = 'REVIEW') AS value\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY decision = 'SECOND_LOOK', scored_at DESC LIMIT 1 BY transaction_id)",
           "queryType": "table",
           "format": 1,
           "refId": "A"
@@ -149,7 +149,7 @@
             "uid": "clickhouse"
           },
           "editorType": "sql",
-          "rawSql": "SELECT 100.0 * countIf(decision = 'REVIEW') / count() AS value\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY scored_at DESC LIMIT 1 BY transaction_id)",
+          "rawSql": "SELECT 100.0 * countIf(decision = 'REVIEW') / count() AS value\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY decision = 'SECOND_LOOK', scored_at DESC LIMIT 1 BY transaction_id)",
           "queryType": "table",
           "format": 1,
           "refId": "A"
@@ -410,7 +410,7 @@
             "uid": "clickhouse"
           },
           "editorType": "sql",
-          "rawSql": "SELECT part, round(ms, 2) AS ms\nFROM (SELECT avg(stage_kafka_ms) AS k, avg(stage_handoff_ms) AS h, avg(stage_state_ms) AS s,\n             avg(stage_redis_ms) AS r, avg(stage_rules_ms) AS f, avg(stage_model_ms) AS m,\n             avg(stage_decode_ms + stage_decide_ms) AS d\n      FROM fraud.transactions_scored\n      WHERE $__timeFilter(scored_at_job) AND stage_decide_ms IS NOT NULL)\nARRAY JOIN ['Kafka: into the queue', 'Kafka to Flink: waiting for a batch',\n            'Flink: the sender''s history', 'Redis: the payee''s side',\n            'Flink: features and rules', 'Flink: the model (ONNX)',\n            'Flink: reading and deciding'] AS part,\n           [k, h, s, r, f, m, d] AS ms",
+          "rawSql": "SELECT part, round(ms, 2) AS ms\nFROM (SELECT avg(stage_kafka_ms) AS k, avg(stage_handoff_ms) AS h, avg(stage_state_ms) AS s,\n             avg(stage_redis_ms) AS r, avg(stage_rules_ms) AS f, avg(stage_model_ms) AS m,\n             avg(stage_decode_ms + stage_decide_ms) AS d\n      FROM fraud.transactions_scored\n      WHERE $__timeFilter(scored_at_job) AND stage_decide_ms IS NOT NULL)\nARRAY JOIN ['Kafka: into the queue', 'Kafka to Flink: waiting for a batch',\n            'Flink: the sender''s history', 'Redis: the payee''s side',\n            'Flink: features, rules, saving the history', 'Flink: the model (ONNX)',\n            'Flink: reading and deciding'] AS part,\n           [k, h, s, r, f, m, d] AS ms",
           "queryType": "table",
           "format": 1,
           "refId": "A"
@@ -499,7 +499,7 @@
             "uid": "clickhouse"
           },
           "editorType": "sql",
-          "rawSql": "SELECT $__timeInterval(scored_at_job) AS time, count() AS checked,\n       countIf(decision = 'REVIEW') AS held\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY scored_at DESC LIMIT 1 BY transaction_id)\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT $__timeInterval(scored_at_job) AS time, count() AS checked,\n       countIf(decision = 'REVIEW') AS held\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY decision = 'SECOND_LOOK', scored_at DESC LIMIT 1 BY transaction_id)\nGROUP BY time\nORDER BY time",
           "queryType": "timeseries",
           "format": 0,
           "refId": "A"
@@ -569,7 +569,7 @@
             "uid": "clickhouse"
           },
           "editorType": "sql",
-          "rawSql": "SELECT multiIf(startsWith(model_version, 'second-look'), 'the second look (TabPFN)',\n        predicted_type = '', 'the model, no fraud type named',\n        concat('the rules: ', transform(toString(predicted_type),\n               ['APP', 'ATO', 'MULE', 'STRUCTURING'],\n               ['phone scam', 'account takeover', 'money mule', 'split amounts'],\n               toString(predicted_type)))) AS held_by, count() AS held\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY scored_at DESC LIMIT 1 BY transaction_id)\nWHERE decision = 'REVIEW'\nGROUP BY held_by\nORDER BY held DESC",
+          "rawSql": "SELECT multiIf(startsWith(model_version, 'second-look'), 'the second look (TabPFN)',\n        predicted_type = '', 'the model, no fraud type named',\n        concat('the rules: ', transform(toString(predicted_type),\n               ['APP', 'ATO', 'MULE', 'STRUCTURING'],\n               ['phone scam', 'account takeover', 'money mule', 'split amounts'],\n               toString(predicted_type)))) AS held_by, count() AS held\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY decision = 'SECOND_LOOK', scored_at DESC LIMIT 1 BY transaction_id)\nWHERE decision = 'REVIEW'\nGROUP BY held_by\nORDER BY held DESC",
           "queryType": "table",
           "format": 1,
           "refId": "A"
@@ -1094,7 +1094,7 @@
             "uid": "clickhouse"
           },
           "editorType": "sql",
-          "rawSql": "SELECT countIf(decision = 'REVIEW' AND startsWith(model_version, 'second-look')) AS value\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY scored_at DESC LIMIT 1 BY transaction_id)",
+          "rawSql": "SELECT countIf(decision = 'REVIEW' AND startsWith(model_version, 'second-look')) AS value\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY decision = 'SECOND_LOOK', scored_at DESC LIMIT 1 BY transaction_id)",
           "queryType": "table",
           "format": 1,
           "refId": "A"
@@ -1141,7 +1141,7 @@
             "uid": "clickhouse"
           },
           "editorType": "sql",
-          "rawSql": "SELECT countIf(endsWith(model_version, ':unscored')) AS value\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY scored_at DESC LIMIT 1 BY transaction_id)",
+          "rawSql": "SELECT countIf(endsWith(model_version, ':unscored')) AS value\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY decision = 'SECOND_LOOK', scored_at DESC LIMIT 1 BY transaction_id)",
           "queryType": "table",
           "format": 1,
           "refId": "A"

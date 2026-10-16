@@ -31,9 +31,11 @@ class FakeRedis:
                                           key=lambda kv: kv[1]) if lo <= s <= hi]
         return rows if withscores else [m for m, _ in rows]
 
-    def zrevrange(self, key, start, stop, withscores=False):
-        rows = sorted(self.sets.get(key, {}).items(), key=lambda kv: -kv[1])
-        rows = rows[start:stop + 1] if stop >= 0 else rows[start:]
+    def zrevrangebyscore(self, key, hi, lo, start=0, num=None, withscores=False):
+        lo = float("-inf") if lo == "-inf" else lo
+        rows = sorted(((m, s) for m, s in self.sets.get(key, {}).items() if lo <= s <= hi),
+                      key=lambda kv: -kv[1])[start:]
+        rows = rows if num is None else rows[:num]
         return rows if withscores else [m for m, _ in rows]
 
     def close(self):
@@ -218,6 +220,14 @@ def test_last_inbound_is_the_newest_payment_to_that_account(store, counters_on):
     account = F.payee_key(_ev("t1", receiver="MULE"))
     assert store.last_inbound(account, 1500) == 1400.0
     assert store.last_inbound("never-paid", 1500) is None
+
+
+def test_last_inbound_ignores_a_payment_after_now(store, counters_on):
+    """A replay started earlier in time finds later payments filed; they are not
+    the last one yet."""
+    store.record(_ev("t1", sender="S1", receiver="MULE"), 1000)
+    store.record(_ev("t2", sender="S2", receiver="MULE"), 9000)
+    assert store.last_inbound(F.payee_key(_ev("t1", receiver="MULE")), 1500) == 1000.0
 
 
 def test_nothing_is_written_while_the_capability_is_off(store):

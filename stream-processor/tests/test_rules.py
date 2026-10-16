@@ -45,6 +45,21 @@ def test_velocity_burst_is_flagged():
     assert "VELOCITY" in res["rule_hits"]
 
 
+def test_later_events_in_the_state_count_in_no_window():
+    """A replay started earlier in time than the last one: the later events left in
+    the state are not "the last ten minutes" of an earlier transfer."""
+    st = SenderState()
+    for i in range(7):
+        evaluate(_ev(9_000_000, payee=f"p{i}"), st, now=100_000 + i)
+    res = evaluate(_ev(200_000, payee="friend"), st, now=1000)
+    names = list(__import__("features").FEATURE_NAMES)
+    f = dict(zip(names, res["features"]))
+    assert (f["vel_10m"], f["distinct_payees_10m"], f["sub_threshold_1h"]) == (1, 1, 0)
+    assert f["daily_sum_ratio"] == 200_000 / C.LIMIT_DAILY
+    assert f["secs_since_last"] == C.RECENT_RETENTION_S
+    assert not {"VELOCITY", "DAILY_LIMIT_BREACH", "IMPOSSIBLE_TRAVEL"} & set(res["rule_hits"])
+
+
 def test_structuring_is_flagged():
     st = SenderState()
     just_under = int(0.95 * C.STRUCTURING_THRESHOLD)

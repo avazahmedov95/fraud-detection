@@ -1,5 +1,6 @@
 """Sink-writer service: transactions.scored -> ClickHouse: every decision, its audit
-record, and a case for each hold. Batched by size and time."""
+record, and a case for each hold. Batched by size and time; the offsets are committed
+after each flush, so a crash reads again what was not stored."""
 
 import json
 import logging
@@ -27,6 +28,13 @@ signal.signal(signal.SIGINT, _stop)
 signal.signal(signal.SIGTERM, _stop)
 
 
+def _commit(consumer):
+    try:
+        consumer.commit()
+    except Exception as exc:                           # noqa: BLE001 - read again at worst
+        log.warning("offset commit failed, these decisions may be stored twice: %s", exc)
+
+
 def main():
     ch = ClickHouseWriter(C.CH_HOST, C.CH_PORT, C.CH_USER, C.CH_PASSWORD, C.CH_DB, C.AUDIT_ALL)
     ch.open()
@@ -35,7 +43,7 @@ def main():
         C.TOPIC_SCORED,
         bootstrap_servers=C.KAFKA_BOOTSTRAP,
         group_id=C.CONSUMER_GROUP,
-        enable_auto_commit=True,
+        enable_auto_commit=False,
         auto_offset_reset="earliest",
         value_deserializer=lambda v: json.loads(v.decode("utf-8")),
         consumer_timeout_ms=1000,
@@ -54,15 +62,18 @@ def main():
             total += 1
             if ch.pending() >= C.BATCH_SIZE:
                 ch.flush()
+                _commit(consumer)
                 last_flush = time.time()
                 log.info("flushed batch (total processed: %d)", total)
             if not _running:
                 break
         if (time.time() - last_flush >= C.FLUSH_INTERVAL_S) or not received:
             ch.flush()
+            _commit(consumer)
             last_flush = time.time()
 
     ch.close()
+    _commit(consumer)
     consumer.close()
     log.info("sink-writer stopped (processed %d events)", total)
 

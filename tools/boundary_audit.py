@@ -386,8 +386,9 @@ def b_receiver_store_round_trips():
             rows = sorted(written.get(key, {}).items(), key=lambda kv: kv[1])
             return rows if withscores else [m for m, _ in rows]
 
-        def zrevrange(self, key, start, stop, withscores=False):
-            rows = sorted(written.get(key, {}).items(), key=lambda kv: -kv[1])
+        def zrevrangebyscore(self, key, hi, lo, start=0, num=None, withscores=False):
+            rows = sorted(((m, s) for m, s in written.get(key, {}).items() if s <= hi),
+                          key=lambda kv: -kv[1])[start:][:num]
             return rows if withscores else [m for m, _ in rows]
 
     store = RS.ReceiverStore("h", 1)

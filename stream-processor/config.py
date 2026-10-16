@@ -101,7 +101,7 @@ MANDATORY_REVIEW_RULES = ("STRUCTURING", "DAILY_LIMIT_BREACH")
 
 # --- Latency (stream-processor/README.md, Speed) ----------------------------
 # Copies side by side: one Python worker and one task slot each. One copy queued
-# at 100 transfers a second; three hold p99 under 300 ms to 150 (README, Speed).
+# at 100 transfers a second; three hold p99 under 300 ms to 200 (README, Speed).
 JOB_PARALLELISM = int(os.getenv("JOB_PARALLELISM", "3"))
 # How long PyFlink gathers records before handing them to Python.
 PY_BUNDLE_TIME_MS = int(os.getenv("PY_BUNDLE_TIME_MS", "20"))

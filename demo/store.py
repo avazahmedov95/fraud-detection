@@ -107,9 +107,11 @@ class CaseStore:
             return self.resolve(transaction_id, "CONFIRMED_FRAUD", by, at_epoch)
         if not self._ensure():
             return False
-        # The latest row: a transfer sent for the second look has its answer after it.
+        # The final row: the second look's answer, not the job's SECOND_LOOK, which is
+        # often stored in the same insert.
         q = (f"SELECT {', '.join(CASE.REPORT_SOURCE)} FROM {self._db}.transactions_scored "
-             f"WHERE transaction_id = %(t)s ORDER BY scored_at DESC LIMIT 1")
+             f"WHERE transaction_id = %(t)s ORDER BY decision = 'SECOND_LOOK', scored_at DESC "
+             f"LIMIT 1")
         rows = self._client.query(q, parameters={"t": transaction_id}).result_rows
         if not rows:
             return False

@@ -2,8 +2,9 @@
 
 Our model on two public datasets, through the same feature code the live job runs.
 Each adapter prints what the file holds and the model's recall, precision and F1 on
-the test rows. The model is trained the way `ml/train.py` trains it, with the
-cut-off where F1 is highest on the rows just before the test. What a dataset does
+the test rows. The model is one LightGBM fit with `ml/train.py`'s settings (not its
+five-fit committee), with the cut-off where F1 is highest on the rows just before the
+test. What a dataset does
 not have is switched off rather than faked (`harness.capability_profile`): no call
 state, no region, no session timing, no analysts' verdicts, so 22 of the 28
 features remain. On 7 October the analysts' verdicts were also played out from IBM

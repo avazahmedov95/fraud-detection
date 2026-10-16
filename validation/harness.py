@@ -108,9 +108,10 @@ def cached_matrix(cache, build):
 
 
 def fit_and_score(X, y, fit, cut, seed=0):
-    """train.py's recipe: fitted on [:fit], the F1-peak cut-off chosen on [fit:cut],
-    the rows from `cut` on scored at it. The ALERT_BUDGET reading needs no cut-off,
-    so its model learns on all of [:cut], as the published PaySim model did."""
+    """train.py's settings, one fit rather than its committee: fitted on [:fit], the
+    F1-peak cut-off chosen on [fit:cut], the rows from `cut` on scored at it. The
+    ALERT_BUDGET reading needs no cut-off, so its model learns on all of [:cut], as
+    the published PaySim model did."""
     def fitted(rows):
         model = T.make_model(T.class_weight(int(y[:rows].sum()), int((y[:rows] == 0).sum())),
                              random_state=seed)
