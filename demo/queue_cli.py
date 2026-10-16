@@ -27,8 +27,8 @@ def _store():
     return s
 
 
-#: Case ids are transaction ids: 36-character UUIDs.
-_ID_W = 38
+#: Case ids are transaction ids: UUIDs, "replay-" before an episode's.
+_ID_W = 45
 
 
 def _duration(s):

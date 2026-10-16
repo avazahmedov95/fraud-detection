@@ -45,6 +45,7 @@ EPISODE_HOURS = 6       # how far around the picked row the episode's rows are s
 KINDS = ("NORMAL", "APP", "ATO", "MULE", "STRUCTURING")
 LIVE_WINDOW = 1000      # how many of the latest decisions the time figures cover
 PAGE = 20               # rows the stream and the queue show before "show more"
+REPLAY_PREFIX = "replay-"   # an episode's ids: ml/retrain.py leaves them out
 
 KAFKA = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
 FLINK = os.getenv("FLINK_REST", "http://jobmanager:8081")
@@ -371,7 +372,7 @@ def replay_messages(items, now, rng=random):
                 pinfls[card] = _digits(rng, 14)
             r["sender_card"], r["sender_pinfl"] = cards[card], pinfls[card]
         offset = _epoch(row) - last
-        r["transaction_id"] = str(uuid.uuid4())
+        r["transaction_id"] = f"{REPLAY_PREFIX}{uuid.uuid4()}"
         r["event_time"] = _utc_iso(now + offset)
         out.append({"role": role, "offset_s": offset,
                     "kind": row["label_fraud_type"] if _is_fraud(row) else "NONE",

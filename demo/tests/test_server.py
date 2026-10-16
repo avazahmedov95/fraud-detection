@@ -72,6 +72,7 @@ def test_replay_gives_the_sender_a_new_card_and_keeps_everything_else(tmp_path):
     assert msgs[-1]["receiver_card"] == SCAMMER   # the confirmed accounts are kept by card
     assert len({m["transaction_id"] for m in msgs}) == len(msgs)
     assert not {m["transaction_id"] for m in msgs} & {row["transaction_id"] for row, _ in items}
+    assert all(m["transaction_id"].startswith(S.REPLAY_PREFIX) for m in msgs)
     assert msgs[-1]["event_time"] == S._utc_iso(now)
     gap = (datetime.fromisoformat(msgs[1]["event_time"])
            - datetime.fromisoformat(msgs[0]["event_time"])).total_seconds()

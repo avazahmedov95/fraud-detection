@@ -90,13 +90,14 @@ Every decision is stored with its feature values (`features` in
 2. It trains the same five-model committee on the rows the current model was fitted
    on plus the logged decisions, where fraud means a person confirmed it. The rows
    that set the cut-off stay unseen: after a promotion the second look's band is
-   chosen on them.
+   chosen on them. The demo's replays of the held-out days are left out: a promoted
+   model is measured on those days.
 3. It sets the new model's cut-off so that it raises as many alerts as the current
    one.
-4. It compares the two by F1 on decisions at least a week old, when clients have had
-   time to report missed frauds: the latest fifth of those, which neither model
-   learned from. On newer decisions the known frauds would be mostly the ones the
-   current model held, and the comparison would favour it.
+4. It compares the two by F1 on decisions made at least a week ago, when clients
+   have had time to report missed frauds: the latest fifth of those, which neither
+   model learned from. On newer decisions the known frauds would be mostly the ones
+   the current model held, and the comparison would favour it.
 
 It saves the new model in `models/candidate/` and changes nothing else. Each run's
 outcome goes to `models/retrain_status.json`, which the demo shows, and to

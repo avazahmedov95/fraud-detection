@@ -264,6 +264,15 @@ def b_retrain_run_matches_the_schema():
     return None
 
 
+def b_demo_replays_are_left_out_of_retraining():
+    """The demo's episodes replay the held-out days under new ids, which retrain.py
+    must recognise, or a promoted model is measured on what it learned."""
+    prefix = pkg("ml", "retrain").REPLAY_PREFIX
+    if f'REPLAY_PREFIX = "{prefix}"' not in _read("demo", "server.py"):
+        return f"demo/server.py does not mark its episodes with {prefix!r}"
+    return None
+
+
 def _job_import_closure():
     """Every stream-processor module fraud_job.py reaches, transitively (to a fixed
     point, so a module three hops down is not missed)."""
@@ -579,6 +588,7 @@ CHECKS = [
     ("scored_row -> ClickHouse 01-schema", b_scored_row_matches_the_schema),
     ("case_row -> ClickHouse 02-cases", b_case_row_matches_the_schema),
     ("retrain run -> ClickHouse 03-retrain", b_retrain_run_matches_the_schema),
+    ("demo episode -> what retraining leaves out", b_demo_replays_are_left_out_of_retraining),
     ("fraud_job imports -> run.ps1 AND Makefile", b_job_modules_cover_every_import),
     ("config artefacts -> run.ps1 serve-prep", b_serve_prep_ships_every_artefact),
     ("no data path derived from __file__", b_no_artefact_path_derived_from_file),

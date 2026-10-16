@@ -19,7 +19,8 @@ buttons send JSON, which a page on another site cannot send here.
 Tabs:
 
 - **Desk** - a live stream of decisions, real fraud cases from the part of the data
-  the model never saw sent through the system, the held transfers to block or
+  the model never saw sent through the system (under ids that begin `replay-`,
+  which retraining leaves out), the held transfers to block or
   release, the verdicts given, each of which can be changed, and on an allowed
   transfer the client's report that it was fraud.
 - **About the project** - every component, the path of one real decision with its

@@ -38,8 +38,9 @@
 6. **Retraining** (`ml/retrain.py`, the retrainer service). Every week it trains a new
    model on the logged decisions, with the labels the analysts and clients gave. It
    sets the new model's alert level for as many alerts as the current one and
-   compares the two by F1 on decisions at least a week old, when clients' reports
-   have come in, and reports which features have changed since training (drift).
+   compares the two by F1 on decisions made at least a week ago, when clients'
+   reports have come in, and reports which features have changed since training
+   (drift). The demo's replays of the test days are left out of the training.
    Each run shows in Grafana; a person reads it there and decides whether to switch
    the new model on.
 

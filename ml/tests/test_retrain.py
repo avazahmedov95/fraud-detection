@@ -35,6 +35,12 @@ def test_the_logged_rows_split_as_train_py_splits_its_data():
     assert R.split(1000) == (640, 800)
 
 
+def test_replays_of_the_held_out_days_are_left_out():
+    """A model that learned them would be measured on what it learned."""
+    ids = ["live-1", "t_held", R.REPLAY_PREFIX + "abc", "live-2"]
+    assert R.replays(ids, {"t_held"}).tolist() == [False, True, True, False]
+
+
 def test_only_decisions_a_week_old_are_compared():
     """Newer ones know mostly the frauds the served model held: clients report later."""
     day = 86_400

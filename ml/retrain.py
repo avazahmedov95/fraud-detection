@@ -32,6 +32,10 @@ MAX_ROWS = 1_000_000
 #: A client reports a missed fraud within about a week. Newer decisions know mostly
 #: the frauds the served model held, which would favour it.
 REPORT_DELAY_S = 7 * 86400
+#: The ids of the demo's episodes (demo/server.py). They and its background replay,
+#: which sends the held-out days' own ids, replay the days a promoted model is
+#: measured on, so they are left out.
+REPLAY_PREFIX = "replay-"
 
 
 def warehouse():
@@ -45,11 +49,12 @@ def warehouse():
 
 def logged(client):
     """The newest decisions with a whole feature vector, one per transfer, in the
-    job's order, labelled by what people called fraud, with their event times."""
+    job's order: their ids, features, labels (what people called fraud) and the
+    times they were decided."""
     n = len(D.FEATURE_NAMES)
     rows = client.query(
-        "SELECT transaction_id, features, toUnixTimestamp(event_time) FROM ("
-        "SELECT transaction_id, features, event_time, scored_at_job FROM transactions_scored "
+        "SELECT transaction_id, features, toUnixTimestamp(scored_at_job) FROM ("
+        "SELECT transaction_id, features, scored_at_job FROM transactions_scored "
         "WHERE length(features) = %(n)s "
         "ORDER BY scored_at_job DESC LIMIT 1 BY transaction_id LIMIT %(cap)s) "
         "ORDER BY scored_at_job", parameters={"n": n, "cap": MAX_ROWS}).result_rows
@@ -58,11 +63,24 @@ def logged(client):
         "WHERE disposition = 'CONFIRMED_FRAUD'").result_rows}
     X = np.array([r[1] for r in rows], dtype="float32").reshape(-1, n)
     y = np.array([r[0] in fraud for r in rows], dtype="int8")
-    return X, y, np.array([r[2] for r in rows], dtype="int64")
+    return [r[0] for r in rows], X, y, np.array([r[2] for r in rows], dtype="int64")
+
+
+def held_out_ids(csv=T.CSV):
+    """The ids of the dataset's held-out days, ordered as train.py orders them."""
+    import pandas as pd
+    df = pd.read_csv(csv, usecols=["transaction_id", "event_time"]).sort_values("event_time")
+    return set(df["transaction_id"].iloc[T.cut_index(len(df)):])
+
+
+def replays(ids, held_out):
+    """Which logged decisions replay the held-out days."""
+    return np.array([i.startswith(REPLAY_PREFIX) or i in held_out for i in ids], dtype=bool)
 
 
 def settled(t):
-    """The decisions at least REPORT_DELAY_S older than the newest one."""
+    """The decisions made at least REPORT_DELAY_S before the newest one, by the clock
+    they were decided on: clients report in real time."""
     return t <= t.max() - REPORT_DELAY_S
 
 
@@ -120,11 +138,15 @@ def run(cache):
     Xh, yh = D.cached_matrix(T.CSV, cache)
     # The rows the served model was fitted and tuned on; its test slice is left out.
     Xh, yh = Xh[:T.cut_index(len(yh))], yh[:T.cut_index(len(yh))]
-    X, y, t = logged(warehouse())
+    ids, X, y, t = logged(warehouse())
+    replayed = replays(ids, held_out_ids())
+    X, y, t = X[~replayed], y[~replayed], t[~replayed]
     fit, cut = split(len(y))
     status = {"logged": int(len(y)), "known_fraud": int(y.sum()),
+              "replays_left_out": int(replayed.sum()),
               "needed": {"rows": MIN_DRIFT_ROWS, "fraud": MIN_FRAUD}}
-    print(f"logged decisions: {len(y):,}, {int(y.sum())} of them called fraud by people")
+    print(f"logged decisions: {len(y):,}, {int(y.sum())} of them called fraud by people; "
+          f"{int(replayed.sum()):,} replays of the held-out days left out")
     if len(y) - fit < MIN_DRIFT_ROWS:
         print(f"too few to read drift or compare ({len(y) - fit} recent of the "
               f"{MIN_DRIFT_ROWS} needed): keep the served model")
