@@ -1,5 +1,6 @@
 """Batched ClickHouse writer: every decision, its audit record, and a case for each
-hold. Fails open, but every discarded row is logged with a running total."""
+hold. While ClickHouse is down it keeps the batch for the next try, so a hold never
+loses its case; only rows a working ClickHouse refuses are dropped, and counted."""
 
 import logging
 import time
@@ -36,25 +37,24 @@ class ClickHouseWriter:
         try:
             import clickhouse_connect
             self._client = clickhouse_connect.get_client(**self._cfg)
-            self._client.ping()
+            if not self._client.ping():
+                raise ConnectionError("no answer to ping")
+            self._resume_chain()
             log.info("ClickHouse connected (%s:%s/%s)",
                      self._cfg["host"], self._cfg["port"], self._db)
-            self._resume_chain()
         except Exception as exc:                       # noqa: BLE001
             log.warning("ClickHouse unavailable: %s", exc)
             self._client = None
         return self._client is not None
 
     def _resume_chain(self):
-        """Continue the audit chain across restarts (one writer: one chain)."""
-        try:
-            rows = self._client.query(f"SELECT seq, record_hash FROM {self._db}.audit_log "
-                                      f"ORDER BY seq DESC LIMIT 1").result_rows
-            if rows:
-                self._seq, self._prev_hash = int(rows[0][0]) + 1, rows[0][1]
-                log.info("audit chain resumed from seq=%d", rows[0][0])
-        except Exception as exc:                       # noqa: BLE001
-            log.warning("could not resume the audit chain, starting fresh: %s", exc)
+        """Continue the stored audit chain. Raises when its tail cannot be read, so the
+        writer never starts a second chain beside it."""
+        rows = self._client.query(f"SELECT seq, record_hash FROM {self._db}.audit_log "
+                                  f"ORDER BY seq DESC LIMIT 1").result_rows
+        if rows:
+            self._seq, self._prev_hash = int(rows[0][0]) + 1, rows[0][1]
+            log.info("audit chain resumed from seq=%d", rows[0][0])
 
     def add(self, event: dict):
         self._rows["transactions_scored"].append(R.scored_row(event))
@@ -65,14 +65,20 @@ class ClickHouseWriter:
             self._rows["cases"].append(CASE.case_row(event, lines, status))
 
     def pending(self) -> int:
-        return len(self._rows["transactions_scored"])
+        return max(len(rows) for rows in self._rows.values())
 
     def _lose(self, reason):
-        """Drop the buffer, never quietly: Kafka has moved on and will not redeliver."""
+        """Drop the buffer, never quietly."""
         for table, rows in self._rows.items():
             self._lost[table] += len(rows)
             rows.clear()
         log.error("ClickHouse %s - rows lost this run: %s", reason, self._lost)
+
+    def _answers(self):
+        try:
+            return bool(self._client.ping())
+        except Exception:                              # noqa: BLE001
+            return False
 
     def _chained(self, cores):
         """The pending audit records linked onto the stored chain's tail."""
@@ -83,13 +89,14 @@ class ClickHouseWriter:
             seq, prev = seq + 1, rh
         return rows
 
-    def flush(self):
-        reconnected = self._client is not None or (
-            time.time() - self._last_attempt >= RECONNECT_INTERVAL_S and self.open())
-        if not reconnected:
-            if any(self._rows.values()):
-                self._lose("down")
-            return
+    def flush(self) -> bool:
+        """Store what is pending. False while ClickHouse is down: the rows not yet
+        stored stay for the next try."""
+        if not any(self._rows.values()):
+            return True
+        if self._client is None and (time.time() - self._last_attempt < RECONNECT_INTERVAL_S
+                                     or not self.open()):
+            return False
         audit = self._chained(self._rows["audit_log"])
         try:
             for table, rows in self._rows.items():
@@ -100,14 +107,19 @@ class ClickHouseWriter:
                         self._seq, self._prev_hash = rows[-1][-3] + 1, rows[-1][-1]
                     self._rows[table].clear()
         except Exception as exc:                       # noqa: BLE001
-            self._lose(f"insert failed: {exc}")
+            if self._answers():
+                self._lose(f"refused the rows: {exc}")
+                return True
+            log.warning("ClickHouse down, %d decisions kept for the next try: %s",
+                        self.pending(), exc)
             self._client = None                        # the reconnect re-reads the tail
-        for rows in self._rows.values():
-            rows.clear()
+            return False
+        return True
 
-    def close(self):
-        self.flush()
+    def close(self) -> bool:
+        stored = self.flush()
         if any(self._lost.values()):
             log.error("sink stopping having LOST rows: %s", self._lost)
         if self._client is not None:
             self._client.close()
+        return stored

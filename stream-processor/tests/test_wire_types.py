@@ -71,7 +71,7 @@ def test_a_wire_shaped_event_extracts_like_a_typed_one():
     {"amount_uzs": [1, 2]}, {"amount_uzs": float("nan")},
     {"amount_uzs": float("inf")}, {"amount_uzs": -500_000},
     {"secs_login_to_confirm": "abc"}, {"secs_login_to_confirm": float("nan")},
-    {"secs_login_to_confirm": -5},
+    {"secs_login_to_confirm": -5}, {"event_time": 1760000000}, {"event_time": [2025]},
 ])
 def test_an_unscorable_event_is_named(bad):
     """Each of these raised in the extractor - a task failing on every replay of the

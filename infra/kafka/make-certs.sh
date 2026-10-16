@@ -42,9 +42,8 @@ EOF
 openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
   -out client.crt -days "$DAYS" -extfile client.ext 2>/dev/null
 
-# Clients take PEM: kafka-python and Flink's Java client both read it.
-echo "==> PEM keystores (clients)"
-cat kafka.key kafka.crt > kafka.keystore.pem
+# The client takes PEM: kafka-python and Flink's Java client both read it.
+echo "==> PEM keystore (client)"
 cat client.key client.crt > client.keystore.pem
 
 # The broker cannot: apache/kafka's entrypoint requires password files for its
@@ -62,8 +61,10 @@ printf '%s' "$STORE_PASS" > truststore_creds
 rm -f kafka.csr client.csr kafka.ext client.ext
 
 # Readable by uid 1000, the Kafka image's user: openssl writes the keystore 0600,
-# and the broker then fails with a message that names no permission problem.
+# and the broker then fails with a message that names no permission problem. The
+# CA's and the broker's keys are read by no one after this script.
 chmod 644 ./* 2>/dev/null || true
+chmod 600 ca.key kafka.key
 
 echo
 echo "--- generated in $CERTS ---"

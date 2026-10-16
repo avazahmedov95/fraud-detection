@@ -49,6 +49,15 @@ def _published(look, event=EVENT, waited=0.0):
     return sent
 
 
+def test_a_publish_that_fails_is_not_taken_as_done():
+    import pytest
+
+    def refused(topic, out):
+        raise RuntimeError("no broker")
+    with pytest.raises(RuntimeError):
+        consumer.handle(dict(EVENT), Look(0.95), refused, now=EVENT["scored_at_job"])
+
+
 def test_every_decision_goes_to_the_scored_topic():
     assert _published(Look(0.95)) == [(C.TOPIC_SCORED, "REVIEW")]
     assert _published(Look(0.10)) == [(C.TOPIC_SCORED, "ALLOW")]

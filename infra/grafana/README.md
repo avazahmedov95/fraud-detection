@@ -19,7 +19,7 @@ last hour and refreshes every 10 seconds; every figure comes from
 - **Speed** — the share of decisions under 25, 50, 100 and 300 ms, and where a
   decision's time goes, by service.
 - **Transfers** — checked and held over time, and who held them: the rules
-  (named by fraud type), the model or the second look.
+  (named by fraud type), the model, the second look, or no answer from it.
 - **The analyst** — holds waiting now, blocked, released, the share of holds that
   were fraud, the money kept with the clients, the median wait for a verdict,
   missed fraud reported by clients, and the latest 50 holds with their reasons.

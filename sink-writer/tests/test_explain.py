@@ -83,10 +83,10 @@ def test_tolerance_is_tighter_than_a_real_divergence_and_looser_than_noise():
     assert 1e-6 < E.TOLERANCE < 1e-2
 
 
-def test_no_recorded_score_still_explains():
-    """A CEP-only run has no ml_score to check against; skip, do not fail."""
+def test_a_hold_no_model_scored_is_not_explained_by_one():
+    """A rules-only run has no ml_score: the model took no part in the hold."""
     ex = _explainer([2.0, 1.0, 0.5, -0.25])
-    assert ex.explain([1.0, 1.0, 1.0], recorded_score=None)[0] == E.OK
+    assert ex.explain([1.0, 1.0, 1.0], recorded_score=None) == (E.RULES_ONLY, [])
 
 
 def test_mislabelling_is_refused(caplog):

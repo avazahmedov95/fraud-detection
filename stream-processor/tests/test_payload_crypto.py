@@ -115,6 +115,14 @@ def test_missing_key_is_an_error_not_a_default():
         pc.key_from_env("DEFINITELY_NOT_SET_PAYLOAD_KEY")
 
 
+def test_a_required_envelope_refuses_a_plain_record():
+    """With encryption required, anyone who can write the topic but holds no key
+    cannot slip a plain record in."""
+    with pytest.raises(pc.PayloadCryptoError):
+        pc.loads_maybe_encrypted(json.dumps(KAT_EVENT).encode(), KAT_KEY, require=True)
+    assert pc.loads_maybe_encrypted(KAT_ENVELOPE, KAT_KEY, require=True) == KAT_EVENT
+
+
 def test_encrypted_record_without_a_key_is_loud():
     """A missing key must not read as 'plaintext record' and vanish."""
     with pytest.raises(pc.PayloadCryptoError):

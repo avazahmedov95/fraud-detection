@@ -90,9 +90,10 @@ def test_a_hold_opens_a_case_with_its_reasons_and_a_release_none():
 
 
 class _Store:
-    """A warehouse that keeps the audit records and can fail one insert."""
+    """A warehouse that keeps the audit records and the cases, and can fail one insert:
+    down (no answer to ping) or refusing the rows (answering)."""
     def __init__(self):
-        self.audit, self.fail = [], None
+        self.audit, self.cases, self.fail, self.answers = [], [], None, False
 
     def insert(self, table, rows, column_names=None):
         if self.fail == table:
@@ -100,6 +101,11 @@ class _Store:
             raise ConnectionError("gone")
         if table.endswith("audit_log"):
             self.audit += [dict(zip(column_names, r)) for r in rows]
+        if table.endswith("cases"):
+            self.cases += [r[0] for r in rows]
+
+    def ping(self):
+        return self.answers
 
     def query(self, sql):
         class _Result:
@@ -111,9 +117,8 @@ class _Store:
         pass
 
 
-def test_a_failed_insert_leaves_the_stored_audit_chain_whole():
-    from verify_audit import verify
-    store, w = _Store(), _writer()
+def _on(store):
+    w = _writer()
     w._client = store
 
     def reconnect():
@@ -121,27 +126,52 @@ def test_a_failed_insert_leaves_the_stored_audit_chain_whole():
         w._resume_chain()
         return True
     w.open, w._last_attempt = reconnect, 0.0
+    return w
+
+
+def test_a_batch_a_down_warehouse_missed_is_stored_when_it_returns():
+    from verify_audit import verify
+    store = _Store()
+    w = _on(store)
     for i in range(3):
         w.add(dict(SCORED, transaction_id=f"a{i}"))
-    w.flush()
+    assert w.flush()
     store.fail = "fraud.audit_log"
-    w.add(dict(SCORED, transaction_id="lost"))
-    w.flush()                                          # lost, and said so
+    w.add(dict(SCORED, transaction_id="held"))
+    assert not w.flush() and w.pending() == 1         # kept, not dropped
     for i in range(2):
         w.add(dict(SCORED, transaction_id=f"b{i}"))
-    w.flush()
-    assert [r["seq"] for r in store.audit] == [0, 1, 2, 3, 4]
-    assert verify(store.audit) == []
+    assert w.flush()
+    assert [r["seq"] for r in store.audit] == [0, 1, 2, 3, 4, 5]
+    assert "held" in store.cases                      # the hold keeps its case
+    assert verify(store.audit) == [] and w._lost == dict.fromkeys(w._lost, 0)
 
 
-def test_rows_lost_to_a_down_warehouse_are_counted_aloud(caplog):
-    w = _writer()
-    w._client, w._last_attempt = None, 1e18           # down, and no reconnect due
+def test_rows_a_working_warehouse_refuses_are_dropped_and_counted(caplog):
+    store = _Store()
+    store.answers, store.fail = True, "fraud.cases"
+    w = _on(store)
     w.add(SCORED)
     with caplog.at_level("ERROR"):
-        w.flush()
-    assert w._lost == {"transactions_scored": 1, "audit_log": 1, "cases": 1}
-    assert "lost" in caplog.text
+        assert w.flush()
+    assert w._lost["cases"] == 1 and "lost" in caplog.text
+
+
+def test_an_unreadable_chain_tail_is_no_connection(monkeypatch):
+    """Starting a second chain beside the stored one would read as tampering."""
+    import sys
+    import types
+
+    class _Client:
+        def ping(self):
+            return True
+
+        def query(self, sql):
+            raise TimeoutError("busy")
+    monkeypatch.setitem(sys.modules, "clickhouse_connect",
+                        types.SimpleNamespace(get_client=lambda **_: _Client()))
+    w = ClickHouseWriter("h", 1, "u", "p", "fraud")
+    assert not w.open() and w._client is None
 
 
 # --- schema alignment -------------------------------------------------------

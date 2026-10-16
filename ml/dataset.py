@@ -1,6 +1,7 @@
 """The training matrix: the CSV replayed through the job's own features and rules,
 so the model trains on what it will be served."""
 
+import hashlib
 import os
 import sys
 from collections import defaultdict
@@ -58,19 +59,31 @@ def build_matrix(csv_path: str, nrows=None) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _source(csv_path):
+    """The CSV's SHA-256: a cache built from other data is not read."""
+    h = hashlib.sha256()
+    with open(csv_path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def cached_matrix(csv_path, cache=None):
-    """build_matrix's features and labels, read from `cache` when it holds these
-    columns and written to it when it does not exist: the replay takes minutes."""
+    """build_matrix's features and labels, read from `cache` when it was built from
+    this CSV with these columns, and built into it otherwise: the replay takes minutes."""
+    source = _source(csv_path)
     if cache and os.path.exists(cache):
         with np.load(cache, allow_pickle=False) as z:
-            if [str(n) for n in z["names"]] != list(FEATURE_NAMES):
-                raise SystemExit(f"{cache} holds other columns - delete it and re-run")
-            return z["X"], z["y"]
+            if ([str(n) for n in z["names"]] == list(FEATURE_NAMES)
+                    and "source" in z.files and str(z["source"]) == source):
+                return z["X"], z["y"]
+        print(f"{cache} was built from other data or columns: building it again")
     df = build_matrix(csv_path)
     X = df[list(FEATURE_NAMES)].astype("float32").values
     y = df["label"].values.astype("int8")
     if cache:
-        np.savez_compressed(cache, X=X, y=y, names=np.array(list(FEATURE_NAMES)))
+        np.savez_compressed(cache, X=X, y=y, names=np.array(list(FEATURE_NAMES)),
+                            source=np.array(source))
     return X, y
 
 

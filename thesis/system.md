@@ -101,8 +101,8 @@ The rules also name the type of an alert, for example "account takeover".
 
 - **Redis is down:** the job keeps deciding. The payee-side features read as
   "nothing seen", and the job tries Redis again every 5 seconds.
-- **ClickHouse is down:** decisions still go out. The sink writer counts what it
-  could not store.
+- **ClickHouse is down:** decisions still go out. The sink writer waits, and stores
+  them when ClickHouse is back; a held transfer never loses its case.
 - **The second look is down:** the job holds the transfers just under the cut-off
   itself.
 - **A part crashes:** Flink saves its state every 2 seconds and restarts from there.
@@ -113,10 +113,15 @@ The rules also name the type of an alert, for example "account takeover".
 ## Records and security
 
 - **The audit chain.** Each stored decision carries a hash of its own content and of
-  the record before it. Changing, deleting or reordering any record breaks the
-  chain, and `run.ps1 verify-audit` finds the break. A hash of the raw transfer is
-  taken when it enters, so a decision cannot be matched to a different transfer.
+  the record before it. Changing, deleting or reordering a record breaks the chain,
+  and `run.ps1 verify-audit` finds the break. Deleting the newest records, or
+  rewriting the chain from some point on, shows only against its last hash kept
+  outside the database, which `verify-audit` prints. The services write as a user
+  that can only add and read rows. A hash of the raw transfer is taken when it
+  enters, so a decision cannot be matched to a different transfer.
 - **Encryption.** Messages can be encrypted (AES-256-GCM), and Kafka can require
   certificates on both sides (mutual TLS). Decrypting a message takes about 0.01
-  ms, and encryption makes it about 40% bigger (16 October).
-- **Access.** Every service listens only on this computer.
+  ms, and encryption makes it about 40% bigger (16 October). With
+  `PAYLOAD_REQUIRE_ENCRYPTED=1` the job refuses an unencrypted message.
+- **Access.** Every service listens only on this computer; the demo page answers
+  only to the names localhost and 127.0.0.1.

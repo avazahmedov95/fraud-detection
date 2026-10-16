@@ -19,8 +19,10 @@ it goes.
 learns from. The job uses the band only if it was chosen for the cut-off the job is
 using. A transfer that has waited 5 seconds or more is held without a score rather
 than let go, and while this service is not refreshing its flag in Redis, the job
-holds such transfers itself. Each part of TabPFN's examples keeps its own copy of
-the model's weights, a gigabyte each; an answer takes about a third of a second.
+holds such transfers itself. When Kafka does not take a decision, the service stops
+and decides that transfer again after its restart. Each part of TabPFN's examples
+keeps its own copy of the model's weights, a gigabyte each; an answer takes about a
+third of a second.
 
 The weights are a gated download, fetched by hand and named by `TABPFN_CHECKPOINT`
 in `.env`. Without them the service says so and stops.

@@ -10,6 +10,8 @@ KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
 KAFKA_SECURITY_PROTOCOL = os.getenv("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT").upper()
 KAFKA_SSL_CA = os.getenv("KAFKA_SSL_CA", "/certs/ca.crt")
 KAFKA_SSL_KEYSTORE = os.getenv("KAFKA_SSL_KEYSTORE", "/certs/client.keystore.pem")
+# 1: a record that arrives unencrypted is refused (needs PAYLOAD_KEY_HEX).
+PAYLOAD_REQUIRE_ENCRYPTED = os.getenv("PAYLOAD_REQUIRE_ENCRYPTED", "") == "1"
 
 
 def kafka_security_properties():

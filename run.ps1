@@ -47,7 +47,7 @@ if (-not (Test-Path ".env")) {
 }
 $DotEnv = Get-DotEnv
 # verify_audit.py reads the same credentials.
-foreach ($k in "CLICKHOUSE_USER", "CLICKHOUSE_PASSWORD", "CLICKHOUSE_DB") {
+foreach ($k in "CLICKHOUSE_USER", "CLICKHOUSE_PASSWORD") {
     if ($DotEnv[$k] -and -not (Test-Path "env:$k")) { Set-Item "env:$k" $DotEnv[$k] }
 }
 $ChUser = $DotEnv.CLICKHOUSE_USER
@@ -237,7 +237,7 @@ switch ($Target.ToLower()) {
         New-Item -ItemType Directory -Force -Path $certs | Out-Null
         $script = Join-Path (Get-Location) "infra\kafka\make-certs.sh"
         docker run --rm --entrypoint sh -v "${certs}:/certs" -v "${script}:/make-certs.sh:ro" `
-            -e CERTS=/certs alpine/openssl:latest /make-certs.sh
+            -e CERTS=/certs -e "FORCE=$env:FORCE" alpine/openssl:latest /make-certs.sh
         # keytool from the Kafka image's JDK: an openssl-made PKCS12 truststore
         # reads back as zero entries in Java.
         $ts = Join-Path (Get-Location) "infra\kafka\make-truststore.sh"
@@ -325,7 +325,7 @@ switch ($Target.ToLower()) {
         } catch {
             Copy-Item "$kept\*" "ml/models/" -Force
             & $PSCommandPath serve-prep
-            Write-Host "The served model is back in ml/models. If the job was stopped: .\run.ps1 resume-job" -ForegroundColor Yellow
+            Write-Host "The served model is back in ml/models. If the job was stopped: .\run.ps1 resume-job (submit-job without a checkpoint)" -ForegroundColor Yellow
             throw
         } finally {
             Remove-Item $kept -Recurse -Force
@@ -352,8 +352,7 @@ switch ($Target.ToLower()) {
     "resume-job" {
         $chk = Get-LatestCheckpoint
         if (-not $chk) {
-            Write-Host "no retained checkpoint - start fresh with: .\run.ps1 submit-job" -ForegroundColor Yellow
-            break
+            throw "no retained checkpoint - start fresh with: .\run.ps1 submit-job"
         }
         Invoke-SubmitJob -FromCheckpoint $chk
     }

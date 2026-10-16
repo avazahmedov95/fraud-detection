@@ -62,15 +62,15 @@ class CaseStore:
 
     def open_cases(self, limit=20, since=None):
         """The held transfers, the largest amount first; with `since` (epoch seconds),
-        those opened from then on."""
+        those opened from then on. `limit` None: all of them."""
         if not self._ensure():
             return []
         where = "disposition = 'NEW'"
         if since is not None:
             where += " AND opened_at >= fromUnixTimestamp64Milli(%(since)s)"
         return self._select(where, None if since is None else {"since": int(since * 1000)},
-                            f"ORDER BY amount_uzs DESC, final_score DESC, opened_at ASC "
-                            f"LIMIT {int(limit)}")
+                            f"ORDER BY amount_uzs DESC, final_score DESC, opened_at ASC"
+                            + ("" if limit is None else f" LIMIT {int(limit)}"))
 
     def get(self, case_id):
         if not self._ensure():
@@ -95,7 +95,7 @@ class CaseStore:
                                          time.time() if at_epoch is None else at_epoch))
         if disposition == "CONFIRMED_FRAUD":
             self._confirm(current["receiver_card"])
-        elif current["disposition"] == "CONFIRMED_FRAUD":
+        else:
             self._withdraw(current["receiver_card"])
         return True
 
@@ -138,18 +138,19 @@ class CaseStore:
 
     def _withdraw(self, card):
         """The payee leaves the confirmed accounts, unless another confirmed case or the
-        history still names it."""
+        history still names it. Run on every release, so a failed try is repaired by
+        the next."""
         q = (f"SELECT count() FROM {self._db}.{_TABLE} FINAL "
              f"WHERE receiver_card = %(card)s AND disposition = 'CONFIRMED_FRAUD'")
-        if self._client.query(q, parameters={"card": card}).result_rows[0][0]:
-            return
         try:
+            if self._client.query(q, parameters={"card": card}).result_rows[0][0]:
+                return
             r = self._redis_client()
             if not r.sismember(HISTORY_KEY, card):
                 r.srem(CONFIRMED_KEY, card)
         except Exception as exc:                       # noqa: BLE001
-            log.error("withdrew %s, but could not take it out of %s: %s",
-                      card, CONFIRMED_KEY, exc)
+            log.error("released %s, but could not take it out of %s (the next release "
+                      "tries again): %s", card, CONFIRMED_KEY, exc)
 
     def stats(self):
         """Counts per verdict and the precision they imply, over resolved holds only:

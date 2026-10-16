@@ -110,12 +110,14 @@ class FakeClient:
 
 class FakeRedis:
     def __init__(self):
-        self.sets = {}
+        self.sets, self.down = {}, False
 
     def sadd(self, key, member):
         self.sets.setdefault(key, set()).add(member)
 
     def srem(self, key, member):
+        if self.down:
+            raise ConnectionError("redis gone")
         self.sets.get(key, set()).discard(member)
 
     def sismember(self, key, member):
@@ -225,6 +227,16 @@ def test_a_withdrawn_confirmation_takes_the_payee_out(store):
     store.resolve("t_1", "FALSE_POSITIVE", "analyst.m", at_epoch=2_000)
     assert store._redis.sets[S.CONFIRMED_KEY] == set()
     assert store.get("t_1")["disposition"] == "FALSE_POSITIVE"
+
+
+def test_a_release_redis_missed_is_repaired_by_the_next(store):
+    _confirmed(store, "t_1", "card_1", 1_000)
+    store._redis.down = True
+    store.resolve("t_1", "FALSE_POSITIVE", "analyst.m", at_epoch=2_000)
+    assert store._redis.sets[S.CONFIRMED_KEY] == {"card_1"}
+    store._redis.down = False
+    store.resolve("t_1", "FALSE_POSITIVE", "analyst.m", at_epoch=3_000)
+    assert store._redis.sets[S.CONFIRMED_KEY] == set()
 
 
 def test_another_confirmed_case_keeps_the_payee_in(store):

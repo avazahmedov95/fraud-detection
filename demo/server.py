@@ -3,6 +3,7 @@ the held-out 20% of the dataset replayed on demand, the analyst's queue and wher
 the decision time goes. It adds no detection logic, and until Kafka, ClickHouse,
 the Flink job and the dataset are all there it shows only what is missing.
 """
+import http.client
 import json
 import math
 import os
@@ -51,6 +52,9 @@ JOB_NAME = "fraud-detection-cep-ml"     # stream-processor/fraud_job.py
 PORT = 8090
 # Opened by the browser, on the host: the host's port, not the service name.
 GRAFANA = "http://localhost:" + os.getenv("GRAFANA_PORT", "3000")
+#: The names the page is opened by. Another site that points its own name at this
+#: address gets nothing: its requests carry its name.
+HOSTS = {f"{h}:{os.getenv('DEMO_PORT', '8090')}" for h in ("localhost", "127.0.0.1")}
 DASHBOARD = os.path.join(ROOT, "infra", "grafana", "provisioning", "dashboards",
                          "json", "fraud-overview.json")
 
@@ -243,7 +247,7 @@ def _get(url):
     try:
         with urllib.request.urlopen(url, timeout=2) as r:
             return r.read()
-    except OSError:
+    except (OSError, http.client.HTTPException):
         return None
 
 
@@ -271,7 +275,10 @@ class Health:
 
     def run(self):
         while True:
-            self.check()
+            try:
+                self.check()
+            except Exception as exc:                   # noqa: BLE001 - checked again in 3 s
+                print(f"[demo] health check failed: {exc}", flush=True)
             time.sleep(3)
 
 
@@ -627,7 +634,7 @@ class App:
             # Unconnected, the store would answer with an empty queue.
             if not s._ensure():
                 raise RuntimeError("the case store cannot reach ClickHouse; see docker logs demo")
-            items = s.open_cases(limit=500, since=self.started if new_only else None)
+            items = s.open_cases(limit=None, since=self.started if new_only else None)
             done = s.resolved_cases(since=self.started, limit=PAGE) if new_only else []
             stats = s.stats()
         except Exception as exc:                       # noqa: BLE001 - shown on the page
@@ -689,7 +696,15 @@ class Handler(BaseHTTPRequestHandler):
         self._send(json.dumps(obj, default=str, ensure_ascii=False).encode("utf-8"),
                    "application/json; charset=utf-8", code)
 
+    def _foreign(self):
+        if self.headers.get("Host") in HOSTS:
+            return False
+        self._json({"error": "unknown host"}, 421)
+        return True
+
     def do_GET(self):
+        if self._foreign():
+            return
         path, _, query = self.path.partition("?")
         q = parse_qs(query)
         if path in ("/", "/index.html", "/about.js"):
@@ -715,6 +730,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "not found"}, 404)
 
     def do_POST(self):
+        if self._foreign():
+            return
         # Another site's page can post a form here, but not JSON: that needs a CORS
         # preflight, which this server never answers.
         if self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":

@@ -125,8 +125,11 @@ def decrypt(blob, key: bytes) -> dict:
     return json.loads(plaintext.decode("utf-8"))
 
 
-def loads_maybe_encrypted(blob, key=None) -> dict:
-    """Decode a record that may or may not be encrypted - one path for both."""
+def loads_maybe_encrypted(blob, key=None, require=False) -> dict:
+    """Decode a record that may or may not be encrypted - one path for both;
+    `require` refuses a plain one."""
+    if require and not is_encrypted(blob):
+        raise PayloadCryptoError("plain record refused: encryption is required")
     if is_encrypted(blob):
         if key is None:
             raise PayloadCryptoError(

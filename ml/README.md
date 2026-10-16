@@ -30,9 +30,9 @@ python seed_confirmed.py # with the stack up
 `export_onnx.py` runs in a container (`infra/ml/Dockerfile`) because Windows Smart
 App Control blocks a library that onnx needs. ONNX keeps split thresholds as
 float32, so the export moves each one to the float32 at or below it; the features
-are float32 too, so no decision changes. `second_look.py` runs in `.venv-models`,
-where TabPFN is installed. Then `run.ps1 resume-job` makes the job use the new
-model, cut-off and band.
+are float32 too, so no decision changes. A failed check leaves the served model as
+it was. `second_look.py` runs in `.venv-models`, where TabPFN is installed. Then
+`run.ps1 resume-job` makes the job use the new model, cut-off and band.
 
 ## Results on the held-out days
 

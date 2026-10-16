@@ -1,6 +1,7 @@
 """What the demo sends: which rows make an episode, and how they are replayed."""
 
 import csv
+import http.client
 import random
 import re
 import threading
@@ -400,6 +401,7 @@ def test_a_button_press_is_taken_only_as_json_which_another_site_cannot_send(mon
         health=SimpleNamespace(ready=True),
         resolve=lambda case_id, disposition: done.append(case_id) or {"ok": True}))
     srv = S.ThreadingHTTPServer(("127.0.0.1", 0), S.Handler)
+    monkeypatch.setattr(S, "HOSTS", {f"127.0.0.1:{srv.server_port}"})
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
@@ -419,3 +421,45 @@ def test_a_button_press_is_taken_only_as_json_which_another_site_cannot_send(mon
     finally:
         srv.shutdown()
         srv.server_close()
+
+
+def test_a_page_under_another_name_gets_no_answer(monkeypatch):
+    # A site that points its own name at this address sends its own name as Host.
+    monkeypatch.setattr(S, "APP", SimpleNamespace(health=SimpleNamespace(ready=True),
+                                                  status=lambda: {"ready": True}))
+    srv = S.ThreadingHTTPServer(("127.0.0.1", 0), S.Handler)
+    monkeypatch.setattr(S, "HOSTS", {f"127.0.0.1:{srv.server_port}"})
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+    def get(host=None):
+        req = urllib.request.Request(f"http://127.0.0.1:{srv.server_port}/api/status",
+                                     headers={"Host": host} if host else {})
+        try:
+            return opener.open(req).status
+        except urllib.error.HTTPError as exc:
+            return exc.code
+
+    try:
+        assert get() == 200 and get("evil.example:8090") == 421
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_a_broken_answer_does_not_stop_the_health_checks(monkeypatch):
+    calls = []
+
+    def check():
+        calls.append(1)
+        raise http.client.IncompleteRead(b"")
+
+    def stop(_):
+        if len(calls) >= 2:
+            raise SystemExit
+    h = S.Health(None)
+    monkeypatch.setattr(h, "check", check)
+    monkeypatch.setattr(S.time, "sleep", stop)
+    with pytest.raises(SystemExit):
+        h.run()
+    assert len(calls) == 2

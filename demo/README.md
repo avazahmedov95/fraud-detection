@@ -3,8 +3,8 @@
 One page over the running system, in Russian and English, at
 http://localhost:8090 (this machine only). It shows the running system or nothing:
 it opens once Kafka, ClickHouse and the Flink job answer, and every figure on it
-comes from them. Its buttons send JSON, and the server takes nothing else: a page
-on another site cannot send JSON here, so it cannot press them.
+comes from them. It answers only to the names localhost and 127.0.0.1, and its
+buttons send JSON, which a page on another site cannot send here.
 
 | File | What it does |
 |---|---|

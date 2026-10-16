@@ -10,6 +10,7 @@ log = logging.getLogger("explain")
 #: Stored beside the explanation so a missing one is never read as "nothing notable".
 OK = "OK"
 NO_MODEL = "NO_MODEL"                 # artefact absent from the image
+RULES_ONLY = "RULES_ONLY"             # no model scored the hold: nothing to explain
 NO_FEATURES = "NO_FEATURES"           # the alert predates feature publication
 MODEL_MISMATCH = "MODEL_MISMATCH"     # joblib disagrees with what scored
 FAILED = "FAILED"
@@ -147,6 +148,8 @@ class Explainer:
         # Features first: checking the model first made NO_MODEL mask a missing vector.
         if not features:
             return NO_FEATURES, []
+        if recorded_score is None:
+            return RULES_ONLY, []
         self._load()
         if self._booster is None:
             return NO_MODEL, []
@@ -156,8 +159,7 @@ class Explainer:
             contrib = self._booster.predict(x, pred_contrib=True)[0]
             margin = float(contrib.sum())              # log-odds incl. the bias
             proba = 1.0 / (1.0 + pow(2.718281828, -margin))
-            if recorded_score is not None and \
-                    abs(proba - float(recorded_score)) > TOLERANCE:
+            if abs(proba - float(recorded_score)) > TOLERANCE:
                 # Say nothing rather than something plausible about the wrong model.
                 log.error("explanation model disagrees with the scorer "
                           "(%.6f vs %.6f) - refusing to explain. model.joblib "

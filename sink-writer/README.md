@@ -19,7 +19,10 @@ A service of its own, so a slow or absent warehouse never holds back the job.
 | `config.py` | connections and batch settings, from the environment |
 | `tests/` | `python -m pytest sink-writer -q` |
 
-When ClickHouse is down the writer keeps consuming and counts what it discards. Its
-offsets are committed after each flush, so a crash reads again what was not stored,
-and the audit records are numbered at the insert, so a lost batch leaves no gap.
+When ClickHouse is down the writer stops reading and tries again every 10 seconds:
+its offsets are committed only once a batch is stored, so a held transfer never
+loses its case, and a crash reads again what was not stored. Rows a working
+ClickHouse refuses are dropped and counted. The audit records are numbered at the
+insert, so the chain has no gaps. The writer connects as `fraud_app`, which can only
+add and read rows.
 `run.ps1 verify-audit` checks the chain; `run.ps1 query-scored` counts decisions.

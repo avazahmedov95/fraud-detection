@@ -1,6 +1,7 @@
 """Sink-writer service: transactions.scored -> ClickHouse: every decision, its audit
-record, and a case for each hold. Batched by size and time; the offsets are committed
-after each flush, so a crash reads again what was not stored."""
+record, and a case for each hold. Batched by size and time. The offsets are committed
+only once a batch is stored: while ClickHouse is down the writer waits and tries
+again, and a crash reads again what was not stored."""
 
 import json
 import logging
@@ -15,6 +16,8 @@ from ch_writer import ClickHouseWriter
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("sink")
+
+POLL_MS = 200
 
 _running = True
 
@@ -35,6 +38,15 @@ def _commit(consumer):
         log.warning("offset commit failed, these decisions may be stored twice: %s", exc)
 
 
+def _store(ch, consumer):
+    """Flush, trying again while ClickHouse is down, then commit."""
+    while not ch.flush():
+        if not _running:
+            return
+        time.sleep(1)
+    _commit(consumer)
+
+
 def main():
     ch = ClickHouseWriter(C.CH_HOST, C.CH_PORT, C.CH_USER, C.CH_PASSWORD, C.CH_DB, C.AUDIT_ALL)
     ch.open()
@@ -46,34 +58,23 @@ def main():
         enable_auto_commit=False,
         auto_offset_reset="earliest",
         value_deserializer=lambda v: json.loads(v.decode("utf-8")),
-        consumer_timeout_ms=1000,
     )
     log.info("sink-writer started: %s -> ClickHouse(%s) (batch=%d, flush=%.0fs)",
              C.TOPIC_SCORED, C.CH_DB, C.BATCH_SIZE, C.FLUSH_INTERVAL_S)
 
-    last_flush = time.time()
-    total = 0
+    last_flush, total = time.time(), 0
     while _running:
-        received = False
-        for msg in consumer:
-            received = True
-            event = msg.value
-            ch.add(event)
-            total += 1
-            if ch.pending() >= C.BATCH_SIZE:
-                ch.flush()
-                _commit(consumer)
-                last_flush = time.time()
-                log.info("flushed batch (total processed: %d)", total)
-            if not _running:
-                break
-        if (time.time() - last_flush >= C.FLUSH_INTERVAL_S) or not received:
-            ch.flush()
-            _commit(consumer)
+        for records in consumer.poll(timeout_ms=POLL_MS, max_records=C.BATCH_SIZE).values():
+            for msg in records:
+                ch.add(msg.value)
+                total += 1
+        if ch.pending() and (ch.pending() >= C.BATCH_SIZE
+                             or time.time() - last_flush >= C.FLUSH_INTERVAL_S):
+            _store(ch, consumer)
             last_flush = time.time()
 
-    ch.close()
-    _commit(consumer)
+    if ch.close():
+        _commit(consumer)
     consumer.close()
     log.info("sink-writer stopped (processed %d events)", total)
 

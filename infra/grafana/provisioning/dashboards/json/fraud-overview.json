@@ -197,7 +197,7 @@
             "uid": "clickhouse"
           },
           "editorType": "sql",
-          "rawSql": "SELECT quantile(0.5)(toUnixTimestamp64Milli(scored_at_job) - toUnixTimestamp64Milli(ingested_at)) AS value\nFROM fraud.transactions_scored\nWHERE $__timeFilter(scored_at_job) AND toUnixTimestamp64Milli(ingested_at) > 0\n  AND NOT startsWith(model_version, 'second-look')",
+          "rawSql": "SELECT quantile(0.5)(toUnixTimestamp64Milli(scored_at_job) - toUnixTimestamp64Milli(ingested_at)) AS value\nFROM fraud.transactions_scored\nWHERE $__timeFilter(scored_at_job) AND toUnixTimestamp64Milli(ingested_at) > 0\n  AND (model_version = 'second-look:unscored' OR NOT startsWith(model_version, 'second-look'))",
           "queryType": "table",
           "format": 1,
           "refId": "A"
@@ -257,7 +257,7 @@
             "uid": "clickhouse"
           },
           "editorType": "sql",
-          "rawSql": "SELECT quantile(0.99)(toUnixTimestamp64Milli(scored_at_job) - toUnixTimestamp64Milli(ingested_at)) AS value\nFROM fraud.transactions_scored\nWHERE $__timeFilter(scored_at_job) AND toUnixTimestamp64Milli(ingested_at) > 0\n  AND NOT startsWith(model_version, 'second-look')",
+          "rawSql": "SELECT quantile(0.99)(toUnixTimestamp64Milli(scored_at_job) - toUnixTimestamp64Milli(ingested_at)) AS value\nFROM fraud.transactions_scored\nWHERE $__timeFilter(scored_at_job) AND toUnixTimestamp64Milli(ingested_at) > 0\n  AND (model_version = 'second-look:unscored' OR NOT startsWith(model_version, 'second-look'))",
           "queryType": "table",
           "format": 1,
           "refId": "A"
@@ -330,7 +330,7 @@
             "uid": "clickhouse"
           },
           "editorType": "sql",
-          "rawSql": "SELECT label, round(100.0 * n / nullIf(total, 0), 1) AS share\nFROM (SELECT count() AS total, countIf(ms < 25) AS c1, countIf(ms >= 25 AND ms < 50) AS c2,\n             countIf(ms >= 50 AND ms < 100) AS c3, countIf(ms >= 100 AND ms < 300) AS c4,\n             countIf(ms >= 300) AS c5\n      FROM (SELECT toUnixTimestamp64Milli(scored_at_job) - toUnixTimestamp64Milli(ingested_at) AS ms FROM fraud.transactions_scored\n            WHERE $__timeFilter(scored_at_job) AND toUnixTimestamp64Milli(ingested_at) > 0\n  AND NOT startsWith(model_version, 'second-look')))\nARRAY JOIN ['under 25 ms', '25 to 50 ms', '50 to 100 ms', '100 to 300 ms', 'over 300 ms'] AS label,\n           [c1, c2, c3, c4, c5] AS n",
+          "rawSql": "SELECT label, round(100.0 * n / nullIf(total, 0), 1) AS share\nFROM (SELECT count() AS total, countIf(ms < 25) AS c1, countIf(ms >= 25 AND ms < 50) AS c2,\n             countIf(ms >= 50 AND ms < 100) AS c3, countIf(ms >= 100 AND ms < 300) AS c4,\n             countIf(ms >= 300) AS c5\n      FROM (SELECT toUnixTimestamp64Milli(scored_at_job) - toUnixTimestamp64Milli(ingested_at) AS ms FROM fraud.transactions_scored\n            WHERE $__timeFilter(scored_at_job) AND toUnixTimestamp64Milli(ingested_at) > 0\n  AND (model_version = 'second-look:unscored' OR NOT startsWith(model_version, 'second-look'))))\nARRAY JOIN ['under 25 ms', '25 to 50 ms', '50 to 100 ms', '100 to 300 ms', 'over 300 ms'] AS label,\n           [c1, c2, c3, c4, c5] AS n",
           "queryType": "table",
           "format": 1,
           "refId": "A"
@@ -569,7 +569,7 @@
             "uid": "clickhouse"
           },
           "editorType": "sql",
-          "rawSql": "SELECT multiIf(startsWith(model_version, 'second-look'), 'the second look (TabPFN)',\n        predicted_type = '', 'the model, no fraud type named',\n        concat('the rules: ', transform(toString(predicted_type),\n               ['APP', 'ATO', 'MULE', 'STRUCTURING'],\n               ['phone scam', 'account takeover', 'money mule', 'split amounts'],\n               toString(predicted_type)))) AS held_by, count() AS held\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY decision = 'SECOND_LOOK', scored_at DESC LIMIT 1 BY transaction_id)\nWHERE decision = 'REVIEW'\nGROUP BY held_by\nORDER BY held DESC",
+          "rawSql": "SELECT multiIf(endsWith(model_version, ':unscored'), 'no answer from the second look',\n        startsWith(model_version, 'second-look'), 'the second look (TabPFN)',\n        predicted_type = '', 'the model, no fraud type named',\n        concat('the rules: ', transform(toString(predicted_type),\n               ['APP', 'ATO', 'MULE', 'STRUCTURING'],\n               ['phone scam', 'account takeover', 'money mule', 'split amounts'],\n               toString(predicted_type)))) AS held_by, count() AS held\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY decision = 'SECOND_LOOK', scored_at DESC LIMIT 1 BY transaction_id)\nWHERE decision = 'REVIEW'\nGROUP BY held_by\nORDER BY held DESC",
           "queryType": "table",
           "format": 1,
           "refId": "A"
@@ -983,7 +983,7 @@
             "uid": "clickhouse"
           },
           "editorType": "sql",
-          "rawSql": "SELECT opened_at AS held_at,\n       concat(substring(receiver_card, 1, 4), ' ', substring(receiver_card, 5, 2),\n              '** **** ', substring(receiver_card, -4)) AS to_card,\n       amount_uzs AS amount_UZS,\n       multiIf(startsWith(model_version, 'second-look'), 'the second look (TabPFN)',\n        predicted_type = '', 'the model, no fraud type named',\n        concat('the rules: ', transform(toString(predicted_type),\n               ['APP', 'ATO', 'MULE', 'STRUCTURING'],\n               ['phone scam', 'account takeover', 'money mule', 'split amounts'],\n               toString(predicted_type)))) AS held_by,\n       arrayStringConcat(explanation, '; ') AS reasons,\n       transform(toString(disposition), ['NEW', 'CONFIRMED_FRAUD', 'FALSE_POSITIVE'],\n                 ['waiting', 'blocked: fraud', 'released: false alarm'],\n                 toString(disposition)) AS verdict\nFROM fraud.cases FINAL WHERE decision = 'REVIEW'\nORDER BY opened_at DESC\nLIMIT 50",
+          "rawSql": "SELECT opened_at AS held_at,\n       concat(substring(receiver_card, 1, 4), ' ', substring(receiver_card, 5, 2),\n              '** **** ', substring(receiver_card, -4)) AS to_card,\n       amount_uzs AS amount_UZS,\n       multiIf(endsWith(model_version, ':unscored'), 'no answer from the second look',\n        startsWith(model_version, 'second-look'), 'the second look (TabPFN)',\n        predicted_type = '', 'the model, no fraud type named',\n        concat('the rules: ', transform(toString(predicted_type),\n               ['APP', 'ATO', 'MULE', 'STRUCTURING'],\n               ['phone scam', 'account takeover', 'money mule', 'split amounts'],\n               toString(predicted_type)))) AS held_by,\n       arrayStringConcat(explanation, '; ') AS reasons,\n       transform(toString(disposition), ['NEW', 'CONFIRMED_FRAUD', 'FALSE_POSITIVE'],\n                 ['waiting', 'blocked: fraud', 'released: false alarm'],\n                 toString(disposition)) AS verdict\nFROM fraud.cases FINAL WHERE decision = 'REVIEW'\nORDER BY opened_at DESC\nLIMIT 50",
           "queryType": "table",
           "format": 1,
           "refId": "A"
@@ -1094,7 +1094,7 @@
             "uid": "clickhouse"
           },
           "editorType": "sql",
-          "rawSql": "SELECT countIf(decision = 'REVIEW' AND startsWith(model_version, 'second-look')) AS value\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY decision = 'SECOND_LOOK', scored_at DESC LIMIT 1 BY transaction_id)",
+          "rawSql": "SELECT countIf(decision = 'REVIEW' AND startsWith(model_version, 'second-look') AND NOT endsWith(model_version, ':unscored')) AS value\nFROM (SELECT transaction_id, decision, predicted_type, model_version, scored_at_job\n FROM fraud.transactions_scored WHERE $__timeFilter(scored_at_job)\n ORDER BY decision = 'SECOND_LOOK', scored_at DESC LIMIT 1 BY transaction_id)",
           "queryType": "table",
           "format": 1,
           "refId": "A"

@@ -44,8 +44,8 @@ ENGINE = MergeTree
 PARTITION BY toYYYYMM(event_time)
 ORDER BY (event_time, transaction_id);
 
--- The audit trail, append-only: the application should hold INSERT and SELECT only
--- (GRANT INSERT, SELECT ON fraud.audit_log TO fraud), never ALTER or DELETE.
+-- The audit trail, append-only: the services write as fraud_app, which can only add
+-- and read rows (04-app-user.sh).
 CREATE TABLE IF NOT EXISTS fraud.audit_log
 (
     audit_id        UUID DEFAULT generateUUIDv4(),
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS fraud.audit_log
     payload         String,                      -- the decision's full JSON
     -- The integrity chain (data-generator/integrity.py).
     ingress_hash    String,                      -- SHA-256 of the raw event at ingress
-    seq             UInt64,                      -- gaps are dropped records
+    seq             UInt64,                      -- a gap is a deleted record
     prev_hash       String,                      -- record_hash of seq - 1
     record_hash     String,                      -- SHA-256(prev_hash, seq, content)
     recorded_at     DateTime64(3) DEFAULT now64(3)

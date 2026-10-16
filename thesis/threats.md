@@ -108,8 +108,8 @@ not take credit for what prevention removes.
 
 | Attack | What protects against it |
 |---|---|
-| forged messages on `transactions.raw` | certificates on both sides (mutual TLS) and message encryption, available but off by default |
-| changing a decision afterwards | the audit chain shows any change, deletion or reordering |
+| forged messages on `transactions.raw` | certificates on both sides (mutual TLS) and message encryption, required with `PAYLOAD_REQUIRE_ENCRYPTED=1`; both off by default |
+| changing a decision afterwards | the services' database user can only add and read rows; the audit chain shows a change, deletion or reordering, and its last hash, kept outside the database, a deleted or rewritten end |
 | probing the model | the customer sees only "allowed" or "held" |
 | poisoning the training data | retraining runs every week by itself, and clients' reports become labels, so false reports could teach the model wrong things; a person must switch on each new model after reading its comparison |
 

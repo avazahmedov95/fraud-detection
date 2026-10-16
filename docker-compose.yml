@@ -9,7 +9,7 @@ services:
     image: ${KAFKA_IMAGE}
     container_name: kafka
     ports:
-      - "127.0.0.1:${KAFKA_HOST_PORT}:29092"        # host clients -> 127.0.0.1:29092
+      - "127.0.0.1:29092:29092"                     # host clients -> 127.0.0.1:29092
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -84,9 +84,12 @@ services:
       - "127.0.0.1:${CLICKHOUSE_HTTP_PORT}:8123"    # HTTP
       - "127.0.0.1:${CLICKHOUSE_NATIVE_PORT}:9000"  # native protocol
     environment:
-      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      # The schema names the database; CLICKHOUSE_USER is the administrator, and the
+      # services write as fraud_app (init/04-app-user.sh).
+      CLICKHOUSE_DB: fraud
       CLICKHOUSE_USER: ${CLICKHOUSE_USER}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_APP_PASSWORD: ${CLICKHOUSE_APP_PASSWORD:?set CLICKHOUSE_APP_PASSWORD in .env}
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
     ulimits:
       nofile:
@@ -119,9 +122,10 @@ services:
     container_name: jobmanager
     command: jobmanager
     ports:
-      - "127.0.0.1:${FLINK_UI_PORT}:8081"           # Flink web UI
+      - "127.0.0.1:8081:8081"                       # Flink web UI
     environment:
       PAYLOAD_KEY_HEX: ${PAYLOAD_KEY_HEX}
+      PAYLOAD_REQUIRE_ENCRYPTED: ${PAYLOAD_REQUIRE_ENCRYPTED:-}
       # PLAINTEXT or SSL; switching needs a resubmit.
       KAFKA_SECURITY_PROTOCOL: ${KAFKA_SECURITY_PROTOCOL:-PLAINTEXT}
       KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:-kafka:9092}
@@ -143,8 +147,9 @@ services:
     # Back after it dies on its own (it once ran out of Metaspace).
     restart: unless-stopped
     environment:
-      # Only enables decryption: records without the envelope are read as they are.
+      # Decrypts records with the envelope; PAYLOAD_REQUIRE_ENCRYPTED=1 refuses the rest.
       PAYLOAD_KEY_HEX: ${PAYLOAD_KEY_HEX}
+      PAYLOAD_REQUIRE_ENCRYPTED: ${PAYLOAD_REQUIRE_ENCRYPTED:-}
       KAFKA_SECURITY_PROTOCOL: ${KAFKA_SECURITY_PROTOCOL:-PLAINTEXT}
       KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:-kafka:9092}
       FLINK_PROPERTIES: |
@@ -170,8 +175,8 @@ services:
       # Lets demo/ show the dashboard in a frame; without it Grafana answers
       # X-Frame-Options: deny. Login is still required.
       GF_SECURITY_ALLOW_EMBEDDING: "true"
-      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_USER: fraud_app
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_APP_PASSWORD:?set CLICKHOUSE_APP_PASSWORD in .env}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -190,9 +195,9 @@ services:
       KAFKA_BOOTSTRAP: kafka:9092
       CLICKHOUSE_HOST: clickhouse
       CLICKHOUSE_HTTP_PORT: "8123"
-      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
-      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      CLICKHOUSE_USER: fraud_app
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_APP_PASSWORD:?set CLICKHOUSE_APP_PASSWORD in .env}
+      CLICKHOUSE_DB: fraud
     volumes:
       - ./ml/models:/ml/models:ro              # the model each case is explained by
     depends_on:
@@ -239,9 +244,9 @@ services:
     environment:
       CLICKHOUSE_HOST: clickhouse
       CLICKHOUSE_HTTP_PORT: "8123"
-      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
-      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      CLICKHOUSE_USER: fraud_app
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_APP_PASSWORD:?set CLICKHOUSE_APP_PASSWORD in .env}
+      CLICKHOUSE_DB: fraud
       PYTHONUNBUFFERED: "1"
     volumes:
       - .:/repo
@@ -265,11 +270,12 @@ services:
       KAFKA_BOOTSTRAP: kafka:9092
       CLICKHOUSE_HOST: clickhouse
       CLICKHOUSE_HTTP_PORT: "8123"
-      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
-      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      CLICKHOUSE_USER: fraud_app
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_APP_PASSWORD:?set CLICKHOUSE_APP_PASSWORD in .env}
+      CLICKHOUSE_DB: fraud
       FLINK_REST: http://jobmanager:8081
       GRAFANA_PORT: ${GRAFANA_PORT}
+      DEMO_PORT: ${DEMO_PORT:-8090}
     volumes:
       - ./demo:/repo/demo:ro
       - ./data-generator:/repo/data-generator:ro

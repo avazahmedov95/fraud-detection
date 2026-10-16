@@ -49,6 +49,8 @@ def unusable(event: dict):
         return f"amount_uzs {amount!r}"
     if not (math.isfinite(secs) and secs >= 0):
         return f"secs_login_to_confirm {secs!r}"
+    if event.get("event_time") is not None and not isinstance(event["event_time"], str):
+        return f"event_time {event['event_time']!r}"
     return None
 
 

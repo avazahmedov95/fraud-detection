@@ -15,6 +15,8 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("second-look")
 
+PUBLISH_TIMEOUT_S = 10.0
+
 _running = True
 
 
@@ -63,6 +65,7 @@ def main():
 
     import redis
     from kafka import KafkaConsumer, KafkaProducer
+    from kafka.errors import KafkaError
     from look import SecondLook
 
     started = time.time()
@@ -72,6 +75,10 @@ def main():
 
     producer = KafkaProducer(bootstrap_servers=C.KAFKA_BOOTSTRAP, acks="all",
                              value_serializer=lambda v: json.dumps(v).encode("utf-8"))
+
+    def publish(topic, value):
+        producer.send(topic, value).get(timeout=PUBLISH_TIMEOUT_S)
+
     consumer = KafkaConsumer(
         C.TOPIC_SECOND_LOOK,
         bootstrap_servers=C.KAFKA_BOOTSTRAP,
@@ -90,8 +97,13 @@ def main():
         _renew(alive)
         for msg in consumer:
             began = time.time()
-            out = handle(msg.value, look, producer.send)
-            producer.flush()
+            try:
+                out = handle(msg.value, look, publish)
+            except KafkaError as exc:
+                # Uncommitted: the restarted service decides this transfer again.
+                log.error("could not publish the decision on %s, stopping: %s",
+                          msg.value.get("transaction_id"), exc)
+                sys.exit(1)
             consumer.commit()
             total += 1
             log.info("%s %s at %s in %.0f ms", out.get("transaction_id"), out["decision"],

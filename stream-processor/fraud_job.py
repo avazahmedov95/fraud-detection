@@ -38,7 +38,7 @@ def _event_epoch(event: dict) -> float:
         return time.time()
     try:
         return datetime.fromisoformat(ts).timestamp()
-    except ValueError:
+    except (TypeError, ValueError):
         return time.time()
 
 
@@ -109,6 +109,8 @@ class FraudDetector(KeyedProcessFunction):
             # A key that is set but unusable fails here, not on every record.
             self._crypto_key = payload_crypto.key_from_env()
             print("[fraud_job] payload decryption enabled (AES-256-GCM)")
+        if C.PAYLOAD_REQUIRE_ENCRYPTED and self._crypto_key is None:
+            raise RuntimeError("PAYLOAD_REQUIRE_ENCRYPTED=1 needs PAYLOAD_KEY_HEX")
 
         self._sess = None
         self._in_name = None
@@ -122,7 +124,14 @@ class FraudDetector(KeyedProcessFunction):
                 self._sess = ort.InferenceSession(
                     C.MODEL_ONNX_PATH, sess_options=opts, providers=["CPUExecutionProvider"])
                 self._in_name = self._sess.get_inputs()[0].name
-                print(f"[fraud_job] ONNX model loaded from {C.MODEL_ONNX_PATH}")
+                width = self._sess.get_inputs()[0].shape[1]
+                if isinstance(width, int) and width != len(F.FEATURE_NAMES):
+                    # Scoring would fail on every record and stop the job.
+                    self._sess = None
+                    _warn_cep_only(f"the model takes {width} features, this profile "
+                                   f"{len(F.FEATURE_NAMES)}: retrain after changing CAP_*")
+                else:
+                    print(f"[fraud_job] ONNX model loaded from {C.MODEL_ONNX_PATH}")
             else:
                 _warn_cep_only(f"model file not found at {C.MODEL_ONNX_PATH}")
         except Exception as exc:                          # noqa: BLE001
@@ -176,7 +185,8 @@ class FraudDetector(KeyedProcessFunction):
         mark = time.perf_counter()
         try:
             # Encrypted or plain; decryption is part of the measured time.
-            event = payload_crypto.loads_maybe_encrypted(value, self._crypto_key)
+            event = payload_crypto.loads_maybe_encrypted(value, self._crypto_key,
+                                                         C.PAYLOAD_REQUIRE_ENCRYPTED)
             problem = F.unusable(event)
             if problem:
                 raise ValueError(problem)
