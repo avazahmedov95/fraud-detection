@@ -38,6 +38,38 @@ The four day-level features (money into the payee, payers new to it, the sender'
 first-time payees and the money sent to them) were added on 13 October. On 20
 earlier datasets they raised the model's F1 on every one, by 2.6 points [2.0, 3.2].
 
+## What each data source adds
+
+Five fresh datasets (seeds 301-305), 16 October. The system's recipe each time, with
+one data source's features left out, or with a signal the model does not use added.
+Averages:
+
+| | PR-AUC | F1 | PR-AUC against all 28 |
+|---|---|---|---|
+| all 28 features | 0.748 | 71.7% | - |
+| without the payee's fan-in over the hour | 0.737 | 70.0% | -0.011 |
+| without counterparties over a day and a week | 0.664 | 64.7% | -0.083 |
+| without the memory of confirmed accounts | 0.696 | 66.1% | -0.052 |
+| without all three: the payee's side | 0.555 | 55.6% | -0.193 |
+| without the app's session signals | 0.728 | 70.0% | -0.019 |
+| without the region | 0.745 | 71.9% | -0.003 |
+| with a family link added | 0.757 | 72.7% | +0.009 |
+| with a device new to the sender added | 0.747 | 71.9% | 0.000 |
+
+Each of the first five lowered PR-AUC on all five datasets. The region and a new
+device change nothing. A family link adds about one point of F1 [+0.2, +1.8], but a
+sending bank rarely knows who is family. The region still serves one rule:
+IMPOSSIBLE_TRAVEL held 7 of 38,966 legitimate moves between regions, and 5 of the 7
+came beside a takeover the label calls normal (a tenth of fraud is never reported).
+
+## A test transfer first
+
+An APP fraudster can have the victim send 10,000 UZS to the payee first; the payee
+is then no longer new. On the main dataset the served model then holds 1 of the 63
+APP frauds instead of 35. On the five fresh datasets, each with its own model, it
+holds 165 of 312 (53%) without the test transfer, 35 (11%) with one 10 minutes
+before, 51 (16%) with one a day before.
+
 ## A month through the running system
 
 On 14-15 October a new month went through the running system: 500,000 transfers, 929
@@ -175,5 +207,7 @@ load.
 - `raw/retrain_fresh.json`: retraining when fraud changes, each run.
 - `raw/ibm_memory_28.json`: the memory on IBM AML, each run.
 - `raw/speed_repeats.json`: every speed repeat and the four versions of the job.
+- `raw/sources_and_test_transfer.json`: each data source left out, and the test
+  transfer, on each dataset.
 - The month test was deleted from ClickHouse and Redis after it was read; its
   figures are kept only here.

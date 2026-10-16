@@ -56,14 +56,15 @@ business decision.
 | impossible travel | know where the victim really was recently | high |
 | many senders to one payee (fan-in) | spread the money over more accounts and hours | high: it slows the network down |
 
-We tested one of these, with the model of early October. If an APP fraudster first
-sends one small transfer to the payee, the share of such frauds we catch falls from
-56% to 32%.
+We tested one of these. If an APP fraudster first has the victim send 10,000 UZS
+to the payee, the payee is no longer new, and the share of such frauds held falls
+from about half to 11-16% on five fresh datasets (`results.md`).
 
-**The most useful signals are not the hardest to avoid.** The app's session signals
-are the second most useful data source, and the cheapest to avoid. How much a
-signal helps and how easily it can be avoided are different things, and a report
-should give both.
+**The most useful signals are not always the hardest to avoid.** A new payee is one
+of the strongest signals of APP fraud, and a 10,000 UZS test transfer removes it.
+The app's session signals help less and are avoided by hanging up before
+confirming. How much a signal helps and how easily it can be avoided are different
+things, and a report should give both.
 
 ## The payee gap
 

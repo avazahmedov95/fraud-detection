@@ -1,0 +1,575 @@
+{
+ "_about": "16 October 2026, on fresh seeds 301-305 with today's code. 'sources': the system's recipe (five LightGBM fits on the first 64%, the F1-peak cut-off on the next 16%, the last 20% read once) with each capability's features left out (stream-processor/capabilities.py), or with a family link or a device new to the sender added; 'travel': IMPOSSIBLE_TRAVEL's holds on transfers labelled legitimate, against the legitimate moves between regions (two consecutive transfers of one card from two regions). 'test_transfer': APP frauds of the test part held [held, of], without and with a 10,000 UZS transfer from the victim to the same payee 10 minutes or a day before; 'main' is the main dataset with the served model, 'fresh' each seed with its own all-features model.",
+ "sources": {
+  "301": {
+   "all 28 features": {
+    "pr_auc": 0.7194,
+    "recall": 0.6134,
+    "precision": 0.8041,
+    "f1": 0.6959,
+    "alerts": 148,
+    "caught": 119,
+    "frauds": 194,
+    "cutoff": 0.1776
+   },
+   "without the payee's fan-in (receiver_velocity)": {
+    "pr_auc": 0.7143,
+    "recall": 0.6031,
+    "precision": 0.8239,
+    "f1": 0.6964,
+    "alerts": 142,
+    "caught": 117,
+    "frauds": 194,
+    "cutoff": 0.2204
+   },
+   "without counterparties over a day and a week (counterparty_history)": {
+    "pr_auc": 0.6201,
+    "recall": 0.5567,
+    "precision": 0.7297,
+    "f1": 0.6316,
+    "alerts": 148,
+    "caught": 108,
+    "frauds": 194,
+    "cutoff": 0.1597
+   },
+   "without the memory of confirmed accounts (confirmed_cases)": {
+    "pr_auc": 0.6772,
+    "recall": 0.5619,
+    "precision": 0.7466,
+    "f1": 0.6412,
+    "alerts": 146,
+    "caught": 109,
+    "frauds": 194,
+    "cutoff": 0.1594
+   },
+   "without all three: the payee's side": {
+    "pr_auc": 0.5165,
+    "recall": 0.4897,
+    "precision": 0.6333,
+    "f1": 0.5523,
+    "alerts": 150,
+    "caught": 95,
+    "frauds": 194,
+    "cutoff": 0.1298
+   },
+   "without the app's session signals (session_telemetry)": {
+    "pr_auc": 0.7056,
+    "recall": 0.5722,
+    "precision": 0.8162,
+    "f1": 0.6727,
+    "alerts": 136,
+    "caught": 111,
+    "frauds": 194,
+    "cutoff": 0.2313
+   },
+   "without the region (geo_telemetry)": {
+    "pr_auc": 0.7203,
+    "recall": 0.6392,
+    "precision": 0.7898,
+    "f1": 0.7066,
+    "alerts": 157,
+    "caught": 124,
+    "frauds": 194,
+    "cutoff": 0.161
+   },
+   "with a family link added": {
+    "pr_auc": 0.7252,
+    "recall": 0.6289,
+    "precision": 0.8026,
+    "f1": 0.7052,
+    "alerts": 152,
+    "caught": 122,
+    "frauds": 194,
+    "cutoff": 0.1707
+   },
+   "with a device new to the sender added": {
+    "pr_auc": 0.7204,
+    "recall": 0.6443,
+    "precision": 0.7485,
+    "f1": 0.6925,
+    "alerts": 167,
+    "caught": 125,
+    "frauds": 194,
+    "cutoff": 0.1444
+   }
+  },
+  "302": {
+   "all 28 features": {
+    "pr_auc": 0.7746,
+    "recall": 0.7089,
+    "precision": 0.7832,
+    "f1": 0.7442,
+    "alerts": 143,
+    "caught": 112,
+    "frauds": 158,
+    "cutoff": 0.1384
+   },
+   "without the payee's fan-in (receiver_velocity)": {
+    "pr_auc": 0.7711,
+    "recall": 0.7278,
+    "precision": 0.7188,
+    "f1": 0.7233,
+    "alerts": 160,
+    "caught": 115,
+    "frauds": 158,
+    "cutoff": 0.1177
+   },
+   "without counterparties over a day and a week (counterparty_history)": {
+    "pr_auc": 0.6842,
+    "recall": 0.5759,
+    "precision": 0.7982,
+    "f1": 0.6691,
+    "alerts": 114,
+    "caught": 91,
+    "frauds": 158,
+    "cutoff": 0.2118
+   },
+   "without the memory of confirmed accounts (confirmed_cases)": {
+    "pr_auc": 0.7049,
+    "recall": 0.5823,
+    "precision": 0.7797,
+    "f1": 0.6667,
+    "alerts": 118,
+    "caught": 92,
+    "frauds": 158,
+    "cutoff": 0.1896
+   },
+   "without all three: the payee's side": {
+    "pr_auc": 0.5834,
+    "recall": 0.4304,
+    "precision": 0.8395,
+    "f1": 0.569,
+    "alerts": 81,
+    "caught": 68,
+    "frauds": 158,
+    "cutoff": 0.3349
+   },
+   "without the app's session signals (session_telemetry)": {
+    "pr_auc": 0.7479,
+    "recall": 0.6013,
+    "precision": 0.8559,
+    "f1": 0.7063,
+    "alerts": 111,
+    "caught": 95,
+    "frauds": 158,
+    "cutoff": 0.2573
+   },
+   "without the region (geo_telemetry)": {
+    "pr_auc": 0.7717,
+    "recall": 0.7025,
+    "precision": 0.7551,
+    "f1": 0.7279,
+    "alerts": 147,
+    "caught": 111,
+    "frauds": 158,
+    "cutoff": 0.1365
+   },
+   "with a family link added": {
+    "pr_auc": 0.7934,
+    "recall": 0.7215,
+    "precision": 0.7808,
+    "f1": 0.75,
+    "alerts": 146,
+    "caught": 114,
+    "frauds": 158,
+    "cutoff": 0.1477
+   },
+   "with a device new to the sender added": {
+    "pr_auc": 0.7726,
+    "recall": 0.7152,
+    "precision": 0.7793,
+    "f1": 0.7459,
+    "alerts": 145,
+    "caught": 113,
+    "frauds": 158,
+    "cutoff": 0.1361
+   }
+  },
+  "303": {
+   "all 28 features": {
+    "pr_auc": 0.8228,
+    "recall": 0.7692,
+    "precision": 0.7447,
+    "f1": 0.7568,
+    "alerts": 188,
+    "caught": 140,
+    "frauds": 182,
+    "cutoff": 0.1202
+   },
+   "without the payee's fan-in (receiver_velocity)": {
+    "pr_auc": 0.8079,
+    "recall": 0.7418,
+    "precision": 0.7895,
+    "f1": 0.7649,
+    "alerts": 171,
+    "caught": 135,
+    "frauds": 182,
+    "cutoff": 0.1328
+   },
+   "without counterparties over a day and a week (counterparty_history)": {
+    "pr_auc": 0.7562,
+    "recall": 0.6593,
+    "precision": 0.75,
+    "f1": 0.7018,
+    "alerts": 160,
+    "caught": 120,
+    "frauds": 182,
+    "cutoff": 0.1482
+   },
+   "without the memory of confirmed accounts (confirmed_cases)": {
+    "pr_auc": 0.7472,
+    "recall": 0.6538,
+    "precision": 0.7,
+    "f1": 0.6761,
+    "alerts": 170,
+    "caught": 119,
+    "frauds": 182,
+    "cutoff": 0.1292
+   },
+   "without all three: the payee's side": {
+    "pr_auc": 0.5936,
+    "recall": 0.4286,
+    "precision": 0.8211,
+    "f1": 0.5632,
+    "alerts": 95,
+    "caught": 78,
+    "frauds": 182,
+    "cutoff": 0.2632
+   },
+   "without the app's session signals (session_telemetry)": {
+    "pr_auc": 0.8067,
+    "recall": 0.7143,
+    "precision": 0.7784,
+    "f1": 0.745,
+    "alerts": 167,
+    "caught": 130,
+    "frauds": 182,
+    "cutoff": 0.1579
+   },
+   "without the region (geo_telemetry)": {
+    "pr_auc": 0.8234,
+    "recall": 0.7473,
+    "precision": 0.7861,
+    "f1": 0.7662,
+    "alerts": 173,
+    "caught": 136,
+    "frauds": 182,
+    "cutoff": 0.1382
+   },
+   "with a family link added": {
+    "pr_auc": 0.8225,
+    "recall": 0.7363,
+    "precision": 0.7929,
+    "f1": 0.7635,
+    "alerts": 169,
+    "caught": 134,
+    "frauds": 182,
+    "cutoff": 0.1491
+   },
+   "with a device new to the sender added": {
+    "pr_auc": 0.8238,
+    "recall": 0.7473,
+    "precision": 0.7771,
+    "f1": 0.7619,
+    "alerts": 175,
+    "caught": 136,
+    "frauds": 182,
+    "cutoff": 0.1361
+   }
+  },
+  "304": {
+   "all 28 features": {
+    "pr_auc": 0.8034,
+    "recall": 0.6965,
+    "precision": 0.8046,
+    "f1": 0.7467,
+    "alerts": 174,
+    "caught": 140,
+    "frauds": 201,
+    "cutoff": 0.2243
+   },
+   "without the payee's fan-in (receiver_velocity)": {
+    "pr_auc": 0.7921,
+    "recall": 0.6318,
+    "precision": 0.8699,
+    "f1": 0.732,
+    "alerts": 146,
+    "caught": 127,
+    "frauds": 201,
+    "cutoff": 0.3445
+   },
+   "without counterparties over a day and a week (counterparty_history)": {
+    "pr_auc": 0.7312,
+    "recall": 0.6119,
+    "precision": 0.8146,
+    "f1": 0.6989,
+    "alerts": 151,
+    "caught": 123,
+    "frauds": 201,
+    "cutoff": 0.2729
+   },
+   "without the memory of confirmed accounts (confirmed_cases)": {
+    "pr_auc": 0.757,
+    "recall": 0.592,
+    "precision": 0.8207,
+    "f1": 0.6879,
+    "alerts": 145,
+    "caught": 119,
+    "frauds": 201,
+    "cutoff": 0.2755
+   },
+   "without all three: the payee's side": {
+    "pr_auc": 0.6225,
+    "recall": 0.4925,
+    "precision": 0.792,
+    "f1": 0.6074,
+    "alerts": 125,
+    "caught": 99,
+    "frauds": 201,
+    "cutoff": 0.2921
+   },
+   "without the app's session signals (session_telemetry)": {
+    "pr_auc": 0.7868,
+    "recall": 0.6965,
+    "precision": 0.8046,
+    "f1": 0.7467,
+    "alerts": 174,
+    "caught": 140,
+    "frauds": 201,
+    "cutoff": 0.2253
+   },
+   "without the region (geo_telemetry)": {
+    "pr_auc": 0.7976,
+    "recall": 0.6418,
+    "precision": 0.8716,
+    "f1": 0.7393,
+    "alerts": 148,
+    "caught": 129,
+    "frauds": 201,
+    "cutoff": 0.3064
+   },
+   "with a family link added": {
+    "pr_auc": 0.8166,
+    "recall": 0.6517,
+    "precision": 0.8912,
+    "f1": 0.7529,
+    "alerts": 147,
+    "caught": 131,
+    "frauds": 201,
+    "cutoff": 0.3199
+   },
+   "with a device new to the sender added": {
+    "pr_auc": 0.8002,
+    "recall": 0.6468,
+    "precision": 0.8844,
+    "f1": 0.7471,
+    "alerts": 147,
+    "caught": 130,
+    "frauds": 201,
+    "cutoff": 0.3234
+   }
+  },
+  "305": {
+   "all 28 features": {
+    "pr_auc": 0.6187,
+    "recall": 0.5634,
+    "precision": 0.7453,
+    "f1": 0.6417,
+    "alerts": 161,
+    "caught": 120,
+    "frauds": 213,
+    "cutoff": 0.2241
+   },
+   "without the payee's fan-in (receiver_velocity)": {
+    "pr_auc": 0.5991,
+    "recall": 0.4742,
+    "precision": 0.7537,
+    "f1": 0.5821,
+    "alerts": 134,
+    "caught": 101,
+    "frauds": 213,
+    "cutoff": 0.3259
+   },
+   "without counterparties over a day and a week (counterparty_history)": {
+    "pr_auc": 0.5306,
+    "recall": 0.4601,
+    "precision": 0.6323,
+    "f1": 0.5326,
+    "alerts": 155,
+    "caught": 98,
+    "frauds": 213,
+    "cutoff": 0.1903
+   },
+   "without the memory of confirmed accounts (confirmed_cases)": {
+    "pr_auc": 0.5935,
+    "recall": 0.5493,
+    "precision": 0.75,
+    "f1": 0.6341,
+    "alerts": 156,
+    "caught": 117,
+    "frauds": 213,
+    "cutoff": 0.2099
+   },
+   "without all three: the payee's side": {
+    "pr_auc": 0.4585,
+    "recall": 0.4038,
+    "precision": 0.6232,
+    "f1": 0.49,
+    "alerts": 138,
+    "caught": 86,
+    "frauds": 213,
+    "cutoff": 0.1549
+   },
+   "without the app's session signals (session_telemetry)": {
+    "pr_auc": 0.5955,
+    "recall": 0.6103,
+    "precision": 0.6468,
+    "f1": 0.628,
+    "alerts": 201,
+    "caught": 130,
+    "frauds": 213,
+    "cutoff": 0.1166
+   },
+   "without the region (geo_telemetry)": {
+    "pr_auc": 0.6098,
+    "recall": 0.6056,
+    "precision": 0.7127,
+    "f1": 0.6548,
+    "alerts": 181,
+    "caught": 129,
+    "frauds": 213,
+    "cutoff": 0.1734
+   },
+   "with a family link added": {
+    "pr_auc": 0.6253,
+    "recall": 0.6479,
+    "precision": 0.6798,
+    "f1": 0.6635,
+    "alerts": 203,
+    "caught": 138,
+    "frauds": 213,
+    "cutoff": 0.1139
+   },
+   "with a device new to the sender added": {
+    "pr_auc": 0.6196,
+    "recall": 0.5822,
+    "precision": 0.7337,
+    "f1": 0.6492,
+    "alerts": 169,
+    "caught": 124,
+    "frauds": 213,
+    "cutoff": 0.1866
+   }
+  }
+ },
+ "travel": {
+  "301": {
+   "false_alarms": 2,
+   "legit_moves": 7885
+  },
+  "302": {
+   "false_alarms": 0,
+   "legit_moves": 7657
+  },
+  "303": {
+   "false_alarms": 0,
+   "legit_moves": 7756
+  },
+  "304": {
+   "false_alarms": 2,
+   "legit_moves": 7926
+  },
+  "305": {
+   "false_alarms": 3,
+   "legit_moves": 7742
+  }
+ },
+ "test_transfer": {
+  "main": {
+   "no test transfer": [
+    35,
+    63
+   ],
+   "10 minutes before": [
+    1,
+    63
+   ],
+   "a day before": [
+    1,
+    63
+   ]
+  },
+  "fresh": {
+   "301": {
+    "no test transfer": [
+     33,
+     69
+    ],
+    "10 minutes before": [
+     0,
+     69
+    ],
+    "a day before": [
+     0,
+     69
+    ]
+   },
+   "302": {
+    "no test transfer": [
+     29,
+     57
+    ],
+    "10 minutes before": [
+     8,
+     57
+    ],
+    "a day before": [
+     10,
+     57
+    ]
+   },
+   "303": {
+    "no test transfer": [
+     43,
+     64
+    ],
+    "10 minutes before": [
+     12,
+     64
+    ],
+    "a day before": [
+     17,
+     64
+    ]
+   },
+   "304": {
+    "no test transfer": [
+     30,
+     54
+    ],
+    "10 minutes before": [
+     13,
+     54
+    ],
+    "a day before": [
+     15,
+     54
+    ]
+   },
+   "305": {
+    "no test transfer": [
+     30,
+     68
+    ],
+    "10 minutes before": [
+     2,
+     68
+    ],
+    "a day before": [
+     9,
+     68
+    ]
+   }
+  }
+ }
+}

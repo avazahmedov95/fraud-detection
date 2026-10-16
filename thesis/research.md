@@ -48,13 +48,14 @@ neutral. The whole system runs on Apache Flink.
 
 ## What we found
 
-1. **What the bank can see matters more than the method.** Measured in August on
-   an earlier, easier version of our data, five datasets each time. Without the
-   payee's side (who else is paying this card) detection fell the most: PR-AUC
-   -0.036. Without the app's session signals it fell almost as much: -0.034.
-   Family links, the device and the region added almost nothing to the model. The
-   region still matters for one rule: it catches a session from a place the person
-   could not have reached in time, with no false alarms on 775 real journeys.
+1. **What the bank can see matters more than the method.** On five fresh datasets,
+   without the payee's side (who pays this card, the counterparties over a day and
+   a week, the memory of confirmed accounts) PR-AUC fell from 0.748 to 0.555 and F1
+   from 71.7% to 55.6%. The app's session signals add less (PR-AUC 0.019); the
+   region and a new device add nothing to the model, a family link about one point
+   of F1. The region still serves one rule: it catches a session from a place the
+   person could not have reached in time, and held 7 of 38,966 legitimate moves
+   between regions (`results.md`).
 2. **Money flowing into a mule is invisible from the sender's side.** The stream is
    split by sender, so each sender sees one ordinary transfer; 81% of mule transfers
    are of this kind. So the payee's side is kept in Redis. Counting, over the last
@@ -81,14 +82,12 @@ neutral. The whole system runs on Apache Flink.
    with rules only; and the text "False" was read as true on every live transfer.
    The system now records what actually ran, not what was configured.
 7. **Public data cannot test the payee side.** Public datasets hide the links
-   between accounts that this kind of detection needs. In August, on PaySim, a rule
-   built only from the sender's own history still separated fraud from normal
-   transfers four times better than chance, but the mule rule found nothing: PaySim
-   has no collection stage.
-8. **Rule limits must follow the data that is available.** In August, on PaySim,
-   our rules first flagged none of 2,520 frauds: fewer signals were available, so
-   the rule score never reached the fixed limit. Scaling the limit to what can still
-   be reached flagged 150 of them.
+   between accounts that this kind of detection needs. PaySim has no collection
+   stage, so the mule rule finds nothing there; only the sender's own history works.
+8. **Rule limits must follow the data that is available.** On PaySim our rules first
+   flagged nothing: with fewer signals the rule score never reached a limit set on
+   full data. The limit is now scaled to what the available data can still reach
+   (`stream-processor/capabilities.py`).
 
 ## Limits
 
