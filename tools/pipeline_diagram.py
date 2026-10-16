@@ -1,6 +1,6 @@
-"""The end-to-end diagram: every component, what it does, and the measured time of
-each stage inside the engine (thesis/results.md, Speed). Writes docs/pipeline_diagram
-as PNG, for a document, and SVG, which stays sharp at any size."""
+"""The end-to-end diagram: every component, what it does, and the time of each stage
+inside the engine, measured on 14 October. Writes docs/pipeline_diagram as PNG, for a
+document, and SVG, which stays sharp at any size."""
 import os
 
 import matplotlib

@@ -1,16 +1,7 @@
-"""Retrains the model on what the running system served and what people decided, and
-says whether the new model should replace the served one. The retrainer service runs
-it every week; nothing changes until a person promotes it (.\\run.ps1 promote-model).
-
-Rows: the job's logged decisions with their features (fraud.transactions_scored),
-added to the rows the served model was fitted on; the rows that set its cut-off stay
-unseen, as second_look.py chooses the band there. Labels: fraud where an analyst confirmed
-it or a client reported it (fraud.cases). Drift is read on all of them. The rest
-uses the decisions a week old or more, whose clients have had time to report a
-missed fraud; split as in train.py: the earliest 64% train, the next 16% set the
-cut-off at the served model's number of alerts, the last 20% decide between the two.
-The outcome goes to models/retrain_status.json for the demo page and to
-fraud.retrain_runs for Grafana.
+"""Retrains the model on the logged decisions and people's verdicts, and says
+whether it should replace the served one (ml/README.md, Retraining). Nothing changes
+until a person promotes it (.\\run.ps1 promote-model). The outcome goes to
+models/retrain_status.json for the demo and to fraud.retrain_runs for Grafana.
 
     python retrain.py [--cache models_matrix.npz] [--every-hours 168]
 """

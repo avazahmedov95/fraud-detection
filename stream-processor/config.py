@@ -100,8 +100,8 @@ SCALE_THRESHOLDS_BY_CAPABILITY = (
 MANDATORY_REVIEW_RULES = ("STRUCTURING", "DAILY_LIMIT_BREACH")
 
 # --- Latency (stream-processor/README.md, Speed) ----------------------------
-# Copies side by side: one Python worker and one task slot each. One copy queued
-# at 100 transfers a second; three hold p99 under 300 ms to 200 (README, Speed).
+# Copies side by side, one Python worker and task slot each: one copy fell behind
+# at 100 transfers a second.
 JOB_PARALLELISM = int(os.getenv("JOB_PARALLELISM", "3"))
 # How long PyFlink gathers records before handing them to Python.
 PY_BUNDLE_TIME_MS = int(os.getenv("PY_BUNDLE_TIME_MS", "20"))
@@ -110,9 +110,8 @@ BUFFER_TIMEOUT_MS = int(os.getenv("BUFFER_TIMEOUT_MS", "5"))
 KAFKA_FETCH_MAX_WAIT_MS = int(os.getenv("KAFKA_FETCH_MAX_WAIT_MS", "20"))
 # The Kafka sinks flush at checkpoints, so this also bounds the warehouse delay.
 CHECKPOINT_INTERVAL_MS = int(os.getenv("CHECKPOINT_INTERVAL_MS", "2000"))
-# A sender silent this long is forgotten (fraud_job.py's timer), and their next transfer
-# reads as a new customer's. Without it the state keeps everyone who ever paid.
-# Longer than any window a feature reads and than the month the model is trained on.
+# A sender silent this long is forgotten (fraud_job.py's timer): longer than any
+# window a feature reads and than the month the model is trained on.
 SENDER_STATE_TTL_DAYS = int(os.getenv("SENDER_STATE_TTL_DAYS", "90"))
 
 # Restart after a crash; the window bounds a crash loop.

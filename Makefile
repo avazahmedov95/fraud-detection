@@ -49,10 +49,8 @@ seed-confirmed: ## load the history's confirmed fraud accounts into Redis
 retrain: ## a new model from the logged decisions and people's verdicts, against the served one
 	cd ml && python retrain.py --cache models_matrix.npz
 
-# The second look's band is re-chosen by hand where TabPFN is installed
-# (ml/second_look.py); until then it stays off under the new cut-off. A failed step
-# puts the served files back, or the next restart would pair the old model with the
-# new cut-off.
+# The second look's band is chosen again by hand where TabPFN is installed
+# (ml/second_look.py). A failed step puts the served files back.
 SERVED = model.joblib thresholds.json feature_names.json metrics.json model.onnx model.txt manifest.json
 promote-model: ## serve the retrained model (after reading retrain's comparison)
 	test -f ml/models/candidate/model.joblib

@@ -1,7 +1,6 @@
-"""Known-answer test pinning the encrypted wire format, which data-generator/'s
-copy must match. A DECRYPT vector, since AES-GCM encryption is non-deterministic:
-fixed key, nonce and envelope pin the magic, routing key, framing and AAD.
-"""
+"""Known-answer test pinning the encrypted wire format. A decrypt vector, since
+AES-GCM encryption is not deterministic: a fixed key, nonce and envelope pin the
+magic, routing key, framing and AAD."""
 
 import base64
 import json
@@ -105,7 +104,7 @@ def test_bytes_and_str_are_both_accepted():
 
 
 def test_both_arms_share_one_decode_path():
-    """Both arms must share a decoder, or the measured difference is not crypto."""
+    """Plain and encrypted records go through one decoder."""
     plain = json.dumps(KAT_EVENT).encode()
     assert pc.loads_maybe_encrypted(plain) == KAT_EVENT
     assert pc.loads_maybe_encrypted(KAT_ENVELOPE, KAT_KEY) == KAT_EVENT

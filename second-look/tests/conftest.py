@@ -1,7 +1,4 @@
-"""Package dir onto sys.path: pytest inserts the test file's OWN directory, not
-its parent, so `import decide` needs this. In a conftest because the packages
-deploy as separate units with no shared tooling.
-"""
+"""The package directory on sys.path: pytest adds only the test file's own."""
 
 import os
 import sys

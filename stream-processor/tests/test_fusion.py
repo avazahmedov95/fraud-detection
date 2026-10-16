@@ -199,10 +199,8 @@ def test_structuring_still_outranks_fan_in():
 
 
 def test_every_label_is_reachable_by_some_rule_that_can_fire():
-    """A label whose every trigger is a rule that never fires is dead weight the
-    dashboard reports as a real category. Checked against the rule names the
-    engine can actually emit, so a renamed rule fails here rather than silently
-    emptying a category."""
+    """Every alert type has a rule the engine can emit, so a renamed rule fails here
+    rather than silently emptying a category."""
     import rules as R
     emitted = set(re.findall(r'hits\.append\("([A-Z_]+)"\)',
                              open(R.__file__, encoding="utf-8").read()))

@@ -44,10 +44,8 @@ def test_open_writes_version_zero():
 
 
 def test_an_explained_open_outranks_an_unexplained_one():
-    """The same transaction is re-alerted whenever the producer replays a CSV. If
-    both open rows carried the same version, which survived the merge would be
-    luck - and it was: 16 cases picked up an explanation on replay while 212 did
-    not. More information about the same event must win deterministically."""
+    """A replay re-alerts the same transaction: of two open rows, the explained one
+    must win the merge, not luck."""
     bare = _as_dict(CASE.case_row(ALERT))
     explained = _as_dict(CASE.case_row(ALERT, ["amount: big (+9.9)"], "OK"))
     assert explained["version"] > bare["version"]

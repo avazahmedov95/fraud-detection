@@ -1,7 +1,4 @@
-"""Package dir onto sys.path: pytest inserts the test file's OWN directory, not
-its parent, so `import features` needs this. In a conftest because the five
-packages deploy as separate units with no shared tooling.
-"""
+"""The package directory on sys.path: pytest adds only the test file's own."""
 
 import os
 import sys

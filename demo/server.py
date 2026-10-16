@@ -1,13 +1,7 @@
-"""Live demo: one page showing the running system decide - the stream, fraud
-episodes replayed on demand with their decisions and reasons, the analyst's queue,
-and where the decision time goes. It adds no detection logic, and until Kafka,
-ClickHouse, the Flink job and the dataset are all there it shows only what is
-missing. It runs in the stack, on the containers' clock the stage times use.
-
-Episodes are real ones from the held-out 20% of the dataset, replayed under a fresh
-sender card and moved in time to end now.
-
-    .\\run.ps1 up; .\\run.ps1 submit-job     # then open http://localhost:8090
+"""Live demo: one page over the running system - the stream, fraud episodes from
+the held-out 20% of the dataset replayed on demand, the analyst's queue and where
+the decision time goes. It adds no detection logic, and until Kafka, ClickHouse,
+the Flink job and the dataset are all there it shows only what is missing.
 """
 import json
 import math

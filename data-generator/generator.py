@@ -229,7 +229,7 @@ def main():
     df, persons_df = build_dataset(config)
 
     os.makedirs(args.out, exist_ok=True)
-    # LF explicitly, not os.linesep: the hash pin must hold on every OS.
+    # LF explicitly, not os.linesep: the same file on every OS.
     df.to_csv(os.path.join(args.out, "transactions.csv"), index=False,
               lineterminator="\n")
     persons_df.to_csv(os.path.join(args.out, "persons.csv"), index=False,

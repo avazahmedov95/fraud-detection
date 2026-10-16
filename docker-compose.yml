@@ -16,7 +16,7 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,SSL:SSL
       # INTERNAL kafka:9092 for containers, EXTERNAL 127.0.0.1:29092 for the host,
-      # SSL kafka:9094 for mutual TLS: side by side, so measuring TLS changes a port.
+      # SSL kafka:9094 for mutual TLS: side by side, so TLS changes only the port.
       KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:29092,SSL://0.0.0.0:9094
       KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://127.0.0.1:29092,SSL://kafka:9094
       # The names the image's entrypoint requires: it finds the stores under

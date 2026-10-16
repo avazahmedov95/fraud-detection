@@ -76,7 +76,7 @@ def _split(text):
 
 def is_encrypted(blob) -> bool:
     """True if this record carries the encrypted envelope. Decidable without the
-    key, so one consumer can read a topic holding both arms."""
+    key, so one consumer can read a topic holding both kinds."""
     try:
         return _as_text(blob).startswith(PREFIX)
     except (UnicodeDecodeError, AttributeError):
@@ -126,7 +126,7 @@ def decrypt(blob, key: bytes) -> dict:
 
 
 def loads_maybe_encrypted(blob, key=None) -> dict:
-    """Decode a record that may or may not be encrypted - one path for both arms."""
+    """Decode a record that may or may not be encrypted - one path for both."""
     if is_encrypted(blob):
         if key is None:
             raise PayloadCryptoError(

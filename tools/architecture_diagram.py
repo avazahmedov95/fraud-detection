@@ -1,7 +1,6 @@
-"""The architecture at a glance, laid out like the cloud reference diagrams the
-mentor sent: stages left to right, each part with the technology that runs it,
-and the offline training path underneath. Writes docs/architecture as PNG and SVG.
-No measured figures here: tools/pipeline_diagram.py carries those."""
+"""The architecture at a glance: stages left to right, each part with the technology
+that runs it, and the offline training path underneath. Writes docs/architecture as
+PNG and SVG. No measured figures here: tools/pipeline_diagram.py carries those."""
 import os
 
 import numpy as np

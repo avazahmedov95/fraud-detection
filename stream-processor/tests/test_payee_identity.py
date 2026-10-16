@@ -39,9 +39,8 @@ def test_resolver_follows_the_mode(mode):
 
 
 def test_no_per_transfer_mode():
-    """Resolving to PINFL only where the bank can was measured and rejected: it
-    makes the key depend on the SENDER's bank, splitting one payee's inbound
-    window in two and losing 17.4% of MULE_FAN_IN's true positives."""
+    """No PINFL only where the bank can resolve it: the key would depend on the
+    sender's bank and split one payee's inbound window in two."""
     assert set(CAP.BY_KEY["payee_identity"].modes) == {"card", "pinfl"}
 
 
@@ -68,10 +67,8 @@ def test_distinct_payees_stay_distinct(mode):
 # --- the limitation, asserted ------------------------------------------------
 
 def test_one_person_two_cards_is_two_payees_by_card(mode):
-    """The measured cost of the honest default: a person holding two cards is ONE
-    payee to the switch and TWO to a bank keying on the PAN, so a mule spreading
-    inbound transfers across their own cards is split across that many fan-in
-    buckets and MULE_FAN_IN sees a fraction of the true convergence."""
+    """The cost of keying by card: a mule's two cards are two payees, and the
+    fan-in is split between them."""
     one, two = _ev(pinfl="P1"), _ev(pinfl="P1", card=payee_card("P1-second"))
 
     mode("card")

@@ -173,7 +173,7 @@ def inject_fraud(config, persons, by_pinfl, fraud_accounts, n_fraud, rng, start_
                     is_fraud=1, fraud_type="MULE", rng=rng))
 
         if config.unreported_fraud_share > 0 and rng.random() < config.unreported_fraud_share:
-            # Never reported: fraud's behaviour, a legitimate label (spec 8, item 7).
+            # Never reported: fraud's behaviour, a legitimate label.
             for ev in events[before:]:
                 ev["label_is_fraud"], ev["label_fraud_type"] = 0, "NONE"
         produced[kind] += len(events) - before

@@ -17,7 +17,7 @@ from sklearn.metrics import (roc_auc_score, average_precision_score,
 import committee
 import dataset as D
 
-# Overridable so a sweep writes elsewhere instead of clobbering the deployed model.
+# Overridable, so a trial run does not overwrite the served model.
 MODELS_DIR = os.getenv(
     "MODELS_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "models"))
 CSV = os.getenv(
@@ -51,8 +51,7 @@ def class_weight(pos, neg, mode=None):
 
 
 def make_model(scale_pos_weight, random_state=42):
-    """The deployed recipe, in one place. The L2 penalty bounds the leaf values
-    (without it they reached 18,111 on this data)."""
+    """The deployed recipe, in one place. The L2 penalty bounds the leaf values."""
     return lgb.LGBMClassifier(
         n_estimators=400, learning_rate=0.05, num_leaves=31,
         colsample_bytree=0.8, min_child_samples=30, reg_lambda=10.0,

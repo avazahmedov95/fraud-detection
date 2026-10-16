@@ -1,19 +1,7 @@
 #!/bin/sh
-# Second stage of certificate generation: the broker's truststore.
-#
-# Runs in the Kafka image rather than the openssl one, because it needs keytool
-# and the Kafka image already ships a JDK - so the store is written by exactly
-# the runtime that will read it.
-#
-# Why not openssl for this too, as for the keystore: a PKCS12 built with
-# `openssl pkcs12 -export -nokeys` is readable by openssl but Java sees ZERO
-# entries in it. Certificate-only bags written that way do not become
-# trustedCertEntry, so the broker would start with an empty truststore and
-# reject every client certificate - a failure that looks like a client problem.
-# Verified rather than assumed:
-#
-#     openssl-built truststore -> "Your keystore contains 0 entries"
-#     keytool-built truststore -> "fraud-ca, trustedCertEntry"
+# The broker's truststore, by keytool in the Kafka image: Java reads a PKCS12
+# truststore made by openssl as zero entries, and the broker would then reject
+# every client.
 set -e
 
 CERTS="${CERTS:-/certs}"
@@ -26,10 +14,7 @@ if [ ! -f ca.crt ]; then
   exit 1
 fi
 
-# This stage runs as the image's own user (uid 1000), which is also the user the
-# broker runs as. If the material written by the previous stage is not readable
-# here, it will not be readable by the broker either - so check it now, where
-# the message can say so, rather than later as an SSL initialisation failure.
+# This runs as the broker's own user: what it cannot read, the broker cannot either.
 for f in ca.crt kafka.keystore.p12 keystore_creds key_creds truststore_creds; do
   if [ ! -r "$f" ]; then
     echo "ERROR: $f is not readable as $(id -u):$(id -g)"

@@ -1,5 +1,4 @@
-"""Path shim for the demo tests: pytest inserts the test file's OWN directory, not
-its parent, so the package dir is added here - as the other packages do."""
+"""The package directory on sys.path: pytest adds only the test file's own."""
 
 import os
 import sys

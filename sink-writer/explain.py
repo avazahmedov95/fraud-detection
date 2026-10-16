@@ -15,7 +15,7 @@ MODEL_MISMATCH = "MODEL_MISMATCH"     # joblib disagrees with what scored
 FAILED = "FAILED"
 
 #: Max |recomputed - recorded| before an explanation is refused: flags a stale
-#: artefact without firing on float noise (ONNX and the booster agree to 3.3e-07).
+#: artefact without firing on float noise.
 TOLERANCE = 1e-4
 
 TOP_N = 3

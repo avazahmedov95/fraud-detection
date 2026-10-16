@@ -16,8 +16,8 @@ EVENT_FIELDS = [
     "amount_uzs", "device_id",
     "sender_region", "receiver_region", "sender_balance_before",
     "active_call", "secs_login_to_confirm",
-    # not on the wire: the job derives is_new_payee itself, and the other two
-    # stay in the file for its pinned hash (data-generator/README.md)
+    # In the file, not on the wire: the job derives is_new_payee itself, and the
+    # bank cannot see the other two.
     "is_new_payee", "receiver_account_age_days", "is_family_transfer",
     "label_is_fraud", "label_fraud_type",
 ]

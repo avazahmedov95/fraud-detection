@@ -16,12 +16,7 @@ param(
     [Parameter(Position = 0)]
     [string]$Target = "help",
 
-    # The analyst queue (`cases`):
-    #   .\run.ps1 cases
-    #   .\run.ps1 cases -Case t_0041237
-    #   .\run.ps1 cases -Case t_0041237 -Verdict CONFIRMED_FRAUD -By analyst.k
-    #   .\run.ps1 cases -Case t_0041237 -Report -By analyst.k   (a client's report)
-    #   .\run.ps1 cases -Stats
+    # The analyst queue (`cases`; demo/README.md).
     [string]$Case = "",
     [ValidateSet("", "CONFIRMED_FRAUD", "FALSE_POSITIVE")]
     [string]$Verdict = "",
@@ -90,9 +85,8 @@ function Wait-Ready {
 }
 
 function Get-ActiveJobs {
-    # Call it as @(Get-ActiveJobs): a function's output is unrolled, so one job comes
-    # back as the job itself, whose .Count PowerShell 5.1 leaves empty - and the
-    # guard against a second job then let one through.
+    # Call it as @(Get-ActiveJobs): PowerShell unrolls a single job, whose .Count
+    # is then empty.
     $jobs = (Invoke-RestMethod -Uri "http://localhost:8081/jobs/overview" -TimeoutSec 5).jobs
     return @($jobs | Where-Object { $_.state -notin @("FAILED", "CANCELED", "FINISHED") })
 }
@@ -128,9 +122,8 @@ function Get-LatestCheckpoint {
 }
 
 function Restart-TaskManager {
-    # A fresh TaskManager per job, from the current image: cancelling a job does not
-    # give back its Metaspace, and the eighth job on one process died of it. Waits for
-    # a NEW registration, not the old one lingering until its heartbeat times out.
+    # A fresh TaskManager per job: a cancelled job keeps its Metaspace. Waits for a
+    # new registration, not the old one lingering until its heartbeat times out.
     $oldIds = $null
     $deadline = (Get-Date).AddSeconds(60)
     while ($null -eq $oldIds -and (Get-Date) -lt $deadline) {
@@ -274,8 +267,7 @@ switch ($Target.ToLower()) {
 
     "export-model" {
         # In a container: Smart App Control blocks onnx's native library on this
-        # host (infra/ml/Dockerfile). The repository is mounted, so the files land
-        # in ml/models.
+        # host. The repository is mounted, so the files land in ml/models.
         docker compose build -q retrainer
         if ($LASTEXITCODE -eq 0) {
             docker run --rm -v "$((Get-Location).Path):/repo" fraud-ml:latest
@@ -289,16 +281,13 @@ switch ($Target.ToLower()) {
     }
 
     "promote-model" {
-        # The steps after train.py, for retrain.py's candidate: its figures on the
-        # held-out days, export, the second look's band under the new cut-off, then
-        # everything that reads the model.
+        # retrain.py's candidate: measured on the held-out days, exported, the second
+        # look's band chosen again, the job restarted. A failed step stops it and puts
+        # the served files back, or the next restart would pair the old model with
+        # the new cut-off.
         if (-not (Test-Path "ml/models/candidate/model.joblib")) {
             throw "no candidate in ml/models/candidate: run .\run.ps1 retrain first"
         }
-        # Every step stops the promotion when it fails: on 15 October a failed export
-        # went on to restart the job with a model that did not match. The served
-        # files are then put back, or the next restart would pair the old model
-        # with the new cut-off.
         $kept = Join-Path $env:TEMP "fraud-served-model"
         Remove-Item $kept -Recurse -Force -ErrorAction SilentlyContinue
         New-Item -ItemType Directory $kept | Out-Null

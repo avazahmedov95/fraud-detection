@@ -14,6 +14,3 @@ datasources:
       defaultDatabase: fraud
     secureJsonData:
       password: $CLICKHOUSE_PASSWORD
-# NOTE: the grafana-clickhouse-datasource schema has changed across plugin
-# versions. If provisioning fails, add the datasource from the Grafana UI
-# instead (host: clickhouse, port: 9000, native protocol).

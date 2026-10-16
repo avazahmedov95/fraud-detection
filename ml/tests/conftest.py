@@ -1,9 +1,4 @@
-"""Path shim for the ml tests.
-
-pytest inserts the test file's OWN directory, not its parent, so the package dir
-is added here - in a conftest, as the other packages do, because the packages
-deploy as separate units with no shared tooling.
-"""
+"""The package directory on sys.path: pytest adds only the test file's own."""
 
 import os
 import sys

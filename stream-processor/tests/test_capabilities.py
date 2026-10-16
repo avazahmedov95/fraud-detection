@@ -27,10 +27,8 @@ def test_every_rule_is_declared_exactly_once():
     assert len(seen) == len(set(seen))
 
 
-#: Capabilities that legitimately have no "off". One that SELECTS between data
-#: sources has no null option: off would model a deployment that cannot key its
-#: state at all. Listed as exemptions rather than weakening the rule, so a new
-#: capability without "off" still has to be argued for here.
+#: Capabilities with no "off": one that selects between data sources cannot be
+#: absent. A new one without "off" has to be added here.
 _NO_OFF_MODE = {
     "payee_identity": "selects which identity the payee is keyed by; there is "
                       "no deployment that keys receiver-side state on nothing",

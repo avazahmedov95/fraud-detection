@@ -55,8 +55,7 @@ def main():
           f"({os.path.getsize(BOOSTER_PATH) / 1024:.0f} KB, "
           f"{model.num_trees()} trees)")
 
-    # A parity check needs valid inputs, not the whole replay: the first rows of the
-    # file, ten minutes shorter at the realistic profile's size.
+    # A parity check needs valid inputs, not the whole replay: the file's first rows.
     df = D.build_matrix(CSV, nrows=PARITY_ROWS)
     sample = df.iloc[int(len(df) * 0.80):][feats].astype("float32").values[:2000]
 

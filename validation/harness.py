@@ -26,8 +26,9 @@ from rules import ReceiverState, SenderState                    # noqa: E402
 warnings.filterwarnings("ignore", message="X does not have valid feature names")
 
 
-#: Median legitimate amount on this project's own data, in UZS: foreign amounts are
-#: rescaled onto it, a unit conversion rather than a tuning.
+#: Foreign amounts are rescaled onto this median, in UZS: a unit conversion, not a
+#: tuning. It is the first version of our data's (August); kept, since changing it
+#: changes the published figures.
 OUR_MEDIAN_UZS = 138_740.0
 #: The share of the riskiest transfers an analyst reviews in the budget reading; the
 #: published PaySim baseline reports its recall at 2%.
