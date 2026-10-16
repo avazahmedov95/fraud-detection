@@ -11,7 +11,8 @@ onnxruntime==1.23.2
 onnxmltools==1.16.0
 skl2onnx==1.20.0
 # What onnxmltools pulls in, pinned to the versions the served model was exported
-# with, so the export container (infra/ml/Dockerfile) writes the same bytes.
+# with, so the export container (infra/ml/Dockerfile) writes the same model; only
+# the graph's name, a random id, differs between two exports.
 onnx==1.22.0
 protobuf==7.36.0
 ml_dtypes==0.6.0

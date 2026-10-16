@@ -16,10 +16,8 @@ kafka-python==3.0.7
 # covers `run.ps1 produce` and `produce-stream`; the producer uses no API that
 # changed between the two patches.
 
-# Needed by payload_crypto.py, and by test_payload_crypto.py which lives in this
-# directory. The import inside payload_crypto.py is deliberately lazy, so the
-# plaintext arm runs on a host without it - but the test exercises the encrypted
-# path directly, so anyone installing only this file and running pytest gets an
-# ImportError rather than a skip. Pinned to the version the job's image decrypts
-# with (infra/flink/Dockerfile): both sides must agree on the envelope.
+# For --encrypt: kafka_producer.py takes payload_crypto.py from stream-processor/,
+# which imports this lazily, so a plaintext replay runs without it. Pinned to the
+# version the job decrypts with (infra/flink/Dockerfile): both sides must agree
+# on the envelope.
 cryptography==48.0.0
