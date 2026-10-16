@@ -56,8 +56,9 @@ business decision.
 | impossible travel | know where the victim really was recently | high |
 | many senders to one payee (fan-in) | spread the money over more accounts and hours | high: it slows the network down |
 
-We tested one of these. If an APP fraudster first sends one small transfer to the
-payee, the share of such frauds we catch falls from 56% to 32%.
+We tested one of these, with the model of early October. If an APP fraudster first
+sends one small transfer to the payee, the share of such frauds we catch falls from
+56% to 32%.
 
 **The most useful signals are not the hardest to avoid.** The app's session signals
 are the second most useful data source, and the cheapest to avoid. How much a

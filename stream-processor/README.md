@@ -2,11 +2,11 @@
 
 The PyFlink job that decides every transfer before it settles. It reads
 `transactions.raw`, keeps each sender's history in Flink state (forgotten after 90
-days of silence, `SENDER_STATE_TTL_DAYS`) and each payee's side in Redis, computes 28 features, runs 10 hard rules, scores the model (ONNX) and
-decides: ALLOW, REVIEW - held for the analyst - or SECOND_LOOK, just under the
-cut-off, sent to TabPFN (`second-look/`). Every decision goes to
-`transactions.scored` with its feature values, where the sink writer opens a case
-for each hold.
+days of silence, `SENDER_STATE_TTL_DAYS`) and each payee's side in Redis, computes
+28 features, runs 10 hard rules, scores the model (ONNX) and decides: ALLOW, REVIEW
+(held for the analyst) or SECOND_LOOK (just under the cut-off, sent to TabPFN in
+`second-look/`). Every decision goes to `transactions.scored` with its feature
+values, where the sink writer opens a case for each hold.
 
 | File | What it does |
 |---|---|
@@ -49,40 +49,14 @@ seen, and the confirmed accounts as none.
 
 ## Speed
 
-Three copies of the job run side by side (`JOB_PARALLELISM`), each handing Python
-a bundle at least every 20 ms (`PY_BUNDLE_TIME_MS`). Arrival to decision in ms,
-3,000 generated transfers per rate (1,000 at 10 a second, 6,000 at 50), producer
-inside Docker, measured on 5 October 2026 on battery - mains power is faster:
-
-| transfers a second | one copy, 50 ms: mean / p95 / p99 | three copies, 20 ms: mean / p95 / p99 |
-|---|---|---|
-| 10 | 56 / 59 / 60 (4 October, mains) | 31 / 34 / 48 |
-| 50 | 84 / 133 / 163 (4 October, mains) | 32 / 58 / 75 |
-| 100 | 2,380 / 3,964 / 4,134 | 64 / 115 / 209 |
-| 150 | 3,696 / 7,211 / 7,828 | 79 / 139 / 188 |
-| 200 | 4,976 / 9,654 / 10,445 | 114 / 224 / 290 |
-| 250 | 3,771 / 6,375 / 6,885 | 313 / 1,054 / 1,371 |
-
-The work itself is 4-5 ms a transfer; the rest is the wait between Kafka and
-Python. One copy could not keep up at 100 a second; three held the 300 ms target
-to 200. Past that, 50 ms bundles did better (three copies at 250: p99 408), and four
-copies contended for this laptop's cores.
-
-The same way on 14 October, with the 28 features, on mains power, three copies and
-20 ms bundles (mean / p95 / p99, ms):
-
-| transfers a second | 10 | 50 | 100 | 150 | 200 | 250 |
-|---|---|---|---|---|---|---|
-| 28 features | 33 / 51 / 71 | 50 / 80 / 101 | 55 / 89 / 103 | 85 / 196 / 297 | 153 / 479 / 715 | 225 / 547 / 715 |
-
-The target then held to 150 a second. The work is still about 4 ms a transfer: the
-payee's side is read in one Redis round trip instead of three. The difference is in
-the wait, and the laptop ran other programs beside it. A torrent client on two
-cores made an earlier run slow at every step, the model included.
-
-On 15 October the job's checkpoints became unaligned and a silent sender is forgotten
-by a daily timer (`fraud_job.py`). In three repeats each, p99 was 128-173 ms at 150
-a second and 155-268 ms at 200: the target now holds to 200 (`thesis/results.md`).
+Three copies of the job run side by side (`JOB_PARALLELISM`), each handing Python a
+bundle at least every 20 ms (`PY_BUNDLE_TIME_MS`). State saves are unaligned, so no
+copy waits for the others, and a silent sender is forgotten by a daily timer rather
+than Flink's state TTL, which cost 2-3 ms a transfer. On 15 October, on mains
+power, 99 of 100 decisions stayed under the 300 ms target at 150 and at 200
+transfers a second in three repeats each (p99 128-173 and 155-268 ms). The job's own
+work is about 3 ms a transfer; the rest is the wait between Kafka and Python
+(`thesis/results.md`, Speed).
 
 ## Run
 

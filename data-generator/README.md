@@ -24,6 +24,7 @@ python kafka_producer.py --file out/transactions.csv --realtime --speed 200 \
     --bootstrap 127.0.0.1:29092 --topic transactions.raw
 ```
 
-`127.0.0.1:29092` is Kafka's listener for the host (not `localhost`, which Windows tries as IPv6 first); `kafka:9092` works only inside
-the Docker network. The labels (`label_is_fraud`, `label_fraud_type`) stay in the
-file: the producer never sends them.
+`127.0.0.1:29092` is Kafka's listener for the host (not `localhost`, which Windows
+tries as IPv6 first); `kafka:9092` works only inside the Docker network. The labels
+(`label_is_fraud`, `label_fraud_type`) stay in the file: the producer never sends
+them.

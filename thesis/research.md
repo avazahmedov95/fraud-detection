@@ -48,45 +48,47 @@ neutral. The whole system runs on Apache Flink.
 
 ## What we found
 
-1. **What the bank can see matters more than the method.** Measured in September
-   on an earlier, easier version of our data, five datasets each time. Without the
+1. **What the bank can see matters more than the method.** Measured in August on
+   an earlier, easier version of our data, five datasets each time. Without the
    payee's side (who else is paying this card) detection fell the most: PR-AUC
    -0.036. Without the app's session signals it fell almost as much: -0.034.
    Family links, the device and the region added almost nothing to the model. The
    region still matters for one rule: it catches a session from a place the person
    could not have reached in time, with no false alarms on 775 real journeys.
 2. **Money flowing into a mule is invisible from the sender's side.** The stream is
-   split by sender, so each sender sees one ordinary transfer. 80% of mule
-   transfers are of this kind. Keeping the payee's side in Redis raised the share
-   of mule fraud caught from 55.7% to 83.4%. Counting, over the last day, the payee's payers
-   who are new to it and the sender's first-time payees raised F1 by another 2.6
-   points over 20 generated datasets (`results.md`).
+   split by sender, so each sender sees one ordinary transfer; 81% of mule transfers
+   are of this kind. So the payee's side is kept in Redis. Counting, over the last
+   day, the payee's payers who are new to it and the sender's first-time payees
+   raised F1 by 2.6 points on all of 20 generated datasets (`results.md`).
 3. **The sending bank usually does not know who owns the receiving card.** Only
-   6.85% of transfers go to a client of the same bank. So the payee's account age,
+   7% of transfers go to a client of the same bank. So the payee's account age,
    a popular fraud signal, is unknown for 93% of transfers, and we removed it. This
    is an argument for checking payees at the national level.
-4. **Data from people helps most now.** A memory of the accounts in confirmed frauds,
-   built from analysts' decisions, raised the share of fraud caught from 67.0% to
-   70.5% with fewer false alarms. Retraining on people's decisions catches 1.8
-   times as many frauds of a new scheme (`results.md`).
-5. **Time is lost in waiting, not in the model.** The model takes 0.4 ms and all
-   the work about 4-5 ms. The rest of each decision is the transfer waiting between
-   Kafka and Python. Shortening that wait cut the average decision time at 50
-   transfers a second from 180 ms to 32 ms.
+4. **Data from people helps most now.** A memory of the accounts in confirmed
+   frauds, built from analysts' decisions, raised F1 on IBM AML in all five runs, by
+   3.4 to 4.2 points. In a month through the running system, false holds fell from
+   249 in the first ten days to 98 in the last eleven as the history and the memory
+   grew. Retraining on people's decisions catches 2.1 times as many frauds of a new
+   scheme (`results.md`).
+5. **Time is lost in waiting, not in the model.** The model takes 0.4 ms and the
+   job's own work about 3 ms. The rest of each decision is the transfer waiting
+   between Kafka and Python. Three copies of the job, a 20 ms hand-off and state
+   saves that do not wait for all copies keep 99 of 100 decisions under 300 ms up to
+   200 transfers a second.
 6. **The most dangerous failures are silent.** We found 22 failures where the
    system kept running and every check looked fine, while part of the job had
    stopped. For example, the model file was not found and the job quietly scored
    with rules only; and the text "False" was read as true on every live transfer.
    The system now records what actually ran, not what was configured.
 7. **Public data cannot test the payee side.** Public datasets hide the links
-   between accounts that this kind of detection needs. On PaySim, a rule built only
-   from the sender's own history still separates fraud from normal transfers four
-   times better than chance. But the mule rule finds nothing there, because PaySim
+   between accounts that this kind of detection needs. In August, on PaySim, a rule
+   built only from the sender's own history still separated fraud from normal
+   transfers four times better than chance, but the mule rule found nothing: PaySim
    has no collection stage.
-8. **Rule limits must follow the data that is available.** On PaySim our rules first
-   flagged none of 2,520 frauds: fewer signals were available, so the rule score
-   never reached the fixed limit. Scaling the limit to what can still be reached
-   flagged 150 of them.
+8. **Rule limits must follow the data that is available.** In August, on PaySim,
+   our rules first flagged none of 2,520 frauds: fewer signals were available, so
+   the rule score never reached the fixed limit. Scaling the limit to what can still
+   be reached flagged 150 of them.
 
 ## Limits
 

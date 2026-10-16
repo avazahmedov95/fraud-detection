@@ -117,6 +117,6 @@ The rules also name the type of an alert, for example "account takeover".
   chain, and `run.ps1 verify-audit` finds the break. A hash of the raw transfer is
   taken when it enters, so a decision cannot be matched to a different transfer.
 - **Encryption.** Messages can be encrypted (AES-256-GCM), and Kafka can require
-  certificates on both sides (mutual TLS). Measured in September, encryption adds no
-  noticeable delay; it makes messages about half as big again.
+  certificates on both sides (mutual TLS). Decrypting a message takes about 0.01
+  ms, and encryption makes it about 40% bigger (16 October).
 - **Access.** Every service listens only on this computer.

@@ -39,7 +39,7 @@ ClickHouse (decisions with features, verdicts, clients' reports) -> the retraine
 ## Run
 
 Needs Docker Desktop and Python 3.11 (`.venv311`). On Windows use `run.ps1`; the
-Makefile carries the same targets.
+Makefile carries the everyday targets.
 
 ```powershell
 copy .env.example .env               # then set the passwords in it
@@ -71,9 +71,9 @@ Then the demo at http://localhost:8090. `.\run.ps1 help` lists every target;
 
 ## Results
 
-Before and after the latest changes, in plain words: `thesis/results.md`. The
-model's exact figures are in `ml/README.md` (and `ml/models/metrics.json`), the
-public datasets in `validation/README.md`.
+Quality and speed in plain words: `thesis/results.md`. The model's exact figures
+are in `ml/README.md` (and `ml/models/metrics.json`), the public datasets in
+`validation/README.md`.
 
 ## Tests
 

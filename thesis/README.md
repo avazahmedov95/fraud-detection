@@ -8,13 +8,12 @@ system as it is now. Nothing in the running system reads them.
 | `research.md` | the problem, the research question, what we found |
 | `system.md` | how the system works, part by part |
 | `data.md` | the data we generate, and the public datasets |
-| `results.md` | quality and speed before and after the latest changes |
+| `results.md` | quality and speed: the latest measurement of each part |
 | `threats.md` | who attacks, what the system can see, what it cannot |
 | `related-work.md` | the papers and sources we used |
 | `raw/` | the numbers behind the tables in `results.md`, run by run |
 
-The longer notes these replace, with the history of every experiment, are in git:
-`git show b2062f2:thesis/<file>`.
+Older notes and measurements are in git: `git log -p -- thesis`.
 
 ## Words used in these notes
 

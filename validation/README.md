@@ -4,12 +4,10 @@ Our model on two public datasets, through the same feature code the live job run
 Each adapter prints what the file holds and the model's recall, precision and F1 on
 the test rows. The model is one LightGBM fit with `ml/train.py`'s settings (not its
 five-fit committee), with the cut-off where F1 is highest on the rows just before the
-test. What a dataset does
-not have is switched off rather than faked (`harness.capability_profile`): no call
-state, no region, no session timing, no analysts' verdicts, so 22 of the 28
-features remain. On 7 October the analysts' verdicts were also played out from IBM
-AML's labels, the way a bank learns them, to measure the memory of confirmed
-accounts there: `thesis/results.md`.
+test. What a dataset does not have is switched off rather than faked
+(`harness.capability_profile`): no call state, no region, no session timing, no
+analysts' verdicts, so 22 of the 28 features remain. The memory of confirmed
+accounts, with verdicts played out from IBM AML's labels, is in `thesis/results.md`.
 
 | File | What it does |
 |---|---|
@@ -33,20 +31,18 @@ reading needs no cut-off, so its model learns on all the rows before the test (o
 PaySim all 24 training days), as that model did. `--all-types` scores every PaySim
 transaction, as that model did, not only the transfers between people.
 
-## Results, 2026-10-13
+## Results, 13 October 2026 (the same on 15 October)
 
 | dataset | what it holds | scored | recall | precision | F1 |
 |---|---|---|---|---|---|
 | PaySim | 6.36M simulated mobile-money transactions over 31 days, 8,213 fraud | its 532,909 TRANSFER rows, 4,097 fraud; 24 days train, 7 test (920 fraud) | 27.9% | 63.0% | 38.7% |
 | IBM AML HI-Small | 4.49M transfers between bank accounts over 17 days, 5,166 laundering | 60/20/20 by time; 1,653 laundering in test | 46.3% | 78.6% | 58.3% |
 
-The four day-level features of 13 October raised IBM AML's F1 from 56.8% to 58.3%;
-PaySim stayed at 38.5-38.7%, as each sender appears there only once. PaySim's clock
-counts hours, so the features over minutes see nothing there. IBM's
-accounts include banks and companies, not only people, so it is reported for
-information only.
+PaySim's clock counts hours, so the features over minutes see nothing there, and
+each sender appears only once. IBM's accounts include banks and companies, not only
+people, so it is reported for information only.
 
-## At a 2% alert budget, 2026-10-13
+## At a 2% alert budget
 
 An analyst checks the 2% riskiest transfers of the test part; how much of the fraud
 is among them.

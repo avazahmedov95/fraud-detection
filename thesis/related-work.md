@@ -42,10 +42,10 @@ say "payments".
 ## Public data and how to read scores on it
 
 - **PaySim**, and the open repository `ris3abh/aml-p2p-fraud-detection` (MIT
-  licence). It reports PR-AUC 0.380 on PaySim's last 7 days (1.142% fraud); we
-  reproduced 0.397. With PaySim's balance columns the score jumps to 0.988-1.000,
-  because those columns give the answer away. So a very high score on public data
-  can mean a broken model.
+  licence). It reports PR-AUC 0.380 on PaySim's last 7 days (1.142% fraud); in
+  August we reproduced 0.397. With PaySim's balance columns the score jumps to
+  0.988-1.000, because those columns give the answer away. So a very high score on
+  public data can mean a broken model.
 - **Tritscher et al. (2022)**, *Open ERP System Data For Occupational Fraud
   Detection*, arXiv:2206.04460. They also generate fraud data because real data is
   not available. They ask that a generator publish its code and parameters, which
@@ -86,8 +86,9 @@ say "payments".
 ## Model families
 
 - **TabPFN** (Prior Labs, checkpoint 3.5). A ready-trained model for tables. In our
-  tests it ranked fraud a little better than our model (PR-AUC 0.968 against 0.954).
-  But it answered about 3,000 times slower, so we use it only as the second look.
+  August tests, on an earlier version of our data, it ranked fraud a little better
+  than our model (PR-AUC 0.968 against 0.954) but answered about 3,000 times slower,
+  so we use it only as the second look.
 - **arXiv:2407.00956**, *A Closer Look at Deep Learning Methods on Tabular
   Datasets*. Tree models stay very strong on tables. This agrees with our
   comparison: the tree models were ahead of SVM and logistic regression.

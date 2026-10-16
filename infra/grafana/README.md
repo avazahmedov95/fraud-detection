@@ -1,6 +1,6 @@
 # Grafana provisioning
 
-Auto-provisions on `make up`:
+Provisioned when the stack starts (`run.ps1 up`):
 
 - **Datasource** (`datasources/clickhouse.yml`) — ClickHouse over the native
   protocol (`clickhouse:9000`, database `fraud`), uid `clickhouse`.
