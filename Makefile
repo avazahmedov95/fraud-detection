@@ -50,12 +50,19 @@ retrain: ## a new model from the logged decisions and people's verdicts, against
 	cd ml && python retrain.py --cache models_matrix.npz
 
 # The second look's band is re-chosen by hand where TabPFN is installed
-# (ml/second_look.py); until then it stays off under the new cut-off.
+# (ml/second_look.py); until then it stays off under the new cut-off. A failed step
+# puts the served files back, or the next restart would pair the old model with the
+# new cut-off.
+SERVED = model.joblib thresholds.json feature_names.json metrics.json model.onnx model.txt manifest.json
 promote-model: ## serve the retrained model (after reading retrain's comparison)
 	test -f ml/models/candidate/model.joblib
-	cd ml/models/candidate && cp model.joblib thresholds.json feature_names.json ..
-	cd ml && python train.py --served
-	$(MAKE) export-model cancel-job resume-job
+	@KEPT=$$(mktemp -d); \
+	for f in $(SERVED); do if [ -f ml/models/$$f ]; then cp ml/models/$$f $$KEPT/; fi; done; \
+	if (cd ml/models/candidate && cp model.joblib thresholds.json feature_names.json ..) \
+	  && (cd ml && python train.py --served) \
+	  && $(MAKE) export-model cancel-job resume-job; then rm -rf $$KEPT; \
+	else cp $$KEPT/* ml/models/; rm -rf $$KEPT; $(MAKE) serve-prep; \
+	  echo "the served model is back in ml/models; if the job was stopped: make resume-job"; exit 1; fi
 	$(COMPOSE) restart sink-writer second-look demo
 
 # The job loads the model when it starts: cancel it (its last checkpoint is kept) so

@@ -721,6 +721,11 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "not found"}, 404)
 
     def do_POST(self):
+        # Another site's page can post a form here, but not JSON: that needs a CORS
+        # preflight, which this server never answers.
+        if self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":
+            self._json({"error": "JSON only"}, 415)
+            return
         if not APP.health.ready:
             self._json({"error": "the system is not running"}, 503)
             return

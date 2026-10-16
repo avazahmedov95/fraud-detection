@@ -3,6 +3,9 @@
 import csv
 import random
 import re
+import threading
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
@@ -388,3 +391,31 @@ def test_a_transfer_decided_twice_keeps_its_row_and_counts_once():
     app = SimpleNamespace(decisions=d, runs={}, _why=lambda rec: None)
     for asked in ("SECOND_LOOK", "REVIEW"):
         assert [r["id"] for r in S.App.stream(app, flt={"decision": asked})["rows"]] == ["t1"]
+
+
+def test_a_button_press_is_taken_only_as_json_which_another_site_cannot_send(monkeypatch):
+    """A form or plain text posted from another site's page changes nothing."""
+    done = []
+    monkeypatch.setattr(S, "APP", SimpleNamespace(
+        health=SimpleNamespace(ready=True),
+        resolve=lambda case_id, disposition: done.append(case_id) or {"ok": True}))
+    srv = S.ThreadingHTTPServer(("127.0.0.1", 0), S.Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+    def press(ctype):
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{srv.server_port}/api/cases/c1/resolve",
+            data=b'{"disposition": "CONFIRMED_FRAUD"}', headers={"Content-Type": ctype})
+        try:
+            return opener.open(req).status
+        except urllib.error.HTTPError as exc:
+            return exc.code
+
+    try:
+        assert (press("application/x-www-form-urlencoded"), press("text/plain")) == (415, 415)
+        assert done == []
+        assert press("application/json") == 200 and done == ["c1"]
+    finally:
+        srv.shutdown()
+        srv.server_close()

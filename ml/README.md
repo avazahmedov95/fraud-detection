@@ -108,7 +108,8 @@ Every decision is stored with its feature values (`features` in
 It saves the new model in `models/candidate/` and changes nothing else. A person
 reads the comparison and switches the new model on with `run.ps1 promote-model`: it
 measures the model on the held-out days (`train.py --served`, the figures above then
-change), exports it, chooses the second look's band again and restarts the job.
+change), exports it, chooses the second look's band again and restarts the job. If a
+step fails, it stops and puts the served model's files back.
 Each run's outcome goes to `models/retrain_status.json`, which the demo shows on the
 About the project tab, and to the table `fraud.retrain_runs`, which Grafana shows in
 its Retraining row: the person deciding reads it there.

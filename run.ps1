@@ -296,33 +296,51 @@ switch ($Target.ToLower()) {
             throw "no candidate in ml/models/candidate: run .\run.ps1 retrain first"
         }
         # Every step stops the promotion when it fails: on 15 October a failed export
-        # went on to restart the job with a model that did not match.
-        foreach ($f in "model.joblib", "thresholds.json", "feature_names.json") {
-            Copy-Item "ml/models/candidate/$f" "ml/models/" -Force
+        # went on to restart the job with a model that did not match. The served
+        # files are then put back, or the next restart would pair the old model
+        # with the new cut-off.
+        $kept = Join-Path $env:TEMP "fraud-served-model"
+        Remove-Item $kept -Recurse -Force -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory $kept | Out-Null
+        foreach ($f in "model.joblib", "thresholds.json", "feature_names.json", "metrics.json",
+                       "model.onnx", "model.txt", "manifest.json", "second_look.json", "second_look.npz") {
+            if (Test-Path "ml/models/$f") { Copy-Item "ml/models/$f" $kept }
         }
-        Invoke-Step "measuring it on the held-out days" {
-            Push-Location ml
-            try { python train.py --served } finally { Pop-Location }
-        }
-        Invoke-Step "exporting it" { & $PSCommandPath export-model }
-        $tabpfn = Join-Path (Split-Path (Get-Location).Path) ".venv-models\Scripts\python.exe"
-        if ((Test-Path $tabpfn) -and $DotEnv.TABPFN_CHECKPOINT) {
-            $ckpt = (Resolve-Path $DotEnv.TABPFN_CHECKPOINT).Path
-            Invoke-Step "choosing the second look's band" {
-                Push-Location ml
-                try { & $tabpfn second_look.py --cache models_matrix.npz --tabpfn-model $ckpt } finally { Pop-Location }
+        try {
+            foreach ($f in "model.joblib", "thresholds.json", "feature_names.json") {
+                Copy-Item "ml/models/candidate/$f" "ml/models/" -Force
             }
-        } else {
-            Write-Host "The second look's band was not re-chosen (it needs ..\.venv-models and TABPFN_CHECKPOINT): the second look stays off under the new cut-off." -ForegroundColor Yellow
+            Invoke-Step "measuring it on the held-out days" {
+                Push-Location ml
+                try { python train.py --served } finally { Pop-Location }
+            }
+            Invoke-Step "exporting it" { & $PSCommandPath export-model }
+            $tabpfn = Join-Path (Split-Path (Get-Location).Path) ".venv-models\Scripts\python.exe"
+            if ((Test-Path $tabpfn) -and $DotEnv.TABPFN_CHECKPOINT) {
+                $ckpt = (Resolve-Path $DotEnv.TABPFN_CHECKPOINT).Path
+                Invoke-Step "choosing the second look's band" {
+                    Push-Location ml
+                    try { & $tabpfn second_look.py --cache models_matrix.npz --tabpfn-model $ckpt } finally { Pop-Location }
+                }
+            } else {
+                Write-Host "The second look's band was not re-chosen (it needs ..\.venv-models and TABPFN_CHECKPOINT): the second look stays off under the new cut-off." -ForegroundColor Yellow
+            }
+            # The job loads the model when it starts: cancel it (its last checkpoint is
+            # kept), and resume-job brings it back with the new one.
+            foreach ($job in @(Get-ActiveJobs)) {
+                Invoke-RestMethod -Method Patch -Uri "http://localhost:8081/jobs/$($job.jid)?mode=cancel" | Out-Null
+            }
+            $deadline = (Get-Date).AddSeconds(60)
+            while (@(Get-ActiveJobs).Count -gt 0 -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 1 }
+            Invoke-Step "restarting the job" { & $PSCommandPath resume-job }
+        } catch {
+            Copy-Item "$kept\*" "ml/models/" -Force
+            & $PSCommandPath serve-prep
+            Write-Host "The served model is back in ml/models. If the job was stopped: .\run.ps1 resume-job" -ForegroundColor Yellow
+            throw
+        } finally {
+            Remove-Item $kept -Recurse -Force
         }
-        # The job loads the model when it starts: cancel it (its last checkpoint is
-        # kept), and resume-job brings it back with the new one.
-        foreach ($job in @(Get-ActiveJobs)) {
-            Invoke-RestMethod -Method Patch -Uri "http://localhost:8081/jobs/$($job.jid)?mode=cancel" | Out-Null
-        }
-        $deadline = (Get-Date).AddSeconds(60)
-        while (@(Get-ActiveJobs).Count -gt 0 -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 1 }
-        Invoke-Step "restarting the job" { & $PSCommandPath resume-job }
         docker compose restart sink-writer second-look demo
     }
 
