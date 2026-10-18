@@ -39,8 +39,8 @@ ClickHouse (decisions with features, verdicts, clients' reports) -> the retraine
 
 ## Run
 
-Needs Docker Desktop and Python 3.11 (`.venv311`). On Windows use `run.ps1`; the
-Makefile carries the everyday targets.
+Needs Docker Desktop and Python 3.11 (`.venv311`). Every action is a target of
+`run.ps1` (PowerShell).
 
 ```powershell
 copy .env.example .env               # then set the passwords in it

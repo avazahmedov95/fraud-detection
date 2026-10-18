@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Operations entry point on Windows; the Makefile carries the same targets.
+    Operations entry point: every action on the stack is one target.
 
 .DESCRIPTION
     ASCII only, deliberately. Windows PowerShell 5.1 reads .ps1 files as ANSI
@@ -54,7 +54,7 @@ $ChUser = $DotEnv.CLICKHOUSE_USER
 $ChPassword = $DotEnv.CLICKHOUSE_PASSWORD
 
 # Every module the PyFlink job imports, shipped with it (tools/boundary_audit.py
-# checks this list and the Makefile's against the job's imports).
+# checks this list against the job's imports).
 $JobModules = @(
     "config.py", "capabilities.py", "features.py", "geo.py", "rules.py",
     "receiver_store.py", "fusion.py", "payload_crypto.py"

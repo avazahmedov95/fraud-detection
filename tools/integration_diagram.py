@@ -101,7 +101,7 @@ node(192, 96, "Grafana", "charts", w=14, h=8)
 node(110, 83, "demo server", "the page's API, the live stream,\nthe analyst's queue (store.py)", w=26)
 node(150, 83, "Analyst's browser", "the demo page,\nGrafana", w=22)
 node(22, 96, "ml/ and the retrainer", "trains the model; the retrainer\nmakes a new one every week", w=28)
-node(70, 136, "Operator: run.ps1, make", "", w=30, h=5)
+node(70, 136, "Operator: run.ps1", "", w=30, h=5)
 
 # ------------------------------------------------------------------ Kafka
 link(1, "kafka", [(25, 122), (31.5, 122)], at=(28.2, 124.5))
@@ -153,8 +153,9 @@ ROWS = [
     (2, "kafka", "Kafka -> Flink job", "the job reads transactions.raw (group fraud-cep); "
      "its read position is saved every 2 s"),
     (3, "redis", "Flink job <-> Redis", "reads the payee's side: ZRANGEBYSCORE rcv:{payee}, "
-     "cp:in:{payee}, cp:card:{payee}; ZREVRANGE cp:in:{sender}; SMISMEMBER confirmed:accounts; "
-     "EXISTS second-look:alive. Writes back in one go: ZADD, ZREMRANGEBYSCORE, EXPIRE"),
+     "cp:in:{payee}, cp:new:{payee}, cp:card:{payee}; ZREVRANGEBYSCORE cp:in:{sender}; "
+     "SMISMEMBER confirmed:accounts; EXISTS second-look:alive. Writes back in one go: ZADD, "
+     "ZREMRANGEBYSCORE, EXPIRE"),
     (4, "kafka", "Flink job -> Kafka", "every decision to transactions.scored, with "
      "its feature values and the time of each step"),
     (5, "kafka", "Flink job -> Kafka", "transfers just under the cut-off to "
@@ -181,7 +182,7 @@ ROWS = [
      "cancelled: SREM, unless another case or confirmed:history (SISMEMBER) still has the card"),
     (15, "http", "demo server -> Flink", "GET :8081/jobs/overview: the page opens only "
      "while the job runs"),
-    (16, "http", "browser <-> demo server", ":8090 GET /api/status, /api/stream, /api/live, "
+    (16, "http", "browser <-> demo server", ":8090 GET /api/status, /api/stream, "
      "/api/cases, /api/results, /api/episode/{id}; POST /api/episode, /api/background, "
      "/api/cases/{id}/resolve, /api/report"),
     (17, "http", "browser -> Grafana", ":3000, also shown inside the demo page; its own login"),

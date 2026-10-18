@@ -303,27 +303,15 @@ def _job_import_closure():
 
 
 def b_job_modules_cover_every_import():
-    """Both submitters (Makefile PYFILES and run.ps1) must ship the whole closure -
-    the mounted directory can hide a module missing from one of them."""
-    needed = _job_import_closure()
-
+    """run.ps1 must ship the whole closure - the mounted directory can hide a
+    module missing from its list."""
     ps1 = _read("run.ps1")
-    listed_ps1 = set(re.findall(r'"([a-z_]+\.py)"',
-                                ps1.split("$JobModules = @(", 1)[1].split(")", 1)[0]))
-
-    mk = _read("Makefile")
-    pyfiles_line = [l for l in mk.splitlines() if l.startswith("PYFILES")][0]
-    listed_mk = set(re.findall(r'([a-z_]+\.py)', pyfiles_line))
-
-    problems = []
-    for where, listed in (("run.ps1 $JobModules", listed_ps1),
-                          ("Makefile PYFILES", listed_mk)):
-        missing = sorted(needed - listed)
-        if missing:
-            problems.append(f"{where} does not ship {missing}")
-    if problems:
-        return ("; ".join(problems) + " - the job then depends on the usrjobs "
-                "mount rather than on what it declares")
+    listed = set(re.findall(r'"([a-z_]+\.py)"',
+                            ps1.split("$JobModules = @(", 1)[1].split(")", 1)[0]))
+    missing = sorted(_job_import_closure() - listed)
+    if missing:
+        return (f"run.ps1 $JobModules does not ship {missing} - the job then depends on "
+                "the usrjobs mount rather than on what it declares")
     return None
 
 
@@ -589,7 +577,7 @@ CHECKS = [
     ("case_row -> ClickHouse 02-cases", b_case_row_matches_the_schema),
     ("retrain run -> ClickHouse 03-retrain", b_retrain_run_matches_the_schema),
     ("demo episode -> what retraining leaves out", b_demo_replays_are_left_out_of_retraining),
-    ("fraud_job imports -> run.ps1 AND Makefile", b_job_modules_cover_every_import),
+    ("fraud_job imports -> run.ps1", b_job_modules_cover_every_import),
     ("config artefacts -> run.ps1 serve-prep", b_serve_prep_ships_every_artefact),
     ("no data path derived from __file__", b_no_artefact_path_derived_from_file),
     ("ReceiverStore write -> read (Redis member)", b_receiver_store_round_trips),

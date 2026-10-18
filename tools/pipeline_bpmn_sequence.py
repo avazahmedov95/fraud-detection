@@ -425,7 +425,7 @@ fig.patch.set_facecolor("white")
 ax.text(0, 106, "One transfer through the system, step by step",
         fontsize=18, fontweight="bold", color=INK, family=FAMILY, va="bottom")
 ax.text(0, 102.8, "The same path as the diagram, read from top to bottom. Times are averages over "
-                 "1,000 transfers at 10 a second, measured on the running system on 5 October 2026, on battery.",
+                 "1,000 transfers at 10 a second, measured on the running system on 14 October 2026, on mains power.",
         fontsize=10.5, color=MUTED, family=FAMILY, va="bottom")
 
 top_y, step = 96, 4.6
