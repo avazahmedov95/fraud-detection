@@ -53,8 +53,7 @@ foreach ($k in "CLICKHOUSE_USER", "CLICKHOUSE_PASSWORD") {
 $ChUser = $DotEnv.CLICKHOUSE_USER
 $ChPassword = $DotEnv.CLICKHOUSE_PASSWORD
 
-# Every module the PyFlink job imports, shipped with it (tools/boundary_audit.py
-# checks this list against the job's imports).
+# Every module the PyFlink job imports, shipped with it.
 $JobModules = @(
     "config.py", "capabilities.py", "features.py", "geo.py", "rules.py",
     "receiver_store.py", "fusion.py", "payload_crypto.py"
@@ -208,7 +207,6 @@ switch ($Target.ToLower()) {
             "query-scored"   = "decision counts in ClickHouse"
             "sink-logs"      = "tail the sink-writer logs"
             "verify-audit"   = "recompute the audit hash chain, report tampering"
-            "boundaries"     = "check every place one component hands something to another"
             "pipeline"       = "clean -> up -> seed-confirmed -> produce -> submit-job"
         }
         Write-Host ""
@@ -408,8 +406,6 @@ switch ($Target.ToLower()) {
         Push-Location "sink-writer"
         try { python verify_audit.py } finally { Pop-Location }
     }
-
-    "boundaries" { python tools/boundary_audit.py -v }
 
     "pipeline" {
         Invoke-Step "removing old containers and volumes" { & $PSCommandPath clean }

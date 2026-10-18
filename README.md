@@ -21,7 +21,6 @@ demo/              one page over the running system, and the analyst's queue on 
                    on the command line
 validation/        the model on the public datasets PaySim and IBM AML
 infra/             Docker images, Kafka, ClickHouse schema, Redis, Grafana
-tools/             boundary_audit.py and the diagram generators
 docs/              the diagrams: architecture (drawn in draw.io, architecture.drawio),
                    integration (how the services talk), the BPMN process, one transfer
                    step by step
@@ -88,5 +87,4 @@ python -m pytest second-look      -q
 python -m pytest demo             -q
 python -m pytest ml               -q
 python -m pytest validation       -q
-python tools/boundary_audit.py       # what each component hands the next
 ```

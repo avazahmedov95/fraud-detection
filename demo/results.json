@@ -1,5 +1,5 @@
 {
-  "_about": "What the demo's About tab says beside the model's own figures: the second look on our own data and this project's model on two public datasets. Every figure carries the exact line of the document it came from, and tools/boundary_audit.py fails when that line is gone.",
+  "_about": "What the demo's About tab says beside the model's own figures: the second look on our own data and this project's model on two public datasets. Every figure carries the exact line of the document it came from.",
   "own": {
     "key": "own",
     "second": {

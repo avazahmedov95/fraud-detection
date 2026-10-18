@@ -38,8 +38,7 @@ it was. `second_look.py` runs in `.venv-models`, where TabPFN is installed. Then
 
 The main dataset (`data-generator`) has 500,000 transfers. The last 100,000 (the
 last six days) are kept for testing; 176 of them are fraud. `models/metrics.json`
-holds the exact figures, and `tools/boundary_audit.py` fails if this table differs
-from it.
+holds the exact figures.
 
 | metric | model | rules only |
 |---|---|---|
