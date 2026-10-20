@@ -137,8 +137,8 @@ queue: at the same 1,278 alerts the model alone catches 836 laundering, the memo
 
 The model trained on each dataset itself, with the 22 of the 28 features it can
 supply (`validation/README.md`), 13 October, repeated with the same result on 15
-October: PaySim F1 38.7%, IBM AML 58.3% (for information only: its accounts include
-banks and companies).
+October: PaySim F1 38.7%, IBM AML 58.3% in one run, 58.4% over five (below; for
+information only: its accounts include banks and companies).
 
 At a 2% alert budget an analyst checks the 2% riskiest transfers of the test part.
 The published PaySim model reports its result this way, so PaySim is scored here on

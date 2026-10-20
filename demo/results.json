@@ -37,13 +37,21 @@
         "en": "6.36 million simulated mobile-money transactions modelled on an African service, over 31 days; 8,213 of them fraud. Scored: the customer-to-customer transfers (type TRANSFER), 532,909 rows with 4,097 fraud; 24 days to train, 7 to test."
       },
       "ours": {
-        "ru": "полнота 27,9%, точность 63,0%, F1 38,7%",
-        "en": "recall 27.9%, precision 63.0%, F1 38.7%"
+        "ru": "полнота 27,9%, точность 63,0%, F1 38,7%. Среди 2% самых подозрительных операций — 48,4% мошенничества; у опубликованной модели 49,4%",
+        "en": "recall 27.9%, precision 63.0%, F1 38.7%. Among the 2% riskiest transactions: 48.4% of the fraud; the published model 49.4%"
       },
       "quotes": [
         {
           "file": "validation/README.md",
           "text": "| PaySim | 6.36M simulated mobile-money transactions over 31 days, 8,213 fraud | its 532,909 TRANSFER rows, 4,097 fraud; 24 days train, 7 test (920 fraud) | 27.9% | 63.0% | 38.7% |"
+        },
+        {
+          "file": "validation/README.md",
+          "text": "| PaySim, all transactions (`--all-types`) | 3,229 | 48.4% (891 of 1,840) | 27.6% |"
+        },
+        {
+          "file": "validation/README.md",
+          "text": "| the published PaySim model (CatBoost, `ris3abh/aml-p2p-fraud-detection`) | - | 49.4% (916 of 1,854) | 26.1% |"
         }
       ]
     },
@@ -58,13 +66,21 @@
         "en": "IBM's simulated bank transfers with money laundering: 4.49 million transfers over 17 days, 5,166 of them laundering. Its accounts include banks and companies, so it is for information only. Split 60/20/20 by time."
       },
       "ours": {
-        "ru": "полнота 46,3%, точность 78,6%, F1 58,3%",
-        "en": "recall 46.3%, precision 78.6%, F1 58.3%"
+        "ru": "F1 58,4% (5 запусков, как в публикации IBM): выше опубликованных графовых нейросетей (до 56,8%), ниже лучшего метода GFP (63,2%)",
+        "en": "F1 58.4% (five runs, as the IBM paper scores it): above the published graph neural networks (up to 56.8%), below the best method, GFP (63.2%)"
       },
       "quotes": [
         {
           "file": "validation/README.md",
-          "text": "| IBM AML HI-Small | 4.49M transfers between bank accounts over 17 days, 5,166 laundering | 60/20/20 by time; 1,653 laundering in test | 46.3% | 78.6% | 58.3% |"
+          "text": "| this project | 58.4 ± 0.4 |"
+        },
+        {
+          "file": "validation/README.md",
+          "text": "| PNA, published | 56.8 ± 2.4 |"
+        },
+        {
+          "file": "validation/README.md",
+          "text": "| GFP + XGBoost, published | 63.2 ± 0.2 |"
         }
       ]
     }
