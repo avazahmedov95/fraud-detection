@@ -94,8 +94,7 @@ neutral. The whole system runs on Apache Flink.
 - The data is generated. Every figure is a design target, not a result from a real
   bank.
 - Everything runs on one laptop, so the speed figures depend on power and load.
-- About a tenth of fraud is never reported, as in a real bank, and the demo has few
-  analysts' decisions so far.
+- About a tenth of fraud is never reported, as in a real bank.
 - The generated data has no weekly or monthly rhythm, so the hour of day is a weak
   signal.
 - Cross-border transfers are not modelled, although in 2025 46% of the money sent
