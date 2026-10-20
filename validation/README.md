@@ -44,8 +44,11 @@ people, so it is reported for information only.
 
 ## IBM AML against its paper
 
-Scored as Altman et al. (NeurIPS 2023, arXiv:2306.16424) score it: 60/20/20 by time,
-F1 on laundering, five runs (20 October 2026, `thesis/raw/ibm_as_published.json`).
+Scored as Altman et al. (NeurIPS 2023, arXiv:2306.16424v3, Table 2) score it:
+60/20/20 by time, F1 on laundering, five runs (20 October 2026,
+`thesis/raw/ibm_as_published.json`). Our rows leave out the 591,212 transfers from an
+account to itself (11 of 5,177 laundering), so our last fifth is close to the
+paper's, not identical.
 
 | model | F1 on HI-Small |
 |---|---|

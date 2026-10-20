@@ -1,5 +1,5 @@
 {
- "_about": "20 October 2026: IBM AML HI-Small scored as Altman et al. (NeurIPS 2023, arXiv:2306.16424) score it: 60/20/20 by time, F1 on laundering (1,653 in the last fifth), five runs (seeds 0-4) of validation/harness.py's fit (one LightGBM, 22 of the 28 features), read from validation/ibm_features.npz. 'chosen': the F1-peak cut-off on the middle 20%, as the harness does; 'at_0_5': the paper's fixed threshold. F1, recall and precision in %. 'published': the paper's table for HI-Small, mean and spread.",
+ "_about": "20 October 2026: IBM AML HI-Small scored as Altman et al. (NeurIPS 2023, arXiv:2306.16424) score it (arXiv:2306.16424v3, Table 2): 60/20/20 by time, F1 on laundering (1,653 in the last fifth; our rows leave out the 591,212 transfers from an account to itself), five runs (seeds 0-4) of validation/harness.py's fit (one LightGBM, 22 of the 28 features), read from validation/ibm_features.npz. 'chosen': the F1-peak cut-off on the middle 20%, as the harness does; 'at_0_5': the paper's fixed threshold. F1, recall and precision in %. 'published': the paper's Table 2 for HI-Small, mean and spread.",
  "chosen": {
   "f1": [58.3, 58.1, 58.6, 58.1, 59.0],
   "cutoff": [0.103, 0.126, 0.109, 0.128, 0.109],
