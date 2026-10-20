@@ -148,12 +148,24 @@ all its transactions, as that model was:
 |---|---|---|---|
 | our data (the last six days) | 2,000 | 98.9% (174 of 176) | 8.7% |
 | PaySim, all transactions | 3,229 | 48.4% (891 of 1,840) | 27.6% |
-| the published PaySim model | - | 49.4% (916 of 1,854) | - |
+| the published PaySim model | - | 49.4% (916 of 1,854) | 26.1% |
 | IBM AML | 17,949 | 82.7% (1,367 of 1,653) | 7.6% |
 
 On our data 2% is far more alerts than there are frauds, so almost all fraud is
 inside. On PaySim our features come close to the published model, which also uses
 PaySim's own transaction type.
+
+IBM AML measured as its paper does (Altman et al. 2023, `related-work.md`): 60/20/20
+by time, F1 on laundering, five runs, 20 October:
+
+| model | F1 on HI-Small |
+|---|---|
+| graph neural networks, published (GIN, GIN + EU, PNA) | 28.7, 47.7, 56.8 |
+| this project | 58.4 ± 0.4 |
+| GFP with boosted trees, published | 62.9-63.2 |
+
+Our cut-off is chosen on the middle 20%. At the paper's fixed 0.5 our model holds
+only what it is nearly sure of (97% of alerts right, 28% caught): F1 42.9 ± 0.6.
 
 ## Speed
 
@@ -206,6 +218,7 @@ load.
 - `raw/day_features_seeds.json`: the 24 and the 28 features on 20 earlier datasets.
 - `raw/retrain_fresh.json`: retraining when fraud changes, each run.
 - `raw/ibm_memory_28.json`: the memory on IBM AML, each run.
+- `raw/ibm_as_published.json`: IBM AML scored as its paper does, each run.
 - `raw/speed_repeats.json`: every speed repeat and the four versions of the job.
 - `raw/sources_and_test_transfer.json`: each data source left out, and the test
   transfer, on each dataset.

@@ -42,6 +42,24 @@ PaySim's clock counts hours, so the features over minutes see nothing there, and
 each sender appears only once. IBM's accounts include banks and companies, not only
 people, so it is reported for information only.
 
+## IBM AML against its paper
+
+Scored as Altman et al. (NeurIPS 2023, arXiv:2306.16424) score it: 60/20/20 by time,
+F1 on laundering, five runs (20 October 2026, `thesis/raw/ibm_as_published.json`).
+
+| model | F1 on HI-Small |
+|---|---|
+| GIN, published | 28.7 ± 1.1 |
+| GIN + EU, published | 47.7 ± 7.9 |
+| PNA, published | 56.8 ± 2.4 |
+| this project | 58.4 ± 0.4 |
+| GFP + LightGBM, published | 62.9 ± 0.3 |
+| GFP + XGBoost, published | 63.2 ± 0.2 |
+
+GFP (arXiv:2402.08593) counts circles and chains of transfers over the whole graph.
+Our cut-off is chosen on the middle 20%; at the paper's fixed 0.5 our model holds
+only what it is nearly sure of, and F1 is 42.9 ± 0.6.
+
 ## At a 2% alert budget
 
 An analyst checks the 2% riskiest transfers of the test part; how much of the fraud
@@ -50,7 +68,7 @@ is among them.
 | dataset | alerts | fraud caught | alerts that are fraud |
 |---|---|---|---|
 | PaySim, all transactions (`--all-types`) | 3,229 | 48.4% (891 of 1,840) | 27.6% |
-| the published PaySim model (CatBoost, `ris3abh/aml-p2p-fraud-detection`) | - | 49.4% (916 of 1,854) | - |
+| the published PaySim model (CatBoost, `ris3abh/aml-p2p-fraud-detection`) | - | 49.4% (916 of 1,854) | 26.1% |
 | IBM AML HI-Small | 17,949 | 82.7% (1,367 of 1,653) | 7.6% |
 
 On PaySim our 22 features come close to the published model, which also uses

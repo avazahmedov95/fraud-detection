@@ -46,6 +46,12 @@ say "payments".
   of the fraud at a 2% alert budget, which we compare with (`results.md`). PaySim's
   balance columns give the answer away: with them a model scores close to 1. So a
   very high score on public data can mean a broken model.
+- **Altman et al. (2023)**, *Realistic Synthetic Financial Transactions for
+  Anti-Money Laundering Models*, NeurIPS, arXiv:2306.16424. The IBM AML datasets and
+  how to score them: 60/20/20 by time, F1 on laundering. On HI-Small its graph neural
+  networks reach F1 28.7-56.8, and GFP with boosted trees 62.9-63.2 (Blanuša et al.
+  2024, arXiv:2402.08593: circles, chains and fan shapes around each transfer, over
+  the whole graph). We compare with this table (`results.md`).
 - **Tritscher et al. (2022)**, *Open ERP System Data For Occupational Fraud
   Detection*, arXiv:2206.04460. They also generate fraud data because real data is
   not available. They ask that a generator publish its code and parameters, which
