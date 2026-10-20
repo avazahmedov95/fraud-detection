@@ -51,7 +51,7 @@
         },
         {
           "file": "validation/README.md",
-          "text": "| the published PaySim model (CatBoost, `ris3abh/aml-p2p-fraud-detection`) | - | 49.4% (916 of 1,854) | 26.1% |"
+          "text": "| the published PaySim model (CatBoost, `ris3abh/aml-p2p-fraud-detection`) | 3,246 | 49.4% (916 of 1,854) | 28.2% |"
         }
       ]
     },

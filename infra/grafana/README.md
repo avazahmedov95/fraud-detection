@@ -2,10 +2,10 @@
 
 Provisioned when the stack starts (`run.ps1 up`):
 
-- **Datasource** (`datasources/clickhouse.yml`) — ClickHouse over the native
-  protocol (`clickhouse:9000`, database `fraud`), uid `clickhouse`.
-- **Dashboard** (`dashboards/json/fraud-overview.json`) — loaded by the file
-  provider into the "Fraud Detection" folder.
+- **Datasource** (`provisioning/datasources/clickhouse.yml`) — ClickHouse over the
+  native protocol (`clickhouse:9000`, database `fraud`), uid `clickhouse`.
+- **Dashboard** (`provisioning/dashboards/json/fraud-overview.json`) — loaded by the
+  file provider into the "Fraud Detection" folder.
 
 ## Dashboard: Fraud Detection — Overview
 
@@ -31,12 +31,6 @@ last hour and refreshes every 10 seconds; every figure comes from
   better model on with `run.ps1 promote-model`.
 
 Each query names its format: 1 for a table or a number, 0 for the time chart.
-Without it the ClickHouse plugin reads every result as a time series and shows
-nothing for a table sorted newest first; the reason is only in
-`docker logs grafana`.
 
-## Embedded in the demo
-
-`demo/` shows this dashboard in a frame, in kiosk mode, which is why
-`GF_SECURITY_ALLOW_EMBEDDING` is set in docker-compose.yml: without it Grafana
-refuses to be framed. It changes nothing else - the frame asks for the same login.
+`demo/` shows this dashboard in a frame (`GF_SECURITY_ALLOW_EMBEDDING` in
+docker-compose.yml); the frame asks for the same login.

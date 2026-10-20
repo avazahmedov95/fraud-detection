@@ -27,12 +27,10 @@ python seed_confirmed.py # with the stack up
 ..\run.ps1 promote-model # switch the new model on
 ```
 
-`export_onnx.py` runs in a container (`infra/ml/Dockerfile`) because Windows Smart
-App Control blocks a library that onnx needs. ONNX keeps split thresholds as
-float32, so the export moves each one to the float32 at or below it; the features
-are float32 too, so no decision changes. A failed check leaves the served model as
-it was. `second_look.py` runs in `.venv-models`, where TabPFN is installed. Then
-`run.ps1 resume-job` makes the job use the new model, cut-off and band.
+`export_onnx.py` runs in a container (`infra/ml/Dockerfile`); a failed check leaves
+the served model as it was. `second_look.py` runs in `.venv-models`, where TabPFN is
+installed. Then `run.ps1 resume-job` makes the job use the new model, cut-off and
+band.
 
 ## Results on the held-out days
 
@@ -52,10 +50,7 @@ Recall by fraud type (at REVIEW): STRUCTURING 86.2%, APP 55.6%, ATO 85.7%, MULE 
 This run: cut at REVIEW = 0.1803.
 
 The model reads 28 features (`stream-processor/capabilities.py`): three come from
-the memory of confirmed fraud accounts, four look at the last day. In this test
-every fraud's payee counts as confirmed a day after the fraud; a real bank learns
-fewer. The data is generated, so these are design targets, not results from a real
-bank.
+the memory of confirmed fraud accounts, four look at the last day.
 
 ## The second look
 

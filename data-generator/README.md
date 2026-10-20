@@ -1,8 +1,8 @@
 # data-generator
 
 Synthetic P2P card transfers calibrated to Uzbekistan (UzCard and HUMO, 14 regions,
-the issuing banks of `banks.csv`), with four fraud patterns injected and labelled -
-there is no public dataset of Uzbek transfers. The dataset of record: 500,000
+the issuing banks of `banks.csv`), with four fraud patterns injected and labelled.
+The dataset of record: 500,000
 transfers by 50,000 people over 30 days, 0.2% fraud, legitimate transfers that share
 fraud's shapes, and a tenth of fraud never reported.
 
@@ -24,7 +24,6 @@ python kafka_producer.py --file out/transactions.csv --realtime --speed 200 \
     --bootstrap 127.0.0.1:29092 --topic transactions.raw
 ```
 
-`127.0.0.1:29092` is Kafka's listener for the host (not `localhost`, which Windows
-tries as IPv6 first); `kafka:9092` works only inside the Docker network. The labels
-(`label_is_fraud`, `label_fraud_type`) stay in the file: the producer never sends
-them.
+`127.0.0.1:29092` is Kafka from the host, `kafka:9092` inside the Docker network.
+The labels (`label_is_fraud`, `label_fraud_type`) stay in the file: the producer
+never sends them.

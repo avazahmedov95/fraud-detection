@@ -148,7 +148,7 @@ all its transactions, as that model was:
 |---|---|---|---|
 | our data (the last six days) | 2,000 | 98.9% (174 of 176) | 8.7% |
 | PaySim, all transactions | 3,229 | 48.4% (891 of 1,840) | 27.6% |
-| the published PaySim model | - | 49.4% (916 of 1,854) | 26.1% |
+| the published PaySim model | 3,246 | 49.4% (916 of 1,854) | 28.2% |
 | IBM AML | 17,949 | 82.7% (1,367 of 1,653) | 7.6% |
 
 On our data 2% is far more alerts than there are frauds, so almost all fraud is

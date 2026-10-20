@@ -5,8 +5,7 @@ Uzbekistan's UzCard and HUMO networks from Kafka, a PyFlink job with hard rules 
 a LightGBM model, a memory of confirmed fraud accounts, and a second look by
 TabPFN. A suspicious transfer is held until an analyst blocks or releases it.
 
-> A research prototype on generated data: the figures are design targets, not
-> results from a real bank.
+> A research prototype: it runs on generated data.
 
 ## Components
 

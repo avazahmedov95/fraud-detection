@@ -51,8 +51,8 @@ seen, and the confirmed accounts as none.
 
 Three copies of the job run side by side (`JOB_PARALLELISM`), each handing Python a
 bundle at least every 20 ms (`PY_BUNDLE_TIME_MS`). State saves are unaligned, so no
-copy waits for the others, and a silent sender is forgotten by a daily timer rather
-than Flink's state TTL, which cost 2-3 ms a transfer. On 15 October, on mains
+copy waits for the others, and a silent sender is forgotten by a daily timer. On 15
+October, on mains
 power, 99 of 100 decisions stayed under the 300 ms target at 150 and at 200
 transfers a second in three repeats each (p99 128-173 and 155-268 ms). The job's own
 work is about 3 ms a transfer; the rest is the wait between Kafka and Python

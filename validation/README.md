@@ -38,9 +38,8 @@ transaction, as that model did, not only the transfers between people.
 | PaySim | 6.36M simulated mobile-money transactions over 31 days, 8,213 fraud | its 532,909 TRANSFER rows, 4,097 fraud; 24 days train, 7 test (920 fraud) | 27.9% | 63.0% | 38.7% |
 | IBM AML HI-Small | 4.49M transfers between bank accounts over 17 days, 5,166 laundering | 60/20/20 by time; 1,653 laundering in test | 46.3% | 78.6% | 58.3% |
 
-PaySim's clock counts hours, so the features over minutes see nothing there, and
-each sender appears only once. IBM's accounts include banks and companies, not only
-people, so it is reported for information only.
+IBM's accounts include banks and companies, not only people, so it is for
+information only.
 
 ## IBM AML against its paper
 
@@ -71,9 +70,5 @@ is among them.
 | dataset | alerts | fraud caught | alerts that are fraud |
 |---|---|---|---|
 | PaySim, all transactions (`--all-types`) | 3,229 | 48.4% (891 of 1,840) | 27.6% |
-| the published PaySim model (CatBoost, `ris3abh/aml-p2p-fraud-detection`) | - | 49.4% (916 of 1,854) | 26.1% |
+| the published PaySim model (CatBoost, `ris3abh/aml-p2p-fraud-detection`) | 3,246 | 49.4% (916 of 1,854) | 28.2% |
 | IBM AML HI-Small | 17,949 | 82.7% (1,367 of 1,653) | 7.6% |
-
-On PaySim our 22 features come close to the published model, which also uses
-PaySim's own transaction type. On all PaySim transactions the F1-peak reading is
-33.4% caught, 44.3% of alerts fraud, F1 38.1%.
