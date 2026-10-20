@@ -136,9 +136,8 @@ queue: at the same 1,278 alerts the model alone catches 836 laundering, the memo
 ## Public datasets
 
 The model trained on each dataset itself, with the 22 of the 28 features it can
-supply (`validation/README.md`), 13 October, repeated with the same result on 15
-October: PaySim F1 38.7%, IBM AML 58.3% in one run, 58.4% over five (below; for
-information only: its accounts include banks and companies).
+supply (`validation/README.md`): PaySim F1 38.7% (13 October), IBM AML 58.3% in one
+run (21 October; for information only: its accounts include banks and companies).
 
 At a 2% alert budget an analyst checks the 2% riskiest transfers of the test part.
 The published PaySim model reports its result this way, so PaySim is scored here on
@@ -149,23 +148,20 @@ all its transactions, as that model was:
 | our data (the last six days) | 2,000 | 98.9% (174 of 176) | 8.7% |
 | PaySim, all transactions | 3,229 | 48.4% (891 of 1,840) | 27.6% |
 | the published PaySim model | 3,246 | 49.4% (916 of 1,854) | 28.2% |
-| IBM AML | 17,949 | 82.7% (1,367 of 1,653) | 7.6% |
+| IBM AML | 20,313 | 83.5% (1,500 of 1,797) | 7.4% |
 
 On our data 2% is far more alerts than there are frauds, so almost all fraud is
-inside. On PaySim our features come close to the published model, which also uses
-PaySim's own transaction type.
+inside.
 
-IBM AML measured as its paper does (Altman et al. 2023, `related-work.md`): 60/20/20
-by time, F1 on laundering, five runs, 20 October:
+IBM AML measured as its paper does (Altman et al. 2023, `related-work.md`): the
+whole file, 60/20/20 by time, F1 on laundering, five runs, our cut-off chosen on the
+middle 20%:
 
 | model | F1 on HI-Small |
 |---|---|
 | graph neural networks, published (GIN, GIN + EU, PNA) | 28.7, 47.7, 56.8 |
-| this project | 58.4 ± 0.4 |
+| this project | 59.3 ± 1.0 |
 | GFP with boosted trees, published | 62.9-63.2 |
-
-Our cut-off is chosen on the middle 20%. At the paper's fixed 0.5 our model holds
-only what it is nearly sure of (97% of alerts right, 28% caught): F1 42.9 ± 0.6.
 
 ## Speed
 

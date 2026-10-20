@@ -121,9 +121,10 @@ def ibm_file(tmp_path):
     return str(path)
 
 
-def test_ibm_load_drops_self_transfers_and_keeps_time_order(ibm_file):
+def test_ibm_load_keeps_every_row_in_time_order(ibm_file):
+    """The paper splits the whole file by time; a dropped row would move its split."""
     d, n_self = IB.load(ibm_file)
-    assert n_self == 1 and not (d.sender == d.receiver).any()
+    assert n_self == 1 and int((d.sender == d.receiver).sum()) == 1
     assert d.ts.is_monotonic_increasing
 
 
@@ -131,7 +132,7 @@ def test_ibm_minutes_survive_and_each_currency_has_its_own_scale(ibm_file):
     """One global factor would put a yen and a dollar amount on opposite sides of
     a threshold for no reason but their denomination."""
     d, _ = IB.load(ibm_file)
-    evs = list(IB.to_events(d))
+    evs = [e for e in IB.to_events(d) if e.ev["sender_pinfl"] != e.ev["receiver_pinfl"]]
     assert any(e.ts % 3600 != 0 for e in evs)
     assert all(RP.OUR_MEDIAN_UZS / 20 < e.ev["amount_uzs"] < RP.OUR_MEDIAN_UZS * 20
                for e in evs)

@@ -31,36 +31,30 @@ reading needs no cut-off, so its model learns on all the rows before the test (o
 PaySim all 24 training days), as that model did. `--all-types` scores every PaySim
 transaction, as that model did, not only the transfers between people.
 
-## Results, 13 October 2026 (the same on 15 October)
+## Results (PaySim 13 October, IBM AML 21 October 2026)
 
 | dataset | what it holds | scored | recall | precision | F1 |
 |---|---|---|---|---|---|
 | PaySim | 6.36M simulated mobile-money transactions over 31 days, 8,213 fraud | its 532,909 TRANSFER rows, 4,097 fraud; 24 days train, 7 test (920 fraud) | 27.9% | 63.0% | 38.7% |
-| IBM AML HI-Small | 4.49M transfers between bank accounts over 17 days, 5,166 laundering | 60/20/20 by time; 1,653 laundering in test | 46.3% | 78.6% | 58.3% |
+| IBM AML HI-Small | 5.08M transfers between bank accounts over 17 days, 5,177 laundering | the whole file, 60/20/20 by time; 1,797 laundering in test | 42.5% | 92.9% | 58.3% |
 
 IBM's accounts include banks and companies, not only people, so it is for
 information only.
 
 ## IBM AML against its paper
 
-Scored as Altman et al. (NeurIPS 2023, arXiv:2306.16424v3, Table 2) score it:
-60/20/20 by time, F1 on laundering, five runs (20 October 2026,
-`thesis/raw/ibm_as_published.json`). Our rows leave out the 591,212 transfers from an
-account to itself (11 of 5,177 laundering), so our last fifth is close to the
-paper's, not identical.
+Scored as Altman et al. (NeurIPS 2023, arXiv:2306.16424v3, Table 2) score it: the
+whole file, 60/20/20 by time, F1 on laundering, five runs; our cut-off is chosen on
+the middle 20% (`thesis/raw/ibm_as_published.json`).
 
 | model | F1 on HI-Small |
 |---|---|
 | GIN, published | 28.7 ± 1.1 |
 | GIN + EU, published | 47.7 ± 7.9 |
 | PNA, published | 56.8 ± 2.4 |
-| this project | 58.4 ± 0.4 |
+| this project | 59.3 ± 1.0 |
 | GFP + LightGBM, published | 62.9 ± 0.3 |
 | GFP + XGBoost, published | 63.2 ± 0.2 |
-
-GFP (arXiv:2402.08593) counts circles and chains of transfers over the whole graph.
-Our cut-off is chosen on the middle 20%; at the paper's fixed 0.5 our model holds
-only what it is nearly sure of, and F1 is 42.9 ± 0.6.
 
 ## At a 2% alert budget
 
@@ -71,4 +65,4 @@ is among them.
 |---|---|---|---|
 | PaySim, all transactions (`--all-types`) | 3,229 | 48.4% (891 of 1,840) | 27.6% |
 | the published PaySim model (CatBoost, `ris3abh/aml-p2p-fraud-detection`) | 3,246 | 49.4% (916 of 1,854) | 28.2% |
-| IBM AML HI-Small | 17,949 | 82.7% (1,367 of 1,653) | 7.6% |
+| IBM AML HI-Small | 20,313 | 83.5% (1,500 of 1,797) | 7.4% |

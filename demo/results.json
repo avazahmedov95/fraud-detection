@@ -62,17 +62,17 @@
         "en": "IBM AML, for information"
       },
       "what": {
-        "ru": "Искусственные банковские переводы IBM с отмыванием денег: 4,49 млн переводов за 17 дней, из них 5 166 — отмывание. Среди счетов есть банки и компании, поэтому набор только для информации. Разбивка по времени 60/20/20.",
-        "en": "IBM's simulated bank transfers with money laundering: 4.49 million transfers over 17 days, 5,166 of them laundering. Its accounts include banks and companies, so it is for information only. Split 60/20/20 by time."
+        "ru": "Искусственные банковские переводы IBM с отмыванием денег: 5,08 млн переводов за 17 дней, из них 5 177 — отмывание. Среди счетов есть банки и компании, поэтому набор только для информации. Разбивка по времени 60/20/20.",
+        "en": "IBM's simulated bank transfers with money laundering: 5.08 million transfers over 17 days, 5,177 of them laundering. Its accounts include banks and companies, so it is for information only. Split 60/20/20 by time."
       },
       "ours": {
-        "ru": "F1 58,4% (5 запусков, как в публикации IBM): выше опубликованных графовых нейросетей (до 56,8%), ниже лучшего метода GFP (63,2%)",
-        "en": "F1 58.4% (five runs, as the IBM paper scores it): above the published graph neural networks (up to 56.8%), below the best method, GFP (63.2%)"
+        "ru": "F1 59,3% (5 запусков, как в публикации IBM): выше опубликованных графовых нейросетей (до 56,8%), ниже лучшего метода GFP (63,2%)",
+        "en": "F1 59.3% (five runs, as the IBM paper scores it): above the published graph neural networks (up to 56.8%), below the best method, GFP (63.2%)"
       },
       "quotes": [
         {
           "file": "validation/README.md",
-          "text": "| this project | 58.4 ± 0.4 |"
+          "text": "| this project | 59.3 ± 1.0 |"
         },
         {
           "file": "validation/README.md",

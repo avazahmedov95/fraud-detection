@@ -22,8 +22,8 @@ COLUMNS = {"Account": "sender", "Account.1": "receiver", "Amount Paid": "amount"
 
 
 def load(path):
-    """The file in time order, without self-transfers (12% of it, mostly
-    `Reinvestment`): they are not transfers between two parties."""
+    """Every row of the file in time order, as the paper splits it; self-transfers
+    (12%, mostly `Reinvestment`) are counted for the description."""
     d = pd.read_csv(path, dtype={"Account": str, "Account.1": str})
     d.columns = [c.strip() for c in d.columns]
     missing = [c for c in COLUMNS if c not in d.columns]
@@ -32,8 +32,7 @@ def load(path):
     d = d.rename(columns=COLUMNS)
     d["ts"] = pd.to_datetime(d["Timestamp"], format="%Y/%m/%d %H:%M")
     n_self = int((d.sender == d.receiver).sum())
-    d = d[d.sender != d.receiver].sort_values("ts").reset_index(drop=True)
-    return d, n_self
+    return d.sort_values("ts", kind="stable").reset_index(drop=True), n_self
 
 
 def to_events(d):
@@ -49,7 +48,7 @@ def to_events(d):
 def describe(d, n_self):
     print(f"IBM AML HI-Small: {len(d):,} transfers between bank accounts over "
           f"{(d.ts.max() - d.ts.min()).days} days, minute timestamps "
-          f"({n_self:,} self-transfers dropped)")
+          f"({n_self:,} of them self-transfers)")
     print(f"  laundering: {int(d.label.sum()):,} ({d.label.mean():.2%})")
     print(f"  accounts: {pd.concat([d.sender, d.receiver]).nunique():,}; "
           f"{d.currency.nunique()} currencies; payment formats: "

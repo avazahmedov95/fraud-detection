@@ -83,8 +83,8 @@ features remain.
   its 532,909 transfers between people, 4,097 of them fraud: 24 days to learn, 7 to
   test. Its clock counts hours, so features over minutes see nothing there, and it
   has no collection stage, so the mule rule finds nothing.
-- **IBM AML (HI-Small):** 4.49 million transfers between bank accounts over 17 days,
-  5,166 of them money laundering. Its accounts include banks and companies, not only
+- **IBM AML (HI-Small):** 5.08 million transfers between bank accounts over 17 days,
+  5,177 of them money laundering. Its accounts include banks and companies, not only
   people, so we report it for information only.
 
 The results are in `results.md`.

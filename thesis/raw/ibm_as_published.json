@@ -1,17 +1,15 @@
 {
- "_about": "20 October 2026: IBM AML HI-Small scored as Altman et al. (NeurIPS 2023, arXiv:2306.16424) score it (arXiv:2306.16424v3, Table 2): 60/20/20 by time, F1 on laundering (1,653 in the last fifth; our rows leave out the 591,212 transfers from an account to itself), five runs (seeds 0-4) of validation/harness.py's fit (one LightGBM, 22 of the 28 features), read from validation/ibm_features.npz. 'chosen': the F1-peak cut-off on the middle 20%, as the harness does; 'at_0_5': the paper's fixed threshold. F1, recall and precision in %. 'published': the paper's Table 2 for HI-Small, mean and spread.",
- "chosen": {
-  "f1": [58.3, 58.1, 58.6, 58.1, 59.0],
-  "cutoff": [0.103, 0.126, 0.109, 0.128, 0.109],
-  "mean": 58.42,
-  "spread": 0.38
- },
- "at_0_5": {
-  "f1": [43.2, 41.9, 43.1, 43.0, 43.5],
-  "recall": [27.8, 26.7, 27.6, 27.6, 28.1],
-  "precision": [97.2, 97.4, 98.1, 97.0, 96.9],
-  "mean": 42.94,
-  "spread": 0.63
+ "_about": "21 October 2026: IBM AML HI-Small scored as Altman et al. (NeurIPS 2023, arXiv:2306.16424v3, Table 2) score it: the whole file (5,078,345 transfers) split 60/20/20 by time, F1 on laundering (1,797 in the last fifth), five runs (seeds 0-4) of validation/harness.py's fit (one LightGBM, 22 of the 28 features). 'chosen': the F1-peak cut-off on the middle 20%, as the harness does; 'at_0_5': a fixed 0.5. Each run is [F1, recall, precision] in %. 'published': the paper's Table 2 for HI-Small, mean and spread.",
+ "runs": [
+  {"seed": 0, "cutoff": 0.198, "chosen": [58.29, 42.46, 92.94], "at_0_5": [45.37, 29.6, 97.08]},
+  {"seed": 1, "cutoff": 0.1563, "chosen": [59.68, 44.69, 89.82], "at_0_5": [46.34, 30.44, 96.99]},
+  {"seed": 2, "cutoff": 0.1606, "chosen": [59.83, 44.46, 91.42], "at_0_5": [45.97, 30.16, 96.61]},
+  {"seed": 3, "cutoff": 0.1328, "chosen": [60.45, 45.97, 88.25], "at_0_5": [45.72, 29.88, 97.28]},
+  {"seed": 4, "cutoff": 0.167, "chosen": [58.13, 42.96, 89.87], "at_0_5": [45.91, 30.16, 96.1]}
+ ],
+ "mean": {
+  "chosen": {"f1": 59.28, "spread": 1.02, "recall": 44.11, "precision": 90.46},
+  "at_0_5": {"f1": 45.86, "spread": 0.36, "recall": 30.05, "precision": 96.81}
  },
  "published": {
   "GIN": [28.70, 1.13],
