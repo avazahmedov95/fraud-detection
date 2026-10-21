@@ -1,0 +1,268 @@
+{
+ "_about": "21 October 2026: the memory of confirmed accounts on IBM AML HI-Small as a bank learns: the whole file (5,078,345 transfers, 60/20/20 by time, 1,797 laundering in the test fifth), 22 of the 28 features plus the three memory columns (payee, sender and the payee's contacts of the week among the confirmed accounts; a confirmed account is a laundering transfer's payee), seeds 0-4. Before the test fifth every laundering is known a day later; in it, 'bank': held by the model alone and confirmed a day later, or missed and reported by half of the victims a week later; 'analysts': held only; 'every': every laundering a day later; 'history': nothing inside the test fifth; 'model_same_alerts' is the model alone at the 'bank' model's number of alerts.",
+ "frauds": 1797,
+ "runs": [
+  {
+   "seed": 0,
+   "model": {
+    "alerts": 821,
+    "caught": 763,
+    "recall": 0.4246,
+    "precision": 0.9294,
+    "f1": 0.5829
+   },
+   "bank": {
+    "alerts": 1160,
+    "caught": 955,
+    "recall": 0.5314,
+    "precision": 0.8233,
+    "f1": 0.6459
+   },
+   "analysts": {
+    "alerts": 1160,
+    "caught": 955,
+    "recall": 0.5314,
+    "precision": 0.8233,
+    "f1": 0.6459
+   },
+   "every": {
+    "alerts": 1200,
+    "caught": 974,
+    "recall": 0.542,
+    "precision": 0.8117,
+    "f1": 0.65
+   },
+   "history": {
+    "alerts": 1003,
+    "caught": 883,
+    "recall": 0.4914,
+    "precision": 0.8804,
+    "f1": 0.6307
+   },
+   "model_same_alerts": {
+    "alerts": 1160,
+    "caught": 898
+   },
+   "known": {
+    "analysts": 763,
+    "bank": 1276
+   }
+  },
+  {
+   "seed": 1,
+   "model": {
+    "alerts": 894,
+    "caught": 803,
+    "recall": 0.4469,
+    "precision": 0.8982,
+    "f1": 0.5968
+   },
+   "bank": {
+    "alerts": 1159,
+    "caught": 953,
+    "recall": 0.5303,
+    "precision": 0.8223,
+    "f1": 0.6448
+   },
+   "analysts": {
+    "alerts": 1159,
+    "caught": 953,
+    "recall": 0.5303,
+    "precision": 0.8223,
+    "f1": 0.6448
+   },
+   "every": {
+    "alerts": 1200,
+    "caught": 970,
+    "recall": 0.5398,
+    "precision": 0.8083,
+    "f1": 0.6473
+   },
+   "history": {
+    "alerts": 1000,
+    "caught": 880,
+    "recall": 0.4897,
+    "precision": 0.88,
+    "f1": 0.6292
+   },
+   "model_same_alerts": {
+    "alerts": 1159,
+    "caught": 883
+   },
+   "known": {
+    "analysts": 803,
+    "bank": 1293
+   }
+  },
+  {
+   "seed": 2,
+   "model": {
+    "alerts": 874,
+    "caught": 799,
+    "recall": 0.4446,
+    "precision": 0.9142,
+    "f1": 0.5983
+   },
+   "bank": {
+    "alerts": 1207,
+    "caught": 974,
+    "recall": 0.542,
+    "precision": 0.807,
+    "f1": 0.6485
+   },
+   "analysts": {
+    "alerts": 1207,
+    "caught": 974,
+    "recall": 0.542,
+    "precision": 0.807,
+    "f1": 0.6485
+   },
+   "every": {
+    "alerts": 1245,
+    "caught": 994,
+    "recall": 0.5531,
+    "precision": 0.7984,
+    "f1": 0.6535
+   },
+   "history": {
+    "alerts": 1055,
+    "caught": 913,
+    "recall": 0.5081,
+    "precision": 0.8654,
+    "f1": 0.6403
+   },
+   "model_same_alerts": {
+    "alerts": 1207,
+    "caught": 898
+   },
+   "known": {
+    "analysts": 799,
+    "bank": 1314
+   }
+  },
+  {
+   "seed": 3,
+   "model": {
+    "alerts": 936,
+    "caught": 826,
+    "recall": 0.4597,
+    "precision": 0.8825,
+    "f1": 0.6045
+   },
+   "bank": {
+    "alerts": 1188,
+    "caught": 958,
+    "recall": 0.5331,
+    "precision": 0.8064,
+    "f1": 0.6419
+   },
+   "analysts": {
+    "alerts": 1188,
+    "caught": 958,
+    "recall": 0.5331,
+    "precision": 0.8064,
+    "f1": 0.6419
+   },
+   "every": {
+    "alerts": 1216,
+    "caught": 971,
+    "recall": 0.5403,
+    "precision": 0.7985,
+    "f1": 0.6445
+   },
+   "history": {
+    "alerts": 1027,
+    "caught": 883,
+    "recall": 0.4914,
+    "precision": 0.8598,
+    "f1": 0.6254
+   },
+   "model_same_alerts": {
+    "alerts": 1188,
+    "caught": 910
+   },
+   "known": {
+    "analysts": 826,
+    "bank": 1293
+   }
+  },
+  {
+   "seed": 4,
+   "model": {
+    "alerts": 859,
+    "caught": 772,
+    "recall": 0.4296,
+    "precision": 0.8987,
+    "f1": 0.5813
+   },
+   "bank": {
+    "alerts": 1153,
+    "caught": 945,
+    "recall": 0.5259,
+    "precision": 0.8196,
+    "f1": 0.6407
+   },
+   "analysts": {
+    "alerts": 1153,
+    "caught": 945,
+    "recall": 0.5259,
+    "precision": 0.8196,
+    "f1": 0.6407
+   },
+   "every": {
+    "alerts": 1197,
+    "caught": 968,
+    "recall": 0.5387,
+    "precision": 0.8087,
+    "f1": 0.6466
+   },
+   "history": {
+    "alerts": 1000,
+    "caught": 874,
+    "recall": 0.4864,
+    "precision": 0.874,
+    "f1": 0.625
+   },
+   "model_same_alerts": {
+    "alerts": 1153,
+    "caught": 874
+   },
+   "known": {
+    "analysts": 772,
+    "bank": 1256
+   }
+  }
+ ],
+ "mean": {
+  "model": {
+   "recall": 0.4411,
+   "precision": 0.9046,
+   "f1": 0.5928,
+   "alerts": 876.8
+  },
+  "bank": {
+   "recall": 0.5326,
+   "precision": 0.8157,
+   "f1": 0.6443,
+   "alerts": 1173.4
+  },
+  "analysts": {
+   "recall": 0.5326,
+   "precision": 0.8157,
+   "f1": 0.6443,
+   "alerts": 1173.4
+  },
+  "every": {
+   "recall": 0.5428,
+   "precision": 0.8051,
+   "f1": 0.6484,
+   "alerts": 1211.6
+  },
+  "history": {
+   "recall": 0.4934,
+   "precision": 0.8719,
+   "f1": 0.6301,
+   "alerts": 1017.0
+  }
+ }
+}

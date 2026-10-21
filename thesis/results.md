@@ -120,18 +120,20 @@ a bank never gets.
 ## The memory on IBM AML
 
 IBM AML with the analysts' verdicts played out from its labels the way a bank learns
-them: 22 of the 28 features plus the memory of confirmed accounts, five seeds, 15
-October:
+them: the whole file, 22 of the 28 features plus the memory of confirmed accounts,
+five runs, 21 October. Before the test fifth every laundering is known a day later;
+in it, a held one is confirmed a day later and half of the missed ones are reported
+a week later.
 
 | | recall | precision | F1 | alerts |
 |---|---|---|---|---|
-| the model alone | 44.7% | 82.6% | 58.0% | 894 |
-| with the memory, as a bank learns | 54.8% | 70.9% | 61.8% | 1,278 |
-| with the memory, every laundering known | 58.2% | 71.0% | 63.9% | 1,356 |
+| the model alone | 44.1% | 90.5% | 59.3% | 877 |
+| with the memory, as a bank learns | 53.3% | 81.6% | 64.4% | 1,173 |
+| with the memory, every laundering known | 54.3% | 80.5% | 64.8% | 1,212 |
 
-The memory raised F1 in all five runs, by 3.4 to 4.2 points. It is not only a longer
-queue: at the same 1,278 alerts the model alone catches 836 laundering, the memory
-905.
+The memory raised F1 in all five runs, by 3.7 to 6.3 points. It is not only a longer
+queue: at the same 1,173 alerts the model alone catches 893 laundering, the memory
+957.
 
 ## Public datasets
 
@@ -213,7 +215,7 @@ load.
 - `raw/fresh_seeds.json`: the 20 fresh datasets, each run.
 - `raw/day_features_seeds.json`: the 24 and the 28 features on 20 earlier datasets.
 - `raw/retrain_fresh.json`: retraining when fraud changes, each run.
-- `raw/ibm_memory_28.json`: the memory on IBM AML, each run.
+- `raw/ibm_memory.json`: the memory on IBM AML, each run.
 - `raw/ibm_as_published.json`: IBM AML scored as its paper does, each run.
 - `raw/speed_repeats.json`: every speed repeat and the four versions of the job.
 - `raw/sources_and_test_transfer.json`: each data source left out, and the test

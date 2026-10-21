@@ -67,7 +67,7 @@ neutral. The whole system runs on Apache Flink.
    is an argument for checking payees at the national level.
 4. **Data from people helps most now.** A memory of the accounts in confirmed
    frauds, built from analysts' decisions, raised F1 on IBM AML in all five runs, by
-   3.4 to 4.2 points. In a month through the running system, false holds fell from
+   3.7 to 6.3 points. In a month through the running system, false holds fell from
    249 in the first ten days to 98 in the last eleven as the history and the memory
    grew. Retraining on people's decisions catches 2.1 times as many frauds of a new
    scheme (`results.md`).
