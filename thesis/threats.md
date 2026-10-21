@@ -75,12 +75,13 @@ that knows the person behind every card would close this gap.
 
 ## The regulator counts the same things
 
-The Central Bank's anti-money-laundering rules (No. 343-В-12 of 3 March 2023) call
-P2P activity suspicious by counts over up to 30 days:
+The Central Bank's anti-money-laundering rules (reg. 2886, item 49, as changed on
+3 March 2023) call card transfers suspicious by counts over up to 30 days:
 
 - 500 BRV or more received on one card from one or several cards;
-- five or more cards paying one foreign wallet;
-- 20 or more cards on one account.
+- one card paying, or paid by, five or more foreign cards or wallets.
+
+Item 55 adds 20 or more cards on one account as a sign of a high-risk client.
 
 Our payee-side features count the same things over an hour, a day and a week. These
 rules are written for the bank that holds the collecting account; our system sits

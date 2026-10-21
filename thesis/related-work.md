@@ -74,17 +74,21 @@ say "payments".
   operations of individuals*** (March 2026). $18.9 billion received from abroad in
   2025; $8.6 billion of it (46%) as P2P transfers to cards, 1.4 times more than a
   year before.
-- **Central Bank requirements for P2P transfers, from 16 November 2026:**
+- **Central Bank requirements for P2P transfers, from 16 November 2026** (the
+  fraud-prevention regulation, reg. 3759, in its edition from that date;
+  https://lex.uz/ru/docs/8011963):
   - no transfers through websites;
   - a new device switches the linked cards off;
   - each bank sets its own limit for transfers without extra confirmation, and pays
     for fraud within it;
   - payee names are masked.
-- **Anti-money-laundering rules for banks, No. 343-В-12** (3 March 2023, registered
-  2886-10). Suspicious P2P activity is defined by counts over up to 30 days
-  (`threats.md`). This led to our day-and-week counterparty features.
-- **CBU resolution 3759** (21 January 2026). The bank app must block use during
-  calls. The source of our reporting threshold in BRV.
+- **Anti-money-laundering rules for banks** (reg. 2886 of 23 May 2017, changed by
+  No. 343-В-12 of 3 March 2023; https://lex.uz/acts/3212192). Item 49 counts
+  suspicious card transfers over up to 30 days (`threats.md`). This led to our
+  day-and-week counterparty features.
+- **The same regulation, reg. 3759** (21 January 2026, in force from 22 April 2026).
+  The bank app must block use during calls. The source of our reporting threshold in
+  BRV.
 - **kun.uz, 13 May 2026.** From April 2026 the Tax Committee watches people's P2P
   activity. Our structuring rule would also catch undeclared trading income. This
   system is meant to protect account holders; tax checks would confuse any test on
@@ -108,8 +112,8 @@ say "payments".
 | Source | What changed |
 |---|---|
 | PaySim | rule limits now follow the data that is available |
-| AML rules No. 343-В-12 | counting a card's counterparties over a day and a week |
-| CBU resolution 3759 | the reporting threshold |
+| AML rules, reg. 2886, item 49 | counting a card's counterparties over a day and a week |
+| fraud-prevention regulation, reg. 3759 | the reporting threshold |
 | Cybersecurity Centre report | we measured the cost of encryption and mutual TLS |
 | Tritscher et al. | the generator's rules and code are published |
 | TabPFN | the second look |
